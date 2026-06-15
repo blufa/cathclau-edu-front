@@ -1,49 +1,34 @@
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { Button as MantineButton, type ButtonProps as MantineButtonProps } from "@mantine/core";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md";
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "color">,
+    Pick<MantineButtonProps, "leftSection" | "rightSection" | "fullWidth"> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
 }
 
-const variants: Record<Variant, string> = {
-  primary: "bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300",
-  secondary: "bg-white text-gray-900 border border-gray-300 hover:bg-gray-50",
-  ghost: "bg-transparent text-gray-700 hover:bg-gray-100",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+/** Maps the project's button vocabulary onto Mantine variants/colors. */
+const VARIANT: Record<Variant, { variant: string; color?: string }> = {
+  primary: { variant: "filled", color: "indigo" },
+  secondary: { variant: "default" },
+  ghost: { variant: "subtle", color: "gray" },
+  danger: { variant: "filled", color: "red" },
 };
-
-const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-sm",
-  md: "h-10 px-4 text-sm",
-};
+const SIZE: Record<Size, string> = { sm: "sm", md: "md" };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = "primary", size = "md", loading, disabled, children, ...props },
+  { variant = "primary", size = "md", loading, children, ...props },
   ref,
 ) {
+  const v = VARIANT[variant];
   return (
-    <button
-      ref={ref}
-      disabled={disabled || loading}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2",
-        "disabled:cursor-not-allowed disabled:opacity-70",
-        variants[variant],
-        sizes[size],
-        className,
-      )}
-      {...props}
-    >
-      {loading && (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-      )}
+    <MantineButton ref={ref} variant={v.variant} color={v.color} size={SIZE[size]} loading={loading} {...props}>
       {children}
-    </button>
+    </MantineButton>
   );
 });

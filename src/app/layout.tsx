@@ -1,17 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import "@mantine/core/styles.css";
 import "./globals.css";
+import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from "@mantine/core";
+import { theme } from "@/lib/theme";
 import { AuthProvider } from "@/providers/auth-provider";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "LacaÉducation",
@@ -24,9 +16,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="fr" {...mantineHtmlProps} className="h-full antialiased">
+      <head>
+        <ColorSchemeScript />
+      </head>
       <body className="min-h-full">
-        <AuthProvider>{children}</AuthProvider>
+        <MantineProvider theme={theme}>
+          <AuthProvider>{children}</AuthProvider>
+        </MantineProvider>
       </body>
     </html>
   );
