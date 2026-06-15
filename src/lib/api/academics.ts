@@ -4,10 +4,16 @@ import type {
   AnneeScolaire,
   Classe,
   ClassStudent,
+  CreateAcademicYearInput,
   CreateClassInput,
+  CreatePeriodInput,
+  CreateRoomInput,
   EnrollmentCountInfo,
+  Matiere,
   Niveau,
+  Periode,
   Salle,
+  StatutAnneeScolaire,
 } from "@/lib/types/academics";
 
 // ── Academic years ──────────────────────────────────────────────────────────
@@ -54,11 +60,72 @@ export function getEnrollmentCount(id: number): Promise<EnrollmentCountInfo> {
   return api.get<EnrollmentCountInfo>(`/academics/classes/${id}/enrollment-count`);
 }
 
-// ── Referentials ──────────────────────────────────────────────────────────--
+// ── Academic years (admin) ────────────────────────────────────────────────--
+export function createAcademicYear(input: CreateAcademicYearInput): Promise<AnneeScolaire> {
+  return api.post<AnneeScolaire>("/academics/academic-years", input);
+}
+export function updateAcademicYear(id: number, input: CreateAcademicYearInput): Promise<AnneeScolaire> {
+  return api.put<AnneeScolaire>(`/academics/academic-years/${id}`, input);
+}
+export function changeAcademicYearStatus(id: number, status: StatutAnneeScolaire): Promise<AnneeScolaire> {
+  return api.patch<AnneeScolaire>(`/academics/academic-years/${id}/status`, undefined, { query: { status } });
+}
+export function setCurrentAcademicYear(id: number): Promise<AnneeScolaire> {
+  return api.patch<AnneeScolaire>(`/academics/academic-years/${id}/set-current`);
+}
+
+// ── Periods ───────────────────────────────────────────────────────────────--
+export function listPeriods(academicYearId: number): Promise<Periode[]> {
+  return api.get<Periode[]>(`/academics/academic-years/${academicYearId}/periods`);
+}
+export function createPeriod(academicYearId: number, input: CreatePeriodInput): Promise<Periode> {
+  return api.post<Periode>(`/academics/academic-years/${academicYearId}/periods`, input);
+}
+export function closePeriod(periodId: number): Promise<Periode> {
+  return api.put<Periode>(`/academics/periods/${periodId}/close`);
+}
+
+// ── Levels ────────────────────────────────────────────────────────────────--
 export function listLevels(): Promise<Niveau[]> {
   return api.get<Niveau[]>("/academics/levels");
 }
+export function createLevel(label: string, sortOrder: number): Promise<Niveau> {
+  return api.post<Niveau>("/academics/levels", undefined, { query: { label, sortOrder } });
+}
+export function updateLevel(id: number, label: string, sortOrder: number): Promise<Niveau> {
+  return api.put<Niveau>(`/academics/levels/${id}`, undefined, { query: { label, sortOrder } });
+}
+export function deleteLevel(id: number): Promise<void> {
+  return api.delete<void>(`/academics/levels/${id}`);
+}
 
+// ── Rooms ─────────────────────────────────────────────────────────────────--
 export function listRooms(): Promise<Salle[]> {
   return api.get<Salle[]>("/academics/rooms");
+}
+export function createRoom(input: CreateRoomInput): Promise<Salle> {
+  return api.post<Salle>("/academics/rooms", input);
+}
+export function updateRoom(id: number, input: CreateRoomInput): Promise<Salle> {
+  return api.put<Salle>(`/academics/rooms/${id}`, input);
+}
+export function setRoomAvailability(id: number, available: boolean): Promise<Salle> {
+  return api.patch<Salle>(`/academics/rooms/${id}/availability`, undefined, { query: { available } });
+}
+export function deleteRoom(id: number): Promise<void> {
+  return api.delete<void>(`/academics/rooms/${id}`);
+}
+
+// ── Subjects ──────────────────────────────────────────────────────────────--
+export function listSubjects(): Promise<Matiere[]> {
+  return api.get<Matiere[]>("/academics/subjects");
+}
+export function createSubject(label: string, coefficient: number, syllabus?: string): Promise<Matiere> {
+  return api.post<Matiere>("/academics/subjects", undefined, { query: { label, coefficient, syllabus } });
+}
+export function updateSubject(id: number, label: string, coefficient: number, syllabus?: string): Promise<Matiere> {
+  return api.put<Matiere>(`/academics/subjects/${id}`, undefined, { query: { label, coefficient, syllabus } });
+}
+export function deleteSubject(id: number): Promise<void> {
+  return api.delete<void>(`/academics/subjects/${id}`);
 }

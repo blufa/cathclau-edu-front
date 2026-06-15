@@ -66,6 +66,13 @@ export const NAVIGATION: NavSection[] = [
     ],
   },
   {
+    title: "Configuration",
+    items: [
+      { label: "Années scolaires", href: "/academic-years", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Référentiels", href: "/referentials", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+    ],
+  },
+  {
     title: "Administration",
     items: [
       { label: "Utilisateurs", href: "/users", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },

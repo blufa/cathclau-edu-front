@@ -30,6 +30,50 @@ export interface Salle {
   available: boolean;
 }
 
+export type TypeSalle = "SALLE_COURS" | "LABORATOIRE" | "AMPHI" | "SALLE_INFO" | "AUTRE";
+
+export interface Matiere {
+  id: number;
+  tenantId: number;
+  label: string;
+  coefficient: string;
+  syllabus: string | null;
+}
+
+export type TypePeriode = "TRIMESTRE" | "SEMESTRE";
+
+export interface Periode {
+  id: number;
+  academicYearId: number;
+  label: string;
+  type: TypePeriode;
+  sortOrder: number;
+  startDate: string | null;
+  endDate: string | null;
+  closed: boolean;
+}
+
+export interface CreateRoomInput {
+  label: string;
+  building: string | null;
+  capacity: number | null;
+  type: TypeSalle;
+}
+
+export interface CreateAcademicYearInput {
+  label: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface CreatePeriodInput {
+  label: string;
+  type: TypePeriode;
+  sortOrder: number;
+  startDate: string | null;
+  endDate: string | null;
+}
+
 export interface Classe {
   id: number;
   tenantId: number;
