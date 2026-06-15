@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
+import "@mantine/dates/styles.css";
 import "./globals.css";
 import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from "@mantine/core";
+import { ModalsProvider } from "@mantine/modals";
+import { Notifications } from "@mantine/notifications";
 import { theme } from "@/lib/theme";
 import { AuthProvider } from "@/providers/auth-provider";
 
@@ -22,7 +26,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full">
         <MantineProvider theme={theme}>
-          <AuthProvider>{children}</AuthProvider>
+          <Notifications position="top-right" />
+          <ModalsProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ModalsProvider>
         </MantineProvider>
       </body>
     </html>

@@ -1,46 +1,64 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Avatar, Burger, Group, Menu, Text } from "@mantine/core";
 import { useAuth } from "@/providers/auth-provider";
-import { Button } from "@/components/ui/button";
+import { notifyError } from "@/lib/feedback";
 
-export function Header() {
+export function Header({ navOpened, onToggleNav }: { navOpened: boolean; onToggleNav: () => void }) {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
 
   const initials = user
     ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "?"
     : "?";
 
   async function handleLogout() {
-    setBusy(true);
     try {
       await logout();
       router.replace("/login");
-    } finally {
-      setBusy(false);
+    } catch (err) {
+      notifyError(err, "Déconnexion impossible");
     }
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
-      <div />
-      <div className="flex items-center gap-4">
-        <div className="text-right">
-          <p className="text-sm font-medium text-gray-900">
-            {user ? `${user.firstName} ${user.lastName}` : ""}
-          </p>
-          <p className="text-xs text-gray-500">{user?.roles.join(", ")}</p>
-        </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
-          {initials}
-        </div>
-        <Button variant="secondary" size="sm" loading={busy} onClick={handleLogout}>
-          Déconnexion
-        </Button>
-      </div>
-    </header>
+    <Group h="100%" px="md" justify="space-between">
+      <Group gap="sm">
+        <Burger opened={navOpened} onClick={onToggleNav} hiddenFrom="sm" size="sm" />
+        <Group gap="xs">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600 font-bold text-white">
+            L
+          </div>
+          <Text fw={600} size="lg">
+            LacaÉducation
+          </Text>
+        </Group>
+      </Group>
+
+      <Menu position="bottom-end" withArrow shadow="md">
+        <Menu.Target>
+          <Group gap="sm" className="cursor-pointer">
+            <div className="text-right">
+              <Text size="sm" fw={500}>
+                {user ? `${user.firstName} ${user.lastName}` : ""}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {user?.roles.join(", ")}
+              </Text>
+            </div>
+            <Avatar color="indigo" radius="xl" size="md">
+              {initials}
+            </Avatar>
+          </Group>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <Menu.Label>{user?.email}</Menu.Label>
+          <Menu.Item color="red" onClick={handleLogout}>
+            Déconnexion
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+    </Group>
   );
 }

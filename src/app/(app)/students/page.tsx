@@ -21,6 +21,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { StudentForm } from "@/components/students/student-form";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const PAGE_SIZE = 20;
 
@@ -60,6 +61,7 @@ export default function StudentsPage() {
   async function handleCreate(input: CreateStudentInput) {
     await createStudent(input);
     setCreating(false);
+    notifySuccess("Élève créé");
     refetch();
   }
 
@@ -67,13 +69,26 @@ export default function StudentsPage() {
     if (!editing) return;
     await updateStudent(editing.id, input);
     setEditing(null);
+    notifySuccess("Élève mis à jour");
     refetch();
   }
 
-  async function handleDelete(student: Student) {
-    if (!confirm(`Archiver l'élève ${student.firstName} ${student.lastName} ?`)) return;
-    await deleteStudent(student.id);
-    refetch();
+  function handleDelete(student: Student) {
+    confirmAction({
+      title: "Archiver l'élève",
+      message: `Archiver l'élève ${student.firstName} ${student.lastName} ?`,
+      confirmLabel: "Archiver",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteStudent(student.id);
+          notifySuccess("Élève archivé");
+          refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
   }
 
   return (

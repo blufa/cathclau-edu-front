@@ -22,6 +22,7 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { ClassForm } from "@/components/classes/class-form";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function ClassesPage() {
   const { user } = useAuth();
@@ -54,18 +55,32 @@ export default function ClassesPage() {
   async function handleCreate(input: CreateClassInput) {
     await createClass(input);
     setCreating(false);
+    notifySuccess("Classe créée");
     classesQuery.refetch();
   }
   async function handleUpdate(input: CreateClassInput) {
     if (!editing) return;
     await updateClass(editing.id, input);
     setEditing(null);
+    notifySuccess("Classe mise à jour");
     classesQuery.refetch();
   }
-  async function handleDelete(classe: Classe) {
-    if (!confirm(`Supprimer la classe ${classe.label} ?`)) return;
-    await deleteClass(classe.id);
-    classesQuery.refetch();
+  function handleDelete(classe: Classe) {
+    confirmAction({
+      title: "Supprimer la classe",
+      message: `Supprimer la classe ${classe.label} ?`,
+      confirmLabel: "Supprimer",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteClass(classe.id);
+          notifySuccess("Classe supprimée");
+          classesQuery.refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
   }
 
   const classes = classesQuery.data ?? [];

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
+import { notifySuccess } from "@/lib/feedback";
 
 interface EnrollModalProps {
   studentId: number;
@@ -49,6 +50,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModa
     try {
       await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
       setClassId("");
+      notifySuccess(type === "RE_ENROLLMENT" ? "Réinscription enregistrée" : "Inscription enregistrée");
       onEnrolled();
       onClose();
     } catch (err) {

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Alert, Button, Group, NativeSelect, NumberInput, SimpleGrid, Stack, TextInput } from "@mantine/core";
+import { useForm } from "@mantine/form";
 import { ApiError } from "@/lib/api/errors";
-import { Button } from "@/components/ui/button";
-import { Field, Input, Label } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import type { Classe, CreateClassInput, Niveau, Salle } from "@/lib/types/academics";
 
 interface ClassFormProps {
@@ -17,6 +16,14 @@ interface ClassFormProps {
   onCancel: () => void;
 }
 
+interface FormValues {
+  label: string;
+  levelId: string;
+  roomId: string;
+  maxCapacity: number | string;
+  headTeacherId: number | string;
+}
+
 export function ClassForm({
   initial,
   academicYearId,
@@ -26,38 +33,40 @@ export function ClassForm({
   onSubmit,
   onCancel,
 }: ClassFormProps) {
-  const [label, setLabel] = useState(initial?.label ?? "");
-  const [levelId, setLevelId] = useState(initial?.levelId ? String(initial.levelId) : "");
-  const [roomId, setRoomId] = useState(initial?.roomId ? String(initial.roomId) : "");
-  const [headTeacherId, setHeadTeacherId] = useState(
-    initial?.headTeacherId ? String(initial.headTeacherId) : "",
-  );
-  const [maxCapacity, setMaxCapacity] = useState(
-    initial?.maxCapacity != null ? String(initial.maxCapacity) : "",
-  );
-
   const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const form = useForm<FormValues>({
+    mode: "uncontrolled",
+    initialValues: {
+      label: initial?.label ?? "",
+      levelId: initial?.levelId ? String(initial.levelId) : "",
+      roomId: initial?.roomId ? String(initial.roomId) : "",
+      maxCapacity: initial?.maxCapacity ?? "",
+      headTeacherId: initial?.headTeacherId ?? "",
+    },
+    validate: {
+      label: (v) => (v.trim() ? null : "Libellé requis"),
+    },
+  });
+
+  async function handleSubmit(values: FormValues) {
     setError(null);
-    setFieldErrors({});
     setSubmitting(true);
     try {
       await onSubmit({
-        label,
+        label: values.label,
         academicYearId,
-        levelId: levelId ? Number(levelId) : null,
-        roomId: roomId ? Number(roomId) : null,
-        headTeacherId: headTeacherId ? Number(headTeacherId) : null,
-        maxCapacity: maxCapacity ? Number(maxCapacity) : null,
+        levelId: values.levelId ? Number(values.levelId) : null,
+        roomId: values.roomId ? Number(values.roomId) : null,
+        maxCapacity: values.maxCapacity === "" ? null : Number(values.maxCapacity),
+        headTeacherId: values.headTeacherId === "" ? null : Number(values.headTeacherId),
       });
     } catch (err) {
       if (err instanceof ApiError) {
-        setFieldErrors(err.fieldErrors);
-        setError(Object.keys(err.fieldErrors).length === 0 ? err.userMessage : null);
+        const fieldErrors = err.fieldErrors;
+        if (Object.keys(fieldErrors).length > 0) form.setErrors(fieldErrors);
+        else setError(err.userMessage);
       } else {
         setError("Enregistrement impossible.");
       }
@@ -65,73 +74,46 @@ export function ClassForm({
     }
   }
 
+  const levelData = [{ value: "", label: "—" }, ...levels.map((l) => ({ value: String(l.id), label: l.label }))];
+  const roomData = [{ value: "", label: "—" }, ...rooms.map((r) => ({ value: String(r.id), label: r.label }))];
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+    <form onSubmit={form.onSubmit(handleSubmit)}>
+      <Stack gap="md">
+        {error && (
+          <Alert color="red" variant="light">
+            {error}
+          </Alert>
+        )}
 
-      <Field>
-        <Label htmlFor="label">Libellé *</Label>
-        <Input id="label" required value={label} onChange={(e) => setLabel(e.target.value)} placeholder="6e A" />
-        {fieldErrors.label && <p className="text-xs text-red-600">{fieldErrors.label}</p>}
-      </Field>
+        <TextInput label="Libellé" withAsterisk placeholder="6e A" {...form.getInputProps("label")} key={form.key("label")} />
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="levelId">Niveau</Label>
-          <Select id="levelId" value={levelId} onChange={(e) => setLevelId(e.target.value)}>
-            <option value="">—</option>
-            {levels.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field>
-          <Label htmlFor="roomId">Salle</Label>
-          <Select id="roomId" value={roomId} onChange={(e) => setRoomId(e.target.value)}>
-            <option value="">—</option>
-            {rooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+        <SimpleGrid cols={2}>
+          <NativeSelect label="Niveau" data={levelData} {...form.getInputProps("levelId")} key={form.key("levelId")} />
+          <NativeSelect label="Salle" data={roomData} {...form.getInputProps("roomId")} key={form.key("roomId")} />
+        </SimpleGrid>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="maxCapacity">Capacité max</Label>
-          <Input
-            id="maxCapacity"
-            type="number"
+        <SimpleGrid cols={2}>
+          <NumberInput label="Capacité max" min={0} allowDecimal={false} {...form.getInputProps("maxCapacity")} key={form.key("maxCapacity")} />
+          <NumberInput
+            label="Prof. principal (ID)"
             min={0}
-            value={maxCapacity}
-            onChange={(e) => setMaxCapacity(e.target.value)}
-          />
-        </Field>
-        <Field>
-          <Label htmlFor="headTeacherId">Prof. principal (ID)</Label>
-          <Input
-            id="headTeacherId"
-            type="number"
-            min={0}
-            value={headTeacherId}
-            onChange={(e) => setHeadTeacherId(e.target.value)}
+            allowDecimal={false}
             placeholder="Optionnel"
+            {...form.getInputProps("headTeacherId")}
+            key={form.key("headTeacherId")}
           />
-        </Field>
-      </div>
+        </SimpleGrid>
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
-          Annuler
-        </Button>
-        <Button type="submit" loading={submitting}>
-          {submitLabel}
-        </Button>
-      </div>
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={onCancel} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button type="submit" loading={submitting}>
+            {submitLabel}
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }

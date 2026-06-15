@@ -19,6 +19,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
   PENDING: "amber",
@@ -78,18 +79,46 @@ export default function EnrollmentsPage() {
   const enrollments = enrollmentsQuery.data ?? [];
 
   async function handleValidate(id: number) {
-    await validateEnrollment(id);
-    enrollmentsQuery.refetch();
+    try {
+      await validateEnrollment(id);
+      notifySuccess("Inscription validée");
+      enrollmentsQuery.refetch();
+    } catch (err) {
+      notifyError(err);
+    }
   }
-  async function handleCancel(id: number) {
-    if (!confirm("Annuler cette inscription ?")) return;
-    await cancelEnrollment(id);
-    enrollmentsQuery.refetch();
+  function handleCancel(id: number) {
+    confirmAction({
+      title: "Annuler l'inscription",
+      message: "Annuler cette inscription ?",
+      confirmLabel: "Annuler l'inscription",
+      onConfirm: async () => {
+        try {
+          await cancelEnrollment(id);
+          notifySuccess("Inscription annulée");
+          enrollmentsQuery.refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
   }
-  async function handleDelete(id: number) {
-    if (!confirm("Supprimer définitivement cette inscription ?")) return;
-    await deleteEnrollment(id);
-    enrollmentsQuery.refetch();
+  function handleDelete(id: number) {
+    confirmAction({
+      title: "Supprimer l'inscription",
+      message: "Supprimer définitivement cette inscription ?",
+      confirmLabel: "Supprimer",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteEnrollment(id);
+          notifySuccess("Inscription supprimée");
+          enrollmentsQuery.refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
   }
 
   return (

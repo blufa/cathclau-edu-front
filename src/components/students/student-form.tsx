@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Alert, Button, Group, NativeSelect, SimpleGrid, Stack, TextInput } from "@mantine/core";
+import { DateInput } from "@mantine/dates";
+import { useForm } from "@mantine/form";
 import { ApiError } from "@/lib/api/errors";
-import { Button } from "@/components/ui/button";
-import { Field, Input, Label } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import type { CreateStudentInput, Gender, Student } from "@/lib/types/student";
 
 interface StudentFormProps {
@@ -14,44 +14,65 @@ interface StudentFormProps {
   onCancel: () => void;
 }
 
-export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: StudentFormProps) {
-  const [firstName, setFirstName] = useState(initial?.firstName ?? "");
-  const [lastName, setLastName] = useState(initial?.lastName ?? "");
-  const [gender, setGender] = useState<Gender>(initial?.gender ?? "MALE");
-  const [studentNumber, setStudentNumber] = useState(initial?.studentNumber ?? "");
-  const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
-  const [birthPlace, setBirthPlace] = useState(initial?.birthPlace ?? "");
-  const [phone, setPhone] = useState(initial?.phone ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
-  const [address, setAddress] = useState(initial?.address ?? "");
-  const [nationality, setNationality] = useState(initial?.nationality ?? "");
+interface FormValues {
+  firstName: string;
+  lastName: string;
+  gender: Gender;
+  studentNumber: string;
+  birthDate: string;
+  birthPlace: string;
+  phone: string;
+  email: string;
+  address: string;
+  nationality: string;
+}
 
+export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: StudentFormProps) {
   const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const form = useForm<FormValues>({
+    mode: "uncontrolled",
+    initialValues: {
+      firstName: initial?.firstName ?? "",
+      lastName: initial?.lastName ?? "",
+      gender: initial?.gender ?? "MALE",
+      studentNumber: initial?.studentNumber ?? "",
+      birthDate: initial?.birthDate ?? "",
+      birthPlace: initial?.birthPlace ?? "",
+      phone: initial?.phone ?? "",
+      email: initial?.email ?? "",
+      address: initial?.address ?? "",
+      nationality: initial?.nationality ?? "",
+    },
+    validate: {
+      firstName: (v) => (v.trim() ? null : "Prénom requis"),
+      lastName: (v) => (v.trim() ? null : "Nom requis"),
+      email: (v) => (!v || /^\S+@\S+$/.test(v) ? null : "Email invalide"),
+    },
+  });
+
+  async function handleSubmit(values: FormValues) {
     setError(null);
-    setFieldErrors({});
     setSubmitting(true);
     try {
       await onSubmit({
-        firstName,
-        lastName,
-        gender,
-        studentNumber: studentNumber || null,
-        birthDate: birthDate || null,
-        birthPlace: birthPlace || null,
-        phone: phone || null,
-        email: email || null,
-        address: address || null,
-        nationality: nationality || null,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        gender: values.gender,
+        studentNumber: values.studentNumber || null,
+        birthDate: values.birthDate || null,
+        birthPlace: values.birthPlace || null,
+        phone: values.phone || null,
+        email: values.email || null,
+        address: values.address || null,
+        nationality: values.nationality || null,
       });
     } catch (err) {
       if (err instanceof ApiError) {
-        setFieldErrors(err.fieldErrors);
-        setError(Object.keys(err.fieldErrors).length === 0 ? err.userMessage : null);
+        const fieldErrors = err.fieldErrors;
+        if (Object.keys(fieldErrors).length > 0) form.setErrors(fieldErrors);
+        else setError(err.userMessage);
       } else {
         setError("Enregistrement impossible.");
       }
@@ -60,82 +81,67 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+    <form onSubmit={form.onSubmit(handleSubmit)}>
+      <Stack gap="md">
+        {error && (
+          <Alert color="red" variant="light">
+            {error}
+          </Alert>
+        )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="firstName">Prénom *</Label>
-          <Input id="firstName" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          {fieldErrors.firstName && <p className="text-xs text-red-600">{fieldErrors.firstName}</p>}
-        </Field>
-        <Field>
-          <Label htmlFor="lastName">Nom *</Label>
-          <Input id="lastName" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
-          {fieldErrors.lastName && <p className="text-xs text-red-600">{fieldErrors.lastName}</p>}
-        </Field>
-      </div>
+        <SimpleGrid cols={2}>
+          <TextInput label="Prénom" withAsterisk {...form.getInputProps("firstName")} key={form.key("firstName")} />
+          <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} key={form.key("lastName")} />
+        </SimpleGrid>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="gender">Sexe *</Label>
-          <Select id="gender" value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
-            <option value="MALE">Masculin</option>
-            <option value="FEMALE">Féminin</option>
-          </Select>
-        </Field>
-        <Field>
-          <Label htmlFor="studentNumber">Matricule</Label>
-          <Input
-            id="studentNumber"
-            value={studentNumber}
-            onChange={(e) => setStudentNumber(e.target.value)}
-            placeholder="Auto-généré si vide"
+        <SimpleGrid cols={2}>
+          <NativeSelect
+            label="Sexe"
+            data={[
+              { value: "MALE", label: "Masculin" },
+              { value: "FEMALE", label: "Féminin" },
+            ]}
+            {...form.getInputProps("gender")}
+            key={form.key("gender")}
           />
-        </Field>
-      </div>
+          <TextInput
+            label="Matricule"
+            placeholder="Auto-généré si vide"
+            {...form.getInputProps("studentNumber")}
+            key={form.key("studentNumber")}
+          />
+        </SimpleGrid>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="birthDate">Date de naissance</Label>
-          <Input id="birthDate" type="date" value={birthDate ?? ""} onChange={(e) => setBirthDate(e.target.value)} />
-        </Field>
-        <Field>
-          <Label htmlFor="birthPlace">Lieu de naissance</Label>
-          <Input id="birthPlace" value={birthPlace ?? ""} onChange={(e) => setBirthPlace(e.target.value)} />
-        </Field>
-      </div>
+        <SimpleGrid cols={2}>
+          <DateInput
+            label="Date de naissance"
+            valueFormat="DD/MM/YYYY"
+            clearable
+            {...form.getInputProps("birthDate")}
+            key={form.key("birthDate")}
+          />
+          <TextInput label="Lieu de naissance" {...form.getInputProps("birthPlace")} key={form.key("birthPlace")} />
+        </SimpleGrid>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="phone">Téléphone</Label>
-          <Input id="phone" value={phone ?? ""} onChange={(e) => setPhone(e.target.value)} />
-        </Field>
-        <Field>
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" value={email ?? ""} onChange={(e) => setEmail(e.target.value)} />
-        </Field>
-      </div>
+        <SimpleGrid cols={2}>
+          <TextInput label="Téléphone" {...form.getInputProps("phone")} key={form.key("phone")} />
+          <TextInput label="Email" type="email" {...form.getInputProps("email")} key={form.key("email")} />
+        </SimpleGrid>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Field>
-          <Label htmlFor="nationality">Nationalité</Label>
-          <Input id="nationality" value={nationality ?? ""} onChange={(e) => setNationality(e.target.value)} />
-        </Field>
-        <Field>
-          <Label htmlFor="address">Adresse</Label>
-          <Input id="address" value={address ?? ""} onChange={(e) => setAddress(e.target.value)} />
-        </Field>
-      </div>
+        <SimpleGrid cols={2}>
+          <TextInput label="Nationalité" {...form.getInputProps("nationality")} key={form.key("nationality")} />
+          <TextInput label="Adresse" {...form.getInputProps("address")} key={form.key("address")} />
+        </SimpleGrid>
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
-          Annuler
-        </Button>
-        <Button type="submit" loading={submitting}>
-          {submitLabel}
-        </Button>
-      </div>
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={onCancel} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button type="submit" loading={submitting}>
+            {submitLabel}
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }

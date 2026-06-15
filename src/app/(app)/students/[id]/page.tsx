@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EnrollModal } from "@/components/enrollments/enroll-modal";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
   PENDING: "amber",
@@ -69,18 +70,46 @@ export default function StudentDetailPage() {
   );
 
   async function handleValidate(enrollmentId: number) {
-    await validateEnrollment(enrollmentId);
-    refetch();
+    try {
+      await validateEnrollment(enrollmentId);
+      notifySuccess("Inscription validée");
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    }
   }
-  async function handleCancel(enrollmentId: number) {
-    if (!confirm("Annuler cette inscription ?")) return;
-    await cancelEnrollment(enrollmentId);
-    refetch();
+  function handleCancel(enrollmentId: number) {
+    confirmAction({
+      title: "Annuler l'inscription",
+      message: "Annuler cette inscription ?",
+      confirmLabel: "Annuler l'inscription",
+      onConfirm: async () => {
+        try {
+          await cancelEnrollment(enrollmentId);
+          notifySuccess("Inscription annulée");
+          refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
   }
-  async function handleDelete(enrollmentId: number) {
-    if (!confirm("Supprimer définitivement cette inscription ?")) return;
-    await deleteEnrollment(enrollmentId);
-    refetch();
+  function handleDelete(enrollmentId: number) {
+    confirmAction({
+      title: "Supprimer l'inscription",
+      message: "Supprimer définitivement cette inscription ?",
+      confirmLabel: "Supprimer",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteEnrollment(enrollmentId);
+          notifySuccess("Inscription supprimée");
+          refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
   }
 
   if (loading) {
