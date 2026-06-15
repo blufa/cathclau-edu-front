@@ -9,7 +9,10 @@ import type {
   CreateClassInput,
   CreatePeriodInput,
   CreateRoomInput,
+  CreateScheduleInput,
+  EmploiDuTemps,
   EnrollmentCountInfo,
+  JourSemaine,
   Matiere,
   Niveau,
   Periode,
@@ -71,6 +74,31 @@ export function assignClassSubject(classId: number, subjectId: number, teacherId
 }
 export function removeClassSubject(classId: number, id: number): Promise<void> {
   return api.delete<void>(`/academics/classes/${classId}/subjects/${id}`);
+}
+
+// ── Timetable ─────────────────────────────────────────────────────────────--
+export function searchSchedules(params: {
+  classId?: number;
+  teacherId?: number;
+  roomId?: number;
+  day?: JourSemaine;
+}): Promise<EmploiDuTemps[]> {
+  return api.get<EmploiDuTemps[]>("/academics/schedules", { query: { ...params } });
+}
+export function getScheduleByClass(classId: number): Promise<EmploiDuTemps[]> {
+  return api.get<EmploiDuTemps[]>(`/academics/schedules/by-class/${classId}`);
+}
+export function getScheduleByTeacher(teacherId: number): Promise<EmploiDuTemps[]> {
+  return api.get<EmploiDuTemps[]>(`/academics/schedules/by-teacher/${teacherId}`);
+}
+export function createSchedule(input: CreateScheduleInput): Promise<EmploiDuTemps> {
+  return api.post<EmploiDuTemps>("/academics/schedules", input);
+}
+export function updateSchedule(id: number, input: CreateScheduleInput): Promise<EmploiDuTemps> {
+  return api.put<EmploiDuTemps>(`/academics/schedules/${id}`, input);
+}
+export function deleteSchedule(id: number): Promise<void> {
+  return api.delete<void>(`/academics/schedules/${id}`);
 }
 
 // ── Academic years (admin) ────────────────────────────────────────────────--

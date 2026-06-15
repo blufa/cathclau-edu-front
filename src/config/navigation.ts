@@ -25,6 +25,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "Inscriptions", href: "/enrollments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
       { label: "Classes", href: "/classes", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
       { label: "Enseignants", href: "/teachers", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Emploi du temps", href: "/timetable", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"] },
     ],
   },
   {

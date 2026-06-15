@@ -86,6 +86,32 @@ export interface Classe {
   maxCapacity: number | null;
 }
 
+export type JourSemaine = "LUNDI" | "MARDI" | "MERCREDI" | "JEUDI" | "VENDREDI" | "SAMEDI";
+
+/** Timetable slot (EmploiDuTemps). Times are "HH:mm[:ss]" strings. */
+export interface EmploiDuTemps {
+  id: number;
+  tenantId: number;
+  schoolClassId: number;
+  subjectId: number;
+  teacherId: number | null;
+  roomId: number | null;
+  day: JourSemaine;
+  startTime: string;
+  endTime: string;
+}
+
+/** Body for POST/PUT schedule — tenantId resolved server-side. */
+export interface CreateScheduleInput {
+  schoolClassId: number;
+  subjectId: number;
+  teacherId: number | null;
+  roomId: number | null;
+  day: JourSemaine;
+  startTime: string;
+  endTime: string;
+}
+
 /** Subject assignment to a class (ClasseMatiere). */
 export interface ClasseMatiere {
   id: number;
