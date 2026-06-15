@@ -3,7 +3,7 @@
 export type Gender = "MALE" | "FEMALE";
 export type EnrollmentStatus = "PENDING" | "VALIDATED" | "CANCELLED";
 export type Relationship = "FATHER" | "MOTHER" | "GUARDIAN";
-export type EnrollmentType = "ENROLLMENT" | "REENROLLMENT";
+export type EnrollmentType = "NEW" | "RE_ENROLLMENT";
 
 export interface Student {
   id: number;
@@ -31,6 +31,22 @@ export interface Enrollment {
   academicYearId: number;
   type: EnrollmentType;
   status: EnrollmentStatus;
+  enrolledAt: string | null;
+}
+
+/** Body for POST /enrollments and /enrollments/re-enrollment. */
+export interface EnrollInput {
+  studentId: number;
+  classId: number;
+  academicYearId: number;
+  type: EnrollmentType;
+}
+
+export interface EnrollmentSearchParams {
+  studentId?: number;
+  classId?: number;
+  academicYearId?: number;
+  status?: EnrollmentStatus;
 }
 
 export interface Parent {

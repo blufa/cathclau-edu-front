@@ -1,14 +1,25 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getStudent } from "@/lib/api/students";
+import { listClasses } from "@/lib/api/academics";
+import {
+  cancelEnrollment,
+  deleteEnrollment,
+  validateEnrollment,
+} from "@/lib/api/enrollments";
 import type { EnrollmentStatus } from "@/lib/types/student";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { EnrollModal } from "@/components/enrollments/enroll-modal";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
   PENDING: "amber",
@@ -33,8 +44,44 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
+  const { user } = useAuth();
+  const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR");
+  const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
-  const { data, loading, error } = useQuery(() => getStudent(id), [id]);
+  const { data, loading, error, refetch } = useQuery(() => getStudent(id), [id]);
+  const [enrolling, setEnrolling] = useState(false);
+
+  // Resolve class labels for the years referenced by the student's enrollments.
+  const yearIds = useMemo(
+    () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId))],
+    [data?.enrollments],
+  );
+  const classesQuery = useQuery(
+    () =>
+      yearIds.length
+        ? Promise.all(yearIds.map((y) => listClasses(y))).then((lists) => lists.flat())
+        : Promise.resolve([]),
+    [yearIds.join(",")],
+  );
+  const classLabel = useMemo(
+    () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
+    [classesQuery.data],
+  );
+
+  async function handleValidate(enrollmentId: number) {
+    await validateEnrollment(enrollmentId);
+    refetch();
+  }
+  async function handleCancel(enrollmentId: number) {
+    if (!confirm("Annuler cette inscription ?")) return;
+    await cancelEnrollment(enrollmentId);
+    refetch();
+  }
+  async function handleDelete(enrollmentId: number) {
+    if (!confirm("Supprimer définitivement cette inscription ?")) return;
+    await deleteEnrollment(enrollmentId);
+    refetch();
+  }
 
   if (loading) {
     return (
@@ -93,8 +140,13 @@ export default function StudentDetailPage() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex items-center justify-between">
           <CardTitle>Inscriptions</CardTitle>
+          {canEnroll && (
+            <Button size="sm" onClick={() => setEnrolling(true)}>
+              Inscrire
+            </Button>
+          )}
         </CardHeader>
         <CardBody className="p-0">
           {enrollments.length === 0 ? (
@@ -107,16 +159,36 @@ export default function StudentDetailPage() {
                   <TH>Année</TH>
                   <TH>Type</TH>
                   <TH>Statut</TH>
+                  <TH className="text-right">Actions</TH>
                 </tr>
               </THead>
               <TBody>
                 {enrollments.map((e) => (
                   <TR key={e.id}>
-                    <TD>#{e.classId}</TD>
+                    <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
                     <TD>#{e.academicYearId}</TD>
-                    <TD>{e.type === "REENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
+                    <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                    </TD>
+                    <TD className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {canDecide && e.status === "PENDING" && (
+                          <Button size="sm" variant="ghost" className="text-green-700" onClick={() => handleValidate(e.id)}>
+                            Valider
+                          </Button>
+                        )}
+                        {canDecide && e.status !== "CANCELLED" && (
+                          <Button size="sm" variant="ghost" onClick={() => handleCancel(e.id)}>
+                            Annuler
+                          </Button>
+                        )}
+                        {canDecide && (
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(e.id)}>
+                            Suppr.
+                          </Button>
+                        )}
+                      </div>
                     </TD>
                   </TR>
                 ))}
@@ -178,6 +250,13 @@ export default function StudentDetailPage() {
           </CardBody>
         </Card>
       </div>
+
+      <EnrollModal
+        studentId={id}
+        open={enrolling}
+        onClose={() => setEnrolling(false)}
+        onEnrolled={refetch}
+      />
     </div>
   );
 }
