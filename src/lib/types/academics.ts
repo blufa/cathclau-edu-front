@@ -86,6 +86,14 @@ export interface Classe {
   maxCapacity: number | null;
 }
 
+/** Subject assignment to a class (ClasseMatiere). */
+export interface ClasseMatiere {
+  id: number;
+  schoolClassId: number;
+  subjectId: number;
+  teacherId: number | null;
+}
+
 /** Roster projection from GET /classes/{id}/students. */
 export interface ClassStudent {
   id: number;

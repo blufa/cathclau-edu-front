@@ -3,6 +3,7 @@ import { ApiError } from "@/lib/api/errors";
 import type {
   AnneeScolaire,
   Classe,
+  ClasseMatiere,
   ClassStudent,
   CreateAcademicYearInput,
   CreateClassInput,
@@ -58,6 +59,18 @@ export function getClassStudents(id: number): Promise<ClassStudent[]> {
 
 export function getEnrollmentCount(id: number): Promise<EnrollmentCountInfo> {
   return api.get<EnrollmentCountInfo>(`/academics/classes/${id}/enrollment-count`);
+}
+
+export function listClassSubjects(classId: number): Promise<ClasseMatiere[]> {
+  return api.get<ClasseMatiere[]>(`/academics/classes/${classId}/subjects`);
+}
+export function assignClassSubject(classId: number, subjectId: number, teacherId?: number): Promise<ClasseMatiere> {
+  return api.post<ClasseMatiere>(`/academics/classes/${classId}/subjects`, undefined, {
+    query: { subjectId, teacherId },
+  });
+}
+export function removeClassSubject(classId: number, id: number): Promise<void> {
+  return api.delete<void>(`/academics/classes/${classId}/subjects/${id}`);
 }
 
 // ── Academic years (admin) ────────────────────────────────────────────────--

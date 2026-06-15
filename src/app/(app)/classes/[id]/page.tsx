@@ -10,13 +10,18 @@ import {
   listLevels,
   listRooms,
 } from "@/lib/api/academics";
+import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { ClassSubjectsSection } from "@/components/classes/class-subjects-section";
 
 export default function ClassDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
+  const { user } = useAuth();
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
   const classQuery = useQuery(() => getClass(id), [id]);
   const countQuery = useQuery(() => getEnrollmentCount(id), [id]);
@@ -110,6 +115,8 @@ export default function ClassDetailPage() {
           </CardBody>
         </Card>
       </div>
+
+      <ClassSubjectsSection classId={id} canWrite={canWrite} />
 
       <Card>
         <CardHeader>
