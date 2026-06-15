@@ -2,21 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Alert, Anchor, Button, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
+import { useForm } from "@mantine/form";
 import { forgotPassword } from "@/lib/auth/auth-service";
-import { Button } from "@/components/ui/button";
-import { Field, Input, Label } from "@/components/ui/input";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const form = useForm({
+    mode: "uncontrolled",
+    initialValues: { email: "" },
+    validate: { email: (v) => (/^\S+@\S+$/.test(v) ? null : "Email invalide") },
+  });
+
+  async function handleSubmit(values: { email: string }) {
     setLoading(true);
     try {
-      await forgotPassword(email);
+      await forgotPassword(values.email);
     } finally {
       // Always report success: the endpoint is intentionally non-revealing about account existence.
       setDone(true);
@@ -25,47 +28,41 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Mot de passe oublié</CardTitle>
-      </CardHeader>
-      <CardBody>
-        {done ? (
-          <div className="space-y-4">
-            <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-              Si un compte existe pour cette adresse, un lien de réinitialisation vous a été envoyé.
-            </p>
-            <Link href="/login" className="text-sm text-indigo-600 hover:underline">
-              ← Retour à la connexion
-            </Link>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-sm text-gray-600">
+    <Paper withBorder shadow="sm" radius="lg" p="xl">
+      <Title order={3} mb="md">
+        Mot de passe oublié
+      </Title>
+      {done ? (
+        <Stack gap="md">
+          <Alert color="green" variant="light">
+            Si un compte existe pour cette adresse, un lien de réinitialisation vous a été envoyé.
+          </Alert>
+          <Anchor component={Link} href="/login" size="sm">
+            ← Retour à la connexion
+          </Anchor>
+        </Stack>
+      ) : (
+        <form onSubmit={form.onSubmit(handleSubmit)}>
+          <Stack gap="md">
+            <Text size="sm" c="dimmed">
               Saisissez votre email pour recevoir un lien de réinitialisation.
-            </p>
-            <Field>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </Field>
-            <Button type="submit" loading={loading} className="w-full">
+            </Text>
+            <TextInput
+              label="Email"
+              autoComplete="email"
+              withAsterisk
+              {...form.getInputProps("email")}
+              key={form.key("email")}
+            />
+            <Button type="submit" loading={loading} fullWidth>
               Envoyer le lien
             </Button>
-            <div className="text-center">
-              <Link href="/login" className="text-sm text-indigo-600 hover:underline">
-                Retour à la connexion
-              </Link>
-            </div>
-          </form>
-        )}
-      </CardBody>
-    </Card>
+            <Anchor component={Link} href="/login" ta="center" size="sm">
+              Retour à la connexion
+            </Anchor>
+          </Stack>
+        </form>
+      )}
+    </Paper>
   );
 }

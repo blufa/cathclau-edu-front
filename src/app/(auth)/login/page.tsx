@@ -3,26 +3,31 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Alert, Anchor, Button, Paper, PasswordInput, Stack, TextInput, Title } from "@mantine/core";
+import { useForm } from "@mantine/form";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/lib/api/errors";
-import { Button } from "@/components/ui/button";
-import { Field, Input, Label } from "@/components/ui/input";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const form = useForm({
+    mode: "uncontrolled",
+    initialValues: { email: "", password: "" },
+    validate: {
+      email: (v) => (/^\S+@\S+$/.test(v) ? null : "Email invalide"),
+      password: (v) => (v ? null : "Mot de passe requis"),
+    },
+  });
+
+  async function handleSubmit(values: { email: string; password: string }) {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      await login(values.email, values.password);
       router.replace("/dashboard");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -30,55 +35,46 @@ export default function LoginPage() {
       } else {
         setError("Connexion impossible. Vérifiez votre réseau.");
       }
-    } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Connexion</CardTitle>
-      </CardHeader>
-      <CardBody>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <Paper withBorder shadow="sm" radius="lg" p="xl">
+      <Title order={3} mb="md">
+        Connexion
+      </Title>
+      <form onSubmit={form.onSubmit(handleSubmit)}>
+        <Stack gap="md">
           {error && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+            <Alert color="red" variant="light">
+              {error}
+            </Alert>
           )}
-          <Field>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@ecole.com"
-            />
-          </Field>
-          <Field>
-            <Label htmlFor="password">Mot de passe</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
-          </Field>
-          <Button type="submit" loading={loading} className="w-full">
+          <TextInput
+            label="Email"
+            placeholder="vous@ecole.com"
+            autoComplete="email"
+            withAsterisk
+            {...form.getInputProps("email")}
+            key={form.key("email")}
+          />
+          <PasswordInput
+            label="Mot de passe"
+            placeholder="••••••••"
+            autoComplete="current-password"
+            withAsterisk
+            {...form.getInputProps("password")}
+            key={form.key("password")}
+          />
+          <Button type="submit" loading={loading} fullWidth>
             Se connecter
           </Button>
-          <div className="text-center">
-            <Link href="/forgot-password" className="text-sm text-indigo-600 hover:underline">
-              Mot de passe oublié ?
-            </Link>
-          </div>
-        </form>
-      </CardBody>
-    </Card>
+          <Anchor component={Link} href="/forgot-password" ta="center" size="sm">
+            Mot de passe oublié ?
+          </Anchor>
+        </Stack>
+      </form>
+    </Paper>
   );
 }
