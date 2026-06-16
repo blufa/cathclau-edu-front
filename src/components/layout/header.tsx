@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { Avatar, Burger, Group, Menu, Text } from "@mantine/core";
 import { useAuth } from "@/providers/auth-provider";
 import { notifyError } from "@/lib/feedback";
+import { getBranding } from "@/lib/branding";
 
 export function Header({ navOpened, onToggleNav }: { navOpened: boolean; onToggleNav: () => void }) {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const branding = getBranding();
 
   const initials = user
     ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "?"
@@ -28,10 +30,10 @@ export function Header({ navOpened, onToggleNav }: { navOpened: boolean; onToggl
         <Burger opened={navOpened} onClick={onToggleNav} hiddenFrom="sm" size="sm" />
         <Group gap="xs">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600 font-bold text-white">
-            L
+            {branding.logoLetter}
           </div>
           <Text fw={600} size="lg">
-            LacaÉducation
+            {branding.appName}
           </Text>
         </Group>
       </Group>

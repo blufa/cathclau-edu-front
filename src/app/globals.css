@@ -1,7 +1,14 @@
 @import "tailwindcss";
 
 /*
- * Tailwind is kept for layout utilities; Mantine owns components and theming.
- * Body colors/fonts are driven by Mantine (MantineProvider + theme), so we don't
- * force a background or font here to avoid clashing with Mantine's color scheme.
+ * Mantine + Tailwind coexistence (projet) — règle :
+ *   • Mantine = composants (inputs, modals, tables, notifications, AppShell).
+ *   • Tailwind = layout / spacing / petits utilitaires sur les éléments wrappers.
+ *
+ * Isolation du preflight Tailwind :
+ *   Tailwind v4 place son reset (preflight) dans la couche CSS `@layer base`.
+ *   Les styles Mantine (`@mantine/core/styles.css`) sont importés AVANT et sont
+ *   NON-layered. En cascade CSS, une déclaration non-layered l'emporte sur toute
+ *   couche → le preflight Tailwind ne peut donc PAS écraser les composants Mantine.
+ *   On évite ainsi de styliser deux fois le même élément.
  */
