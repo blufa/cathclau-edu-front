@@ -10,6 +10,7 @@ import { ApiError } from "@/lib/api/errors";
 import { Modal } from "@/components/ui/modal";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { LevelCatalogPicker } from "@/components/referentials/level-catalog";
 
 function LevelForm({
   initial,
@@ -60,6 +61,7 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
   const q = useQuery(listLevels, []);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Niveau | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const levels = (q.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
 
   async function handleCreate(label: string, sortOrder: number) {
@@ -96,7 +98,10 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
   return (
     <Stack gap="md">
       {canWrite && (
-        <Group justify="flex-end">
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setCatalogOpen(true)}>
+            Catalogue
+          </Button>
           <Button onClick={() => setCreating(true)}>Nouveau niveau</Button>
         </Group>
       )}
@@ -142,6 +147,19 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
       </Modal>
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier le niveau">
         {editing && <LevelForm initial={editing} onSubmit={handleUpdate} onCancel={() => setEditing(null)} />}
+      </Modal>
+
+      <Modal open={catalogOpen} onClose={() => setCatalogOpen(false)} title="Catalogue des niveaux">
+        {catalogOpen && (
+          <LevelCatalogPicker
+            existing={levels}
+            onDone={() => {
+              setCatalogOpen(false);
+              q.refetch();
+            }}
+            onCancel={() => setCatalogOpen(false)}
+          />
+        )}
       </Modal>
     </Stack>
   );

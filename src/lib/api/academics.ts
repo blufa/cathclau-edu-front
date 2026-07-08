@@ -67,9 +67,15 @@ export function getEnrollmentCount(id: number): Promise<EnrollmentCountInfo> {
 export function listClassSubjects(classId: number): Promise<ClasseMatiere[]> {
   return api.get<ClasseMatiere[]>(`/academics/classes/${classId}/subjects`);
 }
-export function assignClassSubject(classId: number, subjectId: number, teacherId?: number): Promise<ClasseMatiere> {
+export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number): Promise<ClasseMatiere> {
   return api.post<ClasseMatiere>(`/academics/classes/${classId}/subjects`, undefined, {
-    query: { subjectId, teacherId },
+    query: { subjectId, teacherId, coefficient },
+  });
+}
+/** Désigne (ou retire avec teacherId=null) le professeur principal de la classe. */
+export function setClassHeadTeacher(classId: number, teacherId: number | null): Promise<Classe> {
+  return api.patch<Classe>(`/academics/classes/${classId}/head-teacher`, undefined, {
+    query: teacherId != null ? { teacherId } : {},
   });
 }
 export function removeClassSubject(classId: number, id: number): Promise<void> {
@@ -114,6 +120,12 @@ export function changeAcademicYearStatus(id: number, status: StatutAnneeScolaire
 export function setCurrentAcademicYear(id: number): Promise<AnneeScolaire> {
   return api.patch<AnneeScolaire>(`/academics/academic-years/${id}/set-current`);
 }
+export function startAcademicYear(id: number): Promise<AnneeScolaire> {
+  return api.put<AnneeScolaire>(`/academics/academic-years/${id}/start`);
+}
+export function closeAcademicYear(id: number): Promise<AnneeScolaire> {
+  return api.put<AnneeScolaire>(`/academics/academic-years/${id}/close`);
+}
 
 // ── Periods ───────────────────────────────────────────────────────────────--
 export function listPeriods(academicYearId: number): Promise<Periode[]> {
@@ -122,8 +134,11 @@ export function listPeriods(academicYearId: number): Promise<Periode[]> {
 export function createPeriod(academicYearId: number, input: CreatePeriodInput): Promise<Periode> {
   return api.post<Periode>(`/academics/academic-years/${academicYearId}/periods`, input);
 }
+export function updatePeriod(periodId: number, input: CreatePeriodInput): Promise<Periode> {
+  return api.put<Periode>(`/academics/academic-years/periods/${periodId}`, input);
+}
 export function closePeriod(periodId: number): Promise<Periode> {
-  return api.put<Periode>(`/academics/periods/${periodId}/close`);
+  return api.put<Periode>(`/academics/academic-years/periods/${periodId}/close`);
 }
 
 // ── Levels ────────────────────────────────────────────────────────────────--
@@ -169,4 +184,16 @@ export function updateSubject(id: number, label: string, coefficient: number, sy
 }
 export function deleteSubject(id: number): Promise<void> {
   return api.delete<void>(`/academics/subjects/${id}`);
+}
+
+// ── Génération automatique d'emploi du temps (selon disponibilités) ─────────────
+export interface ProposedSlot {
+  classId: number; subjectId: number; teacherId: number | null;
+  day: string; startTime: string; endTime: string;
+}
+export interface TimetableProposal { slots: ProposedSlot[]; teachersWithoutAvailability: number[] }
+
+/** Propose un emploi du temps à partir des disponibilités enseignants (sans nombre de séances). */
+export function proposeTimetable(classIds: number[]): Promise<TimetableProposal> {
+  return api.post<TimetableProposal>("/staff/timetable/propose", { classIds });
 }

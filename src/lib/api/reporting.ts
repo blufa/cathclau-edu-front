@@ -1,0 +1,108 @@
+import { api } from "./client";
+
+// ── 10.1 Académique ────────────────────────────────────────────────────────
+export interface ClassAcademicRow {
+  classId: number;
+  className: string;
+  studentCount: number;
+  classAverage: string;
+  highestAverage: string;
+  lowestAverage: string;
+  passRate: string;
+}
+export interface TopStudentRow {
+  studentId: number;
+  studentName: string;
+  classId: number;
+  className: string;
+  overallAverage: string;
+  rank: number | null;
+}
+export interface AcademicDashboard {
+  periodId: number;
+  studentCount: number;
+  overallAverage: string;
+  passRate: string;
+  classes: ClassAcademicRow[];
+  topStudents: TopStudentRow[];
+}
+
+export function getAcademicDashboard(periodId: number, top = 10): Promise<AcademicDashboard> {
+  return api.get<AcademicDashboard>("/dashboard/academic", { query: { periodId, top } });
+}
+
+// ── 10.2 Financier ─────────────────────────────────────────────────────────
+export interface FinanceDashboard {
+  invoiced: string;
+  collected: string;
+  outstanding: string;
+  recoveryRate: string;
+  unpaidInvoices: number;
+}
+
+export function getFinanceDashboard(): Promise<FinanceDashboard> {
+  return api.get<FinanceDashboard>("/dashboard/finance");
+}
+
+export interface ProjectionMonth {
+  year: number;
+  month: number;
+  expectedInflow: string;
+  expectedOutflow: string;
+  net: string;
+  cumulativeNet: string;
+}
+export interface CashflowProjection {
+  outstandingReceivables: string;
+  avgMonthlyCollection: string;
+  recurringPayroll: string;
+  months: ProjectionMonth[];
+}
+
+export function getCashflowProjection(months = 6): Promise<CashflowProjection> {
+  return api.get<CashflowProjection>("/dashboard/finance/projection", { query: { months } });
+}
+
+// ── 10.3 RH ────────────────────────────────────────────────────────────────
+export interface TeacherHrRow {
+  teacherId: number;
+  teacherName: string;
+  presentDays: number;
+  absentDays: number;
+  effectiveHours: number;
+  attendanceRate: string;
+}
+export interface HrDashboard {
+  year: number;
+  month: number;
+  teacherCount: number;
+  totalPresentDays: number;
+  totalAbsentDays: number;
+  totalEffectiveHours: number;
+  teachers: TeacherHrRow[];
+}
+
+export function getHrDashboard(year: number, month: number): Promise<HrDashboard> {
+  return api.get<HrDashboard>("/dashboard/hr", { query: { year, month } });
+}
+
+export interface TeacherPerformanceRow {
+  teacherId: number;
+  teacherName: string;
+  performanceScore: string;
+  completionRate: string;
+  attendanceRate: string;
+  punctualityRate: string;
+  effectiveHours: number;
+  lateMinutes: number;
+}
+export interface PerformanceDashboard {
+  year: number;
+  month: number;
+  teacherCount: number;
+  teachers: TeacherPerformanceRow[];
+}
+
+export function getTeacherPerformance(year: number, month: number): Promise<PerformanceDashboard> {
+  return api.get<PerformanceDashboard>("/dashboard/hr/performance", { query: { year, month } });
+}

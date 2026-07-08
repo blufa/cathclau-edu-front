@@ -20,6 +20,15 @@ export interface Student {
   phone: string | null;
   email: string | null;
   nationality: string | null;
+  originSchool: string | null;
+  birthCertificateNumber: string | null;
+  bloodGroup: string | null;
+  neighborhood: string | null;
+  landmark: string | null;
+  previousClass: string | null;
+  repeating: boolean | null;
+  transferReason: string | null;
+  medicalNotes: string | null;
   createdAt: string | null;
   deletedAt: string | null;
 }
@@ -59,6 +68,7 @@ export interface Parent {
   email: string | null;
   occupation: string | null;
   address: string | null;
+  primaryGuardian?: boolean;
 }
 
 export interface StudentDocument {
@@ -89,6 +99,16 @@ export interface CreateStudentInput {
   phone?: string | null;
   email?: string | null;
   nationality?: string | null;
+  originSchool?: string | null;
+  photo?: string | null;
+  birthCertificateNumber?: string | null;
+  bloodGroup?: string | null;
+  neighborhood?: string | null;
+  landmark?: string | null;
+  previousClass?: string | null;
+  repeating?: boolean | null;
+  transferReason?: string | null;
+  medicalNotes?: string | null;
 }
 
 /** Body for PUT /students/{id}. */
@@ -97,6 +117,8 @@ export type UpdateStudentInput = Omit<CreateStudentInput, "userId">;
 export interface StudentSearchParams {
   classId?: number;
   enrollmentStatus?: EnrollmentStatus;
+  /** Filtre les élèves sans inscription active (présents dans le système mais non inscrits). */
+  notEnrolled?: boolean;
   gender?: Gender;
   search?: string;
   page?: number;

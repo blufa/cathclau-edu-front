@@ -4,15 +4,25 @@ import type {
   CreateStudentInput,
   Student,
   StudentDetail,
+  StudentDocument,
   StudentSearchParams,
   UpdateStudentInput,
 } from "@/lib/types/student";
+
+export type DocumentType = "BIRTH_CERTIFICATE" | "PHOTO" | "MEDICAL_CERTIFICATE" | "ACADEMIC_RECORD";
+export const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
+  BIRTH_CERTIFICATE: "Acte de naissance",
+  PHOTO: "Photo",
+  MEDICAL_CERTIFICATE: "Certificat médical",
+  ACADEMIC_RECORD: "Bulletin / dossier scolaire",
+};
 
 export function searchStudents(params: StudentSearchParams): Promise<Page<Student>> {
   return api.get<Page<Student>>("/students", {
     query: {
       classId: params.classId,
       enrollmentStatus: params.enrollmentStatus,
+      notEnrolled: params.notEnrolled || undefined,
       gender: params.gender,
       search: params.search || undefined,
       page: params.page,
@@ -34,6 +44,69 @@ export function updateStudent(id: number, input: UpdateStudentInput): Promise<St
   return api.put<Student>(`/students/${id}`, input);
 }
 
+export function updateStudentPhoto(id: number, photoUrl: string): Promise<Student> {
+  return api.patch<Student>(`/students/${id}/photo`, undefined, { query: { photoUrl } });
+}
+
 export function deleteStudent(id: number): Promise<void> {
   return api.delete<void>(`/students/${id}`);
+}
+
+// ── Documents ──────────────────────────────────────────────────────────────
+export function getStudentDocuments(studentId: number): Promise<StudentDocument[]> {
+  return api.get<StudentDocument[]>(`/students/${studentId}/documents`);
+}
+export function addStudentDocument(studentId: number, documentType: DocumentType, fileUrl: string): Promise<StudentDocument> {
+  return api.post<StudentDocument>(`/students/${studentId}/documents`, { documentType, fileUrl });
+}
+export function deleteStudentDocument(studentId: number, documentId: number): Promise<void> {
+  return api.delete<void>(`/students/${studentId}/documents/${documentId}`);
+}
+
+// ── Transfer certificate (certificat de radiation/transfert) ─────────────────
+export function generateTransferCertificate(studentId: number, body: { schoolName?: string; motif?: string }): Promise<{ url: string }> {
+  return api.post<{ url: string }>(`/students/${studentId}/certificat-radiation`, body);
+}
+
+// ── Bulk CSV import ──────────────────────────────────────────────────────────
+export interface ImportReport {
+  total: number;
+  created: number;
+  errors: { line: number; message: string }[];
+}
+export async function importStudentsCsv(file: File): Promise<ImportReport> {
+  const { getAccessToken } = await import("@/lib/auth/tokens");
+  const { getImpersonatedTenantId } = await import("@/lib/auth/impersonation");
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8284/api/v1";
+  const form = new FormData();
+  form.append("file", file);
+  const headers = new Headers();
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const imp = getImpersonatedTenantId();
+  if (imp != null) headers.set("X-Tenant-Id", String(imp));
+  const res = await fetch(`${base}/students/import`, { method: "POST", headers, body: form });
+  if (!res.ok) {
+    let detail = "Échec de l'import";
+    try { const j = await res.json(); detail = j.detail ?? j.message ?? detail; } catch { /* ignore */ }
+    throw new Error(detail);
+  }
+  return (await res.json()) as ImportReport;
+}
+
+/** Un créneau d'emploi du temps (vue publique) pour le portail élève/parent. */
+export interface StudentScheduleSlot {
+  id: number;
+  classId: number;
+  subjectId: number;
+  teacherId: number | null;
+  roomId: number | null;
+  day: string;
+  startTime: string;
+  endTime: string;
+}
+
+/** Emploi du temps de la classe courante d'un élève. */
+export function getStudentSchedule(studentId: number): Promise<StudentScheduleSlot[]> {
+  return api.get<StudentScheduleSlot[]>(`/students/${studentId}/emploi-du-temps`);
 }

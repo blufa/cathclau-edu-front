@@ -20,6 +20,11 @@ export function reenroll(input: EnrollInput): Promise<Enrollment> {
   return api.post<Enrollment>("/enrollments/re-enrollment", input);
 }
 
+/** Modify a pending enrollment (class / academic year / type). */
+export function updateEnrollment(id: number, input: EnrollInput): Promise<Enrollment> {
+  return api.put<Enrollment>(`/enrollments/${id}`, input);
+}
+
 export function validateEnrollment(id: number): Promise<Enrollment> {
   return api.patch<Enrollment>(`/enrollments/${id}/validate`);
 }

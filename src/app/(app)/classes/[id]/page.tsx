@@ -10,6 +10,7 @@ import {
   listLevels,
   listRooms,
 } from "@/lib/api/academics";
+import { listTeachers } from "@/lib/api/staff";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ export default function ClassDetailPage() {
   const studentsQuery = useQuery(() => getClassStudents(id), [id]);
   const levelsQuery = useQuery(listLevels, []);
   const roomsQuery = useQuery(listRooms, []);
+  const teachersQuery = useQuery(listTeachers, []);
 
   if (classQuery.loading) {
     return (
@@ -56,6 +58,12 @@ export default function ClassDetailPage() {
   const roomLabel = classe.roomId
     ? (roomsQuery.data?.find((r) => r.id === classe.roomId)?.label ?? "—")
     : "—";
+  const headTeacher = classe.headTeacherId
+    ? teachersQuery.data?.find((t) => t.id === classe.headTeacherId)
+    : null;
+  const headTeacherLabel = headTeacher
+    ? `${headTeacher.firstName} ${headTeacher.lastName}`
+    : classe.headTeacherId ? `#${classe.headTeacherId}` : "Non assigné";
 
   const current = count?.currentCount ?? classe.headcount ?? 0;
   const capacity = count?.maxCapacity ?? classe.maxCapacity ?? null;
@@ -109,14 +117,15 @@ export default function ClassDetailPage() {
             <CardTitle>Prof. principal</CardTitle>
           </CardHeader>
           <CardBody>
-            <p className="text-sm text-gray-700">
-              {classe.headTeacherId ? `#${classe.headTeacherId}` : "Non assigné"}
-            </p>
+            <p className="text-sm font-medium text-gray-700">{headTeacherLabel}</p>
+            <p className="mt-1 text-xs text-gray-400">Se désigne depuis le tableau des matières</p>
           </CardBody>
         </Card>
       </div>
 
-      <ClassSubjectsSection classId={id} canWrite={canWrite} />
+      <ClassSubjectsSection classId={id} canWrite={canWrite}
+        headTeacherId={classe.headTeacherId ?? null}
+        onHeadTeacherChange={() => classQuery.refetch()} />
 
       <Card>
         <CardHeader>

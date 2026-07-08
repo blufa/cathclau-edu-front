@@ -6,9 +6,10 @@ import {
   getRefreshToken,
   setTokens,
 } from "@/lib/auth/tokens";
+import { getImpersonatedTenantId } from "@/lib/auth/impersonation";
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8284/api/v1";
 
 /**
  * Called when the session can no longer be recovered (refresh failed/absent on a 401).
@@ -85,6 +86,10 @@ async function doFetch(path: string, options: RequestOptions, withAuth: boolean)
   if (withAuth) {
     const token = getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
+    // SUPER_ADMIN impersonation: operate within the chosen school (ignored by the backend for
+    // tenant-scoped users, who carry their tenant in the JWT).
+    const impersonated = getImpersonatedTenantId();
+    if (impersonated != null) headers.set("X-Tenant-Id", String(impersonated));
   }
   return fetch(buildUrl(path, options.query), {
     ...options,
@@ -118,8 +123,26 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   return (await res.json()) as T;
 }
 
+/**
+ * Fetches a binary endpoint (e.g. application/pdf) WITH the JWT, and returns a local object URL
+ * usable directly in an <iframe>/<img>. Avoids depending on third-party delivery (Cloudinary) and
+ * works around iframes not carrying the Authorization header.
+ */
+export async function apiBlobUrl(path: string, options: RequestOptions = {}): Promise<string> {
+  const withAuth = options.auth !== false;
+  let res = await doFetch(path, { ...options, method: "GET" }, withAuth);
+  if (res.status === 401 && withAuth) {
+    const refreshed = await ensureRefreshed();
+    if (refreshed) res = await doFetch(path, { ...options, method: "GET" }, withAuth);
+    else { clearTokens(); onSessionExpired?.(); throw await parseError(res); }
+  }
+  if (!res.ok) throw await parseError(res);
+  return URL.createObjectURL(await res.blob());
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => apiFetch<T>(path, { ...options, method: "GET" }),
+  blobUrl: (path: string, options?: RequestOptions) => apiBlobUrl(path, options),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiFetch<T>(path, { ...options, method: "POST", body }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>

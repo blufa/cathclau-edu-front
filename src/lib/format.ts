@@ -36,3 +36,22 @@ export function formatDateTime(iso: string | null | undefined): string {
 export function formatTime(time: string | null | undefined): string {
   return time ? time.slice(0, 5) : "—";
 }
+
+/**
+ * Affiche une classe saisie au format guinéen : un nombre seul devient « Nᵉᵐᵉ » (ème en exposant),
+ * « 1 » devient « 1ʳᵉ ». Toute autre saisie (CM2, Terminale…) est laissée telle quelle.
+ */
+export function formatClassOrdinal(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value).trim();
+  if (!/^\d+$/.test(s)) return s;
+  return s === "1" ? "1ʳᵉ" : `${s}ᵉᵐᵉ`;
+}
+
+/** Classe d'inscription suggérée à partir de la dernière classe (nombre) : N+1, ou N si redoublant. */
+export function nextClassOrdinal(previous: string | number | null | undefined, repeating: boolean): string {
+  const s = String(previous ?? "").trim();
+  if (!/^\d+$/.test(s)) return formatClassOrdinal(s);
+  const n = Number(s);
+  return formatClassOrdinal(repeating ? n : n + 1);
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Alert, Anchor, Button, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Button, Stack, Text, TextInput, Title } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { forgotPassword } from "@/lib/auth/auth-service";
 
@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <Paper withBorder shadow="sm" radius="lg" p="xl">
+    <>
       <Title order={3} mb="md">
         Mot de passe oublié
       </Title>
@@ -63,6 +63,6 @@ export default function ForgotPasswordPage() {
           </Stack>
         </form>
       )}
-    </Paper>
+    </>
   );
 }

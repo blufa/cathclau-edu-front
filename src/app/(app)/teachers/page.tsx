@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Button, Group, NativeSelect, TextInput, Title } from "@mantine/core";
+import { Button, Group, Select, TextInput, Title } from "@mantine/core";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -16,9 +16,12 @@ import {
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { Spinner } from "@/components/ui/spinner";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { TeacherForm } from "@/components/staff/teacher-form";
+import { IdBadge } from "@/components/cards/id-badge";
+import { generateBadge } from "@/lib/api/biometric";
+import { useBranding } from "@/providers/branding-provider";
+import { buildIdentityQr } from "@/lib/identity-qr";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 type ActiveFilter = "all" | "active" | "inactive";
@@ -28,10 +31,22 @@ export default function TeachersPage() {
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
   const q = useQuery(listTeachers, []);
+  const schoolName = useBranding().branding?.schoolName ?? null;
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Teacher | null>(null);
+  const [badgeFor, setBadgeFor] = useState<Teacher | null>(null);
+  const [badgeQr, setBadgeQr] = useState<string | null>(null);
+
+  // Générer le badge = enrôler l'enseignant pour le pointage (un seul QR scannable « BADGE|… »).
+  function openBadge(t: Teacher) {
+    setBadgeFor(t);
+    setBadgeQr(null);
+    generateBadge("TEACHER", t.id)
+      .then((r) => setBadgeQr(r.qrPayload))
+      .catch((err) => notifyError(err));
+  }
 
   const teachers = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -87,6 +102,55 @@ export default function TeachersPage() {
     });
   }
 
+  const columns: Column<Teacher>[] = [
+    {
+      key: "staffNumber",
+      header: "Matricule",
+      accessor: (t) => t.staffNumber ?? "",
+      render: (t) => <span className="font-mono text-xs text-slate-500">{t.staffNumber}</span>,
+    },
+    {
+      key: "name",
+      header: "Nom",
+      accessor: (t) => `${t.firstName} ${t.lastName}`,
+      render: (t) => (
+        <Link href={`/teachers/${t.id}`} className="font-medium text-brand-700 hover:underline">
+          {t.firstName} {t.lastName}
+        </Link>
+      ),
+    },
+    { key: "specialization", header: "Spécialité", accessor: (t) => t.specialization ?? "", render: (t) => t.specialization ?? "—" },
+    { key: "contact", header: "Contact", accessor: (t) => t.email ?? t.phone ?? "", render: (t) => t.email ?? t.phone ?? "—" },
+    {
+      key: "status",
+      header: "Statut",
+      accessor: (t) => (t.active ? "Actif" : "Inactif"),
+      render: (t) => <Badge tone={t.active ? "green" : "gray"}>{t.active ? "Actif" : "Inactif"}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      render: (t) =>
+        canWrite ? (
+          <Group justify="flex-end" gap="xs">
+            <Button size="sm" variant="ghost" onClick={() => openBadge(t)}>
+              Badge
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>
+              Modifier
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => toggleActive(t)}>
+              {t.active ? "Désactiver" : "Réactiver"}
+            </Button>
+            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(t)}>
+              Suppr.
+            </Button>
+          </Group>
+        ) : null,
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -104,9 +168,9 @@ export default function TeachersPage() {
           onChange={(e) => setSearch(e.currentTarget.value)}
           className="max-w-xs"
         />
-        <NativeSelect
+        <Select
           value={activeFilter}
-          onChange={(e) => setActiveFilter(e.currentTarget.value as ActiveFilter)}
+          onChange={(value) => setActiveFilter((value ?? "all") as ActiveFilter)}
           data={[
             { value: "all", label: "Tous" },
             { value: "active", label: "Actifs" },
@@ -115,67 +179,17 @@ export default function TeachersPage() {
         />
       </Group>
 
-      {q.error ? (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-          Impossible de charger les enseignants.
-        </p>
-      ) : q.loading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-8 w-8" />
-        </div>
-      ) : (
-        <Table>
-          <THead>
-            <tr>
-              <TH>Matricule</TH>
-              <TH>Nom</TH>
-              <TH>Spécialité</TH>
-              <TH>Contact</TH>
-              <TH>Statut</TH>
-              <TH className="text-right">Actions</TH>
-            </tr>
-          </THead>
-          <TBody>
-            {teachers.length === 0 && (
-              <TR>
-                <TD colSpan={6} className="py-10 text-center text-gray-400">
-                  Aucun enseignant.
-                </TD>
-              </TR>
-            )}
-            {teachers.map((t) => (
-              <TR key={t.id}>
-                <TD className="font-mono text-xs">{t.staffNumber}</TD>
-                <TD>
-                  <Link href={`/teachers/${t.id}`} className="font-medium text-indigo-600 hover:underline">
-                    {t.firstName} {t.lastName}
-                  </Link>
-                </TD>
-                <TD>{t.specialization ?? "—"}</TD>
-                <TD>{t.email ?? t.phone ?? "—"}</TD>
-                <TD>
-                  <Badge tone={t.active ? "green" : "gray"}>{t.active ? "Actif" : "Inactif"}</Badge>
-                </TD>
-                <TD className="text-right">
-                  {canWrite && (
-                    <Group justify="flex-end" gap="xs">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>
-                        Modifier
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => toggleActive(t)}>
-                        {t.active ? "Désactiver" : "Réactiver"}
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(t)}>
-                        Suppr.
-                      </Button>
-                    </Group>
-                  )}
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      )}
+      <DataTable
+        columns={columns}
+        rows={teachers}
+        loading={q.loading}
+        error={!!q.error}
+        getRowKey={(t) => t.id}
+        emptyLabel="Aucun enseignant."
+        columnToggle
+        exportable
+        exportFilename="enseignants.csv"
+      />
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel enseignant">
         {creating && <TeacherForm submitLabel="Créer" onSubmit={handleCreate} onCancel={() => setCreating(false)} />}
@@ -183,6 +197,22 @@ export default function TeachersPage() {
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'enseignant">
         {editing && (
           <TeacherForm initial={editing} submitLabel="Enregistrer" onSubmit={handleUpdate} onCancel={() => setEditing(null)} />
+        )}
+      </Modal>
+      <Modal open={!!badgeFor} onClose={() => { setBadgeFor(null); setBadgeQr(null); }} title="Badge enseignant">
+        {badgeFor && (
+          <IdBadge
+            kind="Badge enseignant"
+            fullName={`${badgeFor.firstName} ${badgeFor.lastName}`.trim()}
+            subtitle={badgeFor.specialization ?? "Enseignant"}
+            fields={[
+              { label: "Matricule", value: badgeFor.staffNumber ?? "—", mono: true },
+              { label: "Téléphone", value: badgeFor.phone ?? "—" },
+              { label: "Statut", value: badgeFor.active ? "Actif" : "Inactif" },
+            ]}
+            qrData={buildIdentityQr({ schoolName, fullName: `${badgeFor.firstName} ${badgeFor.lastName}`, matricule: badgeFor.staffNumber })}
+            footerNote={badgeQr ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}
+          />
         )}
       </Modal>
     </div>

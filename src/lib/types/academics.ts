@@ -41,12 +41,14 @@ export interface Matiere {
 }
 
 export type TypePeriode = "TRIMESTRE" | "SEMESTRE";
+export type SchoolCycle = "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR";
 
 export interface Periode {
   id: number;
   academicYearId: number;
   label: string;
   type: TypePeriode;
+  cycle: SchoolCycle | null;
   sortOrder: number;
   startDate: string | null;
   endDate: string | null;
@@ -68,6 +70,7 @@ export interface CreateAcademicYearInput {
 
 export interface CreatePeriodInput {
   label: string;
+  cycle: SchoolCycle;
   type: TypePeriode;
   sortOrder: number;
   startDate: string | null;
@@ -118,6 +121,7 @@ export interface ClasseMatiere {
   schoolClassId: number;
   subjectId: number;
   teacherId: number | null;
+  coefficient: string | null;
 }
 
 /** Roster projection from GET /classes/{id}/students. */

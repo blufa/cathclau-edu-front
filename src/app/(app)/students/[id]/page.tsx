@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Tabs } from "@mantine/core";
+import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -11,15 +13,20 @@ import { listClasses } from "@/lib/api/academics";
 import {
   cancelEnrollment,
   deleteEnrollment,
-  validateEnrollment,
 } from "@/lib/api/enrollments";
-import type { EnrollmentStatus } from "@/lib/types/student";
+import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EnrollModal } from "@/components/enrollments/enroll-modal";
+import { CollectFeeModal } from "@/components/billing/collect-fee-modal";
+import { CardSpotlight } from "@/components/ui/aceternity";
+import { StudentAttendanceStats } from "@/components/students/attendance-stats";
+import { ParentsManager } from "@/components/students/parents-manager";
+import { DocumentsManager } from "@/components/students/documents-manager";
+import { CertificateAction } from "@/components/students/certificate-action";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
@@ -36,8 +43,8 @@ const STATUS_LABEL: Record<EnrollmentStatus, string> = {
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs text-gray-500">{label}</dt>
-      <dd className="text-sm text-gray-900">{value || "—"}</dd>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="text-sm text-slate-900">{value || "—"}</dd>
     </div>
   );
 }
@@ -46,13 +53,16 @@ export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR");
   const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
 
   const { data, loading, error, refetch } = useQuery(() => getStudent(id), [id]);
   const [enrolling, setEnrolling] = useState(false);
+  const [editing, setEditing] = useState<Enrollment | null>(null);
+  const [collecting, setCollecting] = useState<{ classId: number | null } | null>(null);
 
-  // Resolve class labels for the years referenced by the student's enrollments.
   const yearIds = useMemo(
     () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId))],
     [data?.enrollments],
@@ -69,15 +79,6 @@ export default function StudentDetailPage() {
     [classesQuery.data],
   );
 
-  async function handleValidate(enrollmentId: number) {
-    try {
-      await validateEnrollment(enrollmentId);
-      notifySuccess("Inscription validée");
-      refetch();
-    } catch (err) {
-      notifyError(err);
-    }
-  }
   function handleCancel(enrollmentId: number) {
     confirmAction({
       title: "Annuler l'inscription",
@@ -122,64 +123,123 @@ export default function StudentDetailPage() {
   if (error || !data) {
     return (
       <div className="space-y-4">
-        <Link href="/students" className="text-sm text-indigo-600 hover:underline">
-          ← Retour à la liste
+        <Link href="/students" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
+          <ArrowLeft className="h-4 w-4" /> Retour à la liste
         </Link>
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Élève introuvable.</p>
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Élève introuvable.</p>
       </div>
     );
   }
 
-  const { student, enrollments, parents, documents } = data;
+  const { student, enrollments } = data;
 
   return (
     <div className="space-y-6">
-      <Link href="/students" className="text-sm text-indigo-600 hover:underline">
-        ← Retour à la liste
+      <Link href="/students" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
+        <ArrowLeft className="h-4 w-4" /> Retour à la liste
       </Link>
 
-      <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-xl font-semibold text-indigo-700">
-          {student.firstName[0]}
-          {student.lastName[0]}
-        </div>
+      {/* Header */}
+      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-brand-50 to-white p-5">
+        {student.photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={student.photo}
+            alt={`${student.firstName} ${student.lastName}`}
+            className="h-20 w-20 shrink-0 rounded-2xl object-cover shadow-md ring-2 ring-white"
+          />
+        ) : (
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-2xl font-bold text-white shadow-md">
+            {student.firstName[0]}
+            {student.lastName[0]}
+          </div>
+        )}
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             {student.firstName} {student.lastName}
           </h1>
-          <p className="font-mono text-sm text-gray-500">{student.studentNumber}</p>
+          <p className="font-mono text-sm text-slate-500">{student.studentNumber}</p>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informations</CardTitle>
-        </CardHeader>
-        <CardBody>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Info label="Sexe" value={student.gender === "FEMALE" ? "Féminin" : "Masculin"} />
-            <Info label="Date de naissance" value={student.birthDate} />
-            <Info label="Lieu de naissance" value={student.birthPlace} />
-            <Info label="Nationalité" value={student.nationality} />
-            <Info label="Téléphone" value={student.phone} />
-            <Info label="Email" value={student.email} />
-            <Info label="Adresse" value={student.address} />
-          </dl>
-        </CardBody>
-      </Card>
+      <Tabs defaultValue="infos" color="teal" variant="pills" radius="md">
+        <Tabs.List>
+          <Tabs.Tab value="infos" leftSection={<IdCard className="h-4 w-4" />}>Infos</Tabs.Tab>
+          <Tabs.Tab value="enrollments" leftSection={<BookOpen className="h-4 w-4" />}>
+            Inscriptions
+          </Tabs.Tab>
+          <Tabs.Tab value="parents" leftSection={<Users className="h-4 w-4" />}>Parents</Tabs.Tab>
+          <Tabs.Tab value="documents" leftSection={<FileText className="h-4 w-4" />}>Documents</Tabs.Tab>
+          <Tabs.Tab value="schooling" leftSection={<GraduationCap className="h-4 w-4" />}>
+            Scolarité
+          </Tabs.Tab>
+        </Tabs.List>
 
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Inscriptions</CardTitle>
-          {canEnroll && (
-            <Button size="sm" onClick={() => setEnrolling(true)}>
-              Inscrire
-            </Button>
-          )}
-        </CardHeader>
-        <CardBody className="p-0">
+        {/* Infos */}
+        <Tabs.Panel value="infos" pt="lg">
+          <div className="space-y-4">
+            <Card>
+              <CardBody>
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">Identité</h3>
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <Info label="Sexe" value={student.gender === "FEMALE" ? "Féminin" : "Masculin"} />
+                  <Info label="Date de naissance" value={student.birthDate} />
+                  <Info label="Lieu de naissance" value={student.birthPlace} />
+                  <Info label="Nationalité" value={student.nationality} />
+                  <Info label="N° acte de naissance" value={student.birthCertificateNumber} />
+                  <Info label="Groupe sanguin" value={student.bloodGroup} />
+                </dl>
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardBody>
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">Coordonnées</h3>
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <Info label="Quartier / commune" value={student.neighborhood} />
+                  <Info label="Point de repère" value={student.landmark} />
+                  <Info label="Adresse" value={student.address} />
+                  <Info label="Téléphone" value={student.phone} />
+                  <Info label="Email" value={student.email} />
+                </dl>
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardBody>
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">Scolarité antérieure</h3>
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                  <Info label="École précédente" value={student.originSchool} />
+                  <Info label="Dernière classe" value={student.previousClass} />
+                  <Info label="Redoublant" value={student.repeating == null ? null : student.repeating ? "Oui" : "Non"} />
+                  <Info label="Motif de transfert" value={student.transferReason} />
+                </dl>
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardBody>
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">Santé</h3>
+                <p className="whitespace-pre-line text-sm text-slate-600">{student.medicalNotes || "—"}</p>
+              </CardBody>
+            </Card>
+          </div>
+        </Tabs.Panel>
+
+        {/* Inscriptions */}
+        <Tabs.Panel value="enrollments" pt="lg">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Historique des inscriptions</h2>
+            {canEnroll && (
+              <Button size="sm" onClick={() => setEnrolling(true)}>
+                Inscrire
+              </Button>
+            )}
+          </div>
           {enrollments.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-gray-400">Aucune inscription.</p>
+            <Card>
+              <CardBody className="text-sm text-slate-400">Aucune inscription.</CardBody>
+            </Card>
           ) : (
             <Table>
               <THead>
@@ -202,9 +262,14 @@ export default function StudentDetailPage() {
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">
-                        {canDecide && e.status === "PENDING" && (
-                          <Button size="sm" variant="ghost" className="text-green-700" onClick={() => handleValidate(e.id)}>
-                            Valider
+                        {canCollect && e.status !== "CANCELLED" && (
+                          <Button size="sm" onClick={() => setCollecting({ classId: e.classId })}>
+                            Facture
+                          </Button>
+                        )}
+                        {canEnroll && e.status === "PENDING" && (
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
+                            Modifier
                           </Button>
                         )}
                         {canDecide && e.status !== "CANCELLED" && (
@@ -224,68 +289,88 @@ export default function StudentDetailPage() {
               </TBody>
             </Table>
           )}
-        </CardBody>
-      </Card>
+        </Tabs.Panel>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Parents & tuteurs</CardTitle>
-          </CardHeader>
-          <CardBody>
-            {parents.length === 0 ? (
-              <p className="text-sm text-gray-400">Aucun parent lié.</p>
-            ) : (
-              <ul className="space-y-3">
-                {parents.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {p.firstName} {p.lastName}
-                      </p>
-                      <p className="text-xs text-gray-500">{p.phone ?? p.email ?? "—"}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
+        {/* Parents */}
+        <Tabs.Panel value="parents" pt="lg">
+          <ParentsManager studentId={student.id} canWrite={canEnroll} />
+        </Tabs.Panel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Documents</CardTitle>
-          </CardHeader>
-          <CardBody>
-            {documents.length === 0 ? (
-              <p className="text-sm text-gray-400">Aucun document.</p>
-            ) : (
-              <ul className="space-y-2">
-                {documents.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700">{d.documentType}</span>
-                    <a
-                      href={d.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:underline"
-                    >
-                      Ouvrir
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-      </div>
+        {/* Documents */}
+        <Tabs.Panel value="documents" pt="lg">
+          <DocumentsManager studentId={student.id} canWrite={canEnroll} />
+        </Tabs.Panel>
+
+        {/* Scolarité — attendance summary + cross-module links */}
+        <Tabs.Panel value="schooling" pt="lg">
+          <Card className="mb-4">
+            <CardBody>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">Assiduité</h3>
+              <StudentAttendanceStats studentId={id} />
+            </CardBody>
+          </Card>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: "Notes & évaluations", href: `/grading?student=${id}` },
+              { label: "Bulletins", href: `/report-cards?student=${id}` },
+              { label: "Factures de l'élève", href: `/invoices?student=${id}` },
+            ].map((l) => (
+              <CardSpotlight key={l.href} className="transition hover:-translate-y-0.5 hover:shadow-lg">
+                <Link href={l.href} className="group block p-5">
+                  <GraduationCap className="h-6 w-6 text-brand-600" strokeWidth={1.6} />
+                  <p className="mt-3 text-sm font-semibold text-slate-900 group-hover:text-brand-700">
+                    {l.label}
+                  </p>
+                </Link>
+              </CardSpotlight>
+            ))}
+          </div>
+
+          {canEnroll && (
+            <Card className="mt-4">
+              <CardBody>
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">Documents officiels</h3>
+                <CertificateAction studentId={student.id} />
+              </CardBody>
+            </Card>
+          )}
+        </Tabs.Panel>
+      </Tabs>
 
       <EnrollModal
         studentId={id}
         open={enrolling}
         onClose={() => setEnrolling(false)}
-        onEnrolled={refetch}
+        onEnrolled={() => {
+          refetch();
+          // Move straight to the enrollment invoice so the fee can be collected right away.
+          if (canCollect) setCollecting({ classId: enrollments.find((e) => e.status !== "CANCELLED")?.classId ?? null });
+        }}
       />
+
+      {editing && (
+        <EnrollModal
+          studentId={id}
+          enrollment={editing}
+          open={!!editing}
+          onClose={() => setEditing(null)}
+          onEnrolled={() => {
+            setEditing(null);
+            refetch();
+          }}
+        />
+      )}
+
+      {tenantId != null && (
+        <CollectFeeModal
+          studentId={id}
+          tenantId={tenantId}
+          classId={collecting?.classId ?? undefined}
+          open={collecting != null}
+          onClose={() => setCollecting(null)}
+          onCollected={refetch}
+        />
+      )}
     </div>
   );
 }

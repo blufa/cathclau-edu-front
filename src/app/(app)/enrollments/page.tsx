@@ -11,14 +11,17 @@ import {
   cancelEnrollment,
   deleteEnrollment,
   searchEnrollments,
-  validateEnrollment,
 } from "@/lib/api/enrollments";
-import type { EnrollmentStatus } from "@/lib/types/student";
+import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { EnrollModal } from "@/components/enrollments/enroll-modal";
+import { PassageMasseModal } from "@/components/enrollments/passage-masse-modal";
+import { CollectFeeModal } from "@/components/billing/collect-fee-modal";
+import { MultiChildCollectModal } from "@/components/billing/multi-child-collect-modal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
@@ -34,7 +37,18 @@ const STATUS_LABEL: Record<EnrollmentStatus, string> = {
 
 export default function EnrollmentsPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+
+  // Open the enrollment fee invoice for collection; full payment validates the enrollment server-side.
+  const [collectFor, setCollectFor] = useState<{ studentId: number; classId: number } | null>(null);
+  const [editing, setEditing] = useState<Enrollment | null>(null);
+  // Multi-student family checkout: pick several students, pay all their unpaid invoices at once.
+  const [picked, setPicked] = useState<number[]>([]);
+  const [familyOpen, setFamilyOpen] = useState(false);
+  const [passageOpen, setPassageOpen] = useState(false);
 
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
@@ -78,15 +92,6 @@ export default function EnrollmentsPage() {
   );
   const enrollments = enrollmentsQuery.data ?? [];
 
-  async function handleValidate(id: number) {
-    try {
-      await validateEnrollment(id);
-      notifySuccess("Inscription validée");
-      enrollmentsQuery.refetch();
-    } catch (err) {
-      notifyError(err);
-    }
-  }
   function handleCancel(id: number) {
     confirmAction({
       title: "Annuler l'inscription",
@@ -123,9 +128,14 @@ export default function EnrollmentsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Inscriptions</h1>
-        <p className="text-sm text-gray-500">Suivi et validation des inscriptions</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Inscriptions</h1>
+          <p className="text-sm text-gray-500">Suivi et validation des inscriptions</p>
+        </div>
+        {canDecide && (
+          <Button onClick={() => setPassageOpen(true)}>Passage en masse</Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -165,6 +175,14 @@ export default function EnrollmentsPage() {
           <option value="VALIDATED">Validée</option>
           <option value="CANCELLED">Annulée</option>
         </Select>
+
+        {canCollect && picked.length > 0 && (
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-slate-500">{picked.length} élève(s) sélectionné(s)</span>
+            <Button size="sm" onClick={() => setFamilyOpen(true)}>Encaisser (famille)</Button>
+            <Button size="sm" variant="ghost" onClick={() => setPicked([])}>Effacer</Button>
+          </div>
+        )}
       </div>
 
       {enrollmentsQuery.error ? (
@@ -179,6 +197,7 @@ export default function EnrollmentsPage() {
         <Table>
           <THead>
             <tr>
+              {canCollect && <TH className="w-8"></TH>}
               <TH>Élève</TH>
               <TH>Classe</TH>
               <TH>Type</TH>
@@ -190,13 +209,26 @@ export default function EnrollmentsPage() {
           <TBody>
             {enrollments.length === 0 && (
               <TR>
-                <TD colSpan={6} className="py-10 text-center text-gray-400">
+                <TD colSpan={canCollect ? 7 : 6} className="py-10 text-center text-gray-400">
                   Aucune inscription pour ces filtres.
                 </TD>
               </TR>
             )}
             {enrollments.map((e) => (
               <TR key={e.id}>
+                {canCollect && (
+                  <TD>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-brand-600"
+                      checked={picked.includes(e.studentId)}
+                      onChange={() =>
+                        setPicked((p) => (p.includes(e.studentId) ? p.filter((x) => x !== e.studentId) : [...p, e.studentId]))
+                      }
+                      aria-label="Sélectionner pour encaissement famille"
+                    />
+                  </TD>
+                )}
                 <TD>
                   <Link href={`/students/${e.studentId}`} className="font-medium text-indigo-600 hover:underline">
                     {studentName.get(e.studentId) ?? `#${e.studentId}`}
@@ -210,9 +242,14 @@ export default function EnrollmentsPage() {
                 </TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-2">
-                    {canDecide && e.status === "PENDING" && (
-                      <Button size="sm" variant="ghost" className="text-green-700" onClick={() => handleValidate(e.id)}>
-                        Valider
+                    {canCollect && e.status !== "CANCELLED" && (
+                      <Button size="sm" onClick={() => setCollectFor({ studentId: e.studentId, classId: e.classId })}>
+                        Facture
+                      </Button>
+                    )}
+                    {canEdit && e.status === "PENDING" && (
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>
+                        Modifier
                       </Button>
                     )}
                     {canDecide && e.status !== "CANCELLED" && (
@@ -231,6 +268,48 @@ export default function EnrollmentsPage() {
             ))}
           </TBody>
         </Table>
+      )}
+
+      {tenantId != null && collectFor != null && (
+        <CollectFeeModal
+          studentId={collectFor.studentId}
+          classId={collectFor.classId}
+          tenantId={tenantId}
+          open={collectFor != null}
+          onClose={() => setCollectFor(null)}
+          onCollected={() => enrollmentsQuery.refetch()}
+        />
+      )}
+
+      {tenantId != null && familyOpen && (
+        <MultiChildCollectModal
+          students={picked.map((id) => ({ id, name: studentName.get(id) ?? `#${id}` }))}
+          tenantId={tenantId}
+          open={familyOpen}
+          onClose={() => setFamilyOpen(false)}
+          onCollected={() => { enrollmentsQuery.refetch(); setPicked([]); }}
+        />
+      )}
+
+      {editing && (
+        <EnrollModal
+          studentId={editing.studentId}
+          enrollment={editing}
+          open={!!editing}
+          onClose={() => setEditing(null)}
+          onEnrolled={() => {
+            setEditing(null);
+            enrollmentsQuery.refetch();
+          }}
+        />
+      )}
+
+      {passageOpen && (
+        <PassageMasseModal
+          open={passageOpen}
+          onClose={() => setPassageOpen(false)}
+          onDone={() => enrollmentsQuery.refetch()}
+        />
       )}
     </div>
   );

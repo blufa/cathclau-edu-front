@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Group, NativeSelect, NumberInput, Stack, TextInput, Title } from "@mantine/core";
-import { DateInput } from "@mantine/dates";
+import { Button, Group, Select, NumberInput, Stack, Textarea, TextInput, Title } from "@mantine/core";
+import { DatePickerInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -22,7 +22,15 @@ import type {
   CreatePeriodInput,
   StatutAnneeScolaire,
   TypePeriode,
+  SchoolCycle,
 } from "@/lib/types/academics";
+import { createEvent, deleteEvent, listEvents } from "@/lib/api/calendar";
+import {
+  EVENT_TYPE_LABEL,
+  EVENT_TYPE_TONE,
+  type AcademicEvent,
+  type AcademicEventType,
+} from "@/lib/types/calendar";
 import { ApiError } from "@/lib/api/errors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,11 +52,17 @@ const STATUS_LABEL: Record<StatutAnneeScolaire, string> = {
   ARCHIVEE: "Archivée",
 };
 
+/** Libellé d'année scolaire au format « 2026 - 2027 » à partir de l'année de début. */
+function schoolYearLabel(year: number): string {
+  return `${year} - ${year + 1}`;
+}
+
 function YearForm({ onSubmit, onCancel }: { onSubmit: (input: CreateAcademicYearInput) => Promise<void>; onCancel: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const form = useForm({
     mode: "uncontrolled",
-    initialValues: { label: "", startDate: "", endDate: "" },
+    // Pré-rempli avec l'année scolaire courante (ex. « 2026 - 2027 »), dérivée de la date de début.
+    initialValues: { label: schoolYearLabel(new Date().getFullYear()), startDate: "", endDate: "" },
     validate: { label: (v) => (v.trim() ? null : "Libellé requis") },
   });
 
@@ -66,10 +80,21 @@ function YearForm({ onSubmit, onCancel }: { onSubmit: (input: CreateAcademicYear
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk placeholder="2025-2026" {...form.getInputProps("label")} key={form.key("label")} />
+        <TextInput label="Libellé" withAsterisk placeholder="2026 - 2027" {...form.getInputProps("label")} key={form.key("label")} />
         <Group grow>
-          <DateInput label="Début" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("startDate")} key={form.key("startDate")} />
-          <DateInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} key={form.key("endDate")} />
+          <DatePickerInput
+            label="Début"
+            valueFormat="DD/MM/YYYY"
+            clearable
+            {...form.getInputProps("startDate")}
+            key={form.key("startDate")}
+            onChange={(val) => {
+              form.setFieldValue("startDate", val ?? "");
+              const yr = val ? new Date(val).getFullYear() : NaN;
+              if (!Number.isNaN(yr)) form.setFieldValue("label", schoolYearLabel(yr));
+            }}
+          />
+          <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} key={form.key("endDate")} />
         </Group>
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={onCancel} disabled={submitting}>
@@ -90,6 +115,7 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
     mode: "uncontrolled",
     initialValues: {
       label: "",
+      cycle: "PRIMAIRE" as SchoolCycle,
       type: "TRIMESTRE" as TypePeriode,
       sortOrder: 1 as number | string,
       startDate: "",
@@ -98,11 +124,12 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
     validate: { label: (v) => (v.trim() ? null : "Libellé requis") },
   });
 
-  async function submit(values: { label: string; type: TypePeriode; sortOrder: number | string; startDate: string; endDate: string }) {
+  async function submit(values: { label: string; cycle: SchoolCycle; type: TypePeriode; sortOrder: number | string; startDate: string; endDate: string }) {
     setSubmitting(true);
     try {
       await onSubmit({
         label: values.label,
+        cycle: values.cycle,
         type: values.type,
         sortOrder: Number(values.sortOrder),
         startDate: values.startDate || null,
@@ -119,8 +146,25 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
         <TextInput label="Libellé" withAsterisk placeholder="1er trimestre" {...form.getInputProps("label")} key={form.key("label")} />
+        <Select
+          label="Cycle"
+          description="Primaire = trimestres ; collège/lycée/supérieur = semestres."
+          data={[
+            { value: "PRIMAIRE", label: "Primaire" },
+            { value: "COLLEGE", label: "Collège" },
+            { value: "LYCEE", label: "Lycée" },
+            { value: "SUPERIEUR", label: "Supérieur" },
+          ]}
+          {...form.getInputProps("cycle")}
+          key={form.key("cycle")}
+          onChange={(value) => {
+            const c = (value ?? "") as SchoolCycle;
+            form.setFieldValue("cycle", c);
+            form.setFieldValue("type", c === "PRIMAIRE" ? "TRIMESTRE" : "SEMESTRE");
+          }}
+        />
         <Group grow>
-          <NativeSelect
+          <Select
             label="Type"
             data={[
               { value: "TRIMESTRE", label: "Trimestre" },
@@ -132,8 +176,8 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
           <NumberInput label="Ordre" min={1} allowDecimal={false} {...form.getInputProps("sortOrder")} key={form.key("sortOrder")} />
         </Group>
         <Group grow>
-          <DateInput label="Début" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("startDate")} key={form.key("startDate")} />
-          <DateInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} key={form.key("endDate")} />
+          <DatePickerInput label="Début" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("startDate")} key={form.key("startDate")} />
+          <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} key={form.key("endDate")} />
         </Group>
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={onCancel} disabled={submitting}>
@@ -142,6 +186,92 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
           <Button type="submit" loading={submitting}>
             Créer
           </Button>
+        </Group>
+      </Stack>
+    </form>
+  );
+}
+
+function CalendarSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boolean }) {
+  const q = useQuery(() => listEvents(year.id), [year.id]);
+  const [creating, setCreating] = useState(false);
+  const events = (q.data ?? []).slice().sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? ""));
+
+  function remove(e: AcademicEvent) {
+    confirmAction({
+      title: "Supprimer l'événement", message: `Supprimer « ${e.title} » ?`, confirmLabel: "Supprimer", danger: true,
+      onConfirm: async () => { try { await deleteEvent(e.id); notifySuccess("Événement supprimé"); q.refetch(); } catch (err) { notifyError(err); } },
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <CardTitle>Calendrier — {year.label}</CardTitle>
+        {canWrite && <Button size="sm" onClick={() => setCreating(true)}>Nouvel événement</Button>}
+      </CardHeader>
+      <CardBody className="p-0">
+        <p className="px-4 pt-3 text-xs text-slate-400">Jours fériés, vacances et événements de l&apos;année (annotent l&apos;emploi du temps).</p>
+        {q.loading ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : (
+          <Table>
+            <THead><tr><TH>Type</TH><TH>Titre</TH><TH>Début</TH><TH>Fin</TH><TH className="text-right">Actions</TH></tr></THead>
+            <TBody>
+              {events.length === 0 && <TR><TD colSpan={5} className="py-8 text-center text-gray-400">Aucun événement.</TD></TR>}
+              {events.map((e) => (
+                <TR key={e.id}>
+                  <TD><Badge tone={EVENT_TYPE_TONE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</Badge></TD>
+                  <TD className="font-medium">{e.title}</TD>
+                  <TD>{e.startDate}</TD>
+                  <TD>{e.endDate ?? "—"}</TD>
+                  <TD className="text-right">{canWrite && <Button size="sm" variant="subtle" color="red" onClick={() => remove(e)}>Suppr.</Button>}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </CardBody>
+      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel événement">
+        <EventForm yearId={year.id} onCancel={() => setCreating(false)}
+          onDone={() => { setCreating(false); notifySuccess("Événement ajouté"); q.refetch(); }} />
+      </Modal>
+    </Card>
+  );
+}
+
+function EventForm({ yearId, onCancel, onDone }: { yearId: number; onCancel: () => void; onDone: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const form = useForm({
+    mode: "controlled",
+    initialValues: { title: "", eventType: "HOLIDAY" as AcademicEventType, startDate: "", endDate: "", description: "" },
+    validate: { title: (v) => (v ? null : "Requis"), startDate: (v) => (v ? null : "Requis") },
+  });
+  async function submit(values: typeof form.values) {
+    setLoading(true);
+    try {
+      await createEvent({
+        academicYearId: yearId, title: values.title, eventType: values.eventType,
+        startDate: values.startDate, endDate: values.endDate || null, description: values.description || null,
+      });
+      onDone();
+    } catch (err) { notifyError(err); } finally { setLoading(false); }
+  }
+  return (
+    <form onSubmit={form.onSubmit(submit)}>
+      <Stack gap="md">
+        <TextInput label="Titre" withAsterisk {...form.getInputProps("title")} />
+        <Select label="Type" allowDeselect={false}
+          data={(Object.keys(EVENT_TYPE_LABEL) as AcademicEventType[]).map((t) => ({ value: t, label: EVENT_TYPE_LABEL[t] }))}
+          {...form.getInputProps("eventType")} />
+        <Group grow>
+          <DatePickerInput label="Début" withAsterisk valueFormat="DD/MM/YYYY" {...form.getInputProps("startDate")} />
+          <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} />
+        </Group>
+        <Textarea label="Description" autosize minRows={2} {...form.getInputProps("description")} />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onCancel}>Annuler</Button>
+          <Button type="submit" loading={loading}>Ajouter</Button>
         </Group>
       </Stack>
     </form>
@@ -361,6 +491,7 @@ export default function AcademicYearsPage() {
       )}
 
       {selected && <PeriodsSection year={selected} canWrite={canWrite} />}
+      {selected && <CalendarSection year={selected} canWrite={canWrite} />}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle année scolaire">
         {creating && <YearForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />}

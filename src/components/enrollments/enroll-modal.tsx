@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
-import { listAcademicYears, listClasses } from "@/lib/api/academics";
-import { enroll, reenroll } from "@/lib/api/enrollments";
+import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
+import { enroll, reenroll, searchEnrollments, updateEnrollment } from "@/lib/api/enrollments";
 import { ApiError } from "@/lib/api/errors";
-import type { EnrollmentType } from "@/lib/types/student";
+import type { Enrollment, EnrollmentType } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Field, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -16,16 +16,22 @@ interface EnrollModalProps {
   studentId: number;
   open: boolean;
   onClose: () => void;
-  onEnrolled: () => void;
+  /** Called with the created/updated enrollment so the caller can move on to its invoice. */
+  onEnrolled: (enrollment: Enrollment) => void;
+  /** When provided, the modal edits this pending enrollment instead of creating a new one. */
+  enrollment?: Enrollment | null;
 }
 
-export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModalProps) {
+export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }: EnrollModalProps) {
+  const editing = !!enrollment;
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
 
-  const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
-  const [classId, setClassId] = useState("");
-  const [type, setType] = useState<EnrollmentType>("NEW");
+  // Seeded from the edited enrollment; the edit modal is mounted fresh per enrollment (keyed by render),
+  // so initializers run with the right values without a setState-in-effect.
+  const [selectedYearId, setSelectedYearId] = useState<number | null>(enrollment?.academicYearId ?? null);
+  const [classId, setClassId] = useState(enrollment ? String(enrollment.classId) : "");
+  const [type, setType] = useState<EnrollmentType>(enrollment?.type ?? "NEW");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -38,6 +44,42 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModa
   );
   const classes = classesQuery.data ?? [];
 
+  // ── Cascade : récupérer l'inscription précédente de l'élève pour proposer la réinscription. ──
+  const historyQuery = useQuery(
+    () => (open && !editing ? searchEnrollments({ studentId }) : Promise.resolve([])),
+    [studentId, open, editing],
+  );
+  // La dernière inscription (autre que l'année en cours de saisie), de préférence validée.
+  const previous = useMemo(() => {
+    const past = (historyQuery.data ?? [])
+      .filter((e) => e.academicYearId !== yearId)
+      .sort((a, b) => (b.academicYearId - a.academicYearId) || (a.status === "VALIDATED" ? -1 : 1));
+    return past[0] ?? null;
+  }, [historyQuery.data, yearId]);
+
+  const prevClassQuery = useQuery(
+    () => (previous ? getClass(previous.classId) : Promise.resolve(null)),
+    [previous?.classId],
+  );
+  const levelsQuery = useQuery(() => (previous ? listLevels() : Promise.resolve([])), [previous?.id]);
+
+  const prevClass = prevClassQuery.data;
+  const prevYearLabel = years.find((y) => y.id === previous?.academicYearId)?.label ?? "";
+  const levels = levelsQuery.data ?? [];
+  const prevLevel = levels.find((l) => l.id === prevClass?.levelId);
+  const nextLevel = prevLevel
+    ? levels.filter((l) => l.sortOrder > prevLevel.sortOrder).sort((a, b) => a.sortOrder - b.sortOrder)[0] ?? null
+    : null;
+  const sameLevelClass = prevClass?.levelId != null ? classes.find((c) => c.levelId === prevClass.levelId) : undefined;
+  const nextLevelClass = nextLevel ? classes.find((c) => c.levelId === nextLevel.id) : undefined;
+
+  /** One-click prefill: pick a class of the given level in the selected year and mark as re-enrollment. */
+  function quickFill(classToSet: { id: number } | undefined) {
+    if (!classToSet) return;
+    setClassId(String(classToSet.id));
+    setType("RE_ENROLLMENT");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -48,10 +90,18 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModa
     setSubmitting(true);
     const input = { studentId, classId: Number(classId), academicYearId: yearId, type };
     try {
-      await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
+      const result = editing
+        ? await updateEnrollment(enrollment!.id, input)
+        : await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
       setClassId("");
-      notifySuccess(type === "RE_ENROLLMENT" ? "Réinscription enregistrée" : "Inscription enregistrée");
-      onEnrolled();
+      notifySuccess(
+        editing
+          ? "Inscription modifiée"
+          : type === "RE_ENROLLMENT"
+            ? "Réinscription enregistrée"
+            : "Inscription enregistrée",
+      );
+      onEnrolled(result);
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.userMessage : "Inscription impossible.");
@@ -61,7 +111,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModa
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Inscrire l'élève">
+    <Modal open={open} onClose={onClose} title={editing ? "Modifier l'inscription" : "Inscrire l'élève"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -98,6 +148,30 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModa
           </Select>
         </Field>
 
+        {!editing && previous && prevClass && (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/60 px-3 py-2 text-sm">
+            <p className="text-slate-700">
+              Dernière inscription : <span className="font-medium text-slate-900">{prevClass.label}</span>
+              {prevYearLabel ? ` (${prevYearLabel})` : ""}
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {nextLevelClass && (
+                <Button type="button" size="sm" onClick={() => quickFill(nextLevelClass)}>
+                  Passer en {nextLevelClass.label}
+                </Button>
+              )}
+              {sameLevelClass && (
+                <Button type="button" size="sm" variant="secondary" onClick={() => quickFill(sameLevelClass)}>
+                  Redoubler ({sameLevelClass.label})
+                </Button>
+              )}
+              {!nextLevelClass && !sameLevelClass && (
+                <span className="text-xs text-slate-400">Aucune classe correspondante dans l&apos;année sélectionnée.</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <Field>
           <Label htmlFor="type">Type</Label>
           <Select id="type" value={type} onChange={(e) => setType(e.target.value as EnrollmentType)}>
@@ -111,7 +185,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled }: EnrollModa
             Annuler
           </Button>
           <Button type="submit" loading={submitting}>
-            Inscrire
+            {editing ? "Enregistrer" : "Inscrire"}
           </Button>
         </div>
       </form>

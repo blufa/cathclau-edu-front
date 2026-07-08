@@ -16,6 +16,11 @@ export function getTeacher(id: number): Promise<Teacher> {
   return api.get<Teacher>(`/staff/teachers/${id}`);
 }
 
+/** The teacher record of the currently authenticated user (teacher portal). */
+export function getMyTeacher(): Promise<Teacher> {
+  return api.get<Teacher>("/staff/teachers/me");
+}
+
 export function createTeacher(input: CreateTeacherInput): Promise<Teacher> {
   return api.post<Teacher>("/staff/teachers", input);
 }
@@ -42,4 +47,111 @@ export function getTeacherSubjects(id: number): Promise<TeacherSubjectInfo[]> {
 
 export function getTeacherSchedule(id: number): Promise<TeacherScheduleSlot[]> {
   return api.get<TeacherScheduleSlot[]>(`/staff/teachers/${id}/schedule`);
+}
+
+// ── Disponibilités de l'enseignant (jour + plage horaire) ────────────────────
+export interface TeacherAvailability {
+  id: number;
+  teacherId: number;
+  day: string;
+  startTime: string;
+  endTime: string;
+}
+
+export function getTeacherAvailability(id: number): Promise<TeacherAvailability[]> {
+  return api.get<TeacherAvailability[]>(`/staff/teachers/${id}/availability`);
+}
+export function addTeacherAvailability(id: number, input: { day: string; startTime: string; endTime: string }): Promise<TeacherAvailability> {
+  return api.post<TeacherAvailability>(`/staff/teachers/${id}/availability`, input);
+}
+export function deleteTeacherAvailability(slotId: number): Promise<void> {
+  return api.delete<void>(`/staff/teachers/availability/${slotId}`);
+}
+
+// ── Classes enseignées (affectation directe, checklist sur la fiche) ──────────
+export function getAssignedClasses(teacherId: number): Promise<number[]> {
+  return api.get<number[]>(`/staff/teachers/${teacherId}/assigned-classes`);
+}
+export function setAssignedClasses(teacherId: number, classIds: number[]): Promise<number[]> {
+  return api.put<number[]>(`/staff/teachers/${teacherId}/assigned-classes`, { classIds });
+}
+
+// ── Matières enseignées (affectation directe, liste sur la fiche) ─────────────
+export function getAssignedSubjects(teacherId: number): Promise<number[]> {
+  return api.get<number[]>(`/staff/teachers/${teacherId}/assigned-subjects`);
+}
+export function setAssignedSubjects(teacherId: number, subjectIds: number[]): Promise<number[]> {
+  return api.put<number[]>(`/staff/teachers/${teacherId}/assigned-subjects`, { subjectIds });
+}
+
+/** Ids des enseignants affectés à une matière (pour proposer les profs au choix de la matière). */
+export function getTeachersBySubject(subjectId: number): Promise<number[]> {
+  return api.get<number[]>(`/staff/teachers/by-subject/${subjectId}`);
+}
+
+// ── Charge horaire hebdomadaire (§4.1) ───────────────────────────────────────
+export interface TeacherWorkload {
+  teacherId: number;
+  totalWeeklyMinutes: number;
+  totalWeeklyHours: string;
+  slotCount: number;
+  minutesByDay: Record<string, number>;
+}
+
+/** Charge horaire hebdomadaire consolidée d'un enseignant (somme des créneaux d'emploi du temps). */
+export function getTeacherWorkload(id: number): Promise<TeacherWorkload> {
+  return api.get<TeacherWorkload>(`/staff/teachers/${id}/workload`);
+}
+
+// ── Personnel non-enseignant (administratif, direction, soutien) — §7.1 ───────
+export type EmployeeCategory = "ADMINISTRATIVE" | "DIRECTION" | "SUPPORT";
+
+export interface Employee {
+  id: number;
+  tenantId: number | null;
+  userId: number | null;
+  employeeNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  email: string | null;
+  category: EmployeeCategory;
+  jobTitle: string | null;
+  hireDate: string | null;
+  baseSalary: string | null;
+  cnssNumber: string | null;
+  active: boolean;
+}
+
+export interface EmployeeInput {
+  userId?: number | null;
+  employeeNumber?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  category: EmployeeCategory;
+  jobTitle?: string | null;
+  hireDate?: string | null;
+  baseSalary?: number | null;
+  cnssNumber?: string | null;
+}
+
+export function listEmployees(category?: EmployeeCategory): Promise<Employee[]> {
+  return api.get<Employee[]>("/staff/employees", { query: { category } });
+}
+export function getEmployee(id: number): Promise<Employee> {
+  return api.get<Employee>(`/staff/employees/${id}`);
+}
+export function createEmployee(input: EmployeeInput): Promise<Employee> {
+  return api.post<Employee>("/staff/employees", input);
+}
+export function updateEmployee(id: number, input: EmployeeInput): Promise<Employee> {
+  return api.put<Employee>(`/staff/employees/${id}`, input);
+}
+export function setEmployeeActive(id: number, active: boolean): Promise<Employee> {
+  return api.patch<Employee>(`/staff/employees/${id}/${active ? "activate" : "deactivate"}`);
+}
+export function deleteEmployee(id: number): Promise<void> {
+  return api.delete<void>(`/staff/employees/${id}`);
 }

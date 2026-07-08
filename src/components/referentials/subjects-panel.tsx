@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Group, NumberInput, Stack, Textarea, TextInput } from "@mantine/core";
+import { Autocomplete, Button, Group, Stack, Textarea } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useQuery } from "@/hooks/use-query";
 import { createSubject, deleteSubject, listSubjects, updateSubject } from "@/lib/api/academics";
@@ -10,6 +10,8 @@ import { ApiError } from "@/lib/api/errors";
 import { Modal } from "@/components/ui/modal";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { SUBJECT_CATALOG } from "@/lib/academics-subjects";
+import { SubjectCatalogPicker } from "@/components/referentials/subject-catalog";
 
 function SubjectForm({
   initial,
@@ -25,19 +27,20 @@ function SubjectForm({
     mode: "uncontrolled",
     initialValues: {
       label: initial?.label ?? "",
-      coefficient: initial?.coefficient ? Number(initial.coefficient) : (1 as number | string),
       syllabus: initial?.syllabus ?? "",
     },
     validate: {
       label: (v) => (v.trim() ? null : "Libellé requis"),
-      coefficient: (v) => (v !== "" && Number(v) > 0 ? null : "Coefficient invalide"),
     },
   });
 
-  async function submit(values: { label: string; coefficient: number | string; syllabus: string }) {
+  async function submit(values: { label: string; syllabus: string }) {
     setSubmitting(true);
     try {
-      await onSubmit(values.label, Number(values.coefficient), values.syllabus || undefined);
+      // Le coefficient n'est plus saisi à la matière : il se définit à l'affectation en classe et à
+      // l'évaluation. On conserve la valeur existante (ou 1 par défaut) pour ne rien casser côté API.
+      const coefficient = initial?.coefficient ? Number(initial.coefficient) : 1;
+      await onSubmit(values.label, coefficient, values.syllabus || undefined);
     } catch (err) {
       if (err instanceof ApiError) form.setErrors(err.fieldErrors);
       notifyError(err);
@@ -48,17 +51,19 @@ function SubjectForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk placeholder="Mathématiques" {...form.getInputProps("label")} key={form.key("label")} />
-        <NumberInput
-          label="Coefficient"
+        <Autocomplete
+          label="Libellé"
+          description="Choisissez une matière proposée ou saisissez la vôtre"
           withAsterisk
-          min={0}
-          step={0.5}
-          decimalScale={2}
-          {...form.getInputProps("coefficient")}
-          key={form.key("coefficient")}
+          placeholder="Mathématiques"
+          data={SUBJECT_CATALOG}
+          {...form.getInputProps("label")}
+          key={form.key("label")}
         />
         <Textarea label="Programme" autosize minRows={2} {...form.getInputProps("syllabus")} key={form.key("syllabus")} />
+        <p className="text-xs text-gray-400">
+          Le coefficient se définit lors de l&apos;affectation de la matière à une classe, et par évaluation.
+        </p>
         <Group justify="flex-end" gap="sm">
           <Button variant="default" onClick={onCancel} disabled={submitting}>
             Annuler
@@ -75,6 +80,7 @@ function SubjectForm({
 export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
   const q = useQuery(listSubjects, []);
   const [creating, setCreating] = useState(false);
+  const [assisting, setAssisting] = useState(false);
   const [editing, setEditing] = useState<Matiere | null>(null);
   const subjects = q.data ?? [];
 
@@ -112,7 +118,10 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
   return (
     <Stack gap="md">
       {canWrite && (
-        <Group justify="flex-end">
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setAssisting(true)}>
+            Catalogue
+          </Button>
           <Button onClick={() => setCreating(true)}>Nouvelle matière</Button>
         </Group>
       )}
@@ -120,14 +129,13 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
         <THead>
           <tr>
             <TH>Libellé</TH>
-            <TH>Coefficient</TH>
             <TH className="text-right">Actions</TH>
           </tr>
         </THead>
         <TBody>
           {subjects.length === 0 && (
             <TR>
-              <TD colSpan={3} className="py-8 text-center text-gray-400">
+              <TD colSpan={2} className="py-8 text-center text-gray-400">
                 Aucune matière.
               </TD>
             </TR>
@@ -135,7 +143,6 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
           {subjects.map((m) => (
             <TR key={m.id}>
               <TD className="font-medium">{m.label}</TD>
-              <TD>{m.coefficient}</TD>
               <TD className="text-right">
                 {canWrite && (
                   <Group justify="flex-end" gap="xs">
@@ -153,6 +160,18 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
         </TBody>
       </Table>
 
+      <Modal open={assisting} onClose={() => setAssisting(false)} title="Catalogue des matières">
+        {assisting && (
+          <SubjectCatalogPicker
+            existing={subjects}
+            onDone={() => {
+              setAssisting(false);
+              q.refetch();
+            }}
+            onCancel={() => setAssisting(false)}
+          />
+        )}
+      </Modal>
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle matière">
         {creating && <SubjectForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />}
       </Modal>

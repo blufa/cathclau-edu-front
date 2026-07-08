@@ -1,10 +1,56 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  Award,
+  BookOpen,
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  CalendarRange,
+  ClipboardList,
+  CreditCard,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
+  LayoutTemplate,
+  Layers,
+  Library,
+  Megaphone,
+  MessagesSquare,
+  School,
+  Settings,
+  Calculator,
+  Gauge,
+  ShieldCheck,
+  HeartPulse,
+  PiggyBank,
+  ShieldAlert,
+  NotebookPen,
+  Banknote,
+  Briefcase,
+  Bus,
+  UserSearch,
+  Users,
+  Webhook,
+} from "lucide-react";
 import type { RoleCode } from "@/lib/types/enums";
+
+/** Functional module codes, mirroring the backend ModuleCode enum. */
+export type ModuleCode =
+  | "IAM" | "STUDENTS" | "STAFF" | "ACADEMICS" | "ATTENDANCE" | "GRADING"
+  | "BILLING" | "PAYMENTS" | "WEBHOOKS" | "REPORT_CARD" | "COMMUNICATION"
+  | "EXPENSES" | "ACCOUNTING" | "STUDENT_CARDS";
 
 export interface NavItem {
   label: string;
-  href: string;
+  /** Omitted for pure parent items that only group children. */
+  href?: string;
+  icon?: LucideIcon;
   /** Roles allowed to see this item. Omitted = visible to any authenticated user. */
   roles?: RoleCode[];
+  /** Backend ModuleCode gating this item. Omitted = always available (not module-gated). */
+  module?: ModuleCode;
+  /** Optional collapsible sub-menu. */
+  children?: NavItem[];
 }
 
 export interface NavSection {
@@ -16,69 +62,159 @@ export interface NavSection {
 export const NAVIGATION: NavSection[] = [
   {
     title: "Pilotage",
-    items: [{ label: "Tableau de bord", href: "/dashboard" }],
+    items: [
+      { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"] },
+      { label: "Rapports & analytique", href: "/reports", icon: Gauge, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
+    ],
+  },
+  {
+    title: "Mon abonnement",
+    items: [
+      {
+        label: "Abonnement",
+        icon: CreditCard,
+        roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"],
+        children: [
+          { label: "Vue d'ensemble", href: "/subscription" },
+          { label: "Factures d'abonnement", href: "/subscription/invoices" },
+        ],
+      },
+    ],
   },
   {
     title: "Scolarité",
     items: [
-      { label: "Élèves", href: "/students", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
-      { label: "Inscriptions", href: "/enrollments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
-      { label: "Classes", href: "/classes", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
-      { label: "Enseignants", href: "/teachers", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
-      { label: "Emploi du temps", href: "/timetable", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"] },
+      { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENTS" },
+      {
+        label: "Inscriptions & rentrée", icon: ClipboardList, module: "STUDENTS",
+        children: [
+          { label: "Inscriptions", href: "/enrollments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENTS" },
+          { label: "Réinscription (rentrée)", href: "/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENTS" },
+          { label: "Mouvements & attente", href: "/enrollment-movements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENTS" },
+          { label: "Tableau de la rentrée", href: "/dashboard/rentree", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENTS" },
+        ],
+      },
+      { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "ACADEMICS" },
+      { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], module: "ACADEMICS" },
+      {
+        label: "Personnel", icon: Briefcase, module: "STAFF",
+        children: [
+          { label: "Enseignants", href: "/teachers", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "STAFF" },
+          { label: "Personnel administratif", href: "/personnel", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "STAFF" },
+        ],
+      },
+      { label: "Transport", href: "/transport", icon: Bus, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
+      { label: "Annuaire inter-écoles", href: "/directory", icon: UserSearch, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
     ],
   },
   {
     title: "Pédagogie",
     items: [
-      { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"] },
-      { label: "Bulletins", href: "/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"] },
-      { label: "Présences", href: "/attendance", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"] },
+      {
+        label: "Notes & bulletins", icon: BookOpen,
+        children: [
+          { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], module: "GRADING" },
+          { label: "Bulletins", href: "/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], module: "REPORT_CARD" },
+          { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], module: "REPORT_CARD" },
+          { label: "Paramètres de notation", href: "/grading/settings", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "GRADING" },
+        ],
+      },
+      { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"] },
+      { label: "Cahier de textes", href: "/lessons", icon: NotebookPen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"] },
+      { label: "Présences", href: "/attendance", icon: CalendarCheck, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], module: "ATTENDANCE" },
+      { label: "Discipline", href: "/discipline", icon: ShieldAlert, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"] },
+      { label: "Santé / Infirmerie", href: "/health", icon: HeartPulse, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"] },
     ],
   },
   {
     title: "Finances",
     items: [
-      { label: "Factures", href: "/invoices", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
-      { label: "Paiements", href: "/payments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
-      { label: "Frais scolaires", href: "/fees", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"] },
+      {
+        label: "Facturation", icon: FileText, module: "BILLING",
+        children: [
+          { label: "Factures élèves", href: "/invoices", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "BILLING" },
+          { label: "Frais scolaires", href: "/fees", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"], module: "BILLING" },
+          { label: "Règles de facturation", href: "/billing-rules", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"], module: "BILLING" },
+        ],
+      },
+      {
+        label: "Encaissements", icon: CreditCard, module: "PAYMENTS",
+        children: [
+          { label: "Paiements", href: "/payments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "PAYMENTS" },
+          { label: "Transactions & reçus", href: "/payments/transactions", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "PAYMENTS" },
+        ],
+      },
+      {
+        label: "Comptabilité", icon: Calculator,
+        children: [
+          { label: "Comptabilité générale", href: "/accounting", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "ACCOUNTING" },
+          { label: "Rapprochement bancaire", href: "/bank-reconciliation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
+          { label: "Petite caisse", href: "/petty-cash", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"] },
+        ],
+      },
+      {
+        label: "Budget & subventions", icon: PiggyBank,
+        children: [
+          { label: "Budget annuel", href: "/budget", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
+          { label: "Subventions", href: "/grants", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
+          { label: "Dépenses", href: "/expenses", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "EXPENSES" },
+        ],
+      },
+      { label: "Paie", href: "/payroll", icon: Banknote, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
     ],
   },
   {
     title: "Communication",
     items: [
-      { label: "Messages", href: "/communications", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"] },
-      { label: "Modèles", href: "/templates", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Messages", href: "/communications", icon: MessagesSquare, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], module: "COMMUNICATION" },
+      { label: "Annonces", href: "/announcements", icon: Megaphone, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"] },
+      { label: "Modèles", href: "/templates", icon: LayoutTemplate, roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "COMMUNICATION" },
     ],
   },
   {
     title: "Mon espace",
     items: [
-      { label: "Mes enfants", href: "/children", roles: ["PARENT"] },
-      { label: "Mes résultats", href: "/my-results", roles: ["STUDENT"] },
+      { label: "Mon tableau de bord", href: "/dashboard/enseignant", icon: Gauge, roles: ["TEACHER"] },
+      { label: "Mes classes", href: "/my-classes", icon: GraduationCap, roles: ["TEACHER"] },
+      { label: "Mes enfants", href: "/children", icon: Users, roles: ["PARENT"] },
+      { label: "Mes résultats", href: "/my-results", icon: Award, roles: ["STUDENT"] },
     ],
   },
   {
     title: "Plateforme",
     items: [
-      { label: "Écoles", href: "/platform/tenants", roles: ["SUPER_ADMIN"] },
-      { label: "Abonnements", href: "/platform/subscriptions", roles: ["SUPER_ADMIN"] },
-      { label: "Plans", href: "/platform/plans", roles: ["SUPER_ADMIN"] },
-    ],
-  },
-  {
-    title: "Configuration",
-    items: [
-      { label: "Années scolaires", href: "/academic-years", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
-      { label: "Référentiels", href: "/referentials", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Tableau de bord", href: "/platform/dashboard", icon: Gauge, roles: ["SUPER_ADMIN"] },
+      { label: "Écoles", href: "/platform/tenants", icon: Building2, roles: ["SUPER_ADMIN"] },
+      { label: "Abonnements", href: "/platform/subscriptions", icon: CreditCard, roles: ["SUPER_ADMIN"] },
+      { label: "Plans", href: "/platform/plans", icon: Layers, roles: ["SUPER_ADMIN"] },
     ],
   },
   {
     title: "Administration",
     items: [
-      { label: "Utilisateurs", href: "/users", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
-      { label: "Rôles & permissions", href: "/roles", roles: ["SCHOOL_ADMIN"] },
-      { label: "Paramètres", href: "/settings", roles: ["SCHOOL_ADMIN"] },
+      { label: "Année scolaire & calendrier", href: "/academic-years", icon: CalendarRange, roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Référentiels", href: "/referentials", icon: Library, roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Documents & modèles", href: "/documents", icon: FileText, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
+      { label: "Utilisateurs", href: "/users", icon: Users, roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+      { label: "Rôles & permissions", href: "/roles", icon: ShieldCheck, roles: ["SCHOOL_ADMIN"] },
+      {
+        label: "Intégrations", icon: Webhook,
+        children: [
+          { label: "Biométrie", href: "/biometric", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
+          { label: "Webhooks", href: "/webhooks", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "WEBHOOKS" },
+        ],
+      },
+      { label: "Paramètres", href: "/settings", icon: Settings, roles: ["SCHOOL_ADMIN"] },
     ],
   },
 ];
+
+/** Flattens nav items (incl. children) to leaf entries that have an href — used by global search. */
+export function flattenNav(items: NavItem[]): { label: string; href: string }[] {
+  const out: { label: string; href: string }[] = [];
+  for (const item of items) {
+    if (item.href) out.push({ label: item.label, href: item.href });
+    if (item.children) out.push(...flattenNav(item.children));
+  }
+  return out;
+}

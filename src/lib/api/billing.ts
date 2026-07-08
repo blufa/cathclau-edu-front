@@ -1,0 +1,174 @@
+import { api } from "@/lib/api/client";
+import type {
+  ApplicableDiscount,
+  Exemption,
+  ExemptionInput,
+  FamilyDiscountRule,
+  FamilyDiscountRuleInput,
+  FeeType,
+  Installment,
+  InstallmentInput,
+  Invoice,
+  InvoiceStatus,
+  SchoolFee,
+  SchoolFeeInput,
+  StaffChildBenefitPolicy,
+  StaffChildBenefitPolicyInput,
+  StaffCoverage,
+} from "@/lib/types/billing";
+
+// ── School fees ──────────────────────────────────────────────────────────
+export function listFeesByTenant(tenantId: number): Promise<SchoolFee[]> {
+  return api.get<SchoolFee[]>(`/billing/fees/tenant/${tenantId}`);
+}
+
+export function listFeesByClass(classId: number): Promise<SchoolFee[]> {
+  return api.get<SchoolFee[]>(`/billing/fees/class/${classId}`);
+}
+
+export function createFee(input: SchoolFeeInput): Promise<SchoolFee> {
+  return api.post<SchoolFee>("/billing/fees", input);
+}
+
+export function updateFee(id: number, input: Omit<SchoolFeeInput, "tenantId">): Promise<SchoolFee> {
+  return api.put<SchoolFee>(`/billing/fees/${id}`, input);
+}
+
+export function deleteFee(id: number): Promise<void> {
+  return api.delete<void>(`/billing/fees/${id}`);
+}
+
+// ── Installments ─────────────────────────────────────────────────────────
+export function listInstallments(feeId: number): Promise<Installment[]> {
+  return api.get<Installment[]>(`/billing/installments/fee/${feeId}`);
+}
+
+export function createInstallment(feeId: number, input: InstallmentInput): Promise<Installment> {
+  return api.post<Installment>("/billing/installments", { feeId, ...input });
+}
+
+/** Génère des échéances trimestrielles pondérées (ex. 40/30/30) depuis un total annuel. */
+export function generateWeightedTerms(feeId: number, annualTotal: number, terms: { label: string; percentage: number; dueDate?: string | null }[]): Promise<Installment[]> {
+  return api.post<Installment[]>("/billing/installments/generate-terms", { feeId, annualTotal, terms });
+}
+
+export function deleteInstallment(id: number): Promise<void> {
+  return api.delete<void>(`/billing/installments/${id}`);
+}
+
+/** Applique une remise / bourse (montant + motif) à une facture. */
+export function applyInvoiceDiscount(id: number, amount: number, reason: string): Promise<Invoice> {
+  return api.patch<Invoice>(`/billing/invoices/${id}/discount`, { amount, reason });
+}
+
+/** Avance le recouvrement d'une étape (relance 1 → relance 2 → exclusion). */
+export function advanceRecovery(id: number): Promise<Invoice> {
+  return api.patch<Invoice>(`/billing/invoices/${id}/recovery/advance`);
+}
+
+/** Positionne directement l'étape de recouvrement. */
+export function setRecoveryStage(id: number, stage: import("@/lib/types/billing").RecoveryStage): Promise<Invoice> {
+  return api.patch<Invoice>(`/billing/invoices/${id}/recovery`, undefined, { query: { stage } });
+}
+
+// ── Invoices ─────────────────────────────────────────────────────────────
+export function listInvoicesByTenant(tenantId: number): Promise<Invoice[]> {
+  return api.get<Invoice[]>(`/billing/invoices/tenant/${tenantId}`);
+}
+
+export function listInvoicesByStatus(tenantId: number, status: InvoiceStatus): Promise<Invoice[]> {
+  return api.get<Invoice[]>(`/billing/invoices/tenant/${tenantId}/status/${status}`);
+}
+
+export function listInvoicesByStudent(studentId: number): Promise<Invoice[]> {
+  return api.get<Invoice[]>(`/billing/invoices/student/${studentId}`);
+}
+
+/** Récupère (ou génère à la demande) l'URL du PDF de la facture. */
+export function getInvoicePdf(id: number): Promise<{ url?: string }> {
+  return api.get<{ url?: string }>(`/billing/invoices/${id}/pdf`);
+}
+
+/** Flux PDF de la facture servi par le backend (object URL local) — indépendant de Cloudinary. */
+export function getInvoicePdfObjectUrl(id: number): Promise<string> {
+  return api.blobUrl(`/billing/invoices/${id}/pdf/download`);
+}
+
+export function createInvoice(input: {
+  tenantId?: number | null;
+  studentId: number;
+  feeId: number;
+  reference: string;
+  totalAmount: number;
+}): Promise<Invoice> {
+  return api.post<Invoice>("/billing/invoices", input);
+}
+
+export function generateInvoicesBulk(tenantId: number | null, classId: number, feeId: number): Promise<Invoice[]> {
+  return api.post<Invoice[]>("/billing/invoices/generate-bulk", { tenantId, classId, feeId });
+}
+
+/** Génère une facture par mois (échéance) d'un frais MENSUALITE pour un élève. */
+export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number): Promise<Invoice[]> {
+  return api.post<Invoice[]>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId });
+}
+
+export function applyInvoicePayment(id: number, amount: number): Promise<Invoice> {
+  return api.put<Invoice>(`/billing/invoices/${id}/payment`, { amount });
+}
+
+export function cancelInvoice(id: number): Promise<void> {
+  return api.delete<void>(`/billing/invoices/${id}/cancel`);
+}
+
+export function getInvoiceByReference(reference: string): Promise<Invoice> {
+  return api.get<Invoice>(`/billing/invoices/reference/${encodeURIComponent(reference)}`);
+}
+
+// ── Exemptions (exonérations de frais) ───────────────────────────────────────
+export function listExemptions(): Promise<Exemption[]> {
+  return api.get<Exemption[]>("/billing/exemptions");
+}
+export function listExemptionsByStudent(studentId: number): Promise<Exemption[]> {
+  return api.get<Exemption[]>(`/billing/exemptions/student/${studentId}`);
+}
+export function grantExemption(input: ExemptionInput): Promise<Exemption> {
+  return api.post<Exemption>("/billing/exemptions", input);
+}
+export function revokeExemption(id: number): Promise<Exemption> {
+  return api.patch<Exemption>(`/billing/exemptions/${id}/revoquer`);
+}
+
+// ── Staff child benefit policies ─────────────────────────────────────────────
+export function listStaffChildBenefits(): Promise<StaffChildBenefitPolicy[]> {
+  return api.get<StaffChildBenefitPolicy[]>("/billing/staff-child-benefits");
+}
+export function createStaffChildBenefit(input: StaffChildBenefitPolicyInput): Promise<StaffChildBenefitPolicy> {
+  return api.post<StaffChildBenefitPolicy>("/billing/staff-child-benefits", input);
+}
+export function updateStaffChildBenefit(id: number, input: StaffChildBenefitPolicyInput): Promise<StaffChildBenefitPolicy> {
+  return api.put<StaffChildBenefitPolicy>(`/billing/staff-child-benefits/${id}`, input);
+}
+export function deleteStaffChildBenefit(id: number): Promise<void> {
+  return api.delete<void>(`/billing/staff-child-benefits/${id}`);
+}
+export function getStaffChildCoverage(studentId: number, feeType: FeeType): Promise<StaffCoverage> {
+  return api.get<StaffCoverage>("/billing/staff-child-benefits/coverage", { query: { studentId, feeType } });
+}
+
+// ── Family discount rules (remise fratrie) ───────────────────────────────────
+export function listFamilyDiscountRules(): Promise<FamilyDiscountRule[]> {
+  return api.get<FamilyDiscountRule[]>("/billing/family-discount-rules");
+}
+export function createFamilyDiscountRule(input: FamilyDiscountRuleInput): Promise<FamilyDiscountRule> {
+  return api.post<FamilyDiscountRule>("/billing/family-discount-rules", input);
+}
+export function updateFamilyDiscountRule(id: number, input: FamilyDiscountRuleInput): Promise<FamilyDiscountRule> {
+  return api.put<FamilyDiscountRule>(`/billing/family-discount-rules/${id}`, input);
+}
+export function deleteFamilyDiscountRule(id: number): Promise<void> {
+  return api.delete<void>(`/billing/family-discount-rules/${id}`);
+}
+export function getApplicableFamilyDiscount(studentId: number, feeType: FeeType): Promise<ApplicableDiscount> {
+  return api.get<ApplicableDiscount>("/billing/family-discount-rules/applicable", { query: { studentId, feeType } });
+}

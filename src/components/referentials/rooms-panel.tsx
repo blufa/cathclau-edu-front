@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Group, NativeSelect, NumberInput, Stack, Switch, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { Button, Group, Stack, Switch } from "@mantine/core";
 import { useQuery } from "@/hooks/use-query";
 import {
   createRoom,
@@ -11,83 +10,19 @@ import {
   setRoomAvailability,
   updateRoom,
 } from "@/lib/api/academics";
-import type { CreateRoomInput, Salle, TypeSalle } from "@/lib/types/academics";
-import { ApiError } from "@/lib/api/errors";
+import type { CreateRoomInput, Salle } from "@/lib/types/academics";
 import { Modal } from "@/components/ui/modal";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { RoomForm, ROOM_TYPE_LABEL } from "@/components/referentials/room-form";
+import { RoomAssistant } from "@/components/referentials/room-assistant";
 
-const TYPE_OPTIONS: { value: TypeSalle; label: string }[] = [
-  { value: "SALLE_COURS", label: "Salle de cours" },
-  { value: "LABORATOIRE", label: "Laboratoire" },
-  { value: "AMPHI", label: "Amphithéâtre" },
-  { value: "SALLE_INFO", label: "Salle informatique" },
-  { value: "AUTRE", label: "Autre" },
-];
-const TYPE_LABEL = Object.fromEntries(TYPE_OPTIONS.map((o) => [o.value, o.label]));
-
-function RoomForm({
-  initial,
-  onSubmit,
-  onCancel,
-}: {
-  initial?: Salle;
-  onSubmit: (input: CreateRoomInput) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [submitting, setSubmitting] = useState(false);
-  const form = useForm({
-    mode: "uncontrolled",
-    initialValues: {
-      label: initial?.label ?? "",
-      building: initial?.building ?? "",
-      capacity: initial?.capacity ?? ("" as number | string),
-      type: (initial?.type as TypeSalle) ?? "SALLE_COURS",
-    },
-    validate: { label: (v) => (v.trim() ? null : "Libellé requis") },
-  });
-
-  async function submit(values: { label: string; building: string; capacity: number | string; type: TypeSalle }) {
-    setSubmitting(true);
-    try {
-      await onSubmit({
-        label: values.label,
-        building: values.building || null,
-        capacity: values.capacity === "" ? null : Number(values.capacity),
-        type: values.type,
-      });
-    } catch (err) {
-      if (err instanceof ApiError) form.setErrors(err.fieldErrors);
-      notifyError(err);
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk {...form.getInputProps("label")} key={form.key("label")} />
-        <Group grow>
-          <TextInput label="Bâtiment" {...form.getInputProps("building")} key={form.key("building")} />
-          <NumberInput label="Capacité" min={0} allowDecimal={false} {...form.getInputProps("capacity")} key={form.key("capacity")} />
-        </Group>
-        <NativeSelect label="Type" data={TYPE_OPTIONS} {...form.getInputProps("type")} key={form.key("type")} />
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={submitting}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={submitting}>
-            Enregistrer
-          </Button>
-        </Group>
-      </Stack>
-    </form>
-  );
-}
+const TYPE_LABEL = ROOM_TYPE_LABEL;
 
 export function RoomsPanel({ canWrite }: { canWrite: boolean }) {
   const q = useQuery(listRooms, []);
   const [creating, setCreating] = useState(false);
+  const [assisting, setAssisting] = useState(false);
   const [editing, setEditing] = useState<Salle | null>(null);
   const rooms = q.data ?? [];
 
@@ -133,7 +68,10 @@ export function RoomsPanel({ canWrite }: { canWrite: boolean }) {
   return (
     <Stack gap="md">
       {canWrite && (
-        <Group justify="flex-end">
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setAssisting(true)}>
+            Assistant (en lot)
+          </Button>
           <Button onClick={() => setCreating(true)}>Nouvelle salle</Button>
         </Group>
       )}
@@ -187,6 +125,18 @@ export function RoomsPanel({ canWrite }: { canWrite: boolean }) {
         </TBody>
       </Table>
 
+      <Modal open={assisting} onClose={() => setAssisting(false)} title="Assistant — création de salles">
+        {assisting && (
+          <RoomAssistant
+            existingRooms={rooms}
+            onCreated={() => {
+              setAssisting(false);
+              q.refetch();
+            }}
+            onCancel={() => setAssisting(false)}
+          />
+        )}
+      </Modal>
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle salle">
         {creating && <RoomForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />}
       </Modal>

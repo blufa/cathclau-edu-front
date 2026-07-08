@@ -11,6 +11,10 @@ import {
 import { setSessionExpiredHandler } from "@/lib/api/client";
 import * as authService from "@/lib/auth/auth-service";
 import { getAccessToken } from "@/lib/auth/tokens";
+import {
+  getImpersonatedTenantId,
+  setImpersonatedTenantId as storeImpersonatedTenantId,
+} from "@/lib/auth/impersonation";
 import type { AuthUser } from "@/lib/types/auth";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -21,6 +25,9 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** SUPER_ADMIN-only: the school currently being impersonated, if any. */
+  impersonatedTenantId: number | null;
+  setImpersonatedTenant: (id: number | null) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -28,6 +35,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
+  // Restore impersonation choice (client-only; returns null on the server).
+  const [impersonatedTenantId, setImpId] = useState<number | null>(() => getImpersonatedTenantId());
+
+  const setImpersonatedTenant = useCallback((id: number | null) => {
+    storeImpersonatedTenantId(id);
+    setImpId(id);
+  }, []);
 
   const loadUser = useCallback(async () => {
     const me = await authService.fetchMe();
@@ -78,9 +92,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearSession();
   }, [clearSession]);
 
+  // For a SUPER_ADMIN impersonating a school, expose that school as the effective tenant so every
+  // tenant-scoped page (which reads user.tenantId) operates on it — mirrored by the X-Tenant-Id header.
+  const effectiveUser = useMemo<AuthUser | null>(() => {
+    if (!user) return null;
+    const isSuperAdmin = user.roles?.some((r) => r.replace(/^ROLE_/, "") === "SUPER_ADMIN");
+    if (isSuperAdmin && impersonatedTenantId != null) return { ...user, tenantId: impersonatedTenantId };
+    return user;
+  }, [user, impersonatedTenantId]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, login, logout, refreshUser: loadUser }),
-    [user, status, login, logout, loadUser],
+    () => ({ user: effectiveUser, status, login, logout, refreshUser: loadUser, impersonatedTenantId, setImpersonatedTenant }),
+    [effectiveUser, status, login, logout, loadUser, impersonatedTenantId, setImpersonatedTenant],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

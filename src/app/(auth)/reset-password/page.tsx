@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Alert, Anchor, Button, Paper, PasswordInput, Stack, Title } from "@mantine/core";
+import { Alert, Anchor, Button, PasswordInput, Stack, Title } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { resetPassword } from "@/lib/auth/auth-service";
 import { ApiError } from "@/lib/api/errors";
@@ -41,19 +41,19 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <Paper withBorder shadow="sm" radius="lg" p="xl">
+      <>
         <Alert color="red" variant="light">
           Lien de réinitialisation invalide ou expiré.
         </Alert>
         <Anchor component={Link} href="/forgot-password" size="sm" mt="md" display="inline-block">
           Demander un nouveau lien
         </Anchor>
-      </Paper>
+      </>
     );
   }
 
   return (
-    <Paper withBorder shadow="sm" radius="lg" p="xl">
+    <>
       <Title order={3} mb="md">
         Nouveau mot de passe
       </Title>
@@ -83,7 +83,7 @@ function ResetPasswordForm() {
           </Button>
         </Stack>
       </form>
-    </Paper>
+    </>
   );
 }
 

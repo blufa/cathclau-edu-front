@@ -12,10 +12,15 @@ import {
   getTeacherSubjects,
 } from "@/lib/api/staff";
 import { listRooms, listSubjects } from "@/lib/api/academics";
+import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
+import { TeacherClassesSection } from "@/components/staff/teacher-classes";
+import { TeacherSubjectsSection } from "@/components/staff/teacher-subjects";
 
 const DAY_LABEL: Record<string, string> = {
   MONDAY: "Lundi",
@@ -25,6 +30,17 @@ const DAY_LABEL: Record<string, string> = {
   FRIDAY: "Vendredi",
   SATURDAY: "Samedi",
   SUNDAY: "Dimanche",
+};
+
+const EMPLOYMENT_LABEL: Record<string, string> = {
+  PERMANENT: "Permanent",
+  VACATAIRE: "Vacataire",
+  CONTRACTUEL: "Contractuel",
+};
+const REMUNERATION_LABEL: Record<string, string> = {
+  MENSUEL: "Mensuel",
+  HORAIRE: "Horaire",
+  FORFAIT: "Forfait",
 };
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
@@ -40,6 +56,8 @@ export default function TeacherDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
 
+  const { user } = useAuth();
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
   const teacherQuery = useQuery(() => getTeacher(id), [id]);
   const classesQuery = useQuery(() => getTeacherClasses(id), [id]);
   const subjectsQuery = useQuery(() => getTeacherSubjects(id), [id]);
@@ -114,6 +132,49 @@ export default function TeacherDetailPage() {
           </dl>
         </CardBody>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Dossier professionnel</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <Info label="Statut" value={EMPLOYMENT_LABEL[t.employmentStatus ?? ""] ?? t.employmentStatus} />
+            <Info label="Diplôme" value={t.diploma} />
+            <Info label="Type de rémunération" value={REMUNERATION_LABEL[t.remunerationType ?? ""] ?? t.remunerationType} />
+            <Info label="Taux / montant" value={t.remunerationRate ? `${t.remunerationRate} GNF` : null} />
+            <Info label="N° autorisation (SNEPUP)" value={t.teachingAuthorizationNumber} />
+            <Info label="N° CNSS" value={t.cnssNumber} />
+          </dl>
+        </CardBody>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Classes enseignées</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <TeacherClassesSection teacherId={id} canWrite={canWrite} />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Matières enseignées</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <TeacherSubjectsSection teacherId={id} canWrite={canWrite} />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Disponibilités</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <TeacherAvailabilitySection teacherId={id} canWrite={canWrite} />
+          </CardBody>
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

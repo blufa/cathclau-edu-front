@@ -2,8 +2,8 @@
 
 /*
  * Mantine + Tailwind coexistence (projet) — règle :
- *   • Mantine = composants (inputs, modals, tables, notifications, AppShell).
- *   • Tailwind = layout / spacing / petits utilitaires sur les éléments wrappers.
+ *   • Mantine = composants fonctionnels (inputs, modals, tables, notifications, AppShell).
+ *   • Tailwind + Aceternity UI = design, layout, animations, sections marketing.
  *
  * Isolation du preflight Tailwind :
  *   Tailwind v4 place son reset (preflight) dans la couche CSS `@layer base`.
@@ -12,3 +12,162 @@
  *   couche → le preflight Tailwind ne peut donc PAS écraser les composants Mantine.
  *   On évite ainsi de styliser deux fois le même élément.
  */
+
+/*
+ * Design tokens — CathClau Edu (palette indigo/violet + accents).
+ * Exposés en variables Tailwind v4 (@theme) pour les composants Aceternity.
+ */
+@theme {
+  /* Accent teal/turquoise façon Skolengo. */
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+
+  /* Animations utilisées par les composants Aceternity (classes `animate-*`). */
+  --animate-aurora: aurora 60s linear infinite;
+  --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
+  --animate-scroll: scroll var(--animation-duration, 40s) var(--animation-direction, forwards) linear infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-moving-border: moving-border 6s linear infinite;
+  --animate-meteor: meteor 5s linear infinite;
+}
+
+@keyframes aurora {
+  from {
+    background-position: 50% 50%, 50% 50%;
+  }
+  to {
+    background-position: 350% 50%, 350% 50%;
+  }
+}
+
+@keyframes spotlight {
+  0% {
+    opacity: 0;
+    transform: translate(-72%, -62%) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+}
+
+@keyframes scroll {
+  to {
+    transform: translate(calc(-50% - 0.5rem));
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes moving-border {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes meteor {
+  0% {
+    transform: rotate(215deg) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(215deg) translateX(-500px);
+    opacity: 0;
+  }
+}
+
+/* Confort de lecture global. */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Form fields (clean admin style, brand-aware focus) ─────────────────────── */
+.mantine-InputWrapper-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-slate-700, #334155);
+  margin-bottom: 0.375rem;
+}
+.mantine-Input-input,
+.mantine-NativeSelect-input,
+.mantine-Textarea-input {
+  border-color: #e2e8f0;            /* slate-200 */
+  border-radius: 0.5rem;            /* rounded-lg */
+  background-color: #fff;
+  color: #0f172a;                   /* slate-900 */
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mantine-Input-input::placeholder { color: #94a3b8; } /* slate-400 */
+.mantine-Input-input:hover,
+.mantine-NativeSelect-input:hover { border-color: #cbd5e1; } /* slate-300 */
+.mantine-Input-input:focus,
+.mantine-Input-input:focus-within,
+.mantine-NativeSelect-input:focus,
+.mantine-Textarea-input:focus {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 18%, transparent);
+  outline: none;
+}
+.mantine-Input-input[data-error],
+.mantine-Input-input[aria-invalid="true"] {
+  border-color: #ef4444; /* red-500 */
+}
+
+/* Mantine table hover → subtle brand tint (matches the headless DataTable). */
+.mantine-Table-table {
+  --table-hover-color: color-mix(in srgb, var(--color-brand-500) 8%, transparent);
+  --table-highlight-on-hover-color: color-mix(in srgb, var(--color-brand-500) 8%, transparent);
+}
+
+/* ── Pointer cursor on everything clickable ─────────────────────────────────── */
+button:not(:disabled),
+a[href],
+summary,
+select,
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"],
+[role="menuitem"],
+.cursor-pointer {
+  cursor: pointer;
+}
+button:disabled,
+[aria-disabled="true"],
+[data-disabled] {
+  cursor: not-allowed;
+}
+
+/* Impression isolée d'un badge (IdBadge) : masque toute l'app sauf la carte. */
+@media print {
+  body.print-badge-only * {
+    visibility: hidden !important;
+  }
+  body.print-badge-only .badge-printable,
+  body.print-badge-only .badge-printable * {
+    visibility: visible !important;
+  }
+  body.print-badge-only .badge-printable {
+    position: fixed;
+    left: 50%;
+    top: 40px;
+    transform: translateX(-50%);
+    box-shadow: none !important;
+  }
+}

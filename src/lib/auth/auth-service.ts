@@ -19,6 +19,8 @@ export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken();
   try {
     if (refreshToken) await api.post<void>("/auth/logout", { refreshToken }, { auth: false });
+  } catch {
+    // Logout must always succeed client-side: ignore a failed/expired server revocation.
   } finally {
     clearTokens();
   }

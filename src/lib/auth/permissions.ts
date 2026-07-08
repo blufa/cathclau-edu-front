@@ -9,6 +9,8 @@ function normalize(role: string): string {
 export function hasRole(user: AuthUser | null, ...roles: RoleCode[]): boolean {
   if (!user) return false;
   const owned = new Set(user.roles.map(normalize));
+  // SUPER_ADMIN is all-powerful (incl. when impersonating a school): it satisfies every role check.
+  if (owned.has("SUPER_ADMIN")) return true;
   return roles.some((r) => owned.has(r));
 }
 

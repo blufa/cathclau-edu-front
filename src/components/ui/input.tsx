@@ -10,7 +10,7 @@ export const Input = React.forwardRef<
 });
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn("block text-sm font-medium text-gray-700", className)} {...props} />;
+  return <label className={cn("block text-sm font-medium text-slate-700", className)} {...props} />;
 }
 
 export function Field({ children }: { children: React.ReactNode }) {

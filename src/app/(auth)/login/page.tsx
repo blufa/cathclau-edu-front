@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Alert, Anchor, Button, Paper, PasswordInput, Stack, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Button, PasswordInput, Stack, TextInput, Title } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/lib/api/errors";
@@ -12,6 +12,10 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  // Success banner after the e-mail activation link redirects here (?verified=1).
+  const [verified] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("verified") === "1",
+  );
   const [loading, setLoading] = useState(false);
 
   const form = useForm({
@@ -40,12 +44,17 @@ export default function LoginPage() {
   }
 
   return (
-    <Paper withBorder shadow="sm" radius="lg" p="xl">
+    <>
       <Title order={3} mb="md">
         Connexion
       </Title>
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
+          {verified && (
+            <Alert color="teal" variant="light">
+              Votre e-mail est vérifié et votre école activée. Connectez-vous pour accéder à votre tableau de bord.
+            </Alert>
+          )}
           {error && (
             <Alert color="red" variant="light">
               {error}
@@ -75,6 +84,6 @@ export default function LoginPage() {
           </Anchor>
         </Stack>
       </form>
-    </Paper>
+    </>
   );
 }

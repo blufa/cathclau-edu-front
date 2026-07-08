@@ -11,7 +11,7 @@ import { QueryProvider } from "@/providers/query-provider";
 import { AuthProvider } from "@/providers/auth-provider";
 
 export const metadata: Metadata = {
-  title: "LacaÉducation",
+  title: "CathClau Edu — Gestion scolaire",
   description: "Plateforme de gestion d'établissements scolaires",
 };
 
@@ -25,7 +25,7 @@ export default function RootLayout({
       <head>
         <ColorSchemeScript />
       </head>
-      <body className="min-h-full">
+      <body className="min-h-full" suppressHydrationWarning>
         <MantineProvider theme={theme}>
           <Notifications position="top-right" />
           <ModalsProvider>

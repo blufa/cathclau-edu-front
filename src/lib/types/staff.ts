@@ -12,6 +12,12 @@ export interface Teacher {
   specialization: string | null;
   hireDate: string | null;
   active: boolean;
+  employmentStatus: string | null;
+  diploma: string | null;
+  remunerationType: string | null;
+  remunerationRate: string | null;
+  teachingAuthorizationNumber: string | null;
+  cnssNumber: string | null;
 }
 
 /** Body for POST /staff/teachers — tenantId resolved server-side. */
@@ -24,6 +30,12 @@ export interface CreateTeacherInput {
   email?: string | null;
   specialization?: string | null;
   hireDate?: string | null;
+  employmentStatus?: string | null;
+  diploma?: string | null;
+  remunerationType?: string | null;
+  remunerationRate?: string | null;
+  teachingAuthorizationNumber?: string | null;
+  cnssNumber?: string | null;
 }
 
 export type UpdateTeacherInput = Omit<CreateTeacherInput, "userId">;
