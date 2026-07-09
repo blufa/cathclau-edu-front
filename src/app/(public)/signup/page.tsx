@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { SignupForm } from "@/components/public/signup-form";
 import { FullPageSpinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
-import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
 
 export const metadata: Metadata = {
   title: "Créer mon école — CathClau Edu",
@@ -12,8 +11,7 @@ export const metadata: Metadata = {
 
 export default function SignupPage() {
   return (
-    <AuroraBackground className="px-4 py-16 sm:py-20">
-      <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" fill="#99f6e4" />
+    <div className="min-h-screen bg-gradient-to-b from-brand-50 via-white to-white px-4 py-16 sm:py-20">
       <div className="relative z-10 mx-auto w-full max-w-2xl">
         <Reveal className="mb-8 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">
@@ -23,7 +21,7 @@ export default function SignupPage() {
             Créez votre école en quelques minutes
           </h1>
           <p className="mt-3 text-slate-600">
-            Sans carte bancaire. Vous activez votre établissement dès la vérification de l&apos;e-mail.
+            Sans carte bancaire. Votre établissement est actif dès la création — connectez-vous aussitôt.
           </p>
         </Reveal>
         <Reveal delay={0.1}>
@@ -32,6 +30,6 @@ export default function SignupPage() {
           </Suspense>
         </Reveal>
       </div>
-    </AuroraBackground>
+    </div>
   );
 }
