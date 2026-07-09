@@ -369,7 +369,7 @@ function UserEditForm({ user, onCancel, onSaved }: { user: User; onCancel: () =>
         <TextInput label="Téléphone" {...form.getInputProps("phone")} />
         <Switch
           label="Compte actif"
-          color="teal"
+          color="brand"
           checked={form.values.active}
           onChange={(e) => form.setFieldValue("active", e.currentTarget.checked)}
         />

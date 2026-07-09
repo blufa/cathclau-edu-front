@@ -152,6 +152,12 @@ export default function LandingPage() {
         <HeroBgCarousel />
         <div className="relative z-10 mx-auto w-full max-w-5xl text-center">
           <Reveal>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/logo.png"
+              alt="CathClau Edu"
+              className="mx-auto mb-8 h-28 w-auto drop-shadow-2xl sm:h-32"
+            />
             <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-medium text-white backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-300" />
               Suite de gestion scolaire · 100 % web

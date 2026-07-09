@@ -57,7 +57,7 @@ export function TenantModulesPanel({ tenantId }: { tenantId: number }) {
                       <p className="text-xs text-amber-600">Expire le {tm.expirationDate}</p>
                     )}
                   </div>
-                  <Switch color="teal" checked={on} disabled={busy === m.code} onChange={(e) => toggle(m.code, e.currentTarget.checked)} />
+                  <Switch color="brand" checked={on} disabled={busy === m.code} onChange={(e) => toggle(m.code, e.currentTarget.checked)} />
                 </div>
               );
             })}

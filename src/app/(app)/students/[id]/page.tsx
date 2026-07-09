@@ -9,7 +9,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getStudent } from "@/lib/api/students";
-import { listClasses } from "@/lib/api/academics";
+import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
   cancelEnrollment,
   deleteEnrollment,
@@ -73,6 +73,12 @@ export default function StudentDetailPage() {
         ? Promise.all(yearIds.map((y) => listClasses(y))).then((lists) => lists.flat())
         : Promise.resolve([]),
     [yearIds.join(",")],
+  );
+  // Une seule inscription (non annulée) par année : sert à griser le bouton « Inscrire ».
+  const yearsQuery = useQuery(listAcademicYears, []);
+  const currentYearId = (yearsQuery.data ?? []).find((y) => y.current)?.id ?? null;
+  const alreadyEnrolledThisYear = (data?.enrollments ?? []).some(
+    (e) => e.academicYearId === currentYearId && e.status !== "CANCELLED",
   );
   const classLabel = useMemo(
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
@@ -162,7 +168,7 @@ export default function StudentDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="infos" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="infos" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="infos" leftSection={<IdCard className="h-4 w-4" />}>Infos</Tabs.Tab>
           <Tabs.Tab value="enrollments" leftSection={<BookOpen className="h-4 w-4" />}>
@@ -231,7 +237,12 @@ export default function StudentDetailPage() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Historique des inscriptions</h2>
             {canEnroll && (
-              <Button size="sm" onClick={() => setEnrolling(true)}>
+              <Button
+                size="sm"
+                onClick={() => setEnrolling(true)}
+                disabled={alreadyEnrolledThisYear}
+                title={alreadyEnrolledThisYear ? "Déjà inscrit pour l'année courante" : undefined}
+              >
                 Inscrire
               </Button>
             )}

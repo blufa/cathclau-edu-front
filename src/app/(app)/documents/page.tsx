@@ -125,7 +125,7 @@ export default function DocumentsPage() {
         )}
       </Reveal>
 
-      <Tabs defaultValue="templates" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="templates" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="templates">Modèles</Tabs.Tab>
           <Tabs.Tab value="history">Historique</Tabs.Tab>

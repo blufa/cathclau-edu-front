@@ -57,7 +57,7 @@ export default function StudentCardsPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Cartes scolaires</h1>
         <p className="text-sm text-slate-500">Émission des cartes élèves avec QR code signé</p>
       </Reveal>
-      <Tabs defaultValue="cards" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="cards" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="cards" leftSection={<IdCard className="h-4 w-4" />}>Cartes</Tabs.Tab>
           <Tabs.Tab value="templates" leftSection={<Tags className="h-4 w-4" />}>Modèles</Tabs.Tab>

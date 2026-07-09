@@ -51,7 +51,7 @@ export default function WebhooksPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Webhooks</h1>
         <p className="text-sm text-slate-500">Notifiez des systèmes tiers des événements de l&apos;école</p>
       </Reveal>
-      <Tabs defaultValue="endpoints" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="endpoints" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="endpoints" leftSection={<Webhook className="h-4 w-4" />}>Endpoints</Tabs.Tab>
           <Tabs.Tab value="events" leftSection={<History className="h-4 w-4" />}>Journal d&apos;événements</Tabs.Tab>
@@ -154,7 +154,7 @@ function EndpointForm({ tenantId, initial, onCancel, onSaved }: {
         <MultiSelect label="Événements souscrits" withAsterisk
           data={(Object.keys(WEBHOOK_EVENT_TYPE_LABEL) as WebhookEventType[]).map((t) => ({ value: t, label: WEBHOOK_EVENT_TYPE_LABEL[t] }))}
           {...form.getInputProps("events")} />
-        {initial && <Switch label="Actif" color="teal" checked={form.values.active} onChange={(e) => form.setFieldValue("active", e.currentTarget.checked)} />}
+        {initial && <Switch label="Actif" color="brand" checked={form.values.active} onChange={(e) => form.setFieldValue("active", e.currentTarget.checked)} />}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
           <Button type="submit" loading={loading}>Enregistrer</Button>

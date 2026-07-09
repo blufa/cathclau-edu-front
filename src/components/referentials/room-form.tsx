@@ -6,7 +6,7 @@ import { useForm } from "@mantine/form";
 import type { CreateRoomInput, Salle, TypeSalle } from "@/lib/types/academics";
 import { ApiError } from "@/lib/api/errors";
 import { notifyError } from "@/lib/feedback";
-import { BUILDINGS, FLOORS, roomSuggestions } from "@/lib/academics-rooms";
+import { BUILDINGS, roomSuggestions } from "@/lib/academics-rooms";
 
 export const ROOM_TYPE_OPTIONS: { value: TypeSalle; label: string }[] = [
   { value: "SALLE_COURS", label: "Salle de cours" },
@@ -28,8 +28,6 @@ export function RoomForm({
   onCancel: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
-  // Étage : aide à la numérotation des salles (ex. 1er étage → « Salle 101 »). Non stocké séparément.
-  const [floor, setFloor] = useState<string>("");
   const form = useForm({
     mode: "controlled",
     initialValues: {
@@ -61,23 +59,13 @@ export function RoomForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
-        <Group grow>
-          <Autocomplete label="Bâtiment" data={BUILDINGS} {...form.getInputProps("building")} />
-          <Select
-            label="Étage"
-            placeholder="Choisir"
-            data={FLOORS}
-            value={floor}
-            onChange={(v) => setFloor(v ?? "")}
-            clearable
-          />
-        </Group>
+        <Autocomplete label="Bâtiment" data={BUILDINGS} {...form.getInputProps("building")} />
         <Autocomplete
           label="Libellé de la salle"
           description="Choisissez une salle proposée ou saisissez la vôtre"
-          placeholder={floor ? "Salle proposée…" : "ex. Salle 101"}
+          placeholder="ex. Salle 001"
           withAsterisk
-          data={floor ? roomSuggestions(floor) : []}
+          data={roomSuggestions(1, 12)}
           {...form.getInputProps("label")}
         />
         <Group grow>

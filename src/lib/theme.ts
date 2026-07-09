@@ -1,13 +1,21 @@
 "use client";
 
-import { createTheme } from "@mantine/core";
+import { createTheme, type MantineColorsTuple } from "@mantine/core";
 
 const SYSTEM_FONT =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
-/** Shared Mantine theme: teal primary (Skolengo-style accent), system font stack. */
+/** Charte « CathClau Edu » dérivée du logo : bleu vif #2b6fe0 (600) + marine #16365a (800). */
+const brand: MantineColorsTuple = [
+  "#eef5ff", "#dbe8fe", "#bcd2fb", "#93b6f8", "#6a97f2",
+  "#3b82f6", "#2b6fe0", "#1e4fa8", "#16365a", "#0f2744",
+];
+
+/** Shared Mantine theme: brand blue primary (logo-aligned), system font stack. */
 export const theme = createTheme({
-  primaryColor: "teal",
+  colors: { brand },
+  primaryColor: "brand",
+  primaryShade: { light: 6, dark: 6 },
   defaultRadius: "md",
   fontFamily: SYSTEM_FONT,
   headings: { fontFamily: SYSTEM_FONT },

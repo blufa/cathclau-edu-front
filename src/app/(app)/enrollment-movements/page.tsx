@@ -71,7 +71,7 @@ export default function EnrollmentMovementsPage() {
       {loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
-        <Tabs defaultValue="waiting" color="teal" variant="pills" radius="md">
+        <Tabs defaultValue="waiting" color="brand" variant="pills" radius="md">
           <Tabs.List>
             <Tabs.Tab value="waiting">Liste d&apos;attente ({waiting.length})</Tabs.Tab>
             <Tabs.Tab value="arrivals">Arrivées ({arrivals.length})</Tabs.Tab>

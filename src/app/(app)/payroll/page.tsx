@@ -68,7 +68,7 @@ export default function PayrollPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Paie</h1>
         <p className="text-sm text-slate-500">Fiches de paie des enseignants et structures salariales</p>
       </Reveal>
-      <Tabs defaultValue="payslips" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="payslips" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="payslips" leftSection={<Banknote className="h-4 w-4" />}>Fiches de paie</Tabs.Tab>
           <Tabs.Tab value="compensation" leftSection={<Clock className="h-4 w-4" />}>Rémunération & heures</Tabs.Tab>

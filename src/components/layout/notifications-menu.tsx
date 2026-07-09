@@ -80,7 +80,7 @@ export function NotificationsMenu() {
           onClick={() => setOpened((o) => !o)}
           className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-brand-300 hover:text-brand-700"
         >
-          <Indicator color="teal" size={8} disabled={unread === 0} offset={4}>
+          <Indicator color="brand" size={8} disabled={unread === 0} offset={4}>
             <Bell className="h-[18px] w-[18px]" />
           </Indicator>
         </button>

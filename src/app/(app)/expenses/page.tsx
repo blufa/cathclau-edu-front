@@ -73,7 +73,7 @@ export default function ExpensesPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dépenses</h1>
         <p className="text-sm text-slate-500">Saisie, validation et paiement des dépenses de l&apos;école</p>
       </Reveal>
-      <Tabs defaultValue="expenses" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="expenses" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="expenses" leftSection={<Receipt className="h-4 w-4" />}>Dépenses</Tabs.Tab>
           <Tabs.Tab value="budgets" leftSection={<Wallet className="h-4 w-4" />}>Budgets</Tabs.Tab>
