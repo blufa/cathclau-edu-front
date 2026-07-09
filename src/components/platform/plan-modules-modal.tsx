@@ -76,7 +76,7 @@ export function PlanModulesModal({
                   </p>
                 </div>
                 <Switch
-                  color="teal"
+                  color="brand"
                   checked={on}
                   disabled={busy === m.code}
                   onChange={(e) => toggle(m.code, e.currentTarget.checked)}

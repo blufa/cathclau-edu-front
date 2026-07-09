@@ -113,7 +113,7 @@ export function DataTable<T>({
         header: ({ table }) => (
           <Checkbox
             size="xs"
-            color="teal"
+            color="brand"
             aria-label="Tout sélectionner"
             checked={table.getIsAllRowsSelected()}
             indeterminate={table.getIsSomeRowsSelected()}
@@ -123,7 +123,7 @@ export function DataTable<T>({
         cell: ({ row }) => (
           <Checkbox
             size="xs"
-            color="teal"
+            color="brand"
             aria-label="Sélectionner la ligne"
             checked={row.getIsSelected()}
             onChange={row.getToggleSelectedHandler()}
@@ -229,7 +229,7 @@ export function DataTable<T>({
                       <Menu.Item key={c.id} onClick={() => c.toggleVisibility()}>
                         <Checkbox
                           size="xs"
-                          color="teal"
+                          color="brand"
                           readOnly
                           checked={c.getIsVisible()}
                           label={typeof def?.header === "string" ? def.header : c.id}

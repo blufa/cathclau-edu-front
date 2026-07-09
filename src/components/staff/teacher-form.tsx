@@ -147,7 +147,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
           active={active}
           onStepClick={setActive}
           size="sm"
-          color="teal"
+          color="brand"
           radius="xl"
           wrap={false}
           completedIcon={<Check className="h-4 w-4" />}
@@ -206,7 +206,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
           <Stepper.Step label="Compte">
             <Stack gap="md" pt="md">
               <div className="rounded-xl border border-slate-200 p-3">
-                <Switch color="teal" label="Créer un accès (espace enseignant)" {...form.getInputProps("createLogin", { type: "checkbox" })} />
+                <Switch color="brand" label="Créer un accès (espace enseignant)" {...form.getInputProps("createLogin", { type: "checkbox" })} />
                 {v.createLogin && (
                   <div className="mt-3 space-y-2">
                     <p className="text-xs text-slate-400">L&apos;enseignant se connectera avec son <strong>email</strong> et ce mot de passe.</p>

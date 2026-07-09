@@ -51,7 +51,7 @@ export default function LoginPage() {
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           {verified && (
-            <Alert color="teal" variant="light">
+            <Alert color="brand" variant="light">
               Votre e-mail est vérifié et votre école activée. Connectez-vous pour accéder à votre tableau de bord.
             </Alert>
           )}

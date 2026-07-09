@@ -24,7 +24,7 @@ export default function GradingSettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="scale" color="teal" variant="pills" radius="md" keepMounted={false}>
+      <Tabs defaultValue="scale" color="brand" variant="pills" radius="md" keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="scale" leftSection={<SlidersHorizontal className="h-4 w-4" />}>Barème</Tabs.Tab>
           <Tabs.Tab value="calc" leftSection={<Calculator className="h-4 w-4" />}>Moteur de calcul</Tabs.Tab>

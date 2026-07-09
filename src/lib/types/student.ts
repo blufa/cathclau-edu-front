@@ -109,6 +109,9 @@ export interface CreateStudentInput {
   repeating?: boolean | null;
   transferReason?: string | null;
   medicalNotes?: string | null;
+  /** Créer un accès au portail élève : la connexion se fait par le matricule + ce mot de passe. */
+  createLogin?: boolean;
+  loginPassword?: string;
 }
 
 /** Body for PUT /students/{id}. */

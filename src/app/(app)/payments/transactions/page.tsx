@@ -49,7 +49,7 @@ export default function PaymentTransactionsPage() {
         <p className="text-sm text-gray-500">Traçabilité des appels fournisseurs (mobile money, cartes) et reçus émis</p>
       </Reveal>
 
-      <Tabs defaultValue="transactions" color="teal" variant="pills" radius="md" keepMounted={false}>
+      <Tabs defaultValue="transactions" color="brand" variant="pills" radius="md" keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="transactions" leftSection={<Landmark className="h-4 w-4" />}>Transactions fournisseur</Tabs.Tab>
           <Tabs.Tab value="receipts" leftSection={<ReceiptIcon className="h-4 w-4" />}>Reçus</Tabs.Tab>
