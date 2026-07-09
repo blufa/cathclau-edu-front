@@ -2,19 +2,31 @@ name: Deploy frontend
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, main]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-frontend
+  group: deploy-frontend-${{ github.ref_name }}
   cancel-in-progress: false
 
-env:
-  NEXT_PUBLIC_API_BASE_URL: https://api.cathclau-edu.com/api/v1
-
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.e.outputs.env }}
+      api: ${{ steps.e.outputs.api }}
+    steps:
+      - id: e
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+            echo "api=https://api.cathclau-edu.com/api/v1" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=dev" >> "$GITHUB_OUTPUT"
+            echo "api=https://api-dev.cathclau-edu.com/api/v1" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
-    name: Lint, types & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,13 +37,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
-      - run: npm run build
-        env:
-          NEXT_PUBLIC_API_BASE_URL: ${{ env.NEXT_PUBLIC_API_BASE_URL }}
 
   build-push:
-    name: Build & push image (GHCR)
-    needs: test
+    needs: [setup, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,38 +49,35 @@ jobs:
       - name: Lowercase owner
         run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build & push
-        uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           build-args: |
-            NEXT_PUBLIC_API_BASE_URL=${{ env.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_API_BASE_URL=${{ needs.setup.outputs.api }}
           tags: |
-            ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:latest
+            ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:${{ needs.setup.outputs.env }}
             ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy to VPS
-    needs: build-push
+    needs: [setup, build-push]
     runs-on: ubuntu-latest
     steps:
-      - name: SSH deploy
-        uses: appleboy/ssh-action@v1
+      - uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /opt/lacaeducation
-            docker compose pull frontend
-            docker compose up -d frontend
+            ENV=${{ needs.setup.outputs.env }}
+            docker compose --env-file .env.$ENV -p laca-$ENV pull frontend
+            docker compose --env-file .env.$ENV -p laca-$ENV up -d frontend
             docker image prune -f
