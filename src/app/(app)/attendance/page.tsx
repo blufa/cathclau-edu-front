@@ -144,7 +144,7 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      <Tabs defaultValue="appel" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="appel" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="appel" leftSection={<ClipboardList className="h-4 w-4" />}>Appel de classe</Tabs.Tab>
           <Tabs.Tab value="suivi" leftSection={<CalendarCheck className="h-4 w-4" />}>Suivi & corrections</Tabs.Tab>

@@ -6,7 +6,7 @@ import { DatePickerInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { Check } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
-import { createUserWithRole } from "@/lib/api/iam";
+import { guineaPhoneRule, PHONE_PLACEHOLDER } from "@/lib/phone";
 import { searchSchools } from "@/lib/api/directory";
 import { formatClassOrdinal, nextClassOrdinal } from "@/lib/format";
 import { FileUpload } from "@/components/ui/file-upload";
@@ -93,10 +93,9 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
     validate: {
       firstName: (v) => (v.trim() ? null : "Prénom requis"),
       lastName: (v) => (v.trim() ? null : "Nom requis"),
-      email: (v, vals) => {
-        if (vals.createLogin) return /^\S+@\S+$/.test(v) ? null : "Email requis pour l'accès";
-        return !v || /^\S+@\S+$/.test(v) ? null : "Email invalide";
-      },
+      // L'email est facultatif (l'élève se connecte par son matricule, pas par email).
+      email: (v) => (!v || /^\S+@\S+$/.test(v) ? null : "Email invalide"),
+      phone: guineaPhoneRule,
       password: (v, vals) => (vals.createLogin && v.length < 6 ? "Mot de passe (6 caractères min.)" : null),
     },
   });
@@ -124,16 +123,10 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
     setError(null);
     setSubmitting(true);
     try {
-      let userId: number | null = null;
-      if (values.createLogin) {
-        const user = await createUserWithRole(
-          { firstName: values.firstName, lastName: values.lastName, email: values.email, password: values.password, phone: values.phone || null },
-          "STUDENT",
-        );
-        userId = user.id;
-      }
       await onSubmit({
-        userId,
+        // L'accès portail est créé côté serveur (login = matricule, pas d'email requis).
+        createLogin: values.createLogin || undefined,
+        loginPassword: values.createLogin ? values.password : undefined,
         firstName: values.firstName,
         lastName: values.lastName,
         gender: values.gender,
@@ -179,7 +172,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
           active={active}
           onStepClick={setActive}
           size="sm"
-          color="teal"
+          color="brand"
           radius="xl"
           wrap={false}
           completedIcon={<Check className="h-4 w-4" />}
@@ -197,7 +190,14 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
                 <TextInput label="Matricule" placeholder="Auto-généré si vide" {...form.getInputProps("studentNumber")} />
               </SimpleGrid>
               <SimpleGrid cols={2}>
-                <DatePickerInput label="Date de naissance" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("birthDate")} />
+                <DatePickerInput
+                  label="Date de naissance"
+                  valueFormat="DD/MM/YYYY"
+                  clearable
+                  defaultLevel="decade"
+                  maxDate={new Date()}
+                  {...form.getInputProps("birthDate")}
+                />
                 <TextInput label="Lieu de naissance" {...form.getInputProps("birthPlace")} />
               </SimpleGrid>
               <SimpleGrid cols={3}>
@@ -219,7 +219,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
               </SimpleGrid>
               <TextInput label="Adresse" {...form.getInputProps("address")} />
               <SimpleGrid cols={2}>
-                <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+                <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("phone")} />
                 <TextInput label="Email" type="email" {...form.getInputProps("email")} />
               </SimpleGrid>
             </Stack>
@@ -266,10 +266,13 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
           <Stepper.Step label="Compte">
             <Stack gap="md" pt="md">
               <div className="rounded-xl border border-slate-200 p-3">
-                <Switch color="teal" label="Créer un accès (espace élève)" {...form.getInputProps("createLogin", { type: "checkbox" })} />
+                <Switch color="brand" label="Créer un accès (espace élève)" {...form.getInputProps("createLogin", { type: "checkbox" })} />
                 {v.createLogin && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs text-slate-400">L&apos;élève se connectera avec son <strong>email</strong> (étape Coordonnées) et ce mot de passe.</p>
+                    <p className="text-xs text-slate-400">
+                      L&apos;élève se connectera avec son <strong>matricule</strong> (généré automatiquement) et ce mot de passe.
+                      Aucun email n&apos;est nécessaire.
+                    </p>
                     <PasswordInput label="Mot de passe" placeholder="••••••••" {...form.getInputProps("password")} />
                   </div>
                 )}

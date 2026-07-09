@@ -73,6 +73,16 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const sameLevelClass = prevClass?.levelId != null ? classes.find((c) => c.levelId === prevClass.levelId) : undefined;
   const nextLevelClass = nextLevel ? classes.find((c) => c.levelId === nextLevel.id) : undefined;
 
+  // (5) Classe cible présélectionnée : par défaut le passage au niveau supérieur (redoublant = même
+  // niveau via le bouton « Redoubler »). L'utilisateur peut toujours changer dans la liste.
+  const autoTargetId = !editing && previous ? (nextLevelClass?.id ?? sameLevelClass?.id ?? null) : null;
+  const effectiveClassId = classId || (autoTargetId != null ? String(autoTargetId) : "");
+  const effectiveType: EnrollmentType = autoTargetId != null && !classId ? "RE_ENROLLMENT" : type;
+
+  // (6) Une seule inscription par élève et par année : si elle existe déjà, on grise « Inscrire ».
+  const existingForYear = !editing ? (historyQuery.data ?? []).find((e) => e.academicYearId === yearId) : undefined;
+  const existingClassLabel = existingForYear ? classes.find((c) => c.id === existingForYear.classId)?.label : undefined;
+
   /** One-click prefill: pick a class of the given level in the selected year and mark as re-enrollment. */
   function quickFill(classToSet: { id: number } | undefined) {
     if (!classToSet) return;
@@ -83,12 +93,16 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!yearId || !classId) {
+    if (existingForYear) {
+      setError("Cet élève est déjà inscrit pour cette année.");
+      return;
+    }
+    if (!yearId || !effectiveClassId) {
       setError("Sélectionnez une année et une classe.");
       return;
     }
     setSubmitting(true);
-    const input = { studentId, classId: Number(classId), academicYearId: yearId, type };
+    const input = { studentId, classId: Number(effectiveClassId), academicYearId: yearId, type: effectiveType };
     try {
       const result = editing
         ? await updateEnrollment(enrollment!.id, input)
@@ -115,6 +129,13 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+        {existingForYear && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Déjà inscrit{existingClassLabel ? ` en ${existingClassLabel}` : ""} pour cette année. Une seule
+            inscription par année — modifiez l&apos;inscription existante en cas d&apos;erreur.
+          </p>
+        )}
+
         <Field>
           <Label htmlFor="year">Année scolaire</Label>
           <Select
@@ -137,7 +158,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
 
         <Field>
           <Label htmlFor="class">Classe</Label>
-          <Select id="class" value={classId} onChange={(e) => setClassId(e.target.value)}>
+          <Select id="class" value={effectiveClassId} onChange={(e) => setClassId(e.target.value)} disabled={!!existingForYear}>
             <option value="">— Sélectionner —</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -174,7 +195,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
 
         <Field>
           <Label htmlFor="type">Type</Label>
-          <Select id="type" value={type} onChange={(e) => setType(e.target.value as EnrollmentType)}>
+          <Select id="type" value={effectiveType} onChange={(e) => setType(e.target.value as EnrollmentType)} disabled={!!existingForYear}>
             <option value="NEW">Inscription</option>
             <option value="RE_ENROLLMENT">Réinscription</option>
           </Select>
@@ -184,7 +205,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
           <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
             Annuler
           </Button>
-          <Button type="submit" loading={submitting}>
+          <Button type="submit" loading={submitting} disabled={!!existingForYear}>
             {editing ? "Enregistrer" : "Inscrire"}
           </Button>
         </div>

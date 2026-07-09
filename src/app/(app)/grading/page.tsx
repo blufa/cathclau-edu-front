@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Select as MantineSelect, MultiSelect, NumberInput, Stack, Tabs, TextInput } from "@mantine/core";
 import { DatePickerInput } from "@mantine/dates";
@@ -23,6 +23,8 @@ import {
   assignExamSupervisor,
   completeExam,
   createAssessment,
+  updateAssessment,
+  listAssessmentTypes,
   createExam,
   deleteAssessment,
   deleteExam,
@@ -119,7 +121,7 @@ export default function GradingPage() {
           Sélectionnez une classe.
         </p>
       ) : (
-        <Tabs defaultValue="evaluations" color="teal" variant="pills" radius="md">
+        <Tabs defaultValue="evaluations" color="brand" variant="pills" radius="md">
           <Tabs.List>
             <Tabs.Tab value="evaluations" leftSection={<BookOpen className="h-4 w-4" />}>Évaluations</Tabs.Tab>
             <Tabs.Tab value="exams" leftSection={<GraduationCap className="h-4 w-4" />}>Examens</Tabs.Tab>
@@ -141,6 +143,18 @@ export default function GradingPage() {
   );
 }
 
+// Regroupement mensuel des évaluations : chaque mois, une matière a généralement 2 évaluations
+// (ex. orale + écrite) et une moyenne mensuelle = moyenne pondérée (par coefficient) ramenée sur 20.
+const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+function monthKeyOf(a: Assessment): string {
+  return a.date ? a.date.slice(0, 7) : "sans-date";
+}
+function monthLabelOf(key: string): string {
+  if (key === "sans-date") return "Sans date";
+  const [y, m] = key.split("-");
+  return `${MONTHS_FR[Number(m) - 1] ?? m} ${y}`;
+}
+
 // ── Évaluations tab ──────────────────────────────────────────────────────────
 function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting }: { classId: number; className: string; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
   const assessmentsQuery = useQuery(() => listAssessmentsByClass(classId), [classId]);
@@ -149,6 +163,7 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
   const teacherLabel = useMemo(() => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachersQuery.data]);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Assessment | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
   // Relevé de notes par matière (PDF backend, moyenne calculée selon le paramétrage de l'établissement).
   const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
@@ -210,6 +225,70 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
     () => [...new Set((assessmentsQuery.data ?? []).map((a) => a.subjectId))],
     [assessmentsQuery.data]);
 
+  // Évaluations groupées par (matière, mois) — 2 évals/mois/matière sans créer de lignes séparées à l'œil.
+  const groups = useMemo(() => {
+    const map = new Map<string, { subjectId: number; monthKey: string; evals: Assessment[] }>();
+    for (const a of assessmentsQuery.data ?? []) {
+      const key = `${a.subjectId}|${monthKeyOf(a)}`;
+      if (!map.has(key)) map.set(key, { subjectId: a.subjectId, monthKey: monthKeyOf(a), evals: [] });
+      map.get(key)!.evals.push(a);
+    }
+    return [...map.values()].sort(
+      (x, y) =>
+        (subjectLabel.get(x.subjectId) ?? "").localeCompare(subjectLabel.get(y.subjectId) ?? "") ||
+        y.monthKey.localeCompare(x.monthKey),
+    );
+  }, [assessmentsQuery.data, subjectLabel]);
+
+  // Relevé mensuel : Éval 1 / Éval 2 / … + Moyenne du mois (pondérée par coefficient, ramenée sur 20).
+  async function printMonthly(group: { subjectId: number; monthKey: string; evals: Assessment[] }) {
+    try {
+      const evals = [...group.evals].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+      const [students, ...gradesLists] = await Promise.all([
+        getClassStudents(classId),
+        ...evals.map((e) => getAssessmentGrades(e.id)),
+      ]);
+      const gradeMaps = gradesLists.map((gl) => new Map(gl.map((g) => [g.studentId, g.value])));
+      const evalCols = evals
+        .map((e) => `<th style="text-align:center">${e.label}<br><span style="font-weight:400;font-size:11px">/${e.maxScore}${Number(e.coefficient) !== 1 ? ` · coef ${e.coefficient}` : ""}</span></th>`)
+        .join("");
+      const rows = students
+        .map((s, i) => {
+          let wsum = 0, csum = 0;
+          const cells = evals
+            .map((e, ei) => {
+              const raw = gradeMaps[ei].get(s.id);
+              if (raw != null && raw !== "") {
+                const v = Number(raw);
+                wsum += (v / Number(e.maxScore)) * 20 * Number(e.coefficient || 1);
+                csum += Number(e.coefficient || 1);
+                return `<td style="text-align:center">${v} / ${e.maxScore}</td>`;
+              }
+              return `<td style="text-align:center">—</td>`;
+            })
+            .join("");
+          const moy = csum > 0 ? (wsum / csum).toFixed(2) : "—";
+          return `<tr><td>${i + 1}</td><td>${s.studentNumber ?? ""}</td><td>${s.lastName ?? ""} ${s.firstName ?? ""}</td>${cells}<td style="text-align:center;font-weight:700">${moy}</td></tr>`;
+        })
+        .join("");
+      const subject = subjectLabel.get(group.subjectId) ?? `#${group.subjectId}`;
+      const w = window.open("", "_blank", "width=920,height=900");
+      if (!w) { notifyError("Autorisez les pop-ups pour imprimer."); return; }
+      w.document.write(
+        `<!doctype html><html><head><meta charset="utf-8"><title>Relevé mensuel — ${subject}</title>`
+        + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
+        + `h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#475569;font-size:13px;margin-bottom:16px}`
+        + `table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #cbd5e1;padding:6px 8px}`
+        + `th{background:#f1f5f9;text-align:left}@media print{body{padding:0}}</style></head><body>`
+        + `<h1>RELEVÉ MENSUEL DE NOTES</h1><div class="sub">${subject} — ${monthLabelOf(group.monthKey)} — ${className || ""}</div>`
+        + `<table><thead><tr><th>N°</th><th>Matricule</th><th>Nom & prénom</th>${evalCols}<th style="text-align:center">Moyenne /20</th></tr></thead>`
+        + `<tbody>${rows}</tbody></table>`
+        + `<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`,
+      );
+      w.document.close();
+    } catch (err) { notifyError(err); }
+  }
+
   function handleDelete(a: Assessment) {
     confirmAction({
       title: "Supprimer l'évaluation", message: `Supprimer « ${a.label} » et ses notes ?`,
@@ -249,26 +328,42 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
             <tr><TH>Évaluation</TH><TH>Matière</TH><TH>Enseignant</TH><TH>Type</TH><TH>Barème</TH><TH>Coef.</TH><TH>Date</TH><TH className="text-right">Actions</TH></tr>
           </THead>
           <TBody>
-            {(assessmentsQuery.data ?? []).length === 0 && (
+            {groups.length === 0 && (
               <TR><TD colSpan={8} className="py-10 text-center text-slate-400">Aucune évaluation.</TD></TR>
             )}
-            {(assessmentsQuery.data ?? []).map((a) => (
-              <TR key={a.id}>
-                <TD className="font-medium text-slate-900">{a.label}</TD>
-                <TD>{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
-                <TD>{a.teacherId ? (teacherLabel.get(a.teacherId) ?? `#${a.teacherId}`) : "—"}</TD>
-                <TD><Badge tone="indigo">{ASSESSMENT_TYPE_LABEL[a.type]}</Badge></TD>
-                <TD>/ {a.maxScore}</TD>
-                <TD>{a.coefficient}</TD>
-                <TD>{a.date ?? "—"}</TD>
-                <TD className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
-                    <Button size="sm" variant="ghost" onClick={() => printGradeSheet(a)}>Fiche de notes</Button>
-                    {canWrite && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
-                  </div>
-                </TD>
-              </TR>
+            {groups.map((g) => (
+              <Fragment key={`${g.subjectId}|${g.monthKey}`}>
+                <TR>
+                  <TD colSpan={7} className="bg-slate-50 font-semibold text-slate-700">
+                    {subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`} · {monthLabelOf(g.monthKey)}
+                    <span className="ml-2 font-normal text-slate-400">
+                      {g.evals.length} évaluation{g.evals.length > 1 ? "s" : ""}
+                    </span>
+                  </TD>
+                  <TD className="bg-slate-50 text-right">
+                    <Button size="sm" variant="secondary" onClick={() => printMonthly(g)}>Relevé du mois</Button>
+                  </TD>
+                </TR>
+                {g.evals.map((a) => (
+                  <TR key={a.id}>
+                    <TD className="pl-6 font-medium text-slate-900">{a.label}</TD>
+                    <TD>{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
+                    <TD>{a.teacherId ? (teacherLabel.get(a.teacherId) ?? `#${a.teacherId}`) : "—"}</TD>
+                    <TD><Badge tone="indigo">{ASSESSMENT_TYPE_LABEL[a.type]}</Badge></TD>
+                    <TD>/ {a.maxScore}</TD>
+                    <TD>{a.coefficient}</TD>
+                    <TD>{a.date ?? "—"}</TD>
+                    <TD className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        <Button size="sm" variant="ghost" onClick={() => printGradeSheet(a)}>Fiche de notes</Button>
+                        {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
+                        {canWrite && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </Fragment>
             ))}
           </TBody>
         </Table>
@@ -277,6 +372,12 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle évaluation">
         <AssessmentForm classId={classId} yearId={yearId} onCancel={() => setCreating(false)}
           onCreated={() => { setCreating(false); notifySuccess("Évaluation créée"); assessmentsQuery.refetch(); }} />
+      </Modal>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'évaluation">
+        {editing && (
+          <AssessmentForm classId={classId} yearId={yearId} initial={editing} onCancel={() => setEditing(null)}
+            onCreated={() => { setEditing(null); notifySuccess("Évaluation modifiée"); assessmentsQuery.refetch(); }} />
+        )}
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
         {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
@@ -582,13 +683,17 @@ function ReportCardDetail({ card }: { card: ReportCard }) {
 }
 
 // ── Assessment create form ───────────────────────────────────────────────────
-function AssessmentForm({ classId, yearId, onCancel, onCreated }: {
-  classId: number; yearId: number | null; onCancel: () => void; onCreated: () => void;
+function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
+  classId: number; yearId: number | null; initial?: Assessment; onCancel: () => void; onCreated: () => void;
 }) {
+  const isEdit = !!initial;
   const subjectsQuery = useQuery(() => listClassSubjects(classId), [classId]);
   const allSubjects = useQuery(() => listSubjects(), []);
   const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
   const teachersQuery = useQuery(listTeachers, []);
+  // Paramètres de notation configurés par l'établissement (Notes → Paramètres).
+  const typeConfigsQuery = useQuery(listAssessmentTypes, []);
+  const typeConfigs = (typeConfigsQuery.data ?? []).filter((c) => c.active);
   const [loading, setLoading] = useState(false);
 
   const subjectName = useMemo(() => new Map((allSubjects.data ?? []).map((s) => [s.id, s.label])), [allSubjects.data]);
@@ -597,7 +702,16 @@ function AssessmentForm({ classId, yearId, onCancel, onCreated }: {
 
   const form = useForm({
     mode: "controlled",
-    initialValues: { subjectIds: [] as string[], periodId: "", type: "HOMEWORK" as AssessmentType, label: "", date: "", coefficient: 1, maxScore: 20 },
+    initialValues: {
+      subjectIds: initial ? [String(initial.subjectId)] : ([] as string[]),
+      periodId: initial ? String(initial.periodId) : "",
+      type: initial ? initial.type : ("HOMEWORK" as AssessmentType),
+      assessmentTypeId: initial?.assessmentTypeId != null ? String(initial.assessmentTypeId) : "",
+      label: initial?.label ?? "",
+      date: initial?.date ?? "",
+      coefficient: initial ? Number(initial.coefficient) : 1,
+      maxScore: initial ? Number(initial.maxScore) : 20,
+    },
     validate: {
       subjectIds: (v) => (v.length ? null : "Choisissez au moins une matière"),
       periodId: (v) => (v ? null : "Requis"),
@@ -618,16 +732,25 @@ function AssessmentForm({ classId, yearId, onCancel, onCreated }: {
     setLoading(true);
     try {
       const multi = values.subjectIds.length > 1;
-      for (const sid of values.subjectIds) {
+      const build = (sid: string): AssessmentInput => {
         const cm = classSubjects.find((c) => String(c.subjectId) === sid);
-        const input: AssessmentInput = {
+        return {
           classId, subjectId: Number(sid), teacherId: cm?.teacherId ?? null,
-          periodId: Number(values.periodId), type: values.type, label: values.label,
+          periodId: Number(values.periodId), type: values.type,
+          assessmentTypeId: values.assessmentTypeId ? Number(values.assessmentTypeId) : null,
+          label: values.label,
           date: values.date || null,
           coefficient: multi ? coefFor(sid) : Number(values.coefficient),
           maxScore: Number(values.maxScore),
         };
-        await createAssessment(input);
+      };
+      if (isEdit && initial) {
+        // Modification : une seule matière.
+        await updateAssessment(initial.id, build(values.subjectIds[0]));
+      } else {
+        for (const sid of values.subjectIds) {
+          await createAssessment(build(sid));
+        }
       }
       onCreated();
     } catch (err) {
@@ -641,8 +764,9 @@ function AssessmentForm({ classId, yearId, onCancel, onCreated }: {
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
         <MultiSelect label="Matière(s)" withAsterisk searchable
+          disabled={isEdit}
           placeholder="Une ou plusieurs matières"
-          description="Sélectionnez plusieurs matières pour créer l'évaluation d'un coup (ex. composition)."
+          description={isEdit ? "La matière ne se change pas ici (supprimez et recréez si besoin)." : "Sélectionnez plusieurs matières pour créer l'évaluation d'un coup (ex. composition)."}
           data={classSubjects.map((cm) => ({ value: String(cm.subjectId), label: subjectName.get(cm.subjectId) ?? `#${cm.subjectId}` }))}
           {...form.getInputProps("subjectIds")}
           onChange={(vals) => {
@@ -680,6 +804,21 @@ function AssessmentForm({ classId, yearId, onCancel, onCreated }: {
         <MantineSelect label="Type"
           data={(Object.keys(ASSESSMENT_TYPE_LABEL) as AssessmentType[]).map((t) => ({ value: t, label: ASSESSMENT_TYPE_LABEL[t] }))}
           {...form.getInputProps("type")} />
+        {typeConfigs.length > 0 && (
+          <MantineSelect
+            label="Paramètre de notation"
+            description="Barème/type d'évaluation configuré (Notes → Paramètres). Facultatif : pré-remplit le coefficient."
+            clearable
+            data={typeConfigs.map((c) => ({ value: String(c.id), label: c.label }))}
+            value={form.values.assessmentTypeId || null}
+            onChange={(v) => {
+              form.setFieldValue("assessmentTypeId", v ?? "");
+              const cfg = typeConfigs.find((c) => String(c.id) === v);
+              const coef = cfg?.defaultCoefficient != null ? Number(cfg.defaultCoefficient) : NaN;
+              if (!Number.isNaN(coef) && coef > 0) form.setFieldValue("coefficient", coef);
+            }}
+          />
+        )}
         <TextInput label="Libellé" withAsterisk {...form.getInputProps("label")} />
         <DatePickerInput label="Date" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("date")} />
         <div className="grid grid-cols-2 gap-3">
@@ -692,7 +831,7 @@ function AssessmentForm({ classId, yearId, onCancel, onCreated }: {
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Créer</Button>
+          <Button type="submit" loading={loading}>{isEdit ? "Enregistrer" : "Créer"}</Button>
         </div>
       </Stack>
     </form>

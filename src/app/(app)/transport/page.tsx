@@ -19,7 +19,7 @@ export default function TransportPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Transport</h1>
         <p className="text-sm text-slate-500">Lignes de bus, arrêts et abonnements des élèves</p>
       </Reveal>
-      <Tabs defaultValue="routes" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="routes" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="routes" leftSection={<Bus className="h-4 w-4" />}>Lignes</Tabs.Tab>
           <Tabs.Tab value="subs" leftSection={<Users className="h-4 w-4" />}>Abonnements</Tabs.Tab>

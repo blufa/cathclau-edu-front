@@ -17,6 +17,7 @@ import {
   type Relationship,
 } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
+import { guineaPhoneRule, PHONE_PLACEHOLDER } from "@/lib/phone";
 import type { Parent } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -106,7 +107,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
       phone: parent.phone ?? "", email: parent.email ?? "",
       occupation: parent.occupation ?? "", address: parent.address ?? "",
     },
-    validate: { firstName: (v) => (v ? null : "Requis"), lastName: (v) => (v ? null : "Requis") },
+    validate: { firstName: (v) => (v ? null : "Requis"), lastName: (v) => (v ? null : "Requis"), phone: guineaPhoneRule },
   });
 
   async function save(values: typeof form.values) {
@@ -129,7 +130,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
           <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+          <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("phone")} />
           <TextInput label="Email" {...form.getInputProps("email")} />
         </div>
         <TextInput label="Profession" {...form.getInputProps("occupation")} />
@@ -160,6 +161,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
     validate: {
       firstName: (v) => (v ? null : "Requis"),
       lastName: (v) => (v ? null : "Requis"),
+      phone: guineaPhoneRule,
       email: (v, vals) => (vals.createLogin && !/^\S+@\S+$/.test(v) ? "Email requis pour l'accès" : null),
       password: (v, vals) => (vals.createLogin && v.length < 6 ? "Mot de passe (6 caractères min.)" : null),
     },
@@ -204,7 +206,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
 
       <SegmentedControl
         fullWidth
-        color="teal"
+        color="brand"
         value={mode}
         onChange={(v) => setMode(v as "existing" | "new")}
         data={[{ value: "existing", label: "Parent existant" }, { value: "new", label: "Nouveau parent" }]}
@@ -240,7 +242,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
               <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+              <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("phone")} />
               <TextInput label="Email" {...form.getInputProps("email")} />
             </div>
             <TextInput label="Profession" {...form.getInputProps("occupation")} />
@@ -248,7 +250,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
 
             <div className="rounded-xl border border-slate-200 p-3">
               <Switch
-                color="teal"
+                color="brand"
                 label="Créer un accès (espace parent)"
                 checked={form.values.createLogin}
                 onChange={(e) => form.setFieldValue("createLogin", e.currentTarget.checked)}

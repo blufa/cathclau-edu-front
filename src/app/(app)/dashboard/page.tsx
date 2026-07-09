@@ -201,7 +201,7 @@ export default function DashboardPage() {
                     <div className="flex justify-between"><span className="text-slate-500">Montant</span><span>{formatGNF(subscription.amount)}</span></div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Renouvellement auto</span>
-                      <Switch color="teal" checked={!!subscription.autoRenewal} onChange={(e) => toggleAutoRenew(e.currentTarget.checked)} />
+                      <Switch color="brand" checked={!!subscription.autoRenewal} onChange={(e) => toggleAutoRenew(e.currentTarget.checked)} />
                     </div>
                     <div className="flex gap-2 pt-2"><Button component={Link} href="/subscription" size="sm">Gérer l&apos;abonnement</Button></div>
                   </>

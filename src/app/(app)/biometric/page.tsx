@@ -25,7 +25,7 @@ export default function BiometricPage() {
         <p className="text-sm text-slate-500">Appareils, enrôlements, pointages — et pointage par caméra (ordinateur ou téléphone)</p>
       </Reveal>
 
-      <Tabs defaultValue="camera" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="camera" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="camera" leftSection={<Camera className="h-4 w-4" />}>Pointage caméra</Tabs.Tab>
           <Tabs.Tab value="badges" leftSection={<IdCard className="h-4 w-4" />}>Badges</Tabs.Tab>

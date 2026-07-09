@@ -79,7 +79,7 @@ export default function AccountingPage() {
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Comptabilité</h1>
         <p className="text-sm text-slate-500">Caisses, banques et trésorerie (comptabilité simple)</p>
       </Reveal>
-      <Tabs defaultValue="treasury" color="teal" variant="pills" radius="md">
+      <Tabs defaultValue="treasury" color="brand" variant="pills" radius="md">
         <Tabs.List>
           <Tabs.Tab value="treasury" leftSection={<Banknote className="h-4 w-4" />}>Trésorerie</Tabs.Tab>
           <Tabs.Tab value="accounts" leftSection={<ListTree className="h-4 w-4" />}>Plan comptable</Tabs.Tab>
@@ -342,9 +342,9 @@ function SettingsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
           <TextInput label="Devise" {...form.getInputProps("currency")} />
           <NumberInput label="Mois de début d'exercice" min={1} max={12} {...form.getInputProps("fiscalYearStartMonth")} />
         </div>
-        <Switch label="TVA applicable" color="teal" checked={form.values.vatApplicable} onChange={(e) => form.setFieldValue("vatApplicable", e.currentTarget.checked)} />
+        <Switch label="TVA applicable" color="brand" checked={form.values.vatApplicable} onChange={(e) => form.setFieldValue("vatApplicable", e.currentTarget.checked)} />
         {form.values.vatApplicable && <NumberInput label="Taux de TVA par défaut (%)" min={0} {...form.getInputProps("defaultVatRate")} />}
-        <Switch label="Numérotation automatique" color="teal" checked={form.values.autoNumbering} onChange={(e) => form.setFieldValue("autoNumbering", e.currentTarget.checked)} />
+        <Switch label="Numérotation automatique" color="brand" checked={form.values.autoNumbering} onChange={(e) => form.setFieldValue("autoNumbering", e.currentTarget.checked)} />
         {canEdit && <div className="flex justify-end"><Button type="submit" loading={loading}>Enregistrer</Button></div>}
       </Stack>
     </form>

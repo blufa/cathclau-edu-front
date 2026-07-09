@@ -17,6 +17,7 @@ export interface Assessment {
   teacherId: number | null;
   periodId: number;
   type: AssessmentType;
+  assessmentTypeId?: number | null;
   label: string;
   date: string | null;
   coefficient: string;
@@ -29,6 +30,8 @@ export interface AssessmentInput {
   teacherId?: number | null;
   periodId: number;
   type: AssessmentType;
+  /** Paramètre de notation configuré (type d'évaluation créé dans Notes → Paramètres) ; optionnel. */
+  assessmentTypeId?: number | null;
   label: string;
   date?: string | null;
   coefficient: number;

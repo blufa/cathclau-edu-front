@@ -5,7 +5,7 @@ import { Autocomplete, Button, Group, NumberInput, Select, Stack, Text } from "@
 import { createRoom } from "@/lib/api/academics";
 import type { Salle, TypeSalle } from "@/lib/types/academics";
 import { notifyError, notifySuccess } from "@/lib/feedback";
-import { BUILDINGS, FLOORS, roomSuggestions } from "@/lib/academics-rooms";
+import { BUILDINGS, nextRoomNumber, roomSuggestions } from "@/lib/academics-rooms";
 import { ROOM_TYPE_OPTIONS } from "@/components/referentials/room-form";
 
 /**
@@ -22,15 +22,16 @@ export function RoomAssistant({
   onCancel: () => void;
 }) {
   const [building, setBuilding] = useState("Bâtiment principal");
-  const [floor, setFloor] = useState("1");
+  // Numéro de départ = reprend automatiquement après la dernière salle existante (numérotation continue).
+  const [startNum, setStartNum] = useState<number | string>(() => nextRoomNumber(existingRooms.map((r) => r.label)));
   const [count, setCount] = useState<number | string>(6);
   const [capacity, setCapacity] = useState<number | string>("");
   const [type, setType] = useState<TypeSalle>("SALLE_COURS");
   const [saving, setSaving] = useState(false);
 
   const planned = useMemo(
-    () => (floor ? roomSuggestions(floor, Math.max(0, Number(count) || 0)) : []),
-    [floor, count],
+    () => roomSuggestions(Math.max(1, Number(startNum) || 1), Math.max(0, Number(count) || 0)),
+    [startNum, count],
   );
   const existingLabels = new Set(existingRooms.map((r) => r.label.trim().toLowerCase()));
   const toCreate = planned.filter((label) => !existingLabels.has(label.toLowerCase()));
@@ -60,12 +61,12 @@ export function RoomAssistant({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Choisissez l&apos;étage et le nombre de salles : l&apos;assistant crée toute la numérotation
-        (ex. « Salle 101 », « Salle 102 »…).
+        Numérotation <strong>continue</strong> : l&apos;assistant reprend après la dernière salle
+        (ex. « Salle 001 », « Salle 002 »… puis l&apos;étage suivant enchaîne « 003 », « 004 »…).
       </Text>
       <Group grow>
         <Autocomplete label="Bâtiment" data={BUILDINGS} value={building} onChange={setBuilding} disabled={saving} />
-        <Select label="Étage" data={FLOORS} value={floor} onChange={(v) => setFloor(v ?? "")} disabled={saving} />
+        <NumberInput label="Numéro de départ" min={1} allowDecimal={false} value={startNum} onChange={setStartNum} disabled={saving} />
       </Group>
       <Group grow>
         <NumberInput label="Nombre de salles" min={1} max={40} allowDecimal={false} value={count} onChange={setCount} disabled={saving} />

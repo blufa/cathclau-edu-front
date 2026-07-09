@@ -21,7 +21,7 @@ export default function BillingRulesPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="exemptions" color="teal" variant="pills" radius="md" keepMounted={false}>
+      <Tabs defaultValue="exemptions" color="brand" variant="pills" radius="md" keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="exemptions" leftSection={<BadgePercent className="h-4 w-4" />}>Exonérations</Tabs.Tab>
           <Tabs.Tab value="family" leftSection={<Users className="h-4 w-4" />}>Remises fratrie</Tabs.Tab>
