@@ -149,12 +149,16 @@ export interface SchoolBranding {
 export interface SignupInput {
   nomEcole: string;
   slugSouhaite?: string;
-  emailDirecteur: string;
+  /** Email facultatif (tout le monde n'en a pas). */
+  emailDirecteur?: string;
+  /** Identifiant de connexion : l'admin se connecte avec le username OU l'email. */
+  username: string;
   password: string;
   directeur?: string;
   ville?: string;
   pays?: string;
-  typeEtablissement?: EstablishmentType;
+  /** Un ou plusieurs types d'établissement. */
+  typesEtablissement?: EstablishmentType[];
   planSouhaite?: string;
   // Compte administrateur de l'école (obligatoire).
   prenomAdmin: string;

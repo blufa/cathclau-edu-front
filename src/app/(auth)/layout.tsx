@@ -11,7 +11,6 @@ import { getSchoolBranding } from "@/lib/api/platform";
 import { resolveTenantSlug } from "@/lib/branding/tenant-slug";
 import { applyBrandColor } from "@/lib/branding/palette";
 import type { SchoolBranding } from "@/lib/types/platform";
-import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
 import { Reveal } from "@/components/public/reveal";
 
 /** Layout for unauthenticated pages: already-authenticated users are bounced to the dashboard. */
@@ -48,13 +47,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   if (status === "loading" || status === "authenticated") return <FullPageSpinner />;
 
   return (
-    <AuroraBackground className="min-h-screen px-4 py-12">
-      <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" fill="#99f6e4" />
-
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-50 via-white to-white px-4 py-12">
       {/* Back to public home — the auth screens are full-screen with no header. */}
       <Link
         href="/"
-        className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-600 backdrop-blur transition hover:border-brand-300 hover:text-brand-700"
+        className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
       >
         <ArrowLeft className="h-4 w-4" /> Accueil
       </Link>
@@ -71,10 +68,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           )}
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">{school?.schoolName ?? branding.appName}</h1>
         </Link>
-        <div className="rounded-2xl border border-slate-200/80 bg-white/90 p-6 shadow-xl ring-1 ring-slate-900/[0.03] backdrop-blur">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl ring-1 ring-slate-900/[0.03]">
           {children}
         </div>
       </Reveal>
-    </AuroraBackground>
+    </div>
   );
 }
