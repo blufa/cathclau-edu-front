@@ -2,21 +2,44 @@
 
 import { useState } from "react";
 import { Switch } from "@mantine/core";
-import { Lock } from "lucide-react";
+import { Calculator, Lock } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
-import { listModuleCatalog, listTenantModules, setTenantModuleActive } from "@/lib/api/platform";
+import { listModuleCatalog, listTenantModules, presetTenantAccountingOnly, setTenantModuleActive } from "@/lib/api/platform";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 /** Effective modules of a tenant, with per-tenant activation overrides (module M). */
 export function TenantModulesPanel({ tenantId }: { tenantId: number }) {
   const catalog = useQuery(() => listModuleCatalog(), []);
   const modules = useQuery(() => listTenantModules(tenantId), [tenantId]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [presetting, setPresetting] = useState(false);
 
   const byCode = new Map((modules.data ?? []).map((m) => [m.moduleCode, m]));
+
+  function applyAccountingOnly() {
+    confirmAction({
+      title: "Comptabilité seule",
+      message:
+        "Activer uniquement Comptabilité + Dépenses (et la gestion des utilisateurs), et désactiver tous les autres modules pour cette école ?",
+      confirmLabel: "Appliquer",
+      onConfirm: async () => {
+        setPresetting(true);
+        try {
+          await presetTenantAccountingOnly(tenantId);
+          notifySuccess("École passée en « comptabilité seule »");
+          modules.refetch();
+        } catch (err) {
+          notifyError(err);
+        } finally {
+          setPresetting(false);
+        }
+      },
+    });
+  }
 
   async function toggle(code: string, on: boolean) {
     setBusy(code);
@@ -33,7 +56,13 @@ export function TenantModulesPanel({ tenantId }: { tenantId: number }) {
 
   return (
     <Card>
-      <CardHeader><CardTitle>Modules de l&apos;école</CardTitle></CardHeader>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle>Modules de l&apos;école</CardTitle>
+        <Button size="sm" variant="secondary" loading={presetting} onClick={applyAccountingOnly}
+          leftSection={<Calculator className="h-4 w-4" />}>
+          Comptabilité seule
+        </Button>
+      </CardHeader>
       <CardBody>
         {catalog.loading || modules.loading ? (
           <div className="flex justify-center py-6"><Spinner /></div>
