@@ -20,8 +20,18 @@ export function getCurrentUser(): Promise<User> {
 }
 
 /** Réinitialise l'accès d'un utilisateur (nouveau mot de passe temporaire). */
-export function resetUserAccess(id: number): Promise<{ username?: string; temporaryPassword?: string }> {
-  return api.post<{ username?: string; temporaryPassword?: string }>(`/users/${id}/reset-access`);
+/**
+ * Réinitialise l'accès d'un utilisateur. Si {@code password} est fourni, il devient le nouveau mot de
+ * passe (définitif) ; sinon un mot de passe temporaire est généré (à changer à la 1re connexion).
+ */
+export function resetUserAccess(
+  id: number,
+  password?: string,
+): Promise<{ username?: string; temporaryPassword?: string; mustChangePassword?: boolean }> {
+  return api.post<{ username?: string; temporaryPassword?: string; mustChangePassword?: boolean }>(
+    `/users/${id}/reset-access`,
+    password && password.trim() ? { password: password.trim() } : undefined,
+  );
 }
 
 export function createUser(input: CreateUserInput): Promise<User> {

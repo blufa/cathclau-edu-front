@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Stack, Switch, TextInput } from "@mantine/core";
+import { PasswordInput, Stack, Switch, TextInput } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
@@ -49,7 +49,8 @@ export default function UsersPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [managingRoles, setManagingRoles] = useState<User | null>(null);
-  const [resetInfo, setResetInfo] = useState<{ name: string; username?: string; password?: string } | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
+  const [resetInfo, setResetInfo] = useState<{ name: string; username?: string; password?: string; mustChange?: boolean } | null>(null);
 
   // Client-side table: load the school's users (typically a small set) and let DataTable
   // handle search, sorting, pagination and CSV export.
@@ -79,21 +80,6 @@ export default function UsersPage() {
     }
   }
 
-  function handleResetAccess(u: User) {
-    confirmAction({
-      title: "Réinitialiser l'accès",
-      message: `Générer un nouveau mot de passe temporaire pour ${fullName(u)} ? Son ancien mot de passe ne fonctionnera plus.`,
-      confirmLabel: "Réinitialiser",
-      onConfirm: async () => {
-        try {
-          const res = await resetUserAccess(u.id);
-          setResetInfo({ name: fullName(u), username: res.username, password: res.temporaryPassword });
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
-  }
 
   function handleDelete(u: User) {
     confirmAction({
@@ -155,8 +141,8 @@ export default function UsersPage() {
           <Button size="sm" variant="ghost" onClick={() => handleToggleActive(u)}>
             {u.active ? "Désactiver" : "Activer"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => handleResetAccess(u)}>
-            Réinit. accès
+          <Button size="sm" variant="ghost" onClick={() => setResetting(u)}>
+            Mot de passe
           </Button>
           <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(u)}>
             Suppr.
@@ -238,13 +224,29 @@ export default function UsersPage() {
         )}
       </Modal>
 
-      {/* Reset access result */}
-      <Modal open={!!resetInfo} onClose={() => setResetInfo(null)} title="Nouvel accès généré">
+      {/* Reset password */}
+      <Modal open={!!resetting} onClose={() => setResetting(null)} title="Réinitialiser le mot de passe">
+        {resetting && (
+          <PasswordResetForm
+            user={resetting}
+            onCancel={() => setResetting(null)}
+            onDone={(res, mustChange) => {
+              setResetInfo({ name: fullName(resetting), username: res.username, password: res.temporaryPassword, mustChange });
+              setResetting(null);
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Reset password result */}
+      <Modal open={!!resetInfo} onClose={() => setResetInfo(null)} title="Mot de passe réinitialisé">
         {resetInfo && (
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
               Communiquez ces identifiants à <span className="font-medium text-slate-900">{resetInfo.name}</span>.
-              Il pourra changer son mot de passe après connexion.
+              {resetInfo.mustChange
+                ? " Ce mot de passe est temporaire : il devra le changer à la prochaine connexion."
+                : " Ce mot de passe est définitif ; il pourra le changer lui-même plus tard s'il le souhaite."}
             </p>
             {resetInfo.username && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -254,7 +256,7 @@ export default function UsersPage() {
             )}
             <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
               <div>
-                <p className="text-xs text-slate-500">Mot de passe temporaire</p>
+                <p className="text-xs text-slate-500">{resetInfo.mustChange ? "Mot de passe temporaire" : "Nouveau mot de passe"}</p>
                 <p className="font-mono text-lg font-bold tracking-wider text-slate-900">{resetInfo.password ?? "—"}</p>
               </div>
               {resetInfo.password && (
@@ -383,6 +385,62 @@ function UserEditForm({ user, onCancel, onSaved }: { user: User; onCancel: () =>
         </div>
       </Stack>
     </form>
+  );
+}
+
+// ── Password reset form ──────────────────────────────────────────────────────
+function PasswordResetForm({
+  user,
+  onCancel,
+  onDone,
+}: {
+  user: User;
+  onCancel: () => void;
+  onDone: (res: { username?: string; temporaryPassword?: string }, mustChange: boolean) => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const chosen = password.trim().length > 0;
+  const tooShort = chosen && password.trim().length < 8;
+
+  async function submit() {
+    if (tooShort) return;
+    setLoading(true);
+    try {
+      // Mot de passe saisi → définitif ; vide → temporaire généré par le serveur.
+      const res = await resetUserAccess(user.id, chosen ? password.trim() : undefined);
+      onDone(res, res.mustChangePassword ?? !chosen);
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Stack gap="md">
+      <p className="text-sm text-slate-600">
+        Définissez un nouveau mot de passe pour{" "}
+        <span className="font-medium text-slate-900">{fullName(user)}</span>. Son ancien mot de passe et ses
+        sessions actives seront révoqués.
+      </p>
+      <PasswordInput
+        label="Nouveau mot de passe"
+        description="Laissez vide pour générer un mot de passe temporaire automatiquement."
+        placeholder="8 caractères minimum"
+        value={password}
+        onChange={(e) => setPassword(e.currentTarget.value)}
+        error={tooShort ? "8 caractères minimum" : undefined}
+      />
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Annuler
+        </Button>
+        <Button type="button" loading={loading} onClick={submit} disabled={tooShort}>
+          {chosen ? "Définir le mot de passe" : "Générer un mot de passe"}
+        </Button>
+      </div>
+    </Stack>
   );
 }
 

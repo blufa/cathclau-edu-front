@@ -57,6 +57,12 @@ export interface SchoolProfile {
   director: string | null;
   accreditationNumber: string | null;
   openingAuthorization: string | null;
+  /** Numéro marchand de reversement (Mobile Money) où la plateforme reverse les fonds de l'école. */
+  payoutMerchantNumber: string | null;
+  /** Opérateur du numéro marchand (ORANGE_MONEY, MTN_MONEY, WAVE…). */
+  payoutOperator: string | null;
+  /** Nom du titulaire du compte marchand. */
+  payoutAccountName: string | null;
   status?: TenantStatus;
   trialEndsAt?: string | null;
   activatedAt?: string | null;
@@ -66,6 +72,7 @@ export type SchoolProfileInput = Pick<
   SchoolProfile,
   "schoolName" | "logo" | "brandColor" | "address" | "city" | "country" | "phone" | "email"
   | "website" | "director" | "accreditationNumber" | "openingAuthorization"
+  | "payoutMerchantNumber" | "payoutOperator" | "payoutAccountName"
 >;
 
 export function getSchoolProfile(): Promise<SchoolProfile> {
@@ -296,6 +303,11 @@ export function setTenantModuleActive(
   return api.patch<TenantModule>(`/platform/tenants/${tenantId}/modules/${moduleCode}/${suffix}`, undefined, {
     query: active && expiration ? { expiration } : undefined,
   });
+}
+
+/** Preset « comptabilité seule » : active IAM + Comptabilité + Dépenses, désactive tout le reste. */
+export function presetTenantAccountingOnly(tenantId: number): Promise<TenantModule[]> {
+  return api.post<TenantModule[]>(`/platform/tenants/${tenantId}/modules/preset/comptabilite`);
 }
 
 // ── SUPER_ADMIN: subscriptions supervision ───────────────────────────────────
