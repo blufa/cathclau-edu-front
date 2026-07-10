@@ -15,7 +15,7 @@ export type TenantStatus = (typeof TENANT_STATUSES)[number];
 export const ESTABLISHMENT_TYPES = ["PRIMAIRE", "COLLEGE", "LYCEE", "SUPERIEUR", "MIXTE"] as const;
 export type EstablishmentType = (typeof ESTABLISHMENT_TYPES)[number];
 
-export const PLAN_CODES = ["STARTER", "STANDARD", "PREMIUM"] as const;
+export const PLAN_CODES = ["STARTER", "STANDARD", "PREMIUM", "COMPTABILITE"] as const;
 export type PlanCode = (typeof PLAN_CODES)[number];
 
 export const BILLING_PERIODS = ["MONTHLY", "ANNUAL"] as const;
@@ -160,6 +160,10 @@ export interface SignupInput {
   /** Un ou plusieurs types d'établissement. */
   typesEtablissement?: EstablishmentType[];
   planSouhaite?: string;
+  /** Numéro marchand de reversement (facultatif à l'inscription, complétable dans les paramètres). */
+  numeroMarchand?: string;
+  /** Opérateur du numéro marchand (ORANGE_MONEY, MTN_MONEY, WAVE…). */
+  operateurMarchand?: string;
   // Compte administrateur de l'école (obligatoire).
   prenomAdmin: string;
   nomAdmin: string;

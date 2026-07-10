@@ -12,7 +12,6 @@ import { listRooms, listSubjects } from "@/lib/api/academics";
 import type { EmploiDuTemps, JourSemaine } from "@/lib/types/academics";
 import { listInvoicesByStudent } from "@/lib/api/billing";
 import { WeeklyTimetable } from "@/components/timetable/weekly-timetable";
-import { initiateSelfServicePayment } from "@/lib/api/payment";
 import { REPORT_CARD_STATUS_LABEL, type ReportCard } from "@/lib/types/grading";
 import { INVOICE_STATUS_LABEL, type Invoice, type InvoiceStatus } from "@/lib/types/billing";
 import type { Student } from "@/lib/types/student";
@@ -22,14 +21,10 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Spinner } from "@/components/ui/spinner";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { notifyError } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
 
 const INVOICE_TONE: Record<InvoiceStatus, "red" | "amber" | "green"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green" };
-
-function genRef(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
-}
 
 export function StudentOverview({ student }: { student: Student }) {
   const reportsQuery = useQuery(() => getStudentReportCards(student.id), [student.id]);
@@ -40,7 +35,6 @@ export function StudentOverview({ student }: { student: Student }) {
   const subjectsQuery = useQuery(listSubjects, []);
   const roomsQuery = useQuery(listRooms, []);
   const documentsQuery = useQuery(() => getChildDocuments(student.id), [student.id]);
-  const [payingId, setPayingId] = useState<number | null>(null);
   const [openingDoc, setOpeningDoc] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
 
@@ -79,28 +73,6 @@ export function StudentOverview({ student }: { student: Student }) {
         : await getReportCardPdfObjectUrl(doc.id);
       setPreview({ url, title: doc.label });
     } catch (err) { notifyError(err); } finally { setOpeningDoc(null); }
-  }
-
-  /** Pay an invoice online: initiate via Djomy and redirect straight to the payment portal (no form). */
-  async function payNow(invoice: Invoice) {
-    const due = Number(invoice.remainingBalance ?? invoice.totalAmount);
-    setPayingId(invoice.id);
-    try {
-      const res = await initiateSelfServicePayment({
-        tenantId: invoice.tenantId, invoiceId: invoice.id, studentId: invoice.studentId,
-        reference: genRef(`PAY-${invoice.reference}`),
-        amount: due, channel: "DJOMY", type: "COMPLETE",
-        payerNumber: "614324299",
-      });
-      if (res.redirectUrl) {
-        notifySuccess("Ouverture du portail de paiement…");
-        const win = window.open(res.redirectUrl, "_blank", "noopener,noreferrer");
-        if (!win) window.location.assign(res.redirectUrl);
-      } else {
-        notifySuccess("Paiement initié.");
-        invoicesQuery.refetch();
-      }
-    } catch (err) { notifyError(err); } finally { setPayingId(null); }
   }
 
   return (
@@ -180,7 +152,7 @@ export function StudentOverview({ student }: { student: Student }) {
                   <TD className="font-medium text-slate-900">{formatGNF(i.totalAmount)}</TD>
                   <TD>{formatGNF(i.remainingBalance ?? i.totalAmount)}</TD>
                   <TD><Badge tone={INVOICE_TONE[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Badge></TD>
-                  <TD className="text-right">{i.status !== "PAID" && <Button size="sm" loading={payingId === i.id} onClick={() => payNow(i)}>Payer en ligne</Button>}</TD>
+                  <TD className="text-right">{i.status !== "PAID" && <span className="text-xs text-slate-400">À régler à l&apos;école</span>}</TD>
                 </TR>
               ))}
             </TBody>

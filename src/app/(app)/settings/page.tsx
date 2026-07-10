@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Group, Stack, TextInput } from "@mantine/core";
-import { Building2, Palette } from "lucide-react";
+import { Group, Select, Stack, TextInput } from "@mantine/core";
+import { Building2, Palette, Wallet } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useBranding } from "@/providers/branding-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -15,6 +15,13 @@ import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const PRESETS = ["#14b8a6", "#0ea5e9", "#6366f1", "#8b5cf6", "#ec4899", "#f97316", "#ef4444", "#10b981", "#0f766e", "#1d4ed8"];
+
+// Opérateurs du numéro marchand de reversement (Mobile Money).
+const PAYOUT_OPERATORS = [
+  { value: "ORANGE_MONEY", label: "Orange Money" },
+  { value: "MTN_MONEY", label: "MTN MoMo" },
+  { value: "WAVE", label: "Wave" },
+];
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -97,6 +104,9 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         director: profile.director,
         accreditationNumber: profile.accreditationNumber,
         openingAuthorization: profile.openingAuthorization,
+        payoutMerchantNumber: profile.payoutMerchantNumber,
+        payoutOperator: profile.payoutOperator,
+        payoutAccountName: profile.payoutAccountName,
       });
       setProfile(updated);
       notifySuccess("Informations enregistrées");
@@ -139,6 +149,29 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <TextInput label="Autorisation d'ouverture" value={profile.openingAuthorization ?? ""} readOnly={ro}
           onChange={(e) => set("openingAuthorization", e.currentTarget.value)} />
       </Group>
+
+      <div className="pt-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Wallet className="h-4 w-4 text-brand-600" /> Encaissements — reversement
+        </h3>
+        <p className="mb-3 mt-1 text-xs text-slate-400">
+          Les paiements des parents sont encaissés par la plateforme, puis reversés à votre école sur
+          ce compte Mobile Money. Renseignez le numéro marchand qui doit recevoir vos fonds.
+        </p>
+        <Stack gap="md">
+          <Group grow align="flex-end">
+            <TextInput label="Numéro marchand" placeholder="Ex. 620 00 00 00" inputMode="tel"
+              value={profile.payoutMerchantNumber ?? ""} readOnly={ro}
+              onChange={(e) => set("payoutMerchantNumber", e.currentTarget.value)} />
+            <Select label="Opérateur" data={PAYOUT_OPERATORS} readOnly={ro}
+              value={profile.payoutOperator ?? null}
+              onChange={(v) => set("payoutOperator", v)} />
+          </Group>
+          <TextInput label="Titulaire du compte" value={profile.payoutAccountName ?? ""} readOnly={ro}
+            onChange={(e) => set("payoutAccountName", e.currentTarget.value)} />
+        </Stack>
+      </div>
+
       {canEdit && (
         <div className="flex justify-end">
           <Button onClick={save} loading={saving}>Enregistrer</Button>
