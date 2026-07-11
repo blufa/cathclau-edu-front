@@ -6,7 +6,8 @@ import { DatePickerInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { Check } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
-import { guineaPhoneRule, PHONE_PLACEHOLDER } from "@/lib/phone";
+import { phoneRule } from "@/lib/phone";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { searchSchools } from "@/lib/api/directory";
 import { formatClassOrdinal, nextClassOrdinal } from "@/lib/format";
 import { FileUpload } from "@/components/ui/file-upload";
@@ -95,7 +96,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
       lastName: (v) => (v.trim() ? null : "Nom requis"),
       // L'email est facultatif (l'élève se connecte par son matricule, pas par email).
       email: (v) => (!v || /^\S+@\S+$/.test(v) ? null : "Email invalide"),
-      phone: guineaPhoneRule,
+      phone: phoneRule,
       password: (v, vals) => (vals.createLogin && v.length < 6 ? "Mot de passe (6 caractères min.)" : null),
     },
   });
@@ -219,7 +220,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
               </SimpleGrid>
               <TextInput label="Adresse" {...form.getInputProps("address")} />
               <SimpleGrid cols={2}>
-                <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("phone")} />
+                <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
                 <TextInput label="Email" type="email" {...form.getInputProps("email")} />
               </SimpleGrid>
             </Stack>

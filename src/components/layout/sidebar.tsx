@@ -115,8 +115,15 @@ function SidebarSection({
   isDisabled: (item: NavItem) => boolean;
   onNavigate?: () => void;
 }) {
-  // Sections are expanded by default (discoverability); users can collapse any of them.
-  const [open, setOpen] = useState(true);
+  // Seule la section active est ouverte par défaut (moins de menus visibles d'un coup) ; les autres
+  // sont repliées et dépliables à la demande. Une section s'ouvre automatiquement quand on y navigue.
+  const sectionActive = section.items.some((it) => isItemActive(it));
+  const [open, setOpen] = useState(sectionActive);
+  const [prevActive, setPrevActive] = useState(sectionActive);
+  if (sectionActive !== prevActive) {
+    setPrevActive(sectionActive);
+    if (sectionActive) setOpen(true);
+  }
 
   const items = (
     <div className="space-y-0.5">

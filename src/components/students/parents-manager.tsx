@@ -17,7 +17,8 @@ import {
   type Relationship,
 } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
-import { guineaPhoneRule, PHONE_PLACEHOLDER } from "@/lib/phone";
+import { phoneRule } from "@/lib/phone";
+import { PhoneInput } from "@/components/ui/phone-input";
 import type { Parent } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +108,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
       phone: parent.phone ?? "", email: parent.email ?? "",
       occupation: parent.occupation ?? "", address: parent.address ?? "",
     },
-    validate: { firstName: (v) => (v ? null : "Requis"), lastName: (v) => (v ? null : "Requis"), phone: guineaPhoneRule },
+    validate: { firstName: (v) => (v ? null : "Requis"), lastName: (v) => (v ? null : "Requis"), phone: phoneRule },
   });
 
   async function save(values: typeof form.values) {
@@ -130,7 +131,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
           <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("phone")} />
+          <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
           <TextInput label="Email" {...form.getInputProps("email")} />
         </div>
         <TextInput label="Profession" {...form.getInputProps("occupation")} />
@@ -161,7 +162,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
     validate: {
       firstName: (v) => (v ? null : "Requis"),
       lastName: (v) => (v ? null : "Requis"),
-      phone: guineaPhoneRule,
+      phone: phoneRule,
       email: (v, vals) => (vals.createLogin && !/^\S+@\S+$/.test(v) ? "Email requis pour l'accès" : null),
       password: (v, vals) => (vals.createLogin && v.length < 6 ? "Mot de passe (6 caractères min.)" : null),
     },
@@ -242,7 +243,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
               <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("phone")} />
+              <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
               <TextInput label="Email" {...form.getInputProps("email")} />
             </div>
             <TextInput label="Profession" {...form.getInputProps("occupation")} />

@@ -9,6 +9,7 @@ import { useQuery } from "@/hooks/use-query";
 import { addStop, createRoute, deleteRoute, deleteStop, listRoutes, listStops, updateRoute } from "@/lib/api/transport";
 import type { TransportRoute } from "@/lib/types/transport";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -103,7 +104,7 @@ function RouteForm({ initial, onCancel, onDone }: { initial: TransportRoute | nu
         </div>
         <div className="grid grid-cols-2 gap-3">
           <TextInput label="Chauffeur" {...form.getInputProps("driverName")} />
-          <TextInput label="Téléphone chauffeur" {...form.getInputProps("driverPhone")} />
+          <PhoneInput label="Téléphone chauffeur" {...form.getInputProps("driverPhone")} />
         </div>
         <NumberInput label="Frais mensuels (GNF)" thousandSeparator=" " min={0} {...form.getInputProps("monthlyFee")} />
         <Textarea label="Description / itinéraire" autosize minRows={2} {...form.getInputProps("description")} />

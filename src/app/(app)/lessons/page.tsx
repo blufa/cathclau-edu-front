@@ -66,11 +66,11 @@ export default function LessonsPage() {
       </Reveal>
 
       <div className="flex flex-wrap items-end gap-3">
-        <Select className="max-w-[240px]" label="Classe"
+        <Select className="max-w-[240px]" label="Classe" searchable
           data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
           value={effectiveClassId != null ? String(effectiveClassId) : null}
           onChange={(value) => { setClassId(value ? Number(value) : null); setSubjectId(null); }} />
-        <Select className="max-w-[240px]" label="Matière" clearable placeholder="Toutes"
+        <Select className="max-w-[240px]" label="Matière" clearable searchable placeholder="Toutes"
           data={(subjectsQuery.data ?? []).map((s) => ({ value: String(s.id), label: s.label }))}
           value={subjectId != null ? String(subjectId) : null}
           onChange={(value) => setSubjectId(value ? Number(value) : null)} />

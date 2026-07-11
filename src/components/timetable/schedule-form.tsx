@@ -158,6 +158,7 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
         <Select
           label="Matière"
           withAsterisk
+          searchable
           data={[{ value: "", label: "— Sélectionner —" }, ...subjectOptions]}
           {...form.getInputProps("subjectId")}
           key={form.key("subjectId")}

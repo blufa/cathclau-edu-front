@@ -234,6 +234,7 @@ export default function TimetablePage() {
             />
             <Select
               label="Classe"
+              searchable
               value={effectiveClassId != null ? String(effectiveClassId) : null}
               onChange={(value) => setClassId(value ? Number(value) : null)}
               data={classes.map((c) => ({ value: String(c.id), label: c.label }))}

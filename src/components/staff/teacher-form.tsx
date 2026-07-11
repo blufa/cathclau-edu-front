@@ -10,6 +10,7 @@ import { listSubjects } from "@/lib/api/academics";
 import { ApiError } from "@/lib/api/errors";
 import { createUserWithRole } from "@/lib/api/iam";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 interface TeacherFormProps {
   initial?: Teacher;
@@ -161,7 +162,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
                 <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
               </SimpleGrid>
               <SimpleGrid cols={2}>
-                <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+                <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
                 <TextInput label="Email" type="email" {...form.getInputProps("email")} />
               </SimpleGrid>
             </Stack>
