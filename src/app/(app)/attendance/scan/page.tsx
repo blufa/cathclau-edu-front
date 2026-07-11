@@ -62,6 +62,8 @@ export default function AttendanceScanPage() {
   const rafRef = useRef<number | null>(null);
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const lastRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
+  // Sujets dont un pointage est en cours : évite deux envois simultanés pour la même personne.
+  const inFlightRef = useRef<Set<string>>(new Set());
 
   const [streaming, setStreaming] = useState(false);
   const [supported, setSupported] = useState(true);
@@ -80,12 +82,17 @@ export default function AttendanceScanPage() {
   }, [subjectType, studentsQuery.data, teachersQuery.data]);
 
   const submit = useCallback(async (type: ScanSubjectType, subjectId: number, st: AttendanceStatus) => {
+    const key = `${type}:${subjectId}`;
+    if (inFlightRef.current.has(key)) return; // un pointage est déjà en cours pour ce sujet
+    inFlightRef.current.add(key);
     try {
       const res = await scanAttendance({ subjectType: type, subjectId, status: st });
       setFeed((f) => [{ id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, status: res.status, ok: true, at: new Date().toLocaleTimeString() }, ...f].slice(0, 25));
     } catch (err) {
       setFeed((f) => [{ id: `${Date.now()}`, name: `#${subjectId}`, status: st, ok: false, at: new Date().toLocaleTimeString() }, ...f].slice(0, 25));
       notifyError(err);
+    } finally {
+      inFlightRef.current.delete(key);
     }
   }, []);
 

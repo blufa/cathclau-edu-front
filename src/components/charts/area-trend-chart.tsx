@@ -32,7 +32,7 @@ export function AreaTrendChart({
   valueFormatter?: (value: number) => string;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer width="100%" height={height} minWidth={0}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
         <defs>
           {series.map((s) => (

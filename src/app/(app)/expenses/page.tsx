@@ -39,6 +39,7 @@ import {
   type Supplier,
 } from "@/lib/types/expense";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -276,7 +277,7 @@ function SuppliersTab() {
             <TextInput label="Nom" withAsterisk {...form.getInputProps("name")} />
             <TextInput label="Type" {...form.getInputProps("type")} />
             <div className="grid grid-cols-2 gap-3">
-              <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+              <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
               <TextInput label="Email" {...form.getInputProps("email")} />
             </div>
             <TextInput label="Adresse" {...form.getInputProps("address")} />

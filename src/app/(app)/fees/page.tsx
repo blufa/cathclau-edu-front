@@ -213,7 +213,7 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
         {initial ? (
-          <Select label="Classe" withAsterisk data={[{ value: "", label: "— Choisir —" }, ...classes]} {...form.getInputProps("classId")} />
+          <Select label="Classe" withAsterisk searchable data={[{ value: "", label: "— Choisir —" }, ...classes]} {...form.getInputProps("classId")} />
         ) : (
           <MultiSelect
             label="Classes"

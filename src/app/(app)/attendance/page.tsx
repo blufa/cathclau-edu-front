@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Tabs } from "@mantine/core";
+import { Tabs, Select as MantineSelect } from "@mantine/core";
 import { DatePickerInput } from "@mantine/dates";
 import { CalendarCheck, ClipboardList, ScanLine, UserCheck } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
@@ -121,14 +121,15 @@ export default function AttendancePage() {
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Classe</label>
-          <Select
+          <MantineSelect
             className="max-w-[220px]"
-            value={classId ?? ""}
-            onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">— Choisir —</option>
-            {classes.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-          </Select>
+            searchable
+            clearable
+            placeholder="— Choisir —"
+            data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
+            value={classId != null ? String(classId) : null}
+            onChange={(v) => setClassId(v ? Number(v) : null)}
+          />
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Date</label>

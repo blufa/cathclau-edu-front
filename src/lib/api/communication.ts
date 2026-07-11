@@ -7,6 +7,20 @@ import type {
   SendCommunicationInput,
 } from "@/lib/types/communication";
 
+// ── SMS : solde du bundle (SUPER_ADMIN) ──────────────────────────────────────
+export interface SmsBalance {
+  country: string | null;
+  offerName: string | null;
+  availableUnits: number | null;
+  status: string | null;
+  expirationDate: string | null;
+}
+
+/** Solde SMS du compte plateforme (Orange). Liste vide si le fournisseur n'est pas configuré. */
+export function getSmsBalance(): Promise<SmsBalance[]> {
+  return api.get<SmsBalance[]>("/communications/sms/solde");
+}
+
 // ── Communications ─────────────────────────────────────────────────────────
 export function sendCommunication(input: SendCommunicationInput): Promise<Communication> {
   return api.post<Communication>("/communications", input);

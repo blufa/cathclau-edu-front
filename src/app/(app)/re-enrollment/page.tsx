@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Switch } from "@mantine/core";
+import { Switch, Select as MantineSelect } from "@mantine/core";
 import { GraduationCap, Rocket } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -128,10 +128,12 @@ export default function ReEnrollmentPage() {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Classe source</label>
-          <Select value={sourceClassId} onChange={(e) => { setSourceClassId(e.target.value); setOverrides({}); setResults({}); }}>
-            <option value="">— Choisir une classe —</option>
-            {(sourceClassesQuery.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </Select>
+          <MantineSelect
+            searchable clearable placeholder="— Choisir une classe —"
+            data={(sourceClassesQuery.data ?? []).map((c) => ({ value: String(c.id), label: c.label }))}
+            value={sourceClassId || null}
+            onChange={(v) => { setSourceClassId(v ?? ""); setOverrides({}); setResults({}); }}
+          />
         </div>
       </div>
 
@@ -171,10 +173,11 @@ export default function ReEnrollmentPage() {
                         onChange={(e) => setRow(s.id, { redoublant: e.currentTarget.checked, targetClassId: undefined })} />
                     </TD>
                     <TD>
-                      <Select className="max-w-[200px]" value={String(r.targetClassId)} onChange={(e) => setRow(s.id, { targetClassId: e.target.value ? Number(e.target.value) : "" })}>
-                        <option value="">— Choisir —</option>
-                        {targetClasses.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                      </Select>
+                      <MantineSelect className="max-w-[200px]"
+                        searchable clearable placeholder="— Choisir —"
+                        data={targetClasses.map((c) => ({ value: String(c.id), label: c.label }))}
+                        value={r.targetClassId ? String(r.targetClassId) : null}
+                        onChange={(v) => setRow(s.id, { targetClassId: v ? Number(v) : "" })} />
                     </TD>
                     <TD>
                       {results[s.id] === "ok" ? <Badge tone="green">Réinscrit</Badge>

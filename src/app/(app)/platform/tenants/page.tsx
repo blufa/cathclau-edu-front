@@ -34,7 +34,13 @@ function TenantsTable() {
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
   // Identifiants affichés une seule fois après création avec mot de passe généré.
-  const [credentials, setCredentials] = useState<{ school: string; email: string | null; password: string } | null>(null);
+  const [credentials, setCredentials] = useState<{
+    school: string;
+    slug: string;
+    username: string | null;
+    email: string | null;
+    password: string | null;
+  } | null>(null);
 
   const { data, loading, error, refetch } = useQuery(
     () => searchTenants({ status: status || undefined, city: city || undefined, page, size: PAGE_SIZE }),
@@ -47,10 +53,14 @@ function TenantsTable() {
       setCreating(false);
       notifySuccess("École créée");
       refetch();
-      // Mot de passe généré → on l'affiche une seule fois au SUPER_ADMIN (aussi envoyé par email).
-      if (tenant.temporaryPassword) {
-        setCredentials({ school: tenant.schoolName, email: tenant.email, password: tenant.temporaryPassword });
-      }
+      // Écran de fin : récap des accès (à remettre à l'école) + « par où commencer ».
+      setCredentials({
+        school: tenant.schoolName,
+        slug: tenant.slug,
+        username: input.username?.trim() || null,
+        email: tenant.email ?? input.email ?? null,
+        password: tenant.temporaryPassword ?? null,
+      });
     } catch (err) {
       notifyError(err);
     }
@@ -150,40 +160,64 @@ function TenantsTable() {
         <TenantForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />
       </Modal>
 
-      <Modal open={!!credentials} onClose={() => setCredentials(null)} title="Identifiants de l'administrateur">
-        {credentials && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Voici le mot de passe temporaire de l&apos;administrateur de{" "}
-              <strong>{credentials.school}</strong>. Il a aussi été envoyé par email. Notez-le
-              maintenant : il ne sera plus affiché. L&apos;administrateur devra le changer à sa première connexion.
-            </p>
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
-              <div className="flex justify-between gap-4 py-1">
-                <span className="text-gray-500">Email</span>
-                <span className="font-medium">{credentials.email ?? "—"}</span>
+      <Modal open={!!credentials} onClose={() => setCredentials(null)} title="École créée 🎉">
+        {credentials && (() => {
+          const loginUrl = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
+          const rows: [string, string][] = [];
+          if (credentials.username) rows.push(["Identifiant de connexion", credentials.username]);
+          if (credentials.email) rows.push(["Email", credentials.email]);
+          rows.push(["Mot de passe", credentials.password ?? "Celui que vous avez défini"]);
+          rows.push(["Lien de connexion", loginUrl]);
+          const copyText = [
+            `École : ${credentials.school}`,
+            credentials.username ? `Identifiant : ${credentials.username}` : "",
+            credentials.email ? `Email : ${credentials.email}` : "",
+            `Mot de passe : ${credentials.password ?? "(défini par l'administrateur)"}`,
+            `Connexion : ${loginUrl}`,
+          ].filter(Boolean).join("\n");
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                <strong>{credentials.school}</strong> est prête. Remettez ces accès à l&apos;administrateur — il
+                se connecte avec son <strong>identifiant</strong>{credentials.email ? " ou son email" : ""} et son mot de passe.
+                {credentials.password && " Le mot de passe temporaire ne sera plus affiché ; notez-le."}
+              </p>
+
+              <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-slate-50 text-sm">
+                {rows.map(([label, value]) => (
+                  <div key={label} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                    <span className="text-slate-500">{label}</span>
+                    <span className="truncate font-mono font-medium text-slate-900">{value}</span>
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between gap-4 py-1">
-                <span className="text-gray-500">Mot de passe temporaire</span>
-                <span className="font-mono font-semibold">{credentials.password}</span>
+
+              <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm">
+                <p className="font-semibold text-slate-800">Par où commencer ?</p>
+                <p className="mt-1 text-slate-600">
+                  Dès sa première connexion, un guide <strong>« Premiers pas »</strong> accompagne l&apos;administrateur,
+                  étape par étape : créer les classes, ajouter les enseignants et les élèves, définir les frais
+                  scolaires… sans avoir à chercher dans les menus.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    navigator.clipboard
+                      ?.writeText(copyText)
+                      .then(() => notifySuccess("Accès copiés"))
+                      .catch((e) => notifyError(e, "Copie impossible"));
+                  }}
+                >
+                  Copier les accès
+                </Button>
+                <Button onClick={() => setCredentials(null)}>Terminé</Button>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  navigator.clipboard
-                    ?.writeText(`Email : ${credentials.email ?? ""}\nMot de passe : ${credentials.password}`)
-                    .then(() => notifySuccess("Identifiants copiés"))
-                    .catch((e) => notifyError(e, "Copie impossible"));
-                }}
-              >
-                Copier
-              </Button>
-              <Button onClick={() => setCredentials(null)}>J&apos;ai noté</Button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
     </div>
   );

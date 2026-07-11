@@ -85,6 +85,7 @@ export default function AssignmentsPage() {
       <Select
         className="max-w-[260px]"
         label="Classe"
+        searchable
         data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
         value={effectiveClassId != null ? String(effectiveClassId) : null}
         onChange={(value) => setClassId(value ? Number(value) : null)}
@@ -170,7 +171,7 @@ function AssignmentForm({ classId, initial, subjectName, onCancel, onCreated }: 
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
-        <Select label="Matière" withAsterisk
+        <Select label="Matière" withAsterisk searchable
           data={[{ value: "", label: "— Choisir —" }, ...(classSubjectsQuery.data ?? []).map((cm) => ({ value: String(cm.subjectId), label: subjectName.get(cm.subjectId) ?? `#${cm.subjectId}` }))]}
           {...form.getInputProps("subjectId")} />
         <TextInput label="Titre" withAsterisk {...form.getInputProps("title")} />

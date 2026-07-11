@@ -8,6 +8,7 @@ import {
   CalendarRange,
   ClipboardList,
   CreditCard,
+  IdCard,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -68,23 +69,10 @@ export const NAVIGATION: NavSection[] = [
     ],
   },
   {
-    title: "Mon abonnement",
-    items: [
-      {
-        label: "Abonnement",
-        icon: CreditCard,
-        roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"],
-        children: [
-          { label: "Vue d'ensemble", href: "/subscription" },
-          { label: "Factures d'abonnement", href: "/subscription/invoices" },
-        ],
-      },
-    ],
-  },
-  {
     title: "Scolarité",
     items: [
       { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENTS" },
+      { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "STUDENT_CARDS" },
       {
         label: "Inscriptions & rentrée", icon: ClipboardList, module: "STUDENTS",
         children: [
@@ -187,6 +175,20 @@ export const NAVIGATION: NavSection[] = [
       { label: "Écoles", href: "/platform/tenants", icon: Building2, roles: ["SUPER_ADMIN"] },
       { label: "Abonnements", href: "/platform/subscriptions", icon: CreditCard, roles: ["SUPER_ADMIN"] },
       { label: "Plans", href: "/platform/plans", icon: Layers, roles: ["SUPER_ADMIN"] },
+    ],
+  },
+  {
+    title: "Mon abonnement",
+    items: [
+      {
+        label: "Abonnement",
+        icon: CreditCard,
+        roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"],
+        children: [
+          { label: "Vue d'ensemble", href: "/subscription" },
+          { label: "Factures d'abonnement", href: "/subscription/invoices" },
+        ],
+      },
     ],
   },
   {

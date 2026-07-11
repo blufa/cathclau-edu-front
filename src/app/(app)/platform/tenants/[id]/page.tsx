@@ -13,6 +13,7 @@ import { QuotaProgress } from "@/components/platform/quota-progress";
 import { TenantModulesPanel } from "@/components/platform/tenant-modules-panel";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -176,7 +177,7 @@ function EditTenantForm({ tenant, onCancel, onSaved }: { tenant: Tenant; onCance
       <Stack gap="md">
         <TextInput label="Nom" withAsterisk {...form.getInputProps("schoolName")} />
         <TextInput label="Email" {...form.getInputProps("email")} />
-        <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+        <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
         <TextInput label="Ville" {...form.getInputProps("city")} />
         <TextInput label="Pays" {...form.getInputProps("country")} />
         <TextInput label="Directeur" {...form.getInputProps("director")} />

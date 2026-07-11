@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Tabs, Title, Select as MantineSelect } from "@mantine/core";
 import { Landmark, Receipt as ReceiptIcon, Search, FileText } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
@@ -156,12 +156,19 @@ function ReceiptsTab() {
     catch (err) { notifyError(err); } finally { setOpeningId(null); }
   }
 
-  async function lookup() {
-    if (!reference.trim()) return;
-    setSearching(true);
-    try { setFound(await getReceiptByReference(reference.trim())); }
-    catch (err) { setFound(null); notifyError(err); } finally { setSearching(false); }
-  }
+  // Recherche dynamique du reçu par numéro : suit la frappe (debounce 350 ms), sans bouton ni
+  // erreurs pendant la saisie (on efface simplement le résultat tant qu'aucun reçu ne correspond).
+  useEffect(() => {
+    const ref = reference.trim();
+    const t = setTimeout(async () => {
+      if (ref.length < 3) { setFound(null); setSearching(false); return; }
+      setSearching(true);
+      try { setFound(await getReceiptByReference(ref)); }
+      catch { setFound(null); }
+      finally { setSearching(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [reference]);
 
   const rows = q.data ?? [];
 
@@ -180,9 +187,9 @@ function ReceiptsTab() {
         </div>
         <div className="ml-auto">
           <label className="mb-1 block text-xs text-slate-500">Retrouver un reçu par son numéro</label>
-          <div className="flex gap-2">
-            <Input className="max-w-[200px]" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Numéro du reçu" />
-            <Button onClick={lookup} loading={searching}><Search className="mr-1 h-4 w-4" /> Chercher</Button>
+          <div className="relative flex items-center">
+            <Search className={`pointer-events-none absolute left-2.5 h-4 w-4 ${searching ? "animate-pulse text-brand-500" : "text-slate-400"}`} />
+            <Input className="max-w-[220px] pl-8" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Numéro du reçu" />
           </div>
         </div>
       </div>

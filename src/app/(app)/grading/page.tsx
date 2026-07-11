@@ -109,10 +109,10 @@ export default function GradingPage() {
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Classe</label>
-          <Select className="max-w-[220px]" value={classId ?? ""} onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— Choisir —</option>
-            {classes.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-          </Select>
+          <MantineSelect className="max-w-[220px]" searchable clearable placeholder="— Choisir —"
+            data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
+            value={classId != null ? String(classId) : null}
+            onChange={(v) => setClassId(v ? Number(v) : null)} />
         </div>
       </div>
 

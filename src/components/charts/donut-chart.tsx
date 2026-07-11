@@ -35,7 +35,7 @@ export function DonutChart({
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row">
       <div className="relative" style={{ width: height, height }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width={height} height={height} minWidth={0} minHeight={0}>
           <PieChart>
             <Pie
               data={data}
