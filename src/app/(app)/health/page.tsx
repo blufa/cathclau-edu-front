@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/health";
 import { VISIT_OUTCOME_LABEL, type HealthRecord, type InfirmaryVisit, type VisitOutcome } from "@/lib/types/health";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
@@ -208,11 +209,11 @@ function HealthRecordForm({ studentId, record, canWrite, onSaved }: {
             <Textarea label="Restrictions alimentaires" autosize minRows={1} {...form.getInputProps("dietaryRestrictions")} />
             <div className="grid gap-3 sm:grid-cols-2">
               <TextInput label="Médecin traitant" {...form.getInputProps("doctorName")} />
-              <TextInput label="Téléphone médecin" {...form.getInputProps("doctorPhone")} />
+              <PhoneInput label="Téléphone médecin" {...form.getInputProps("doctorPhone")} />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <TextInput label="Contact d'urgence" {...form.getInputProps("emergencyContactName")} />
-              <TextInput label="Téléphone urgence" {...form.getInputProps("emergencyContactPhone")} />
+              <PhoneInput label="Téléphone urgence" {...form.getInputProps("emergencyContactPhone")} />
               <TextInput label="Lien (père, mère…)" {...form.getInputProps("emergencyContactRelation")} />
             </div>
             <Textarea label="Notes" autosize minRows={1} {...form.getInputProps("notes")} />

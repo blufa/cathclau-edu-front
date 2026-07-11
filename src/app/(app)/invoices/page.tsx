@@ -261,7 +261,7 @@ function InvoiceForm({ tenantId, fees, onCancel, onCreated }: {
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
         <TextInput label="Rechercher un élève" placeholder="Nom / matricule" value={search} onChange={(e) => setSearch(e.currentTarget.value)} />
-        <MantineSelect label="Élève" withAsterisk
+        <MantineSelect label="Élève" withAsterisk searchable
           data={[{ value: "", label: "— Choisir —" }, ...(studentsQuery.data ?? []).map((s) => ({ value: String(s.id), label: `${s.firstName} ${s.lastName} (${s.studentNumber})` }))]}
           {...form.getInputProps("studentId")} />
         <MantineSelect label="Frais" withAsterisk
@@ -299,7 +299,7 @@ function BulkInvoiceForm({ tenantId, fees, onCancel, onDone }: {
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
-        <MantineSelect label="Classe" withAsterisk data={[{ value: "", label: "— Choisir —" }, ...(classesQuery.data ?? []).map((c) => ({ value: String(c.id), label: c.label }))]} {...form.getInputProps("classId")} />
+        <MantineSelect label="Classe" withAsterisk searchable data={[{ value: "", label: "— Choisir —" }, ...(classesQuery.data ?? []).map((c) => ({ value: String(c.id), label: c.label }))]} {...form.getInputProps("classId")} />
         <MantineSelect label="Frais" withAsterisk data={[{ value: "", label: "— Choisir —" }, ...fees.map((f) => ({ value: String(f.id), label: `${FEE_TYPE_LABEL[f.type]} — ${f.amount}` }))]} {...form.getInputProps("feeId")} />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>

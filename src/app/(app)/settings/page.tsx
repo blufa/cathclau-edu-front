@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Group, Select, Stack, TextInput } from "@mantine/core";
 import { Building2, Palette, Wallet } from "lucide-react";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/providers/auth-provider";
 import { useBranding } from "@/providers/branding-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -134,8 +135,8 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
           onChange={(e) => set("country", e.currentTarget.value)} />
       </Group>
       <Group grow>
-        <TextInput label="Téléphone" value={profile.phone ?? ""} readOnly={ro}
-          onChange={(e) => set("phone", e.currentTarget.value)} />
+        <PhoneInput label="Téléphone" value={profile.phone ?? ""} disabled={ro}
+          onChange={(v) => set("phone", v)} />
         <TextInput label="Email" value={profile.email ?? ""} readOnly={ro}
           onChange={(e) => set("email", e.currentTarget.value)} />
       </Group>

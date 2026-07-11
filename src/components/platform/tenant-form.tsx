@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { slugify } from "@/lib/platform-utils";
 import { ESTABLISHMENT_TYPE_LABEL } from "@/lib/platform-labels";
 import { ESTABLISHMENT_TYPES, type CreateTenantInput, type EstablishmentType } from "@/lib/types/platform";
+import { phoneRule } from "@/lib/phone";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 interface TenantFormProps {
   onSubmit: (input: CreateTenantInput) => Promise<void>;
@@ -20,14 +22,21 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
   const form = useForm<CreateTenantInput & { typeValues: EstablishmentType[]; confirmPassword: string }>({
     mode: "controlled",
     initialValues: {
-      schoolName: "", slug: "", email: "", phone: "", city: "", country: "Guinée",
+      schoolName: "", slug: "", email: "", username: "", phone: "", city: "", country: "Guinée",
       director: "", establishmentTypes: ["PRIMAIRE"], initialState: "TRIAL", typeValues: ["PRIMAIRE"],
       adminPassword: "", confirmPassword: "",
     },
     validate: {
       schoolName: (v) => (v.trim().length >= 2 ? null : "Nom requis"),
-      email: (v) => (/^\S+@\S+\.\S+$/.test(v) ? null : "Email invalide"),
-      phone: (v) => (v.trim() ? null : "Téléphone requis"),
+      // Email facultatif : validé seulement s'il est fourni.
+      email: (v) => (!v || /^\S+@\S+\.\S+$/.test(v) ? null : "Email invalide"),
+      // Identifiant facultatif (généré si vide), mais au moins un email OU un identifiant est requis.
+      username: (v, values) => {
+        if (v && !/^[a-zA-Z0-9._-]{3,}$/.test(v)) return "3 caractères min. (lettres, chiffres, . _ -)";
+        if (!v && !values.email?.trim()) return "Renseignez un email ou un identifiant";
+        return null;
+      },
+      phone: (v) => (!v.trim() ? "Téléphone requis" : phoneRule(v)),
       typeValues: (v) => (v && v.length > 0 ? null : "Au moins un type requis"),
       adminPassword: (v) => (!v || v.length >= 8 ? null : "8 caractères minimum"),
       confirmPassword: (v, values) =>
@@ -39,7 +48,8 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
     await onSubmit({
       schoolName: values.schoolName,
       slug: values.slug || slugify(values.schoolName),
-      email: values.email,
+      email: values.email || undefined,
+      username: values.username || undefined,
       phone: values.phone,
       city: values.city || undefined,
       country: values.country || undefined,
@@ -65,8 +75,14 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
             setSlugEdited(true);
             form.setFieldValue("slug", slugify(e.currentTarget.value));
           }} />
-        <TextInput label="Email du directeur" withAsterisk {...form.getInputProps("email")} />
-        <TextInput label="Téléphone" withAsterisk {...form.getInputProps("phone")} />
+        <TextInput
+          label="Identifiant de connexion"
+          description="L'admin se connectera avec cet identifiant (ou son email s'il est renseigné). Généré si vide."
+          placeholder="ex. direction-lumiere"
+          {...form.getInputProps("username")}
+        />
+        <TextInput label="Email du directeur (optionnel)" {...form.getInputProps("email")} />
+        <PhoneInput label="Téléphone" required {...form.getInputProps("phone")} />
         <TextInput label="Ville" {...form.getInputProps("city")} />
         <TextInput label="Pays" {...form.getInputProps("country")} />
         <TextInput label="Directeur" {...form.getInputProps("director")} />

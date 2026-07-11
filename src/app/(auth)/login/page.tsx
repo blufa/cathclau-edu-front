@@ -23,7 +23,7 @@ export default function LoginPage() {
     initialValues: { email: "", password: "" },
     validate: {
       // Connexion par email OU identifiant (username) : on exige juste un champ non vide.
-      email: (v) => (v.trim() ? null : "Email ou identifiant requis"),
+      email: (v) => (v.trim() ? null : "Email, identifiant ou téléphone requis"),
       password: (v) => (v ? null : "Mot de passe requis"),
     },
   });
@@ -62,8 +62,8 @@ export default function LoginPage() {
             </Alert>
           )}
           <TextInput
-            label="Email ou identifiant"
-            placeholder="vous@ecole.com ou votre identifiant"
+            label="Email, identifiant ou téléphone"
+            placeholder="email, identifiant ou numéro de téléphone"
             autoComplete="username"
             withAsterisk
             {...form.getInputProps("email")}

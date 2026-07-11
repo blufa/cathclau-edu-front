@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -317,7 +318,7 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
           <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
         </div>
         <TextInput label="Email" withAsterisk {...form.getInputProps("email")} />
-        <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+        <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
         <TextInput label="Mot de passe initial" type="password" withAsterisk {...form.getInputProps("password")} />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onCancel}>
@@ -368,7 +369,7 @@ function UserEditForm({ user, onCancel, onSaved }: { user: User; onCancel: () =>
           <TextInput label="Prénom" withAsterisk {...form.getInputProps("firstName")} />
           <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
         </div>
-        <TextInput label="Téléphone" {...form.getInputProps("phone")} />
+        <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
         <Switch
           label="Compte actif"
           color="brand"

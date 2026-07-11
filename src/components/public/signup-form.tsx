@@ -24,7 +24,8 @@ import { Button } from "@/components/ui/button";
 import { getSchoolBranding, resendVerification, signup } from "@/lib/api/platform";
 import { ApiError } from "@/lib/api/errors";
 import { maskEmail, slugify } from "@/lib/platform-utils";
-import { guineaPhoneRule, PHONE_PLACEHOLDER } from "@/lib/phone";
+import { phoneRule } from "@/lib/phone";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ESTABLISHMENT_TYPE_LABEL } from "@/lib/platform-labels";
 import { ESTABLISHMENT_TYPES, type EstablishmentType } from "@/lib/types/platform";
 
@@ -91,7 +92,7 @@ export function SignupForm() {
       username: (v) => (/^[a-zA-Z0-9._-]{3,}$/.test(v) ? null : "Identifiant : 3 caractères min. (lettres, chiffres, . _ -)"),
       // Email FACULTATIF : validé seulement s'il est saisi.
       emailDirecteur: (v) => (!v || /^\S+@\S+\.\S+$/.test(v) ? null : "Email invalide"),
-      telephoneAdmin: guineaPhoneRule,
+      telephoneAdmin: phoneRule,
       password: (v) =>
         v.length >= 8 && /[A-Za-z]/.test(v) && /[0-9]/.test(v) ? null : "8 caractères min., avec lettres et chiffres",
       confirm: (v, values) => (v === values.password ? null : "Les mots de passe ne correspondent pas"),
@@ -250,7 +251,7 @@ export function SignupForm() {
                 {...form.getInputProps("username")}
               />
               <Group grow>
-                <TextInput label="Téléphone" placeholder={PHONE_PLACEHOLDER} inputMode="tel" {...form.getInputProps("telephoneAdmin")} />
+                <PhoneInput label="Téléphone" {...form.getInputProps("telephoneAdmin")} />
                 <TextInput label="Email (optionnel)" type="email" {...form.getInputProps("emailDirecteur")} />
               </Group>
               <Group grow>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Stack, Textarea, TextInput } from "@mantine/core";
+import { Stack, Textarea, TextInput, Select as MantineSelect } from "@mantine/core";
 import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -253,23 +253,23 @@ export default function AnnouncementsPage() {
               {scope === "CLASS" && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Classe</label>
-                  <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
-                    <option value="">— Choisir une classe —</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                  </Select>
+                  <MantineSelect
+                    searchable clearable placeholder="— Choisir une classe —"
+                    data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
+                    value={classId || null}
+                    onChange={(v) => setClassId(v ?? "")}
+                  />
                 </div>
               )}
               {scope === "STUDENT" && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Élève</label>
-                  <Select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-                    <option value="">— Choisir un élève —</option>
-                    {students.map((s) => (
-                      <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
-                    ))}
-                  </Select>
+                  <MantineSelect
+                    searchable clearable placeholder="— Choisir un élève —"
+                    data={students.map((s) => ({ value: String(s.id), label: `${s.firstName} ${s.lastName}` }))}
+                    value={studentId || null}
+                    onChange={(v) => setStudentId(v ?? "")}
+                  />
                 </div>
               )}
             </>

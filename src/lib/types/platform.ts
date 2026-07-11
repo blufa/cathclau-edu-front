@@ -173,7 +173,10 @@ export interface SignupInput {
 export interface CreateTenantInput {
   schoolName: string;
   slug?: string;
-  email: string;
+  /** Email facultatif (login possible par identifiant). */
+  email?: string;
+  /** Identifiant de connexion de l'admin (login par username OU email) ; généré si vide. */
+  username?: string;
   phone: string;
   address?: string;
   city?: string;

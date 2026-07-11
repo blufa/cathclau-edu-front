@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NumberInput, Select as MantineSelect, Stack, TextInput } from "@mantine/core";
 import { DatePickerInput } from "@mantine/dates";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import type { Employee, EmployeeCategory, EmployeeInput } from "@/lib/api/staff";
 
 export const EMPLOYEE_CATEGORY_LABEL: Record<EmployeeCategory, string> = {
@@ -75,7 +76,7 @@ export function EmployeeForm({
         <TextInput label="Fonction / poste" value={jobTitle} onChange={(e) => setJobTitle(e.currentTarget.value)} placeholder="Ex. Comptable, Surveillant…" />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <TextInput label="Téléphone" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+        <PhoneInput label="Téléphone" value={phone} onChange={setPhone} />
         <TextInput label="Email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
       </div>
       <div className="grid grid-cols-2 gap-3">

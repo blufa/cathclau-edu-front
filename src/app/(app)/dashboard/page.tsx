@@ -21,6 +21,7 @@ import { DonutChart, type DonutSlice } from "@/components/charts/donut-chart";
 import { SubscriptionStatusBadge } from "@/components/platform/status-badge";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { PendingSubscriptionBanner } from "@/components/platform/pending-subscription-banner";
+import { GettingStarted } from "@/components/dashboard/getting-started";
 import { Reveal } from "@/components/public/reveal";
 import { formatDate, formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
@@ -87,6 +88,9 @@ export default function DashboardPage() {
   const monthly = billingByMonth(invoices);
   const breakdown = statusBreakdown(invoices);
   const quotaNearLimit = plan?.studentLimit != null && consumed >= plan.studentLimit * 0.9;
+  // École qui a déjà des données réelles → on affiche le tableau financier ; sinon (école neuve) on
+  // laisse le guide « Premiers pas » être le centre de la page, sans widgets vides qui l'encombrent.
+  const hasData = consumed > 0 || invoices.length > 0;
 
   async function toggleAutoRenew(enabled: boolean) {
     if (!subscription) return;
@@ -104,11 +108,18 @@ export default function DashboardPage() {
         <div className="absolute -bottom-12 right-24 h-32 w-32 rounded-full bg-white/10" />
         <div className="relative">
           <h1 className="text-2xl font-bold tracking-tight">Bonjour {user.firstName} 👋</h1>
-          <p className="mt-1 text-sm text-white/85">Voici un aperçu de votre établissement aujourd&apos;hui.</p>
+          <p className="mt-1 text-sm text-white/85">
+            {tenantScoped && !hasData && !studentsQuery.loading && !invoicesQuery.loading
+              ? "Configurons votre établissement — suivez le guide ci-dessous, étape par étape."
+              : "Voici un aperçu de votre établissement aujourd'hui."}
+          </p>
         </div>
       </div>
 
       {tenantScoped && <PendingSubscriptionBanner />}
+
+      {/* Guide « Premiers pas » pour une école nouvellement inscrite (se masque une fois configuré). */}
+      {tenantScoped && <GettingStarted />}
 
       {!tenantScoped ? (
         <Card>
@@ -151,7 +162,8 @@ export default function DashboardPage() {
             </Reveal>
           )}
 
-          {/* KPI cards — données scolaires réelles */}
+          {/* KPI cards — données scolaires réelles (masqués tant qu'aucune donnée : école neuve) */}
+          {hasData && (
           <Reveal y={12}>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard title="Élèves inscrits" value={consumed} icon={GraduationCap} accent="teal"
@@ -164,8 +176,10 @@ export default function DashboardPage() {
                 trend={{ value: `${recovery}%`, positive: recovery >= 70 }} />
             </div>
           </Reveal>
+          )}
 
           {/* Charts — frais élèves */}
+          {hasData && (
           <Reveal y={12}>
             <div className="grid gap-4 lg:grid-cols-3">
               <Card className="lg:col-span-2">
@@ -188,6 +202,7 @@ export default function DashboardPage() {
               </Card>
             </div>
           </Reveal>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
@@ -228,6 +243,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Dernières factures élèves */}
+          {hasData && (
           <Card>
             <CardHeader><CardTitle>Dernières factures élèves</CardTitle></CardHeader>
             <CardBody>
@@ -251,6 +267,7 @@ export default function DashboardPage() {
               <div className="pt-3"><Button component={Link} href="/invoices" size="sm" variant="ghost">Toutes les factures →</Button></div>
             </CardBody>
           </Card>
+          )}
         </>
       )}
     </div>
