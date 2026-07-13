@@ -154,20 +154,12 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* Impression isolée d'un badge (IdBadge) : masque toute l'app sauf la carte. */
+/* Par défaut, les navigateurs omettent les couleurs de fond/dégradés à l'impression (économie
+   d'encre) — ce qui viderait les en-têtes colorés et bandes tricolores des badges/documents. On force
+   leur rendu : c'est voulu ici (documents officiels aux couleurs de l'école/du pays). */
 @media print {
-  body.print-badge-only * {
-    visibility: hidden !important;
-  }
-  body.print-badge-only .badge-printable,
-  body.print-badge-only .badge-printable * {
-    visibility: visible !important;
-  }
-  body.print-badge-only .badge-printable {
-    position: fixed;
-    left: 50%;
-    top: 40px;
-    transform: translateX(-50%);
-    box-shadow: none !important;
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

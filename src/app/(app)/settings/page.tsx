@@ -105,6 +105,8 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         director: profile.director,
         accreditationNumber: profile.accreditationNumber,
         openingAuthorization: profile.openingAuthorization,
+        motto: profile.motto,
+        slogan: profile.slogan,
         payoutMerchantNumber: profile.payoutMerchantNumber,
         payoutOperator: profile.payoutOperator,
         payoutAccountName: profile.payoutAccountName,
@@ -149,6 +151,12 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
           onChange={(e) => set("accreditationNumber", e.currentTarget.value)} />
         <TextInput label="Autorisation d'ouverture" value={profile.openingAuthorization ?? ""} readOnly={ro}
           onChange={(e) => set("openingAuthorization", e.currentTarget.value)} />
+      </Group>
+      <Group grow align="flex-start">
+        <TextInput label="Devise de l'établissement" placeholder="Ex. Excellence, Rigueur, Discipline" value={profile.motto ?? ""} readOnly={ro}
+          description="Phrase courte et formelle, imprimée au verso des cartes/badges." onChange={(e) => set("motto", e.currentTarget.value)} />
+        <TextInput label="Slogan" placeholder="Ex. Le savoir pour tous" value={profile.slogan ?? ""} readOnly={ro}
+          description="Accroche de l'école, imprimée au verso des cartes/badges." onChange={(e) => set("slogan", e.currentTarget.value)} />
       </Group>
 
       <div className="pt-2">
