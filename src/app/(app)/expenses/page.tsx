@@ -47,8 +47,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/stat-card";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { AreaTrendChart } from "@/components/charts/area-trend-chart";
-import { DonutChart, type DonutSlice } from "@/components/charts/donut-chart";
+import { BarTrendChart } from "@/components/charts/bar-trend-chart";
+import { BarBreakdownChart, type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -411,10 +411,10 @@ function ReportsTab() {
   const supplierName = new Map((suppliersQuery.data ?? []).map((s) => [s.id, s.name]));
   const paid = expensesQuery.data ?? [];
 
-  // By category (donut)
+  // By category (bar breakdown)
   const byCat = new Map<string, number>();
   for (const e of paid) { const k = e.categoryId != null ? (categoryName.get(e.categoryId) ?? `#${e.categoryId}`) : "Sans catégorie"; byCat.set(k, (byCat.get(k) ?? 0) + Number(e.amount)); }
-  const catSlices: DonutSlice[] = [...byCat.entries()].map(([name, value], i) => ({ name, value: Math.round(value), color: PALETTE[i % PALETTE.length] }));
+  const catSlices: BreakdownItem[] = [...byCat.entries()].map(([name, value], i) => ({ name, value: Math.round(value), color: PALETTE[i % PALETTE.length] }));
 
   // By month (area)
   const byMonth = new Map<string, number>();
@@ -434,11 +434,11 @@ function ReportsTab() {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">Dépenses payées par mois</h3>
         {monthData.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">Aucune donnée.</p> :
-          <AreaTrendChart data={monthData} valueFormatter={(v) => formatGNF(v)} series={[{ key: "Dépenses", name: "Dépenses", color: "#f43f5e" }]} />}
+          <BarTrendChart data={monthData} valueFormatter={(v) => formatGNF(v)} series={[{ key: "Dépenses", name: "Dépenses", color: "#f43f5e" }]} />}
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">Par catégorie</h3>
-        <DonutChart data={catSlices} centerLabel="dépenses" valueFormatter={(v) => formatGNF(v)} />
+        <BarBreakdownChart data={catSlices} centerLabel="dépenses" valueFormatter={(v) => formatGNF(v)} />
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-3">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">Par fournisseur</h3>
@@ -483,7 +483,7 @@ function TreasuryTab({ tenantId }: { tenantId: number }) {
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">Entrées vs sorties (6 derniers mois)</h3>
         {data.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">Aucune donnée.</p> :
-          <AreaTrendChart data={data} valueFormatter={(v) => formatGNF(v)} series={[{ key: "Entrées", name: "Entrées", color: "#14b8a6" }, { key: "Sorties", name: "Sorties", color: "#f43f5e" }]} />}
+          <BarTrendChart data={data} valueFormatter={(v) => formatGNF(v)} series={[{ key: "Entrées", name: "Entrées", color: "#14b8a6" }, { key: "Sorties", name: "Sorties", color: "#f43f5e" }]} />}
       </div>
     </div>
   );

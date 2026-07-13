@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, children }: React.TableHTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/[0.02]">
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white ring-1 ring-slate-900/[0.02]">
       <MantineTable highlightOnHover verticalSpacing="sm" horizontalSpacing="md" className={className}>
         {children}
       </MantineTable>

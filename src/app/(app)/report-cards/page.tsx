@@ -30,7 +30,7 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { AreaTrendChart } from "@/components/charts/area-trend-chart";
+import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -150,7 +150,7 @@ function StudentRecord({ student, periodLabel, canPublish, onChangeStudent }: {
           {trend.length > 1 && (
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <h3 className="mb-3 text-sm font-semibold text-slate-700">Évolution de la moyenne</h3>
-              <AreaTrendChart data={trend} series={[{ key: "Moyenne", name: "Moyenne", color: "#14b8a6" }]} />
+              <BarTrendChart data={trend} series={[{ key: "Moyenne", name: "Moyenne", color: "#14b8a6" }]} />
             </div>
           )}
           <Table>

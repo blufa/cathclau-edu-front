@@ -25,7 +25,7 @@ export function TableSkeleton({ columns, rows = 6 }: { columns: number; rows?: n
 /** Skeleton for a KPI / stat card. */
 export function StatCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5">
       <Skeleton className="h-11 w-11 rounded-xl" />
       <Skeleton className="mt-4 h-3 w-24" />
       <Skeleton className="mt-2 h-6 w-28" />
@@ -36,7 +36,7 @@ export function StatCardSkeleton() {
 /** Generic card skeleton (header + lines). */
 export function CardSkeleton({ lines = 4 }: { lines?: number }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5">
       <Skeleton className="h-4 w-32" />
       <div className="mt-4 space-y-2.5">
         {Array.from({ length: lines }).map((_, i) => (

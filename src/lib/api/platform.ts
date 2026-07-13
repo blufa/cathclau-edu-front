@@ -6,6 +6,7 @@ import type {
   Plan,
   PlanChange,
   PlanInput,
+  PlatformUser,
   SchoolBranding,
   SignupInput,
   SignupResult,
@@ -219,6 +220,11 @@ export function changeTenantStatus(id: number, action: "ACTIVATE" | "SUSPEND" | 
 
 export function deleteTenant(id: number): Promise<void> {
   return api.delete<void>(`/platform/tenants/${id}`);
+}
+
+/** Tous les utilisateurs, toutes écoles confondues (ou d'une seule école si `tenantId` est fourni). */
+export function listPlatformUsers(tenantId?: number): Promise<PlatformUser[]> {
+  return api.get<PlatformUser[]>("/platform/users", { query: { tenantId } });
 }
 
 // ── SUPER_ADMIN: plans CRUD ──────────────────────────────────────────────────

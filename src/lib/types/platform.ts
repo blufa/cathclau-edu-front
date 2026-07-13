@@ -80,6 +80,23 @@ export interface TenantDetail {
   consumedStudents: number;
 }
 
+/** Utilisateur vu depuis l'espace Plateforme (toutes écoles confondues) — voir PlatformUserController. */
+export interface PlatformUser {
+  id: number;
+  tenantId: number | null;
+  firstName: string;
+  lastName: string;
+  username: string | null;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+  roles: string[];
+  lastLoginAt: string | null;
+  lastActivityAt: string | null;
+  /** Actif dans les 5 dernières minutes. */
+  online: boolean;
+}
+
 export interface Subscription {
   id: number;
   tenantId: number;

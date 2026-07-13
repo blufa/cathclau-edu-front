@@ -2,7 +2,29 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Rocket, X } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  Bus,
+  Calculator,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  Fingerprint,
+  HeartPulse,
+  IdCard,
+  Megaphone,
+  MessagesSquare,
+  NotebookPen,
+  PiggyBank,
+  Rocket,
+  ShieldAlert,
+  ShieldCheck,
+  UserSearch,
+  Users,
+  Webhook,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import {
@@ -32,10 +54,86 @@ interface Group {
   steps: Step[];
 }
 
+/** Fonctionnalité complémentaire (non indispensable au démarrage) listée pour mémoire, avec le
+ * bouton exact à utiliser — pour qu'aucune fonctionnalité ne reste cachée dans les menus. */
+interface ExtraItem {
+  title: string;
+  help: string;
+  href: string;
+  icon: typeof Bus;
+}
+interface ExtraGroup {
+  title: string;
+  theme: keyof typeof THEME;
+  items: ExtraItem[];
+}
+
+/** Classes Tailwind statiques par thème de couleur (une couleur par grand domaine, pour repérer
+ * les familles de fonctionnalités d'un coup d'œil — les classes doivent rester écrites en toutes
+ * lettres pour que Tailwind les détecte). */
+const THEME = {
+  sky: { title: "text-sky-700", card: "border-sky-100 bg-sky-50/60 hover:border-sky-300", icon: "bg-sky-100 text-sky-700" },
+  emerald: { title: "text-emerald-700", card: "border-emerald-100 bg-emerald-50/60 hover:border-emerald-300", icon: "bg-emerald-100 text-emerald-700" },
+  amber: { title: "text-amber-700", card: "border-amber-100 bg-amber-50/60 hover:border-amber-300", icon: "bg-amber-100 text-amber-700" },
+  violet: { title: "text-violet-700", card: "border-violet-100 bg-violet-50/60 hover:border-violet-300", icon: "bg-violet-100 text-violet-700" },
+} as const;
+
+const EXTRA_GROUPS: ExtraGroup[] = [
+  {
+    title: "Vie scolaire au quotidien",
+    theme: "sky",
+    items: [
+      { title: "Devoirs", help: "Bouton « Nouveau devoir » pour donner un travail à une classe.", href: "/assignments", icon: ClipboardList },
+      { title: "Cahier de textes", help: "Bouton « Nouvelle séance » pour noter ce qui a été fait en cours.", href: "/lessons", icon: NotebookPen },
+      { title: "Discipline", help: "Bouton « Signaler un incident » pour consigner un fait disciplinaire.", href: "/discipline", icon: ShieldAlert },
+      { title: "Santé / infirmerie", help: "Bouton « Enregistrer un passage » pour un élève reçu à l'infirmerie.", href: "/health", icon: HeartPulse },
+      { title: "Transport scolaire", help: "Onglet « Lignes » → « Nouvelle ligne » ; onglet « Abonnements » → « Abonner un élève ».", href: "/transport", icon: Bus },
+      { title: "Cartes scolaires (badges)", help: "Onglet « Cartes » → bouton « Émettre une carte ».", href: "/student-cards", icon: IdCard },
+      { title: "Réinscription & mouvements", help: "Cochez des élèves puis « Réinscrire la sélection » ; onglets Liste d'attente / Arrivées / Départs pour le suivi.", href: "/re-enrollment", icon: ClipboardList },
+      { title: "Annuaire inter-écoles", help: "Recherchez un élève déjà scolarisé dans une autre école du réseau.", href: "/directory", icon: UserSearch },
+    ],
+  },
+  {
+    title: "Finances avancées",
+    theme: "emerald",
+    items: [
+      { title: "Factures élèves", help: "Bouton « Nouvelle facture », ou « Générer en masse » pour toute une classe.", href: "/invoices", icon: FileText },
+      { title: "Règles de facturation", help: "Onglets Exonérations, Remises fratrie, Enfants du personnel pour les cas particuliers.", href: "/billing-rules", icon: FileText },
+      { title: "Comptabilité générale", help: "Onglets Plan comptable, Journaux, Écritures ; boutons « Nouveau compte », « Nouvelle écriture »…", href: "/accounting", icon: Calculator },
+      { title: "Rapprochement bancaire", help: "Bouton « Nouveau rapprochement » pour pointer un relevé de banque.", href: "/bank-reconciliation", icon: Calculator },
+      { title: "Petite caisse", help: "Bouton « Nouvelle caisse », puis « Bon de sortie » et « Réapprovisionner ».", href: "/petty-cash", icon: PiggyBank },
+      { title: "Budget annuel", help: "Bouton « Nouveau budget » pour planifier vos dépenses de l'année.", href: "/budget", icon: PiggyBank },
+      { title: "Subventions", help: "Bouton « Nouvelle subvention » pour suivre un financement externe.", href: "/grants", icon: Banknote },
+      { title: "Paie du personnel", help: "Bouton « Générer une fiche » (ou « Générer en lot ») pour les salaires.", href: "/payroll", icon: Banknote },
+    ],
+  },
+  {
+    title: "Communication",
+    theme: "amber",
+    items: [
+      { title: "Messages", help: "Bouton « Nouveau message » pour un SMS, un email ou un WhatsApp ciblé.", href: "/communications", icon: MessagesSquare },
+      { title: "Annonces", help: "Bouton « Nouvelle annonce » pour informer toute l'école, une classe ou un élève.", href: "/announcements", icon: Megaphone },
+      { title: "Documents & modèles", help: "Bouton « Nouveau modèle » (ou « Modèles par défaut ») pour vos certificats, reçus, attestations.", href: "/documents", icon: FileText },
+    ],
+  },
+  {
+    title: "Sécurité & intégrations",
+    theme: "violet",
+    items: [
+      { title: "Utilisateurs", help: "Bouton « Nouvel utilisateur » pour créer un accès (secrétaire, comptable…).", href: "/users", icon: Users },
+      { title: "Rôles & permissions", help: "Bouton « Nouveau rôle » pour créer un profil d'accès sur mesure.", href: "/roles", icon: ShieldCheck },
+      { title: "Biométrie", help: "Onglets Pointage caméra, Badges, Appareils, Enrôlements pour la reconnaissance des présences.", href: "/biometric", icon: Fingerprint },
+      { title: "Webhooks", help: "Bouton « Nouvel endpoint » pour connecter un système externe à vos événements.", href: "/webhooks", icon: Webhook },
+    ],
+  },
+];
+
 /**
  * Guide « Premiers pas » complet pour une école : un point d'entrée unique qui liste, regroupées par
  * thème, toutes les configurations à faire — l'admin n'a pas à fouiller les menus. Chaque étape se
- * coche automatiquement d'après les données réelles. Masquable (mémorisé), et masqué une fois tout fait.
+ * coche automatiquement d'après les données réelles. En dessous, une liste de référence indique,
+ * bouton par bouton, où trouver chaque fonctionnalité complémentaire. Masquable (mémorisé), et
+ * masqué une fois l'essentiel terminé.
  */
 export function GettingStarted() {
   const { user } = useAuth();
@@ -81,40 +179,40 @@ export function GettingStarted() {
     {
       title: "1. Structure de l'établissement",
       steps: [
-        { title: "Année scolaire & périodes", help: "Confirmez l'année en cours et créez vos trimestres/semestres.", href: "/classes", done: !!currentYear && has(periodsQ.data) },
-        { title: "Niveaux (cycles)", help: "Définissez les niveaux (Primaire, Collège, Lycée…).", href: "/classes", done: has(levelsQ.data) },
-        { title: "Salles", help: "Ajoutez les salles de classe de l'école.", href: "/classes", done: has(roomsQ.data) },
-        { title: "Classes", help: "Créez les classes (ex. « 7ème A »).", href: "/classes", done: has(classesQ.data) },
-        { title: "Matières", help: "Renseignez les matières enseignées.", href: "/classes", done: has(subjectsQ.data) },
-        { title: "Emploi du temps", help: "Placez les cours dans la semaine.", href: "/timetable", done: has(schedulesQ.data) },
+        { title: "Année scolaire & périodes", help: "Bouton « Nouvelle année », puis « Nouvelle période » pour vos trimestres/semestres.", href: "/academic-years", done: !!currentYear && has(periodsQ.data) },
+        { title: "Niveaux (cycles)", help: "Onglet « Niveaux » → bouton « Nouveau niveau » (ou un modèle prêt à l'emploi).", href: "/referentials", done: has(levelsQ.data) },
+        { title: "Salles", help: "Onglet « Salles » → bouton « Nouvelle salle ».", href: "/referentials", done: has(roomsQ.data) },
+        { title: "Classes", help: "Bouton « Nouvelle classe » en haut à droite de la page.", href: "/classes", done: has(classesQ.data) },
+        { title: "Matières", help: "Onglet « Matières » → bouton « Nouvelle matière ».", href: "/referentials", done: has(subjectsQ.data) },
+        { title: "Emploi du temps", help: "Bouton « Ajouter un créneau » pour placer un cours dans la semaine.", href: "/timetable", done: has(schedulesQ.data) },
       ],
     },
     {
       title: "2. Personnel",
       steps: [
-        { title: "Enseignants", help: "Créez les comptes des enseignants et leurs affectations.", href: "/teachers", done: has(teachersQ.data) },
-        { title: "Personnel administratif", help: "Ajoutez le personnel non enseignant.", href: "/personnel", done: has(employeesQ.data) },
+        { title: "Enseignants", help: "Bouton « Nouvel enseignant » et ses affectations classe/matière.", href: "/teachers", done: has(teachersQ.data) },
+        { title: "Personnel administratif", help: "Bouton « Nouveau membre » (secrétaire, comptable…).", href: "/personnel", done: has(employeesQ.data) },
       ],
     },
     {
       title: "3. Élèves & familles",
       steps: [
-        { title: "Élèves", help: "Inscrivez vos élèves et affectez-les à une classe.", href: "/students", done: (studentsQ.data?.totalElements ?? 0) > 0 },
-        { title: "Parents / tuteurs", help: "Rattachez les parents pour les notifications.", href: "/students", done: has(parentsQ.data) },
+        { title: "Élèves", help: "Bouton « Nouvel élève » en haut à droite, puis choisissez sa classe.", href: "/students", done: (studentsQ.data?.totalElements ?? 0) > 0 },
+        { title: "Parents / tuteurs", help: "Fiche de l'élève → onglet « Parents » → bouton « Ajouter un parent ».", href: "/students", done: has(parentsQ.data) },
       ],
     },
     {
       title: "4. Finances",
       steps: [
-        { title: "Frais scolaires", help: "Configurez les frais (inscription, mensualités, transport…).", href: "/fees", done: has(feesQ.data) },
-        { title: "Numéro marchand de reversement", help: "Le compte Mobile Money où recevoir vos encaissements.", href: "/settings", done: !!profile?.payoutMerchantNumber },
+        { title: "Frais scolaires", help: "Bouton « Nouveau frais », puis « + Ajouter une échéance » pour étaler le paiement.", href: "/fees", done: has(feesQ.data) },
+        { title: "Numéro marchand de reversement", help: "Bas de la section « Informations de l'établissement » → champ « Numéro marchand » (Mobile Money).", href: "/settings", done: !!profile?.payoutMerchantNumber },
       ],
     },
     {
       title: "5. Personnalisation & communication",
       steps: [
-        { title: "Logo & couleurs de l'école", help: "Personnalisez l'apparence (figure sur les documents).", href: "/settings", done: !!profile?.logo },
-        { title: "Modèles de messages", help: "Standardisez vos SMS/emails automatiques.", href: "/templates", done: has(templatesQ.data) },
+        { title: "Logo & couleurs de l'école", help: "Section « Apparence » → bouton d'import « Logo de l'établissement » et palette de couleurs.", href: "/settings", done: !!profile?.logo },
+        { title: "Modèles de messages", help: "Bouton « Nouveau modèle » pour standardiser vos SMS/emails automatiques.", href: "/templates", done: has(templatesQ.data) },
       ],
     },
   ];
@@ -203,6 +301,45 @@ export function GettingStarted() {
             </ol>
           </div>
         ))}
+      </div>
+
+      {/* Référence complète : chaque fonctionnalité restante, avec le bouton exact à utiliser — rien
+          n'est laissé de côté, même ce qui n'est pas indispensable pour démarrer. */}
+      <div className="mt-6 border-t border-brand-100 pt-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Pour aller plus loin — le reste de la plateforme, bouton par bouton
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {EXTRA_GROUPS.map((g) => {
+            const t = THEME[g.theme];
+            return (
+              <div key={g.title} className="rounded-xl border border-slate-100 bg-white/70 p-3">
+                <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${t.title}`}>{g.title}</p>
+                <ul className="space-y-1.5">
+                  {g.items.map((it) => {
+                    const Icon = it.icon;
+                    return (
+                      <li key={it.title}>
+                        <Link
+                          href={it.href}
+                          className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 transition ${t.card}`}
+                        >
+                          <span className={`mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-lg ${t.icon}`}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-slate-900">{it.title}</span>
+                            <span className="block text-xs text-slate-500">{it.help}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

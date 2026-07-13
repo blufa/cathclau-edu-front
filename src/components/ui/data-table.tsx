@@ -258,7 +258,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/[0.02]">
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white ring-1 ring-slate-900/[0.02]">
         <table className="w-full border-collapse text-sm">
           <thead className="border-b border-slate-200 bg-slate-50/80">
             {table.getHeaderGroups().map((hg) => (

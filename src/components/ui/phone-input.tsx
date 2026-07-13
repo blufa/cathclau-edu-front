@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Select, TextInput } from "@mantine/core";
+import { Input, Select, TextInput, type OptionsFilter } from "@mantine/core";
 import {
   COUNTRY_OPTIONS,
   capNational,
   formatNational,
   parsePhone,
+  placeholderNational,
   toE164,
   type CountryCode,
 } from "@/lib/phone";
@@ -24,10 +25,21 @@ interface PhoneInputProps {
   disabled?: boolean;
 }
 
-const COUNTRY_DATA = COUNTRY_OPTIONS.map((c) => ({
-  value: c.code,
-  label: `${c.flag} ${c.name} (+${c.dial})`,
-}));
+// Sélecteur de pays : uniquement le drapeau une fois replié (pas de nom qui alourdit la ligne) —
+// mais on garde nom + indicatif pour la recherche et pour l'affichage des options dans la liste.
+const COUNTRY_BY_CODE = new Map(COUNTRY_OPTIONS.map((c) => [c.code, c]));
+const COUNTRY_DATA = COUNTRY_OPTIONS.map((c) => ({ value: c.code, label: c.flag }));
+
+/** Recherche par nom de pays, indicatif ou code ISO, même si le libellé affiché n'est que le drapeau. */
+const filterCountries: OptionsFilter = ({ options, search }) => {
+  const q = search.trim().toLowerCase();
+  if (!q) return options;
+  return options.filter((o) => {
+    if (!("value" in o)) return false;
+    const c = COUNTRY_BY_CODE.get(o.value as CountryCode);
+    return !!c && (c.name.toLowerCase().includes(q) || c.dial.includes(q) || c.code.toLowerCase().includes(q));
+  });
+};
 
 /**
  * Saisie standardisée d'un numéro : on choisit le pays (liste mondiale, recherchable par nom ou
@@ -85,15 +97,27 @@ export function PhoneInput({
           disabled={disabled}
           maxDropdownHeight={280}
           nothingFoundMessage="Aucun pays"
-          comboboxProps={{ withinPortal: true }}
+          comboboxProps={{ withinPortal: true, width: 240 }}
+          filter={filterCountries}
+          renderOption={({ option }) => {
+            const c = COUNTRY_BY_CODE.get(option.value as CountryCode);
+            return (
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 18 }}>{option.label}</span>
+                <span>{c?.name}</span>
+                <span style={{ color: "var(--mantine-color-dimmed)" }}>+{c?.dial}</span>
+              </span>
+            );
+          }}
           aria-label="Pays"
-          style={{ width: 158, flex: "0 0 auto" }}
+          style={{ width: 72, flex: "0 0 auto" }}
+          styles={{ input: { fontSize: 18, textAlign: "center", paddingInline: 4 } }}
           onChange={(code) => code && changeCountry(code as CountryCode)}
         />
         <TextInput
           style={{ flex: 1, minWidth: 0 }}
           inputMode="tel"
-          placeholder="Numéro de téléphone"
+          placeholder={placeholderNational(country)}
           value={formatNational(country, national)}
           disabled={disabled}
           error={!!error}
