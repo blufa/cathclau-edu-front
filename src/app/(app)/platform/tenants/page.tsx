@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { CircleDot } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
-import { changeTenantStatus, createTenant, searchTenants } from "@/lib/api/platform";
+import { changeTenantStatus, createTenant, listPlatformUsers, searchTenants } from "@/lib/api/platform";
+import { Badge } from "@/components/ui/badge";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
 import { TenantForm } from "@/components/platform/tenant-form";
 import { TenantStatusBadge } from "@/components/platform/status-badge";
@@ -45,6 +47,13 @@ function TenantsTable() {
   const { data, loading, error, refetch } = useQuery(
     () => searchTenants({ status: status || undefined, city: city || undefined, page, size: PAGE_SIZE }),
     [status, city, page],
+  );
+
+  // Écoles ayant au moins un utilisateur actif dans les 5 dernières minutes (« connectée »).
+  const usersQuery = useQuery(() => listPlatformUsers(), []);
+  const onlineTenantIds = useMemo(
+    () => new Set((usersQuery.data ?? []).filter((u) => u.online && u.tenantId != null).map((u) => u.tenantId)),
+    [usersQuery.data],
   );
 
   async function handleCreate(input: CreateTenantInput) {
@@ -104,6 +113,17 @@ function TenantsTable() {
       render: (t) => (t.establishmentTypes?.length ? t.establishmentTypes.map((x) => ESTABLISHMENT_TYPE_LABEL[x]).join(", ") : "—"),
     },
     { key: "status", header: "Statut", accessor: (t) => t.status, render: (t) => <TenantStatusBadge status={t.status} /> },
+    {
+      key: "online",
+      header: "Connectée",
+      accessor: (t) => (onlineTenantIds.has(t.id) ? "En ligne" : "Hors ligne"),
+      render: (t) => (
+        <Badge tone={onlineTenantIds.has(t.id) ? "green" : "gray"}>
+          <CircleDot className="mr-1 inline h-3 w-3" />
+          {onlineTenantIds.has(t.id) ? "En ligne" : "Hors ligne"}
+        </Badge>
+      ),
+    },
     { key: "createdAt", header: "Créée le", accessor: (t) => t.createdAt ?? "", render: (t) => formatDate(t.createdAt) },
     {
       key: "actions",

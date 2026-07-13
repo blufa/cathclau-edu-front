@@ -32,13 +32,6 @@ import { ESTABLISHMENT_TYPES, type EstablishmentType } from "@/lib/types/platfor
 const COUNTRIES = ["Guinée", "Sénégal", "Côte d'Ivoire", "Mali", "Burkina Faso", "Bénin", "Togo"];
 const RESEND_COOLDOWN = 60;
 
-// Opérateurs du numéro marchand de reversement (Mobile Money).
-const PAYOUT_OPERATORS = [
-  { value: "ORANGE_MONEY", label: "Orange Money" },
-  { value: "MTN_MONEY", label: "MTN MoMo" },
-  { value: "WAVE", label: "Wave" },
-];
-
 type SlugState = "idle" | "checking" | "available" | "taken";
 
 interface FormValues {
@@ -48,8 +41,6 @@ interface FormValues {
   pays: string;
   typesEtablissement: EstablishmentType[];
   directeur: string;
-  numeroMarchand: string;
-  operateurMarchand: string;
   prenomAdmin: string;
   nomAdmin: string;
   username: string;
@@ -80,7 +71,6 @@ export function SignupForm() {
     initialValues: {
       nomEcole: "", slug: "", ville: "", pays: "Guinée",
       typesEtablissement: ["PRIMAIRE"], directeur: "",
-      numeroMarchand: "", operateurMarchand: "ORANGE_MONEY",
       prenomAdmin: "", nomAdmin: "", username: "", telephoneAdmin: "",
       emailDirecteur: "", password: "", confirm: "", cgu: false,
     },
@@ -150,8 +140,6 @@ export function SignupForm() {
         ville: values.ville || undefined,
         pays: values.pays || undefined,
         typesEtablissement: values.typesEtablissement,
-        numeroMarchand: values.numeroMarchand.trim() || undefined,
-        operateurMarchand: values.numeroMarchand.trim() ? values.operateurMarchand : undefined,
         planSouhaite: plan,
         prenomAdmin: values.prenomAdmin,
         nomAdmin: values.nomAdmin,
@@ -224,16 +212,6 @@ export function SignupForm() {
                 {...form.getInputProps("typesEtablissement")}
               />
               <TextInput label="Nom du directeur (optionnel)" {...form.getInputProps("directeur")} />
-              <Group grow align="flex-end">
-                <TextInput
-                  label="Numéro marchand (optionnel)"
-                  description="Compte Mobile Money où vous recevrez vos encaissements — modifiable plus tard"
-                  placeholder="Ex. 620 00 00 00"
-                  inputMode="tel"
-                  {...form.getInputProps("numeroMarchand")}
-                />
-                <Select label="Opérateur" data={PAYOUT_OPERATORS} {...form.getInputProps("operateurMarchand")} />
-              </Group>
             </Stack>
           </Stepper.Step>
 

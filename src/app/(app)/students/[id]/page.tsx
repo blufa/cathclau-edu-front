@@ -326,7 +326,7 @@ export default function StudentDetailPage() {
               { label: "Bulletins", href: `/report-cards?student=${id}` },
               { label: "Factures de l'élève", href: `/invoices?student=${id}` },
             ].map((l) => (
-              <CardSpotlight key={l.href} className="transition hover:-translate-y-0.5 hover:shadow-lg">
+              <CardSpotlight key={l.href} className="transition hover:-translate-y-0.5 hover:shadow-sm">
                 <Link href={l.href} className="group block p-5">
                   <GraduationCap className="h-6 w-6 text-brand-600" strokeWidth={1.6} />
                   <p className="mt-3 text-sm font-semibold text-slate-900 group-hover:text-brand-700">

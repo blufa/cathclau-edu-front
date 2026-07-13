@@ -16,7 +16,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatCardSkeleton, CardSkeleton } from "@/components/ui/skeleton";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AreaTrendChart } from "@/components/charts/area-trend-chart";
+import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { formatGNF } from "@/lib/format";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
@@ -151,7 +151,7 @@ export default function ReportsPage() {
               <CardSkeleton />
             ) : (
               <>
-                <AreaTrendChart
+                <BarTrendChart
                   data={projectionData}
                   series={[
                     { key: "Encaissements", name: "Encaissements attendus", color: "#10b981" },
