@@ -16,8 +16,8 @@ import { CardSkeleton, StatCardSkeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { AreaTrendChart } from "@/components/charts/area-trend-chart";
-import { DonutChart, type DonutSlice } from "@/components/charts/donut-chart";
+import { BarTrendChart } from "@/components/charts/bar-trend-chart";
+import { BarBreakdownChart, type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
 import { SubscriptionStatusBadge } from "@/components/platform/status-badge";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { PendingSubscriptionBanner } from "@/components/platform/pending-subscription-banner";
@@ -51,7 +51,7 @@ function billingByMonth(invoices: Invoice[]) {
   }));
 }
 
-function statusBreakdown(invoices: Invoice[]): DonutSlice[] {
+function statusBreakdown(invoices: Invoice[]): BreakdownItem[] {
   const counts = new Map<string, number>();
   for (const i of invoices) counts.set(i.status, (counts.get(i.status) ?? 0) + 1);
   return [...counts.entries()].map(([status, value]) => ({
@@ -188,7 +188,7 @@ export default function DashboardPage() {
                   {monthly.length === 0 ? (
                     <p className="py-10 text-center text-sm text-slate-400">Pas encore de factures de frais émises.</p>
                   ) : (
-                    <AreaTrendChart data={monthly} valueFormatter={(v) => formatGNF(v)}
+                    <BarTrendChart data={monthly} valueFormatter={(v) => formatGNF(v)}
                       series={[{ key: "Émis", name: "Émis", color: "#6366f1" }, { key: "Encaissé", name: "Encaissé", color: "#14b8a6" }]} />
                   )}
                 </CardBody>
@@ -197,7 +197,7 @@ export default function DashboardPage() {
                 <CardHeader><CardTitle>Statut des factures élèves</CardTitle></CardHeader>
                 <CardBody>
                   {breakdown.length === 0 ? <p className="py-10 text-center text-sm text-slate-400">Aucune facture.</p>
-                    : <DonutChart data={breakdown} centerLabel="factures" />}
+                    : <BarBreakdownChart data={breakdown} centerLabel="factures" />}
                 </CardBody>
               </Card>
             </div>

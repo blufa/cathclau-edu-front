@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ScrollArea, Tooltip } from "@mantine/core";
-import { ChevronDown, Lock, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronDown, Lock, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import { NAVIGATION, type NavItem, type NavSection } from "@/config/navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -18,6 +18,9 @@ interface SidebarProps {
   compact?: boolean;
   onToggleCompact?: () => void;
 }
+
+/** Couleur d'accent d'une section : "violet" pour l'Administration (mise en avant), "brand" ailleurs. */
+type Accent = "brand" | "violet";
 
 export function Sidebar({ onNavigate, compact = false, onToggleCompact }: SidebarProps) {
   const { user } = useAuth();
@@ -115,10 +118,15 @@ function SidebarSection({
   isDisabled: (item: NavItem) => boolean;
   onNavigate?: () => void;
 }) {
+  // Section « Administration » : accès sensible (utilisateurs, rôles, paramètres…), mise en avant
+  // avec un habillage violet et toujours ouverte par défaut pour qu'elle saute aux yeux dans la liste.
+  const isAdmin = section.title === "Administration";
+  const accent: Accent = isAdmin ? "violet" : "brand";
+
   // Seule la section active est ouverte par défaut (moins de menus visibles d'un coup) ; les autres
   // sont repliées et dépliables à la demande. Une section s'ouvre automatiquement quand on y navigue.
   const sectionActive = section.items.some((it) => isItemActive(it));
-  const [open, setOpen] = useState(sectionActive);
+  const [open, setOpen] = useState(sectionActive || isAdmin);
   const [prevActive, setPrevActive] = useState(sectionActive);
   if (sectionActive !== prevActive) {
     setPrevActive(sectionActive);
@@ -132,6 +140,7 @@ function SidebarSection({
           key={item.label}
           item={item}
           compact={compact}
+          accent={accent}
           disabled={isDisabled(item)}
           isDisabled={isDisabled}
           isActive={isActive}
@@ -142,16 +151,28 @@ function SidebarSection({
     </div>
   );
 
-  if (compact) return <div className="pb-1">{items}</div>;
+  if (compact) {
+    return (
+      <div className={cn("rounded-xl pb-1", isAdmin && "bg-violet-50 py-1 ring-1 ring-violet-200")}>
+        {items}
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className={cn(isAdmin && "rounded-xl border-2 border-violet-200 bg-gradient-to-b from-violet-50 to-white p-1.5 shadow-sm")}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between rounded-lg px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:text-slate-600"
+        className={cn(
+          "flex w-full items-center justify-between rounded-lg px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+          isAdmin ? "text-violet-700 hover:text-violet-900" : "text-slate-400 hover:text-slate-600",
+        )}
       >
-        <span>{section.title}</span>
+        <span className="flex items-center gap-1.5">
+          {isAdmin && <ShieldCheck className="h-3.5 w-3.5" />}
+          {section.title}
+        </span>
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
       </button>
       {open && items}
@@ -162,6 +183,7 @@ function SidebarSection({
 function SidebarNode({
   item,
   compact,
+  accent,
   disabled = false,
   isDisabled,
   isActive,
@@ -170,6 +192,7 @@ function SidebarNode({
 }: {
   item: NavItem;
   compact: boolean;
+  accent: Accent;
   disabled?: boolean;
   isDisabled: (item: NavItem) => boolean;
   isActive: (href?: string) => boolean;
@@ -180,6 +203,7 @@ function SidebarNode({
   const active = isItemActive(item);
   const hasChildren = !!item.children?.length;
   const [open, setOpen] = useState(active);
+  const violet = accent === "violet";
 
   // Module not available (e.g. trial ended): render a greyed, non-clickable entry.
   if (disabled && !hasChildren) {
@@ -191,7 +215,7 @@ function SidebarNode({
     if (compact) {
       const firstHref = item.children!.find((c) => c.href)?.href ?? "#";
       return (
-        <IconLink href={firstHref} label={item.label} Icon={Icon} active={active} onNavigate={onNavigate} compact />
+        <IconLink href={firstHref} label={item.label} Icon={Icon} active={active} accent={accent} onNavigate={onNavigate} compact />
       );
     }
     return (
@@ -201,10 +225,17 @@ function SidebarNode({
           onClick={() => setOpen((o) => !o)}
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            active
+              ? violet ? "bg-violet-100 text-violet-700" : "bg-brand-50 text-brand-700"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
           )}
         >
-          {Icon && <Icon className={cn("h-[18px] w-[18px] shrink-0", active ? "text-brand-600" : "text-slate-400")} strokeWidth={1.8} />}
+          {Icon && (
+            <Icon
+              className={cn("h-[18px] w-[18px] shrink-0", active ? (violet ? "text-violet-600" : "text-brand-600") : "text-slate-400")}
+              strokeWidth={1.8}
+            />
+          )}
           <span className="flex-1 text-left">{item.label}</span>
           <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
         </button>
@@ -223,7 +254,7 @@ function SidebarNode({
                   className={cn(
                     "block rounded-lg px-3 py-1.5 text-sm transition-colors",
                     isActive(child.href)
-                      ? "bg-brand-50 font-medium text-brand-700"
+                      ? violet ? "bg-violet-100 font-medium text-violet-700" : "bg-brand-50 font-medium text-brand-700"
                       : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
                   )}
                 >
@@ -239,7 +270,7 @@ function SidebarNode({
 
   // Leaf item.
   return (
-    <IconLink href={item.href ?? "#"} label={item.label} Icon={Icon} active={active} onNavigate={onNavigate} compact={compact} />
+    <IconLink href={item.href ?? "#"} label={item.label} Icon={Icon} active={active} accent={accent} onNavigate={onNavigate} compact={compact} />
   );
 }
 
@@ -248,6 +279,7 @@ function IconLink({
   label,
   Icon,
   active,
+  accent,
   onNavigate,
   compact,
 }: {
@@ -255,9 +287,11 @@ function IconLink({
   label: string;
   Icon?: NavItem["icon"];
   active: boolean;
+  accent: Accent;
   onNavigate?: () => void;
   compact: boolean;
 }) {
+  const violet = accent === "violet";
   const content = (
     <Link
       href={href}
@@ -266,7 +300,9 @@ function IconLink({
         "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         compact && "justify-center px-0",
         active
-          ? "bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-sm shadow-brand-600/20"
+          ? violet
+            ? "bg-gradient-to-r from-violet-500 to-violet-600 text-white shadow-sm shadow-violet-600/20"
+            : "bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-sm shadow-brand-600/20"
           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
       )}
     >

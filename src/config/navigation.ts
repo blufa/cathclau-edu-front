@@ -173,6 +173,7 @@ export const NAVIGATION: NavSection[] = [
     items: [
       { label: "Tableau de bord", href: "/platform/dashboard", icon: Gauge, roles: ["SUPER_ADMIN"] },
       { label: "Écoles", href: "/platform/tenants", icon: Building2, roles: ["SUPER_ADMIN"] },
+      { label: "Utilisateurs", href: "/platform/users", icon: Users, roles: ["SUPER_ADMIN"] },
       { label: "Abonnements", href: "/platform/subscriptions", icon: CreditCard, roles: ["SUPER_ADMIN"] },
       { label: "Plans", href: "/platform/plans", icon: Layers, roles: ["SUPER_ADMIN"] },
     ],

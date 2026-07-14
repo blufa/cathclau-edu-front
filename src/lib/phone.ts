@@ -84,6 +84,20 @@ export function capNational(country: CountryCode, national: string): string {
   return d;
 }
 
+/**
+ * Repère visuel du format attendu (ex. GN → « 000 00 00 00 ») affiché tant que le champ est vide,
+ * pour que le format du numéro apparaisse dès le choix du pays — sans attendre la première saisie.
+ */
+export function placeholderNational(country: CountryCode): string {
+  let d = "";
+  for (let i = 0; i < 15; i++) {
+    const next = d + "0";
+    if (validatePhoneNumberLength(next, country) === "TOO_LONG") break;
+    d = next;
+  }
+  return d ? new AsYouType(country).input(d) : "";
+}
+
 /** Numéro local + pays → E.164 (`+<indicatif><national>`) ; chaîne vide si le local est vide. */
 export function toE164(country: CountryCode, national: string): string {
   const d = digitsOnly(national);

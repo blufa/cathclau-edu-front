@@ -13,7 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
+import { BarBreakdownChart } from "@/components/charts/bar-breakdown-chart";
 import { formatGNF } from "@/lib/format";
+
+/** Palette vive (une couleur par barre) pour que chaque catégorie se distingue au premier coup d'œil. */
+const PALETTE = ["#6366f1", "#14b8a6", "#f59e0b", "#f43f5e", "#8b5cf6", "#0ea5e9", "#84cc16"];
 
 export default function PlatformDashboardPage() {
   return (
@@ -102,13 +106,11 @@ function DashboardContent({ d }: { d: PlatformDashboard }) {
           <BreakdownCard
             title="Par statut"
             data={d.subscriptionsByStatus}
-            total={d.totalSubscriptions}
             label={(k) => SUBSCRIPTION_STATUS_LABEL[k as SubscriptionStatus] ?? k}
           />
           <BreakdownCard
             title="Par plan"
             data={d.subscriptionsByPlan}
-            total={d.totalSubscriptions}
             label={(k) => k}
           />
         </div>
@@ -163,31 +165,17 @@ function SmsBalanceCard() {
 }
 
 function BreakdownCard({
-  title, data, total, label,
-}: { title: string; data: Record<string, number>; total: number; label: (key: string) => string }) {
+  title, data, label,
+}: { title: string; data: Record<string, number>; label: (key: string) => string }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const items = entries.map(([key, value], i) => ({ name: label(key), value, color: PALETTE[i % PALETTE.length] }));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5">
       <h2 className="mb-4 text-sm font-semibold text-slate-700">{title}</h2>
       {entries.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-400">Aucune donnée.</p>
       ) : (
-        <ul className="space-y-3">
-          {entries.map(([key, count]) => {
-            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-            return (
-              <li key={key}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-slate-700">{label(key)}</span>
-                  <span className="font-medium text-slate-900">{count} <span className="text-xs text-slate-400">({pct}%)</span></span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-700" style={{ width: `${pct}%` }} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <BarBreakdownChart data={items} />
       )}
     </div>
   );

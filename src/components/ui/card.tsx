@@ -15,8 +15,8 @@ export function Card({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ring-1 ring-slate-900/[0.02]",
-        hover && "transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lg",
+        "overflow-hidden rounded-2xl border border-slate-200/80 bg-white ring-1 ring-slate-900/[0.02]",
+        hover && "transition duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-sm",
         className,
       )}
       {...props}
