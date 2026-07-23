@@ -1,10 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { Alert } from "@mantine/core";
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/providers/subscription-provider";
 import { daysUntil } from "@/lib/platform-utils";
+import { cn } from "@/lib/utils";
+
+type AlertTone = "info" | "danger" | "warning" | "caution";
+
+const TONE: Record<AlertTone, string> = {
+  info: "border-info-200 bg-info-50 text-info-800",
+  danger: "border-error-200 bg-error-600 text-white",
+  warning: "border-warning-200 bg-warning-50 text-warning-800",
+  caution: "border-warning-300 bg-warning-50 text-warning-900",
+};
+
+function Alert({ tone, title, children }: { tone: AlertTone; title: string; children: React.ReactNode }) {
+  return (
+    <div className={cn("mb-4 rounded-xl border px-4 py-3 text-sm", TONE[tone])}>
+      <p className="mb-1 font-semibold">{title}</p>
+      {children}
+    </div>
+  );
+}
 
 /**
  * Contextual banner shown across the connected app, driven by the current subscription
@@ -26,7 +44,7 @@ export function SubscriptionBanner() {
   const noPaidSub = !subscription || subscription.status === "PENDING";
   if (noPaidSub && tenantStatus === "TRIAL") {
     return (
-      <Alert color="blue" variant="light" mb="md" title="Période d'essai">
+      <Alert tone="info" title="Période d'essai">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>Profitez de votre essai gratuit. Choisissez un plan pour continuer sans interruption.</span>
           {cta("Voir les plans", "/subscription")}
@@ -39,7 +57,7 @@ export function SubscriptionBanner() {
 
   if (subscription.status === "SUSPENDED") {
     return (
-      <Alert color="red" variant="filled" mb="md" title="Accès suspendu">
+      <Alert tone="danger" title="Accès suspendu">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>Votre accès est suspendu (paiement en attente). Régularisez pour rétablir le service.</span>
           {cta("Régulariser", "/subscription/invoices")}
@@ -50,7 +68,7 @@ export function SubscriptionBanner() {
 
   if (subscription.status === "EXPIRED" || subscription.status === "CANCELLED") {
     return (
-      <Alert color="orange" variant="light" mb="md" title="Abonnement expiré">
+      <Alert tone="caution" title="Abonnement expiré">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>Votre abonnement a pris fin. Souscrivez à nouveau pour continuer.</span>
           {cta("Souscrire", "/subscription")}
@@ -63,7 +81,7 @@ export function SubscriptionBanner() {
   const left = daysUntil(subscription.endDate);
   if (left > 0 && left <= 7) {
     return (
-      <Alert color="yellow" variant="light" mb="md" title="Renouvellement proche">
+      <Alert tone="warning" title="Renouvellement proche">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span>Votre abonnement se termine dans {left} jour{left > 1 ? "s" : ""}.</span>
           {cta("Gérer l'abonnement", "/subscription")}

@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Group, NumberInput, Stack, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input, Label, Field } from "@/components/ui/input";
 import { useQuery } from "@/hooks/use-query";
 import { createLevel, deleteLevel, listLevels, updateLevel } from "@/lib/api/academics";
 import type { Niveau } from "@/lib/types/academics";
@@ -11,6 +14,12 @@ import { Modal } from "@/components/ui/modal";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { LevelCatalogPicker } from "@/components/referentials/level-catalog";
+
+const levelSchema = z.object({
+  label: z.string().trim().min(1, "Libellé requis"),
+  sortOrder: z.union([z.number(), z.literal("")]),
+});
+type LevelFormValues = z.infer<typeof levelSchema>;
 
 function LevelForm({
   initial,
@@ -22,37 +31,41 @@ function LevelForm({
   onCancel: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
-  const form = useForm({
-    mode: "uncontrolled",
-    initialValues: { label: initial?.label ?? "", sortOrder: initial?.sortOrder ?? 0 },
-    validate: { label: (v) => (v.trim() ? null : "Libellé requis") },
+  const { handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<LevelFormValues>({
+    resolver: zodResolver(levelSchema),
+    defaultValues: { label: initial?.label ?? "", sortOrder: initial?.sortOrder ?? 0 },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: { label: string; sortOrder: number }) {
+  async function submit(values: LevelFormValues) {
     setSubmitting(true);
     try {
-      await onSubmit(values.label, Number(values.sortOrder));
+      await onSubmit(values.label, values.sortOrder === "" ? 0 : Number(values.sortOrder));
     } catch (err) {
-      if (err instanceof ApiError) form.setErrors(err.fieldErrors);
+      if (err instanceof ApiError) {
+        for (const [field, message] of Object.entries(err.fieldErrors)) setError(field as keyof LevelFormValues, { message });
+      }
       notifyError(err);
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk placeholder="6ème" {...form.getInputProps("label")} key={form.key("label")} />
-        <NumberInput label="Ordre" min={0} allowDecimal={false} {...form.getInputProps("sortOrder")} key={form.key("sortOrder")} />
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={submitting}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={submitting}>
-            Enregistrer
-          </Button>
-        </Group>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <Input placeholder="6ème" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+        {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+      </Field>
+      <Field>
+        <Label>Ordre</Label>
+        <Input type="number" min={0} value={v.sortOrder} onChange={(e) => setValue("sortOrder", e.target.value === "" ? "" : Number(e.target.value))} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+        <Button type="submit" loading={submitting}>Enregistrer</Button>
+      </div>
     </form>
   );
 }
@@ -96,14 +109,12 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
   }
 
   return (
-    <Stack gap="md">
+    <div className="space-y-4">
       {canWrite && (
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={() => setCatalogOpen(true)}>
-            Catalogue
-          </Button>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setCatalogOpen(true)}>Catalogue</Button>
           <Button onClick={() => setCreating(true)}>Nouveau niveau</Button>
-        </Group>
+        </div>
       )}
       <Table>
         <THead>
@@ -127,14 +138,10 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
               <TD className="font-medium">{l.label}</TD>
               <TD className="text-right">
                 {canWrite && (
-                  <Group justify="flex-end" gap="xs">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(l)}>
-                      Modifier
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(l)}>
-                      Suppr.
-                    </Button>
-                  </Group>
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(l)}>Modifier</Button>
+                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(l)}>Suppr.</Button>
+                  </div>
                 )}
               </TD>
             </TR>
@@ -161,6 +168,6 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
           />
         )}
       </Modal>
-    </Stack>
+    </div>
   );
 }

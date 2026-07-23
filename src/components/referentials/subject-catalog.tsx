@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Checkbox, Group, Stack, Text } from "@mantine/core";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { createSubject } from "@/lib/api/academics";
 import type { Matiere } from "@/lib/types/academics";
 import { notifyError, notifySuccess } from "@/lib/feedback";
@@ -55,16 +56,14 @@ export function SubjectCatalogPicker({
   }
 
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
         Cochez les matières à créer. Celles déjà présentes sont grisées. Le coefficient se définit
         ensuite à l&apos;affectation en classe et par évaluation.
-      </Text>
+      </p>
       {SUBJECT_CATALOG_BY_CYCLE.map((group) => (
         <div key={group.cycle}>
-          <Text fw={600} size="sm" mb={6}>
-            {group.cycle}
-          </Text>
+          <p className="mb-1.5 text-sm font-semibold text-gray-700">{group.cycle}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {group.subjects.map((label) => {
               const already = existingLabels.has(label.trim().toLowerCase());
@@ -81,14 +80,10 @@ export function SubjectCatalogPicker({
           </div>
         </div>
       ))}
-      <Group justify="flex-end" gap="sm">
-        <Button variant="default" onClick={onCancel} disabled={saving}>
-          Annuler
-        </Button>
-        <Button onClick={handleAdd} loading={saving} disabled={selected.size === 0}>
-          Ajouter la sélection
-        </Button>
-      </Group>
-    </Stack>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel} disabled={saving}>Annuler</Button>
+        <Button onClick={handleAdd} loading={saving} disabled={selected.size === 0}>Ajouter la sélection</Button>
+      </div>
+    </div>
   );
 }

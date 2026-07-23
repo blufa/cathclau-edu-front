@@ -1,6 +1,6 @@
 "use client";
 
-import { Tabs } from "@mantine/core";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Bus, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -11,21 +11,21 @@ import { SubscriptionsTab } from "@/components/transport/subscriptions-tab";
 export default function TransportPage() {
   const { user } = useAuth();
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY")) {
-    return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Réservé à l&apos;administration.</div>;
+    return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration.</div>;
   }
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Transport</h1>
-        <p className="text-sm text-slate-500">Lignes de bus, arrêts et abonnements des élèves</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Transport</h1>
+        <p className="text-sm text-gray-500">Lignes de bus, arrêts et abonnements des élèves</p>
       </Reveal>
-      <Tabs defaultValue="routes" color="brand" variant="pills" radius="md">
-        <Tabs.List>
-          <Tabs.Tab value="routes" leftSection={<Bus className="h-4 w-4" />}>Lignes</Tabs.Tab>
-          <Tabs.Tab value="subs" leftSection={<Users className="h-4 w-4" />}>Abonnements</Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value="routes" pt="lg"><RoutesTab /></Tabs.Panel>
-        <Tabs.Panel value="subs" pt="lg"><SubscriptionsTab /></Tabs.Panel>
+      <Tabs defaultValue="routes">
+        <TabsList>
+          <TabsTrigger value="routes" icon={Bus}>Lignes</TabsTrigger>
+          <TabsTrigger value="subs" icon={Users}>Abonnements</TabsTrigger>
+        </TabsList>
+        <TabsPanel value="routes"><RoutesTab /></TabsPanel>
+        <TabsPanel value="subs"><SubscriptionsTab /></TabsPanel>
       </Tabs>
     </div>
   );

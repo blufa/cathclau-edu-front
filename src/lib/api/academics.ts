@@ -67,10 +67,14 @@ export function getEnrollmentCount(id: number): Promise<EnrollmentCountInfo> {
 export function listClassSubjects(classId: number): Promise<ClasseMatiere[]> {
   return api.get<ClasseMatiere[]>(`/academics/classes/${classId}/subjects`);
 }
-export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number): Promise<ClasseMatiere> {
+export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number, code?: string): Promise<ClasseMatiere> {
   return api.post<ClasseMatiere>(`/academics/classes/${classId}/subjects`, undefined, {
-    query: { subjectId, teacherId, coefficient },
+    query: { subjectId, teacherId, coefficient, code },
   });
+}
+/** Codes déjà attribués pour cette matière (ex. CH1, CH2), toutes classes confondues — pour la grille horaire. */
+export function getTeacherCodesForSubject(subjectId: number): Promise<ClasseMatiere[]> {
+  return api.get<ClasseMatiere[]>(`/academics/subjects/${subjectId}/teacher-codes`);
 }
 /** Désigne (ou retire avec teacherId=null) le professeur principal de la classe. */
 export function setClassHeadTeacher(classId: number, teacherId: number | null): Promise<Classe> {

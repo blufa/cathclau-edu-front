@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MultiSelect } from "@mantine/core";
+import { useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { listSubjects } from "@/lib/api/academics";
 import { getAssignedSubjects, setAssignedSubjects } from "@/lib/api/staff";
 import type { Matiere } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Label } from "@/components/ui/input";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
-/** Affecte les matières enseignées par un enseignant (liste déroulante multi-sélection sur sa fiche). */
+/** Affecte les matières enseignées par un enseignant (checklist multi-sélection sur sa fiche). */
 export function TeacherSubjectsSection({ teacherId, canWrite }: { teacherId: number; canWrite: boolean }) {
   const subjectsQuery = useQuery(listSubjects, []);
   const assignedQuery = useQuery(() => getAssignedSubjects(teacherId), [teacherId]);
@@ -42,7 +42,10 @@ function SubjectPicker({
 }) {
   const [selected, setSelected] = useState<string[]>(initialSelected);
   const [saving, setSaving] = useState(false);
-  const options = useMemo(() => subjects.map((s) => ({ value: String(s.id), label: s.label })), [subjects]);
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
+  }
 
   async function save() {
     setSaving(true);
@@ -55,15 +58,20 @@ function SubjectPicker({
 
   return (
     <div className="space-y-3">
-      <MultiSelect
-        label="Matières enseignées"
-        placeholder="Sélectionner les matières"
-        searchable
-        data={options}
-        value={selected}
-        onChange={setSelected}
-        readOnly={!canWrite}
-      />
+      <Field>
+        <Label>Matières enseignées</Label>
+        <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+          {subjects.length === 0 && <p className="px-1 py-2 text-sm text-gray-400">Aucune matière.</p>}
+          {subjects.map((s) => (
+            <label key={s.id} className={`flex items-center gap-2 text-sm ${canWrite ? "cursor-pointer" : "opacity-60"}`}>
+              <input type="checkbox" disabled={!canWrite} checked={selected.includes(String(s.id))}
+                onChange={() => toggle(String(s.id))}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+              {s.label}
+            </label>
+          ))}
+        </div>
+      </Field>
       {canWrite && (
         <div className="flex justify-end">
           <Button onClick={save} loading={saving}>Enregistrer</Button>

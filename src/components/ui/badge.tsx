@@ -5,12 +5,12 @@ type Tone = "gray" | "green" | "amber" | "red" | "indigo" | "blue" | "brand";
 
 /** Soft status pill (clean admin style). Semantic tones stay fixed; `brand` follows the tenant colour. */
 const TONE: Record<Tone, string> = {
-  gray: "bg-slate-100 text-slate-600",
-  green: "bg-emerald-50 text-emerald-700",
-  amber: "bg-amber-50 text-amber-700",
-  red: "bg-red-50 text-red-700",
+  gray: "bg-gray-100 text-gray-700",
+  green: "bg-success-50 text-success-600",
+  amber: "bg-warning-50 text-warning-600",
+  red: "bg-error-50 text-error-600",
   indigo: "bg-indigo-50 text-indigo-700",
-  blue: "bg-sky-50 text-sky-700",
+  blue: "bg-info-50 text-info-700",
   brand: "bg-brand-50 text-brand-700",
 };
 

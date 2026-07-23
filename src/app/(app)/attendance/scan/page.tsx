@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Select as MantineSelect } from "@mantine/core";
 import { CheckCircle2, ScanLine, Video, VideoOff, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -13,6 +12,7 @@ import { ATTENDANCE_STATUS_LABEL, type AttendanceStatus } from "@/lib/types/atte
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Reveal } from "@/components/public/reveal";
 import { matriculeFromQr } from "@/lib/identity-qr";
 import { notifyError } from "@/lib/feedback";
@@ -73,12 +73,15 @@ export default function AttendanceScanPage() {
 
   // Manual / teacher fallback
   const [subjectType, setSubjectType] = useState<ScanSubjectType>("STUDENT");
-  const [manualId, setManualId] = useState<string | null>(null);
+  const [manualId, setManualId] = useState("");
   const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
   const teachersQuery = useQuery(listTeachers, []);
-  const manualOptions = useMemo(() => {
+  const manualOptions: SearchableOption[] = useMemo(() => {
     const src = subjectType === "STUDENT" ? (studentsQuery.data ?? []) : (teachersQuery.data ?? []);
-    return src.map((p) => ({ value: String(p.id), label: `${p.firstName} ${p.lastName}` }));
+    return src.map((p) => {
+      const label = `${p.firstName} ${p.lastName}`;
+      return { value: String(p.id), trigger: label, label, searchText: label };
+    });
   }, [subjectType, studentsQuery.data, teachersQuery.data]);
 
   const submit = useCallback(async (type: ScanSubjectType, subjectId: number, st: AttendanceStatus) => {
@@ -157,25 +160,25 @@ export default function AttendanceScanPage() {
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
-  if (!canScan) return <p className="rounded-xl bg-red-50 px-4 py-6 text-sm text-red-700">Accès non autorisé.</p>;
+  if (!canScan) return <p className="rounded-xl bg-error-50 px-4 py-6 text-sm text-error-700">Accès non autorisé.</p>;
 
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <ScanLine className="h-6 w-6 text-brand-600" /> Pointage par scan de carte
         </h1>
-        <p className="text-sm text-slate-500">Présentez la carte scolaire devant la caméra (téléphone ou ordinateur). Élèves et enseignants.</p>
+        <p className="text-sm text-gray-500">Présentez la carte scolaire devant la caméra (téléphone ou ordinateur). Élèves et enseignants.</p>
       </Reveal>
 
       {/* Status selector — applies to every scan */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-slate-600">Statut à appliquer :</span>
+        <span className="text-sm font-medium text-gray-600">Statut à appliquer :</span>
         {(["PRESENT", "ABSENT", "LATE"] as AttendanceStatus[]).map((s) => (
           <button key={s} type="button" onClick={() => setStatus(s)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${status === s
-              ? s === "PRESENT" ? "bg-emerald-600 text-white" : s === "ABSENT" ? "bg-red-600 text-white" : "bg-amber-500 text-white"
-              : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+              ? s === "PRESENT" ? "bg-success-600 text-white" : s === "ABSENT" ? "bg-error-600 text-white" : "bg-warning-500 text-white"
+              : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
             {ATTENDANCE_STATUS_LABEL[s]}
           </button>
         ))}
@@ -184,64 +187,66 @@ export default function AttendanceScanPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardBody className="space-y-3">
-            <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
+            <div className="relative aspect-video overflow-hidden rounded-xl bg-gray-900">
               <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
               {streaming && <div className="pointer-events-none absolute inset-x-10 inset-y-8 rounded-xl border-2 border-brand-400/70" />}
               {!streaming && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-400">
                   <VideoOff className="h-8 w-8" /><span className="text-sm">Caméra éteinte</span>
                 </div>
               )}
             </div>
-            {!supported && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Ce navigateur ne décode pas les QR nativement — utilisez la sélection manuelle ci-contre (ou Chrome/Android, Safari iOS 17+).</p>}
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+            {!supported && <p className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800">Ce navigateur ne décode pas les QR nativement — utilisez la sélection manuelle ci-contre (ou Chrome/Android, Safari iOS 17+).</p>}
+            {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700">{error}</p>}
             <div className="flex gap-2">
               {!streaming ? (
                 <Button onClick={startCamera} leftSection={<Video className="h-4 w-4" />}>Démarrer le scan</Button>
               ) : (
-                <Button variant="ghost" className="text-red-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Arrêter</Button>
+                <Button variant="ghost" className="text-error-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Arrêter</Button>
               )}
             </div>
-            <p className="text-xs text-slate-400">Le statut sélectionné ci-dessus est appliqué à chaque carte scannée. Un re-scan corrige le statut du jour.</p>
+            <p className="text-xs text-gray-400">Le statut sélectionné ci-dessus est appliqué à chaque carte scannée. Un re-scan corrige le statut du jour.</p>
           </CardBody>
         </Card>
 
         <Card>
           <CardBody className="space-y-4">
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-700">Pointage manuel</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">Pointage manuel</h3>
               <div className="mb-2 flex gap-2">
                 {(["STUDENT", "TEACHER"] as ScanSubjectType[]).map((t) => (
-                  <button key={t} type="button" onClick={() => { setSubjectType(t); setManualId(null); }}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${subjectType === t ? "bg-brand-600 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                  <button key={t} type="button" onClick={() => { setSubjectType(t); setManualId(""); }}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${subjectType === t ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
                     {t === "STUDENT" ? "Élève" : "Enseignant / Direction"}
                   </button>
                 ))}
               </div>
-              <MantineSelect placeholder={subjectType === "STUDENT" ? "Rechercher un élève" : "Rechercher un enseignant / membre de la direction"} searchable
-                data={manualOptions} value={manualId} onChange={setManualId} />
+              <SearchableSelect
+                noResultsLabel={subjectType === "STUDENT" ? "Aucun élève" : "Aucun enseignant"}
+                options={manualOptions} value={manualId} onChange={setManualId}
+                triggerClassName="w-full justify-between px-3" />
               <Button className="mt-2" disabled={!manualId}
-                onClick={() => { if (manualId) submit(subjectType, Number(manualId), status); setManualId(null); }}>
+                onClick={() => { if (manualId) submit(subjectType, Number(manualId), status); setManualId(""); }}>
                 Pointer ({ATTENDANCE_STATUS_LABEL[status]})
               </Button>
-              {subjectType === "TEACHER" && <p className="mt-1 text-xs text-slate-400">Enseignant / direction : présent / absent (le retard est compté présent côté RH). Le personnel de direction doit être enregistré comme membre du staff.</p>}
+              {subjectType === "TEACHER" && <p className="mt-1 text-xs text-gray-400">Enseignant / direction : présent / absent (le retard est compté présent côté RH). Le personnel de direction doit être enregistré comme membre du staff.</p>}
             </div>
 
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-700">Pointages récents</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">Pointages récents</h3>
               {feed.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-400">Aucun pointage pour l&apos;instant.</p>
+                <p className="py-4 text-center text-sm text-gray-400">Aucun pointage pour l&apos;instant.</p>
               ) : (
                 <ul className="space-y-1.5">
                   {feed.map((f) => (
-                    <li key={f.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                    <li key={f.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                       <span className="flex items-center gap-2 text-sm">
-                        {f.ok ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-                        <span className="font-medium text-slate-800">{f.name}</span>
+                        {f.ok ? <CheckCircle2 className="h-4 w-4 text-success-600" /> : <XCircle className="h-4 w-4 text-error-600" />}
+                        <span className="font-medium text-gray-800">{f.name}</span>
                       </span>
                       <span className="flex items-center gap-2">
                         <Badge tone={STATUS_TONE[f.status]}>{ATTENDANCE_STATUS_LABEL[f.status]}</Badge>
-                        <span className="text-xs text-slate-400">{f.at}</span>
+                        <span className="text-xs text-gray-400">{f.at}</span>
                       </span>
                     </li>
                   ))}

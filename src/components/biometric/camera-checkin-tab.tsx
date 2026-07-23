@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Select as MantineSelect } from "@mantine/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, RefreshCw, SwitchCamera, Video, VideoOff } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { listDevices, listEnrollments, recordPunch } from "@/lib/api/biometric";
@@ -10,6 +9,8 @@ import { useDirectory } from "@/components/biometric/use-directory";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Label } from "@/components/ui/input";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /**
@@ -27,8 +28,8 @@ export function CameraCheckinTab() {
   const [streaming, setStreaming] = useState(false);
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [snapshot, setSnapshot] = useState<string | null>(null);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
-  const [externalUserId, setExternalUserId] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState("");
+  const [externalUserId, setExternalUserId] = useState("");
   const [direction, setDirection] = useState<PunchDirection>("IN");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,31 +86,38 @@ export function CameraCheckinTab() {
       });
       notifySuccess("Pointage enregistré");
       setSnapshot(null);
-      setExternalUserId(null);
+      setExternalUserId("");
     } catch (err) { notifyError(err); } finally { setSubmitting(false); }
   }
 
-  const devices = devicesQuery.data ?? [];
-  const enrollments = enrollmentsQuery.data ?? [];
-  const personOptions = enrollments.map((e) => ({
-    value: e.externalUserId,
-    label: `${name.get(`${e.subjectType}-${e.subjectId}`) ?? e.externalUserId} (${e.externalUserId})`,
-  }));
+  const devices = useMemo(() => devicesQuery.data ?? [], [devicesQuery.data]);
+  const enrollments = useMemo(() => enrollmentsQuery.data ?? [], [enrollmentsQuery.data]);
+  const deviceOptions: SearchableOption[] = useMemo(
+    () => devices.map((d) => ({ value: String(d.id), trigger: d.name, label: d.name, searchText: d.name })),
+    [devices],
+  );
+  const personOptions: SearchableOption[] = useMemo(
+    () => enrollments.map((e) => {
+      const label = `${name.get(`${e.subjectType}-${e.subjectId}`) ?? e.externalUserId} (${e.externalUserId})`;
+      return { value: e.externalUserId, trigger: label, label, searchText: label };
+    }),
+    [enrollments, name],
+  );
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Card>
         <CardBody className="space-y-3">
-          <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
+          <div className="relative aspect-video overflow-hidden rounded-xl bg-gray-900">
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
             {!streaming && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-400">
                 <VideoOff className="h-8 w-8" />
                 <span className="text-sm">Caméra éteinte</span>
               </div>
             )}
           </div>
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700">{error}</p>}
           <div className="flex flex-wrap gap-2">
             {!streaming ? (
               <Button size="sm" onClick={() => startCamera(facing)} leftSection={<Video className="h-4 w-4" />}>Démarrer la caméra</Button>
@@ -120,11 +128,11 @@ export function CameraCheckinTab() {
                   onClick={() => { const next = facing === "user" ? "environment" : "user"; setFacing(next); startCamera(next); }}>
                   Avant / arrière
                 </Button>
-                <Button size="sm" variant="ghost" className="text-red-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Éteindre</Button>
+                <Button size="sm" variant="ghost" className="text-error-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Éteindre</Button>
               </>
             )}
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-gray-400">
             La caméra utilisée est celle de l&apos;appareil ouvrant la page : webcam sur ordinateur, caméra avant/arrière sur téléphone.
           </p>
         </CardBody>
@@ -132,24 +140,28 @@ export function CameraCheckinTab() {
 
       <Card>
         <CardBody className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-700">Enregistrer le pointage</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Enregistrer le pointage</h3>
           {devicesQuery.loading || enrollmentsQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
             <>
               {devices.length === 0 && (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800">
                   Aucun appareil. Créez un appareil (onglet « Appareils », ex. « Caméra Web ») pour rattacher les pointages.
                 </p>
               )}
-              <MantineSelect label="Appareil de pointage" placeholder="Choisir" data={devices.map((d) => ({ value: String(d.id), label: d.name }))}
-                value={deviceId} onChange={setDeviceId} />
-              <MantineSelect label="Personne (enrôlée)" placeholder="Rechercher" searchable data={personOptions}
-                value={externalUserId} onChange={setExternalUserId} nothingFoundMessage="Aucun enrôlement — enrôlez d'abord la personne" />
+              <Field>
+                <Label>Appareil de pointage</Label>
+                <SearchableSelect value={deviceId} options={deviceOptions} onChange={setDeviceId} triggerClassName="w-full justify-between px-3" />
+              </Field>
+              <Field>
+                <Label>Personne (enrôlée)</Label>
+                <SearchableSelect value={externalUserId} options={personOptions} onChange={setExternalUserId} triggerClassName="w-full justify-between px-3" noResultsLabel="Aucun enrôlement — enrôlez d'abord la personne" />
+              </Field>
               <div>
-                <p className="mb-1 text-sm font-medium text-slate-600">Sens</p>
+                <p className="mb-1 text-sm font-medium text-gray-600">Sens</p>
                 <div className="flex gap-2">
                   {(["IN", "OUT"] as PunchDirection[]).map((d) => (
                     <button key={d} type="button" onClick={() => setDirection(d)}
-                      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${direction === d ? "bg-brand-600 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${direction === d ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
                       {d === "IN" ? "Entrée" : "Sortie"}
                     </button>
                   ))}
@@ -158,9 +170,9 @@ export function CameraCheckinTab() {
 
               {snapshot ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={snapshot} alt="Capture" className="aspect-video w-full rounded-xl border border-slate-200 object-cover" />
+                <img src={snapshot} alt="Capture" className="aspect-video w-full rounded-xl border border-gray-200 object-cover" />
               ) : (
-                <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-dashed border-slate-200 text-sm text-slate-400">
+                <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-400">
                   Aucune capture — cliquez sur « Capturer »
                 </div>
               )}

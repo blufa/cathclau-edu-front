@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NumberInput, SimpleGrid, Stack } from "@mantine/core";
 import { getGradingScale, updateGradingScale } from "@/lib/api/grading";
 import type { GradingScaleInput } from "@/lib/types/grading";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label } from "@/components/ui/input";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const FIELDS: { key: keyof GradingScaleInput; label: string; hint?: string }[] = [
@@ -58,33 +58,28 @@ export function GradingScalePanel({ canWrite }: { canWrite: boolean }) {
   if (loading || !form) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   return (
-    <div className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-6">
-      <p className="mb-4 text-xs text-slate-400">
+    <div className="max-w-2xl rounded-2xl border border-gray-200 bg-white p-6">
+      <p className="mb-4 text-xs text-gray-400">
         Seuils (sur 20) déterminant les mentions et la décision d&apos;admission portées sur les bulletins.
       </p>
-      <Stack gap="md">
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-          {FIELDS.map((f) => (
-            <NumberInput
-              key={f.key}
-              label={f.label}
-              description={f.hint}
-              min={0}
-              max={20}
-              step={0.5}
-              decimalScale={2}
-              disabled={!canWrite}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {FIELDS.map((f) => (
+          <Field key={f.key}>
+            <Label>{f.label}</Label>
+            {f.hint && <p className="text-xs text-gray-400">{f.hint}</p>}
+            <Input
+              type="number" min={0} max={20} step={0.5} disabled={!canWrite}
               value={form[f.key]}
-              onChange={(v) => setForm((s) => (s ? { ...s, [f.key]: typeof v === "number" ? v : 0 } : s))}
+              onChange={(e) => setForm((s) => (s ? { ...s, [f.key]: Number(e.target.value) || 0 } : s))}
             />
-          ))}
-        </SimpleGrid>
-        {canWrite && (
-          <div className="flex justify-end">
-            <Button onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
-          </div>
-        )}
-      </Stack>
+          </Field>
+        ))}
+      </div>
+      {canWrite && (
+        <div className="mt-4 flex justify-end">
+          <Button onClick={save} loading={saving}>Enregistrer</Button>
+        </div>
+      )}
     </div>
   );
 }

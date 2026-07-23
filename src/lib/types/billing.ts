@@ -1,6 +1,6 @@
 /** Billing contracts mirrored from the backend billing module (school fees ↔ parents). */
 
-export type FeeType = "ENROLLMENT" | "RE_ENROLLMENT" | "MONTHLY" | "TRANSPORT" | "CANTEEN" | "EXAM";
+export type FeeType = "ENROLLMENT" | "RE_ENROLLMENT" | "MONTHLY" | "TRANSPORT" | "CANTEEN" | "EXAM" | "OTHER";
 
 export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   ENROLLMENT: "Inscription",
@@ -9,6 +9,7 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   TRANSPORT: "Transport",
   CANTEEN: "Cantine",
   EXAM: "Examen",
+  OTHER: "Autre (frais annexe)",
 };
 
 export interface SchoolFee {
@@ -18,6 +19,8 @@ export interface SchoolFee {
   type: FeeType;
   amount: string;
   academicYear: string | null;
+  /** Nom du frais quand type = OTHER (ex. "Tenue scolaire", "Bus de transport"). */
+  label: string | null;
 }
 
 export interface SchoolFeeInput {
@@ -26,6 +29,7 @@ export interface SchoolFeeInput {
   type: FeeType;
   amount: number;
   academicYear?: string | null;
+  label?: string | null;
 }
 
 export type InstallmentStatus = "PENDING" | "PAID" | "OVERDUE";

@@ -1,8 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Burger, Drawer, Group, Stack } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getBranding } from "@/lib/branding";
 
@@ -15,7 +15,8 @@ const NAV = [
 
 export function PublicHeader() {
   const branding = getBranding();
-  const [opened, { toggle, close }] = useDisclosure(false);
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm shadow-slate-900/[0.04] backdrop-blur">
@@ -43,7 +44,7 @@ export function PublicHeader() {
           <span className="text-lg font-semibold tracking-tight text-slate-900">{branding.appName}</span>
         </Link>
 
-        <Group gap="lg" visibleFrom="sm">
+        <div className="hidden items-center gap-6 sm:flex">
           {NAV.map((n) => (
             <Link key={n.href} href={n.href} className="text-sm font-medium text-gray-600 hover:text-gray-900">
               {n.label}
@@ -55,26 +56,45 @@ export function PublicHeader() {
           <Button component={Link} href="/signup" size="sm">
             Essai gratuit
           </Button>
-        </Group>
+        </div>
 
-        <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Menu" />
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Menu"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 sm:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
       </div>
 
-      <Drawer opened={opened} onClose={close} title="Menu" size="xs" position="right">
-        <Stack>
-          {NAV.map((n) => (
-            <Link key={n.href} href={n.href} onClick={close} className="text-sm font-medium text-gray-700">
-              {n.label}
-            </Link>
-          ))}
-          <Link href="/login" onClick={close} className="text-sm font-medium text-gray-700">
-            Connexion
-          </Link>
-          <Button component={Link} href="/signup" onClick={close} fullWidth>
-            Essai gratuit
-          </Button>
-        </Stack>
-      </Drawer>
+      {/* Mobile drawer */}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40 bg-gray-900/50 sm:hidden" onClick={close} />
+          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white p-6 shadow-xl sm:hidden">
+            <div className="mb-6 flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-900">Menu</span>
+              <button type="button" onClick={close} aria-label="Fermer" className="rounded-lg p-1 text-gray-500 hover:bg-gray-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-4">
+              {NAV.map((n) => (
+                <Link key={n.href} href={n.href} onClick={close} className="text-sm font-medium text-gray-700">
+                  {n.label}
+                </Link>
+              ))}
+              <Link href="/login" onClick={close} className="text-sm font-medium text-gray-700">
+                Connexion
+              </Link>
+              <Button component={Link} href="/signup" onClick={close} fullWidth>
+                Essai gratuit
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 }

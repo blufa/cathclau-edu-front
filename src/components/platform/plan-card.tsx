@@ -1,6 +1,8 @@
 "use client";
 
-import { Badge, Card, Group, List, Stack, Text, ThemeIcon, Title } from "@mantine/core";
+import { Check } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatGNF } from "@/lib/format";
 import { BILLING_PERIOD_LABEL } from "@/lib/platform-labels";
@@ -22,51 +24,48 @@ export function PlanCard({ plan, period, current, ctaLabel = "Choisir ce plan", 
   const price = planPrice(plan, period);
 
   return (
-    <Card
-      withBorder
-      radius="lg"
-      padding="lg"
-      shadow={popular ? "md" : "xs"}
-      style={popular ? { borderColor: "var(--mantine-color-indigo-5)", borderWidth: 2 } : undefined}
-    >
-      <Stack gap="sm" h="100%">
-        <Group justify="space-between" align="center">
-          <Title order={3}>{plan.name}</Title>
-          {current ? (
-            <Badge color="green" variant="light">Plan actuel</Badge>
-          ) : popular ? (
-            <Badge color="indigo" variant="filled">Populaire</Badge>
-          ) : null}
-        </Group>
+    <Card className={popular ? "flex h-full flex-col border-2 border-brand-500 p-6 shadow-md" : "flex h-full flex-col p-6"}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">{plan.name}</h3>
+        {current ? (
+          <Badge tone="green">Plan actuel</Badge>
+        ) : popular ? (
+          <Badge tone="indigo">Populaire</Badge>
+        ) : null}
+      </div>
 
-        <Text c="dimmed" size="sm">{studentLimitLabel(plan.studentLimit)}</Text>
+      <p className="mt-1 text-sm text-gray-500">{studentLimitLabel(plan.studentLimit)}</p>
 
-        <Group gap={6} align="baseline">
-          <Text fw={700} size="28px">{formatGNF(price)}</Text>
-          <Text c="dimmed" size="sm">/ {BILLING_PERIOD_LABEL[period].toLowerCase()}</Text>
-        </Group>
-        {plan.archived && <Badge color="gray" variant="light">Plan archivé</Badge>}
+      <div className="mt-2 flex items-baseline gap-1.5">
+        <span className="text-[28px] font-bold text-gray-900">{formatGNF(price)}</span>
+        <span className="text-sm text-gray-500">/ {BILLING_PERIOD_LABEL[period].toLowerCase()}</span>
+      </div>
+      {plan.archived && <Badge tone="gray" className="mt-2 w-fit">Plan archivé</Badge>}
 
-        <List spacing="xs" size="sm" mt="xs" center
-          icon={<ThemeIcon color="green" size={18} radius="xl">✓</ThemeIcon>}>
-          {(PLAN_FEATURES[plan.code] ?? []).map((f) => (
-            <List.Item key={f}>{f}</List.Item>
-          ))}
-        </List>
+      <ul className="mt-3 space-y-2 text-sm">
+        {(PLAN_FEATURES[plan.code] ?? []).map((f) => (
+          <li key={f} className="flex items-center gap-2">
+            <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-success-100 text-success-700">
+              <Check className="h-3 w-3" />
+            </span>
+            {f}
+          </li>
+        ))}
+      </ul>
 
-        <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-        {onChoose && (
-          <Button
-            fullWidth
-            variant={popular ? "primary" : "secondary"}
-            disabled={disabled || plan.archived || current}
-            onClick={() => onChoose(plan)}
-          >
-            {current ? "Plan actuel" : ctaLabel}
-          </Button>
-        )}
-      </Stack>
+      {onChoose && (
+        <Button
+          fullWidth
+          variant={popular ? "primary" : "secondary"}
+          disabled={disabled || plan.archived || current}
+          onClick={() => onChoose(plan)}
+          className="mt-4"
+        >
+          {current ? "Plan actuel" : ctaLabel}
+        </Button>
+      )}
     </Card>
   );
 }

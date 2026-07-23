@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SegmentedControl, Switch } from "@mantine/core";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
 import { useQuery } from "@/hooks/use-query";
@@ -137,7 +137,7 @@ export default function SubscriptionPage() {
                   <div><p className="text-gray-500">Période</p><p className="font-medium">{formatDate(subscription.startDate)} → {formatDate(subscription.endDate)}</p></div>
                   <div>
                     <p className="text-gray-500">Renouvellement auto</p>
-                    <Switch checked={!!subscription.autoRenewal} onChange={(e) => toggleAutoRenew(e.currentTarget.checked)} mt={4} />
+                    <div className="mt-1"><Switch checked={!!subscription.autoRenewal} onChange={toggleAutoRenew} ariaLabel="Renouvellement automatique" /></div>
                   </div>
                 </div>
               ) : (
@@ -153,15 +153,14 @@ export default function SubscriptionPage() {
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle>{subscription ? "Changer de plan" : "Choisir un plan"}</CardTitle>
-                <SegmentedControl
-                  size="xs"
-                  value={period}
-                  onChange={(v) => setPeriod(v as BillingPeriod)}
-                  data={[
-                    { label: "Mensuel", value: "MONTHLY" },
-                    { label: "Annuel", value: "ANNUAL" },
-                  ]}
-                />
+                <div className="inline-flex rounded-lg border border-gray-200 p-0.5">
+                  {([{ label: "Mensuel", value: "MONTHLY" }, { label: "Annuel", value: "ANNUAL" }] as { label: string; value: BillingPeriod }[]).map((o) => (
+                    <button key={o.value} type="button" onClick={() => setPeriod(o.value)}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition ${period === o.value ? "bg-brand-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardHeader>
             <CardBody>

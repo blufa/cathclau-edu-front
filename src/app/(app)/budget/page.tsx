@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { NumberInput, Select as MantineSelect, Stack, Textarea, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
 import { Plus, Wallet } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -34,6 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
@@ -50,9 +50,16 @@ export default function BudgetPage() {
 
   const budgetsQuery = useQuery(listBudgets, []);
   const budgets = useMemo(() => budgetsQuery.data ?? [], [budgetsQuery.data]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState("");
   const selected = budgets.find((b) => String(b.id) === selectedId) ?? null;
   const [creating, setCreating] = useState(false);
+  const budgetOptions: SearchableOption[] = useMemo(
+    () => budgets.map((b) => {
+      const label = `${b.label} (${b.academicYear})`;
+      return { value: String(b.id), trigger: label, label, searchText: label };
+    }),
+    [budgets],
+  );
 
   async function submit(b: AnnualBudget) {
     try { await submitBudget(b.id); notifySuccess("Budget soumis à la direction"); budgetsQuery.refetch(); } catch (e) { notifyError(e); }
@@ -69,7 +76,7 @@ export default function BudgetPage() {
   function remove(b: AnnualBudget) {
     confirmAction({
       title: "Supprimer le budget", message: `Supprimer « ${b.label} » et ses lignes ?`, confirmLabel: "Supprimer", danger: true,
-      onConfirm: async () => { try { await deleteBudget(b.id); setSelectedId(null); notifySuccess("Supprimé"); budgetsQuery.refetch(); } catch (e) { notifyError(e); } },
+      onConfirm: async () => { try { await deleteBudget(b.id); setSelectedId(""); notifySuccess("Supprimé"); budgetsQuery.refetch(); } catch (e) { notifyError(e); } },
     });
   }
 
@@ -77,26 +84,25 @@ export default function BudgetPage() {
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <Wallet className="h-6 w-6 text-brand-600" /> Budget annuel
           </h1>
-          <p className="text-sm text-slate-500">Recettes et dépenses prévisionnelles, suivi du prévu vs réalisé</p>
+          <p className="text-sm text-gray-500">Recettes et dépenses prévisionnelles, suivi du prévu vs réalisé</p>
         </div>
         {canWrite && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau budget</Button>}
       </Reveal>
 
       <div className="max-w-md">
-        <MantineSelect
-          label="Budget" placeholder="Choisir un budget" clearable
-          data={budgets.map((b) => ({ value: String(b.id), label: `${b.label} (${b.academicYear})` }))}
-          value={selectedId} onChange={setSelectedId}
-        />
+        <Field>
+          <Label>Budget</Label>
+          <SearchableSelect value={selectedId} options={budgetOptions} onChange={setSelectedId} triggerClassName="w-full justify-between px-3" />
+        </Field>
       </div>
 
       {budgetsQuery.loading ? (
         <div className="flex justify-center py-10"><Spinner /></div>
       ) : !selected ? (
-        <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+        <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
           {budgets.length === 0 ? "Aucun budget. Créez-en un pour commencer." : "Sélectionnez un budget."}
         </p>
       ) : (
@@ -146,9 +152,9 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-slate-900">{budget.label}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{budget.label}</h2>
           <Badge tone={STATUS_TONE[budget.status]}>{BUDGET_STATUS_LABEL[budget.status]}</Badge>
-          <span className="text-sm text-slate-400">{budget.academicYear}</span>
+          <span className="text-sm text-gray-400">{budget.academicYear}</span>
         </div>
         <div className="flex gap-2">
           {editable && <Button size="sm" variant="ghost" onClick={() => setEditingHeader(true)}>Modifier</Button>}
@@ -156,12 +162,12 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
           {canApprove && budget.status === "SUBMITTED" && <Button size="sm" onClick={onApprove}>Approuver</Button>}
           {canApprove && budget.status === "SUBMITTED" && <Button size="sm" variant="secondary" onClick={() => { setReason(""); setRejecting(true); }}>Rejeter</Button>}
           {canApprove && budget.status === "APPROVED" && <Button size="sm" variant="secondary" onClick={onClose}>Clôturer</Button>}
-          {canApprove && <Button size="sm" variant="ghost" className="text-red-600" onClick={onDelete}>Supprimer</Button>}
+          {canApprove && <Button size="sm" variant="ghost" className="text-error-600" onClick={onDelete}>Supprimer</Button>}
         </div>
       </div>
 
       {budget.status === "REJECTED" && budget.rejectionReason && (
-        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-800">
           <strong>Budget rejeté par la direction :</strong> {budget.rejectionReason}
         </div>
       )}
@@ -173,8 +179,8 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
 
       {s && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <SummaryCard title="Recettes" planned={s.plannedRevenue} actual={s.actualRevenue} toneClass="text-emerald-600" />
-          <SummaryCard title="Dépenses" planned={s.plannedExpense} actual={s.actualExpense} toneClass="text-red-600" />
+          <SummaryCard title="Recettes" planned={s.plannedRevenue} actual={s.actualRevenue} toneClass="text-success-600" />
+          <SummaryCard title="Dépenses" planned={s.plannedExpense} actual={s.actualExpense} toneClass="text-error-600" />
           <SummaryCard title="Solde" planned={s.plannedBalance} actual={s.actualBalance} toneClass="text-brand-600" />
         </div>
       )}
@@ -199,16 +205,18 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
       </Modal>
 
       <Modal open={rejecting} onClose={() => setRejecting(false)} title="Rejeter le budget">
-        <Stack gap="md">
-          <Textarea label="Motif du rejet" withAsterisk autosize minRows={3}
-            placeholder="Expliquez pourquoi le budget est rejeté (le comptable pourra corriger et resoumettre)."
-            value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
+        <div className="space-y-4">
+          <Field>
+            <Label>Motif du rejet <span className="text-error-500">*</span></Label>
+            <Textarea rows={3} placeholder="Expliquez pourquoi le budget est rejeté (le comptable pourra corriger et resoumettre)."
+              value={reason} onChange={(e) => setReason(e.target.value)} />
+          </Field>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setRejecting(false)}>Annuler</Button>
-            <Button className="!bg-red-600" disabled={!reason.trim()}
+            <Button variant="danger" disabled={!reason.trim()}
               onClick={() => { onReject(reason.trim()); setRejecting(false); }}>Rejeter</Button>
           </div>
-        </Stack>
+        </div>
       </Modal>
     </div>
   );
@@ -220,9 +228,9 @@ function SummaryCard({ title, planned, actual, toneClass }: { title: string; pla
     <Card>
       <CardBody>
         <p className={`text-xs font-semibold uppercase tracking-wide ${toneClass}`}>{title}</p>
-        <p className="mt-1 text-lg font-bold text-slate-900">{formatGNF(actual)}</p>
-        <p className="text-xs text-slate-500">Prévu : {formatGNF(planned)}</p>
-        <p className={`text-xs ${variance >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+        <p className="mt-1 text-lg font-bold text-gray-900">{formatGNF(actual)}</p>
+        <p className="text-xs text-gray-500">Prévu : {formatGNF(planned)}</p>
+        <p className={`text-xs ${variance >= 0 ? "text-success-600" : "text-error-600"}`}>
           Écart : {variance >= 0 ? "+" : ""}{formatGNF(String(variance))}
         </p>
       </CardBody>
@@ -238,11 +246,11 @@ function LineSection({ title, type, lines, canWrite, onAdd, onEdit, onRemove }: 
     <Card>
       <CardBody>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
           {canWrite && <Button size="sm" variant="ghost" onClick={onAdd} leftSection={<Plus className="h-4 w-4" />}>Ajouter</Button>}
         </div>
         {lines.length === 0 ? (
-          <p className="py-4 text-center text-sm text-slate-400">Aucune ligne.</p>
+          <p className="py-4 text-center text-sm text-gray-400">Aucune ligne.</p>
         ) : (
           <Table>
             <THead><tr><TH>Catégorie</TH><TH className="text-right">Prévu</TH><TH className="text-right">Réalisé</TH><TH className="text-right">Écart</TH><TH /></tr></THead>
@@ -251,14 +259,14 @@ function LineSection({ title, type, lines, canWrite, onAdd, onEdit, onRemove }: 
                 const v = Number(l.actualAmount) - Number(l.plannedAmount);
                 return (
                   <TR key={l.id}>
-                    <TD className="font-medium text-slate-900">{l.category}{l.notes ? <span className="block text-xs text-slate-400">{l.notes}</span> : null}</TD>
+                    <TD className="font-medium text-gray-900">{l.category}{l.notes ? <span className="block text-xs text-gray-400">{l.notes}</span> : null}</TD>
                     <TD className="text-right">{formatGNF(l.plannedAmount)}</TD>
                     <TD className="text-right">{formatGNF(l.actualAmount)}</TD>
-                    <TD className={`text-right text-sm ${(type === "REVENUE" ? v : -v) >= 0 ? "text-emerald-600" : "text-red-600"}`}>{v >= 0 ? "+" : ""}{formatGNF(String(v))}</TD>
+                    <TD className={`text-right text-sm ${(type === "REVENUE" ? v : -v) >= 0 ? "text-success-600" : "text-error-600"}`}>{v >= 0 ? "+" : ""}{formatGNF(String(v))}</TD>
                     <TD className="text-right">{canWrite && (
                       <div className="inline-flex gap-1">
                         <Button size="sm" variant="ghost" onClick={() => onEdit(l)}>Modifier</Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => onRemove(l)}>Suppr.</Button>
+                        <Button size="sm" variant="ghost" className="text-error-600" onClick={() => onRemove(l)}>Suppr.</Button>
                       </div>
                     )}</TD>
                   </TR>
@@ -274,28 +282,31 @@ function LineSection({ title, type, lines, canWrite, onAdd, onEdit, onRemove }: 
 
 function BudgetForm({ initial, onCancel, onDone }: { initial?: AnnualBudget | null; onCancel: () => void; onDone: (b: AnnualBudget) => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: { academicYear: initial?.academicYear ?? "", label: initial?.label ?? "", notes: initial?.notes ?? "" },
-    validate: { academicYear: (v) => (v ? null : "Requis"), label: (v) => (v ? null : "Requis") },
-  });
-  async function submit(values: typeof form.values) {
+  const [label, setLabel] = useState(initial?.label ?? "");
+  const [academicYear, setAcademicYear] = useState(initial?.academicYear ?? "");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  async function submit() {
+    if (!label.trim() || !academicYear.trim()) { notifyError("Libellé et année requis"); return; }
     setLoading(true);
-    try { onDone(initial ? await updateBudget(initial.id, values) : await createBudget(values)); }
+    try { onDone(initial ? await updateBudget(initial.id, { label, academicYear, notes }) : await createBudget({ label, academicYear, notes })); }
     catch (err) { notifyError(err); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk placeholder="Budget 2025-2026" {...form.getInputProps("label")} />
-        <TextInput label="Année scolaire" withAsterisk placeholder="2025-2026" {...form.getInputProps("academicYear")} />
-        <Textarea label="Notes" autosize minRows={2} {...form.getInputProps("notes")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
-        </div>
-      </Stack>
-    </form>
+    <div className="space-y-4">
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <Input placeholder="Budget 2025-2026" value={label} onChange={(e) => setLabel(e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Année scolaire <span className="text-error-500">*</span></Label>
+        <Input placeholder="2025-2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} />
+      </Field>
+      <Field><Label>Notes</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="button" onClick={submit} loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
+      </div>
+    </div>
   );
 }
 
@@ -303,23 +314,18 @@ function LineForm({ budgetId, type, initial, onCancel, onDone }: {
   budgetId: number; type: BudgetLineType; initial?: BudgetLine | null; onCancel: () => void; onDone: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
-      category: initial?.category ?? "",
-      plannedAmount: (initial?.plannedAmount != null ? Number(initial.plannedAmount) : 0) as number | string,
-      actualAmount: (initial?.actualAmount != null ? Number(initial.actualAmount) : 0) as number | string,
-      notes: initial?.notes ?? "",
-    },
-    validate: { category: (v) => (v ? null : "Requis") },
-  });
-  async function submit(values: typeof form.values) {
+  const [category, setCategory] = useState(initial?.category ?? "");
+  const [plannedAmount, setPlannedAmount] = useState(initial?.plannedAmount != null ? String(Number(initial.plannedAmount)) : "0");
+  const [actualAmount, setActualAmount] = useState(initial?.actualAmount != null ? String(Number(initial.actualAmount)) : "0");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  async function submit() {
+    if (!category.trim()) { notifyError("Catégorie requise"); return; }
     setLoading(true);
     try {
       const payload = {
-        lineType: type, category: values.category,
-        plannedAmount: Number(values.plannedAmount) || 0, actualAmount: Number(values.actualAmount) || 0,
-        notes: values.notes || null,
+        lineType: type, category,
+        plannedAmount: Number(plannedAmount) || 0, actualAmount: Number(actualAmount) || 0,
+        notes: notes || null,
       };
       if (initial) await updateBudgetLine(initial.id, payload);
       else await addBudgetLine(budgetId, payload);
@@ -327,20 +333,21 @@ function LineForm({ budgetId, type, initial, onCancel, onDone }: {
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <p className="text-sm text-slate-500">{BUDGET_LINE_TYPE_LABEL[type]}</p>
-        <TextInput label="Catégorie" withAsterisk placeholder={type === "REVENUE" ? "Frais de scolarité, subvention…" : "Salaires, fournitures…"} {...form.getInputProps("category")} />
-        <div className="grid grid-cols-2 gap-3">
-          <NumberInput label="Montant prévu (GNF)" thousandSeparator=" " min={0} {...form.getInputProps("plannedAmount")} />
-          <NumberInput label="Réalisé (GNF)" thousandSeparator=" " min={0} {...form.getInputProps("actualAmount")} />
-        </div>
-        <Textarea label="Notes" autosize minRows={1} {...form.getInputProps("notes")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>{initial ? "Enregistrer" : "Ajouter"}</Button>
-        </div>
-      </Stack>
-    </form>
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">{BUDGET_LINE_TYPE_LABEL[type]}</p>
+      <Field>
+        <Label>Catégorie <span className="text-error-500">*</span></Label>
+        <Input placeholder={type === "REVENUE" ? "Frais de scolarité, subvention…" : "Salaires, fournitures…"} value={category} onChange={(e) => setCategory(e.target.value)} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field><Label>Montant prévu (GNF)</Label><Input type="number" min={0} value={plannedAmount} onChange={(e) => setPlannedAmount(e.target.value)} /></Field>
+        <Field><Label>Réalisé (GNF)</Label><Input type="number" min={0} value={actualAmount} onChange={(e) => setActualAmount(e.target.value)} /></Field>
+      </div>
+      <Field><Label>Notes</Label><Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="button" onClick={submit} loading={loading}>{initial ? "Enregistrer" : "Ajouter"}</Button>
+      </div>
+    </div>
   );
 }

@@ -77,6 +77,8 @@ export interface CreatePeriodInput {
   endDate: string | null;
 }
 
+export type ClassType = "NORMALE" | "EXAMEN";
+
 export interface Classe {
   id: number;
   tenantId: number;
@@ -87,6 +89,8 @@ export interface Classe {
   label: string;
   headcount: number | null;
   maxCapacity: number | null;
+  /** Classe normale ou classe d'examen (§6) — détermine le tarif horaire de paie appliqué. */
+  classType: ClassType;
 }
 
 export type JourSemaine = "LUNDI" | "MARDI" | "MERCREDI" | "JEUDI" | "VENDREDI" | "SAMEDI";
@@ -122,6 +126,9 @@ export interface ClasseMatiere {
   subjectId: number;
   teacherId: number | null;
   coefficient: string | null;
+  /** Code affecté par le Directeur des Études pour identifier ce professeur sur cette matière
+   * (ex. "CH1", "CH2") — généré automatiquement à l'affectation, modifiable ensuite. */
+  code: string | null;
 }
 
 /** Roster projection from GET /classes/{id}/students. */
@@ -148,4 +155,5 @@ export interface CreateClassInput {
   roomId?: number | null;
   label: string;
   maxCapacity: number | null;
+  classType?: ClassType | null;
 }

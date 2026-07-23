@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Select } from "@mantine/core";
 import { GraduationCap, TrendingUp, Wallet, AlertTriangle, Award, Users } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listPeriods } from "@/lib/api/academics";
@@ -16,6 +15,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatCardSkeleton, CardSkeleton } from "@/components/ui/skeleton";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { formatGNF } from "@/lib/format";
 
@@ -58,22 +58,22 @@ export default function ReportsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Rapports &amp; analytique</h1>
-        <p className="text-sm text-slate-500">Pilotage académique, financier et RH de l&apos;établissement.</p>
+        <h1 className="text-2xl font-semibold text-gray-900">Rapports &amp; analytique</h1>
+        <p className="text-sm text-gray-500">Pilotage académique, financier et RH de l&apos;établissement.</p>
       </div>
 
       {/* ── Académique ─────────────────────────────────────────── */}
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-slate-800">Académique</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Académique</h2>
           <Select
             aria-label="Période"
-            data={(periods ?? []).map((p) => ({ value: String(p.id), label: p.label }))}
-            value={resolvedPeriodId}
-            onChange={setPeriodId}
-            placeholder="Période"
-            w={200}
-          />
+            className="max-w-[200px]"
+            value={resolvedPeriodId ?? ""}
+            onChange={(e) => setPeriodId(e.target.value || null)}
+          >
+            {(periods ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
+          </Select>
         </div>
         {academic.loading ? (
           <div className="grid gap-4 sm:grid-cols-3"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
@@ -100,7 +100,7 @@ export default function ReportsPage() {
                     </TR>
                   ))}
                   {!academic.loading && !(academic.data?.classes ?? []).length && (
-                    <TR><TD colSpan={4} className="text-slate-400">Aucun bulletin pour cette période.</TD></TR>
+                    <TR><TD colSpan={4} className="text-gray-400">Aucun bulletin pour cette période.</TD></TR>
                   )}
                 </TBody>
               </Table>
@@ -121,7 +121,7 @@ export default function ReportsPage() {
                     </TR>
                   ))}
                   {!academic.loading && !(academic.data?.topStudents ?? []).length && (
-                    <TR><TD colSpan={4} className="text-slate-400">Aucun classement disponible.</TD></TR>
+                    <TR><TD colSpan={4} className="text-gray-400">Aucun classement disponible.</TD></TR>
                   )}
                 </TBody>
               </Table>
@@ -132,7 +132,7 @@ export default function ReportsPage() {
 
       {/* ── Financier ──────────────────────────────────────────── */}
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-slate-800">Financier</h2>
+        <h2 className="text-lg font-semibold text-gray-800">Financier</h2>
         {finance.loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
@@ -159,7 +159,7 @@ export default function ReportsPage() {
                   ]}
                   valueFormatter={(v) => formatGNF(v)}
                 />
-                <p className="mt-3 text-xs text-slate-500">
+                <p className="mt-3 text-xs text-gray-500">
                   Encaissement moyen mensuel estimé : {formatGNF(projection.data?.avgMonthlyCollection)} ·
                   Masse salariale récurrente : {formatGNF(projection.data?.recurringPayroll)} ·
                   Reste à recouvrer : {formatGNF(projection.data?.outstandingReceivables)}
@@ -173,12 +173,14 @@ export default function ReportsPage() {
       {/* ── RH : performance enseignant ────────────────────────── */}
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-slate-800">Performance enseignants</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Performance enseignants</h2>
           <div className="flex gap-2">
-            <Select aria-label="Mois" w={130} value={String(month)} onChange={(v) => v && setMonth(Number(v))}
-              data={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} />
-            <Select aria-label="Année" w={110} value={String(year)} onChange={(v) => v && setYear(Number(v))}
-              data={[year - 1, year, year + 1].map((y) => ({ value: String(y), label: String(y) }))} />
+            <Select aria-label="Mois" className="max-w-[130px]" value={String(month)} onChange={(e) => setMonth(Number(e.target.value))}>
+              {MONTHS.map((m, i) => (<option key={m} value={i + 1}>{m}</option>))}
+            </Select>
+            <Select aria-label="Année" className="max-w-[110px]" value={String(year)} onChange={(e) => setYear(Number(e.target.value))}>
+              {[year - 1, year, year + 1].map((y) => (<option key={y} value={y}>{y}</option>))}
+            </Select>
           </div>
         </div>
         <Card>
@@ -203,7 +205,7 @@ export default function ReportsPage() {
                   </TR>
                 ))}
                 {!performance.loading && !(performance.data?.teachers ?? []).length && (
-                  <TR><TD colSpan={6} className="text-slate-400">Aucune donnée de pointage pour ce mois.</TD></TR>
+                  <TR><TD colSpan={6} className="text-gray-400">Aucune donnée de pointage pour ce mois.</TD></TR>
                 )}
               </TBody>
             </Table>

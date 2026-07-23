@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MultiSelect, Select as MantineSelect, Stack, Textarea, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
 import { Send } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -34,6 +32,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -51,7 +50,7 @@ export default function CommunicationsPage() {
   const [detail, setDetail] = useState<Communication | null>(null);
 
   if (!tenantId) {
-    return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Réservé aux comptes d&apos;établissement.</div>;
+    return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé aux comptes d&apos;établissement.</div>;
   }
 
   const rows = (q.data ?? []).filter((c) => !channel || c.channel === channel);
@@ -65,8 +64,8 @@ export default function CommunicationsPage() {
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Communication</h1>
-          <p className="text-sm text-slate-500">SMS, e-mail et WhatsApp aux familles et au personnel</p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Communication</h1>
+          <p className="text-sm text-gray-500">SMS, e-mail et WhatsApp aux familles et au personnel</p>
         </div>
         {canSend && <Button onClick={() => setComposing(true)} leftSection={<Send className="h-4 w-4" />}>Nouveau message</Button>}
       </Reveal>
@@ -80,18 +79,18 @@ export default function CommunicationsPage() {
         <Table>
           <THead><tr><TH>Date</TH><TH>Canal</TH><TH>Motif</TH><TH>Destinataires</TH><TH>Sujet</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {rows.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-slate-400">Aucun message.</TD></TR>}
+            {rows.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun message.</TD></TR>}
             {rows.map((c) => (
               <TR key={c.id}>
-                <TD className="text-slate-500">{c.sentAt?.slice(0, 16).replace("T", " ") ?? "—"}</TD>
+                <TD className="text-gray-500">{c.sentAt?.slice(0, 16).replace("T", " ") ?? "—"}</TD>
                 <TD><Badge tone="indigo">{CHANNEL_LABEL[c.channel]}</Badge></TD>
                 <TD>{REASON_LABEL[c.reason]}</TD>
                 <TD>{RECIPIENT_TYPE_LABEL[c.recipientType]}</TD>
-                <TD className="text-slate-700">{c.subject ?? "—"}</TD>
+                <TD className="text-gray-700">{c.subject ?? "—"}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setDetail(c)}>Détail</Button>
-                    {canSend && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(c)}>Suppr.</Button>}
+                    {canSend && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(c)}>Suppr.</Button>}
                   </div>
                 </TD>
               </TR>
@@ -119,66 +118,93 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
   const templatesQuery = useQuery(() => listTemplates(tenantId), []);
   const [loading, setLoading] = useState(false);
 
-  const userOptions = useMemo(
-    () => (usersQuery.data ?? []).map((u) => ({ value: String(u.id), label: `${u.firstName} ${u.lastName} (${u.email})` })),
-    [usersQuery.data],
-  );
+  const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
 
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
-      channel: "SMS" as CommunicationChannel,
-      recipientType: "PARENT" as RecipientType,
-      reason: "GENERAL" as CommunicationReason,
-      subject: "",
-      content: "",
-      recipientIds: [] as string[],
-    },
-    validate: {
-      content: (v) => (v.trim() ? null : "Message requis"),
-      recipientIds: (v) => (v.length > 0 ? null : "Sélectionnez au moins un destinataire"),
-    },
-  });
+  const [channel, setChannel] = useState<CommunicationChannel>("SMS");
+  const [recipientType, setRecipientType] = useState<RecipientType>("PARENT");
+  const [reason, setReason] = useState<CommunicationReason>("GENERAL");
+  const [subject, setSubject] = useState("");
+  const [content, setContent] = useState("");
+  const [recipientIds, setRecipientIds] = useState<string[]>([]);
+
+  function toggleRecipient(id: string) {
+    setRecipientIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   function applyTemplate(id: string) {
     const t = (templatesQuery.data ?? []).find((x) => String(x.id) === id);
     if (!t) return;
-    form.setValues({ ...form.values, channel: t.channel, reason: t.reason, subject: t.subject ?? "", content: t.body });
+    setChannel(t.channel); setReason(t.reason); setSubject(t.subject ?? ""); setContent(t.body);
   }
 
-  async function submit(values: typeof form.values) {
+  async function submit() {
+    if (!content.trim()) { notifyError("Message requis"); return; }
+    if (recipientIds.length === 0) { notifyError("Sélectionnez au moins un destinataire"); return; }
     setLoading(true);
     try {
       await sendCommunication({
-        tenantId, senderId, channel: values.channel, recipientType: values.recipientType,
-        subject: values.subject || null, content: values.content, reason: values.reason,
-        recipientUserIds: values.recipientIds.map(Number),
+        tenantId, senderId, channel, recipientType,
+        subject: subject || null, content, reason,
+        recipientUserIds: recipientIds.map(Number),
       });
       onSent();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        {(templatesQuery.data ?? []).length > 0 && (
-          <MantineSelect label="Modèle (optionnel)" data={[{ value: "", label: "— Aucun —" }, ...(templatesQuery.data ?? []).map((t) => ({ value: String(t.id), label: `${REASON_LABEL[t.reason]} · ${CHANNEL_LABEL[t.channel]}` }))]}
-            onChange={(value) => applyTemplate(value ?? "")} />
-        )}
-        <div className="grid grid-cols-3 gap-3">
-          <MantineSelect label="Canal" data={(Object.keys(CHANNEL_LABEL) as CommunicationChannel[]).map((c) => ({ value: c, label: CHANNEL_LABEL[c] }))} {...form.getInputProps("channel")} />
-          <MantineSelect label="Type" data={(Object.keys(RECIPIENT_TYPE_LABEL) as RecipientType[]).map((c) => ({ value: c, label: RECIPIENT_TYPE_LABEL[c] }))} {...form.getInputProps("recipientType")} />
-          <MantineSelect label="Motif" data={(Object.keys(REASON_LABEL) as CommunicationReason[]).map((c) => ({ value: c, label: REASON_LABEL[c] }))} {...form.getInputProps("reason")} />
+    <div className="space-y-4">
+      {(templatesQuery.data ?? []).length > 0 && (
+        <Field>
+          <Label>Modèle (optionnel)</Label>
+          <Select onChange={(e) => applyTemplate(e.target.value)}>
+            <option value="">— Aucun —</option>
+            {(templatesQuery.data ?? []).map((t) => (<option key={t.id} value={t.id}>{REASON_LABEL[t.reason]} · {CHANNEL_LABEL[t.channel]}</option>))}
+          </Select>
+        </Field>
+      )}
+      <div className="grid grid-cols-3 gap-3">
+        <Field>
+          <Label>Canal</Label>
+          <Select value={channel} onChange={(e) => setChannel(e.target.value as CommunicationChannel)}>
+            {(Object.keys(CHANNEL_LABEL) as CommunicationChannel[]).map((c) => (<option key={c} value={c}>{CHANNEL_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Type</Label>
+          <Select value={recipientType} onChange={(e) => setRecipientType(e.target.value as RecipientType)}>
+            {(Object.keys(RECIPIENT_TYPE_LABEL) as RecipientType[]).map((c) => (<option key={c} value={c}>{RECIPIENT_TYPE_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Motif</Label>
+          <Select value={reason} onChange={(e) => setReason(e.target.value as CommunicationReason)}>
+            {(Object.keys(REASON_LABEL) as CommunicationReason[]).map((c) => (<option key={c} value={c}>{REASON_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+      </div>
+      <Field>
+        <Label>Destinataires <span className="text-error-500">*</span></Label>
+        <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+          {users.length === 0 && <p className="px-1 py-2 text-sm text-gray-400">Aucun utilisateur.</p>}
+          {users.map((u) => (
+            <label key={u.id} className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={recipientIds.includes(String(u.id))} onChange={() => toggleRecipient(String(u.id))}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+              {u.firstName} {u.lastName} ({u.email})
+            </label>
+          ))}
         </div>
-        <MultiSelect label="Destinataires" placeholder="Choisir des utilisateurs" searchable data={userOptions} {...form.getInputProps("recipientIds")} />
-        <TextInput label="Sujet" {...form.getInputProps("subject")} />
-        <Textarea label="Message" autosize minRows={4} withAsterisk {...form.getInputProps("content")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Envoyer</Button>
-        </div>
-      </Stack>
-    </form>
+      </Field>
+      <Field><Label>Sujet</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
+      <Field>
+        <Label>Message <span className="text-error-500">*</span></Label>
+        <Textarea rows={4} value={content} onChange={(e) => setContent(e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="button" onClick={submit} loading={loading}>Envoyer</Button>
+      </div>
+    </div>
   );
 }
 
@@ -199,14 +225,14 @@ function DeliveryDetail({ communication, canManage }: { communication: Communica
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-600">{communication.content}</p>
+      <p className="text-sm text-gray-600">{communication.content}</p>
       {recipients.length > 0 && (
-        <p className="text-xs text-slate-400">{recipients.length} destinataire(s) — {delivered} livré(s), {readCount} lu(s)</p>
+        <p className="text-xs text-gray-400">{recipients.length} destinataire(s) — {delivered} livré(s), {readCount} lu(s)</p>
       )}
       <Table>
         <THead><tr><TH>Destinataire</TH><TH>Statut</TH><TH>Lu</TH>{canManage && <TH className="text-right">Marquer</TH>}</tr></THead>
         <TBody>
-          {recipients.length === 0 && <TR><TD colSpan={canManage ? 4 : 3} className="py-6 text-center text-slate-400">Aucun destinataire.</TD></TR>}
+          {recipients.length === 0 && <TR><TD colSpan={canManage ? 4 : 3} className="py-6 text-center text-gray-400">Aucun destinataire.</TD></TR>}
           {recipients.map((r) => (
             <TR key={r.id}>
               <TD>{r.destination ?? "—"}</TD>
@@ -218,7 +244,7 @@ function DeliveryDetail({ communication, canManage }: { communication: Communica
                     {r.deliveryStatus === "PENDING" && (
                       <>
                         <Button size="sm" variant="ghost" loading={busyId === r.id} onClick={() => act(r.id, markRecipientDelivered, "Marqué comme livré")}>Livré</Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" loading={busyId === r.id} onClick={() => act(r.id, markRecipientFailed, "Marqué en échec")}>Échec</Button>
+                        <Button size="sm" variant="ghost" className="text-error-600" loading={busyId === r.id} onClick={() => act(r.id, markRecipientFailed, "Marqué en échec")}>Échec</Button>
                       </>
                     )}
                     {!r.read && (

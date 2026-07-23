@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Checkbox, Group, Stack, Text } from "@mantine/core";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { createLevel } from "@/lib/api/academics";
 import type { Niveau } from "@/lib/types/academics";
 import { notifyError, notifySuccess } from "@/lib/feedback";
@@ -63,11 +64,11 @@ export function LevelCatalogPicker({
   }
 
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
         Cochez les cycles à créer. Ceux déjà présents sont grisés. Les classes (« 6ème A », « 7ème A »…)
         se créent ensuite et se rattachent à un niveau.
-      </Text>
+      </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {LEVEL_CATALOG.map((label) => {
           const already = existingLabels.has(label.trim().toLowerCase());
@@ -82,14 +83,10 @@ export function LevelCatalogPicker({
           );
         })}
       </div>
-      <Group justify="flex-end" gap="sm">
-        <Button variant="default" onClick={onCancel} disabled={saving}>
-          Annuler
-        </Button>
-        <Button onClick={handleAdd} loading={saving} disabled={selected.size === 0}>
-          Ajouter la sélection
-        </Button>
-      </Group>
-    </Stack>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel} disabled={saving}>Annuler</Button>
+        <Button onClick={handleAdd} loading={saving} disabled={selected.size === 0}>Ajouter la sélection</Button>
+      </div>
+    </div>
   );
 }

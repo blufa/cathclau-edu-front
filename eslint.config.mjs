@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Template vendored as source material for the admin redesign — not part of the app build.
+    "free-nextjs-admin-dashboard-main/**",
   ]),
 ]);
 

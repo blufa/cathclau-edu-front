@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Select, NumberInput, Stack, Textarea, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useQuery } from "@/hooks/use-query";
 import { archivePlan, createPlan, deletePlan, listPlans, setPlanDefaultTrial, updatePlan } from "@/lib/api/platform";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
@@ -11,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -22,15 +25,6 @@ export default function PlatformPlansPage() {
       <PlansTable />
     </RequireSuperAdmin>
   );
-}
-
-interface PlanFormValues {
-  name: string;
-  code: PlanCode;
-  studentLimit: number | "";
-  monthlyPrice: number | "";
-  annualPrice: number | "";
-  description: string;
 }
 
 function PlansTable() {
@@ -87,7 +81,7 @@ function PlansTable() {
       </div>
 
       {error ? (
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Impossible de charger les plans.</p>
+        <p className="rounded-md bg-error-50 px-4 py-3 text-sm text-error-700">Impossible de charger les plans.</p>
       ) : loading && !data ? (
         <div className="flex justify-center py-16"><Spinner /></div>
       ) : (
@@ -116,7 +110,7 @@ function PlansTable() {
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>Modifier</Button>
                     <Button size="sm" variant="ghost" onClick={() => makeDefaultTrial(p)}>Trial déf.</Button>
                     {!p.archived && <Button size="sm" variant="ghost" onClick={() => archive(p)}>Archiver</Button>}
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(p)}>Suppr.</Button>
+                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(p)}>Suppr.</Button>
                   </div>
                 </TD>
               </TR>
@@ -159,57 +153,87 @@ function PlansTable() {
   );
 }
 
+const schema = z.object({
+  name: z.string().trim().min(1, "Nom requis"),
+  code: z.string(),
+  studentLimit: z.string(),
+  monthlyPrice: z.string(),
+  annualPrice: z.string(),
+  description: z.string(),
+});
+type FormValues = z.infer<typeof schema>;
+
 function PlanForm({ initial, onSubmit, onCancel }: {
   initial?: Plan;
   onSubmit: (input: PlanInput) => Promise<void>;
   onCancel: () => void;
 }) {
-  const form = useForm<PlanFormValues>({
-    mode: "controlled",
-    initialValues: {
+  const [submitting, setSubmitting] = useState(false);
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
       name: initial?.name ?? "",
       code: initial?.code ?? "STARTER",
-      studentLimit: initial?.studentLimit ?? "",
-      monthlyPrice: initial?.monthlyPrice ? Number(initial.monthlyPrice) : "",
-      annualPrice: initial?.annualPrice ? Number(initial.annualPrice) : "",
+      studentLimit: initial?.studentLimit != null ? String(initial.studentLimit) : "",
+      monthlyPrice: initial?.monthlyPrice ? String(Number(initial.monthlyPrice)) : "",
+      annualPrice: initial?.annualPrice ? String(Number(initial.annualPrice)) : "",
       description: initial?.description ?? "",
     },
-    validate: { name: (v) => (v.trim() ? null : "Nom requis") },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: PlanFormValues) {
+  async function submit(values: FormValues) {
+    setSubmitting(true);
     try {
       await onSubmit({
         name: values.name,
-        code: values.code,
+        code: values.code as PlanCode,
         studentLimit: values.studentLimit === "" ? null : Number(values.studentLimit),
-        monthlyPrice: values.monthlyPrice === "" ? null : String(values.monthlyPrice),
-        annualPrice: values.annualPrice === "" ? null : String(values.annualPrice),
+        monthlyPrice: values.monthlyPrice === "" ? null : values.monthlyPrice,
+        annualPrice: values.annualPrice === "" ? null : values.annualPrice,
         description: values.description || null,
       });
     } catch (err) {
       notifyError(err);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Nom" withAsterisk {...form.getInputProps("name")} />
-        <Select
-          label="Code" disabled={!!initial}
-          data={PLAN_CODES.map((c) => ({ value: c, label: c }))}
-          {...form.getInputProps("code")}
-        />
-        <NumberInput label="Limite d'élèves (vide = illimité)" min={0} {...form.getInputProps("studentLimit")} />
-        <NumberInput label="Prix mensuel (GNF)" thousandSeparator=" " min={0} {...form.getInputProps("monthlyPrice")} />
-        <NumberInput label="Prix annuel (GNF)" thousandSeparator=" " min={0} {...form.getInputProps("annualPrice")} />
-        <Textarea label="Description" autosize minRows={2} {...form.getInputProps("description")} />
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit">{initial ? "Enregistrer" : "Créer"}</Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Nom <span className="text-error-500">*</span></Label>
+        <Input value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
+        {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
+      </Field>
+      <Field>
+        <Label>Code</Label>
+        <Select disabled={!!initial} value={v.code} onChange={(e) => setValue("code", e.target.value)}>
+          {PLAN_CODES.map((c) => (<option key={c} value={c}>{c}</option>))}
+        </Select>
+      </Field>
+      <Field>
+        <Label>Limite d&apos;élèves (vide = illimité)</Label>
+        <Input type="number" min={0} value={v.studentLimit} onChange={(e) => setValue("studentLimit", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Prix mensuel (GNF)</Label>
+        <Input type="number" min={0} value={v.monthlyPrice} onChange={(e) => setValue("monthlyPrice", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Prix annuel (GNF)</Label>
+        <Input type="number" min={0} value={v.annualPrice} onChange={(e) => setValue("annualPrice", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Description</Label>
+        <Textarea rows={2} value={v.description} onChange={(e) => setValue("description", e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={submitting}>{initial ? "Enregistrer" : "Créer"}</Button>
+      </div>
     </form>
   );
 }

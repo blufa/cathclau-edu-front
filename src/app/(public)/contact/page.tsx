@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Stack, Textarea, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
 import { Reveal } from "@/components/public/reveal";
 import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
 import { notifySuccess } from "@/lib/feedback";
@@ -15,24 +17,32 @@ const COORDS = [
   { icon: MapPin, label: "Adresse", value: "Conakry, Guinée" },
 ];
 
+const schema = z.object({
+  name: z.string().trim().min(1, "Requis"),
+  email: z.string().regex(/^\S+@\S+\.\S+$/, "Email invalide"),
+  subject: z.string(),
+  message: z.string().min(10, "Message trop court"),
+});
+type FormValues = z.infer<typeof schema>;
+
 export default function ContactPage() {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: { name: "", email: "", subject: "", message: "" },
-    validate: {
-      name: (v) => (v ? null : "Requis"),
-      email: (v) => (/^\S+@\S+\.\S+$/.test(v) ? null : "Email invalide"),
-      message: (v) => (v.length >= 10 ? null : "Message trop court"),
-    },
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: "", email: "", subject: "", message: "" },
   });
 
-  async function submit() {
+  async function onSubmit() {
     setLoading(true);
     // No contact backend yet — acknowledge locally.
     await new Promise((r) => setTimeout(r, 500));
     notifySuccess("Message envoyé. Notre équipe vous répondra rapidement.");
-    form.reset();
+    reset();
     setLoading(false);
   }
 
@@ -80,20 +90,39 @@ export default function ContactPage() {
         {/* Form */}
         <Reveal delay={0.1}>
           <form
-            onSubmit={form.onSubmit(submit)}
-            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            onSubmit={handleSubmit(onSubmit)}
+            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
           >
-            <Stack gap="md">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <TextInput label="Nom complet" withAsterisk {...form.getInputProps("name")} />
-                <TextInput label="E-mail" withAsterisk {...form.getInputProps("email")} />
-              </div>
-              <TextInput label="Sujet" {...form.getInputProps("subject")} />
-              <Textarea label="Message" autosize minRows={5} withAsterisk {...form.getInputProps("message")} />
-              <Button type="submit" loading={loading} fullWidth>
-                Envoyer le message
-              </Button>
-            </Stack>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <Label htmlFor="name">
+                  Nom complet <span className="text-error-500">*</span>
+                </Label>
+                <Input id="name" aria-invalid={!!errors.name} {...register("name")} />
+                {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
+              </Field>
+              <Field>
+                <Label htmlFor="email">
+                  E-mail <span className="text-error-500">*</span>
+                </Label>
+                <Input id="email" aria-invalid={!!errors.email} {...register("email")} />
+                {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
+              </Field>
+            </div>
+            <Field>
+              <Label htmlFor="subject">Sujet</Label>
+              <Input id="subject" {...register("subject")} />
+            </Field>
+            <Field>
+              <Label htmlFor="message">
+                Message <span className="text-error-500">*</span>
+              </Label>
+              <Textarea id="message" rows={5} aria-invalid={!!errors.message} {...register("message")} />
+              {errors.message && <p className="text-xs text-error-600">{errors.message.message}</p>}
+            </Field>
+            <Button type="submit" loading={loading} fullWidth>
+              Envoyer le message
+            </Button>
           </form>
         </Reveal>
       </section>

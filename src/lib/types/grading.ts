@@ -351,3 +351,57 @@ export interface GradeHistory {
   changedAt: string | null;
   reason: string | null;
 }
+
+// ── Grading formulas (formule de calcul par étapes) ──────────────────────────
+export type FormulaPeriodType = "SEMESTRE" | "TRIMESTRE";
+export const FORMULA_PERIOD_TYPE_LABEL: Record<FormulaPeriodType, string> = {
+  SEMESTRE: "Semestre",
+  TRIMESTRE: "Trimestre",
+};
+
+export type StepKind = "GROUP" | "COMBINE";
+export const STEP_KIND_LABEL: Record<StepKind, string> = {
+  GROUP: "Moyenne d'un groupe d'évaluations",
+  COMBINE: "Combinaison d'étapes précédentes",
+};
+
+export type WeightMode = "EQUAL" | "SUBJECT_COEFFICIENT" | "FIXED";
+export const WEIGHT_MODE_LABEL: Record<WeightMode, string> = {
+  EQUAL: "Poids égal (1)",
+  SUBJECT_COEFFICIENT: "Coefficient de la matière",
+  FIXED: "Poids fixe",
+};
+
+export interface GradingFormulaStepInput {
+  id?: number;
+  refStepOrder: number;
+  weightMode: WeightMode;
+  fixedWeight?: number | null;
+}
+
+export interface GradingFormulaStep {
+  id?: number;
+  stepOrder: number;
+  label: string | null;
+  stepKind: StepKind;
+  monthIndex?: number | null;
+  assessmentTypeId?: number | null;
+  inputs: GradingFormulaStepInput[];
+  finalStep: boolean;
+}
+
+export interface GradingFormula {
+  id: number;
+  tenantId: number | null;
+  label: string;
+  periodType: FormulaPeriodType;
+  active: boolean;
+  steps: GradingFormulaStep[];
+}
+
+export interface GradingFormulaInput {
+  label: string;
+  periodType: FormulaPeriodType;
+  active?: boolean | null;
+  steps: GradingFormulaStep[];
+}

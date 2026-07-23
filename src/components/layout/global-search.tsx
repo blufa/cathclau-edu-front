@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Modal } from "@mantine/core";
+import { Modal } from "@/components/ui/modal";
 import { CornerDownLeft, Search } from "lucide-react";
 import { NAVIGATION, flattenNav } from "@/config/navigation";
 import { useAuth } from "@/providers/auth-provider";
@@ -75,15 +75,7 @@ export function GlobalSearch() {
         </kbd>
       </button>
 
-      <Modal
-        opened={open}
-        onClose={() => setOpen(false)}
-        withCloseButton={false}
-        padding={0}
-        radius="lg"
-        size="lg"
-        yOffset="12vh"
-      >
+      <Modal open={open} onClose={() => setOpen(false)} bare align="top" className="max-w-lg overflow-hidden">
         <div className="flex items-center gap-3 border-b border-slate-100 px-4">
           <Search className="h-4 w-4 text-slate-400" />
           <input
