@@ -3,10 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Alert, Anchor, Button, PasswordInput, Stack, TextInput, Title } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useAuth } from "@/providers/auth-provider";
 import { ApiError } from "@/lib/api/errors";
+import { roleHome } from "@/lib/auth/role-access";
+import { Button } from "@/components/ui/button";
+import { Field, Input, Label, PasswordInput } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+
+const schema = z.object({
+  email: z.string().trim().min(1, "Email, identifiant ou téléphone requis"),
+  password: z.string().min(1, "Mot de passe requis"),
+});
+type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -18,22 +29,18 @@ export default function LoginPage() {
   );
   const [loading, setLoading] = useState(false);
 
-  const form = useForm({
-    mode: "uncontrolled",
-    initialValues: { email: "", password: "" },
-    validate: {
-      // Connexion par email OU identifiant (username) : on exige juste un champ non vide.
-      email: (v) => (v.trim() ? null : "Email, identifiant ou téléphone requis"),
-      password: (v) => (v ? null : "Mot de passe requis"),
-    },
-  });
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
 
-  async function handleSubmit(values: { email: string; password: string }) {
+  async function onSubmit(values: FormValues) {
     setError(null);
     setLoading(true);
     try {
-      await login(values.email, values.password);
-      router.replace("/dashboard");
+      const me = await login(values.email, values.password);
+      router.replace(roleHome(me));
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.status === 401 ? "Email ou mot de passe incorrect." : err.userMessage);
@@ -46,44 +53,42 @@ export default function LoginPage() {
 
   return (
     <>
-      <Title order={3} mb="md">
-        Connexion
-      </Title>
-      <form onSubmit={form.onSubmit(handleSubmit)}>
-        <Stack gap="md">
-          {verified && (
-            <Alert color="brand" variant="light">
-              Votre e-mail est vérifié et votre école activée. Connectez-vous pour accéder à votre tableau de bord.
-            </Alert>
-          )}
-          {error && (
-            <Alert color="red" variant="light">
-              {error}
-            </Alert>
-          )}
-          <TextInput
-            label="Email, identifiant ou téléphone"
+      <h3 className="mb-4 text-lg font-semibold text-gray-900">Connexion</h3>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {verified && <Alert tone="brand">Votre e-mail est vérifié et votre école activée. Connectez-vous pour accéder à votre tableau de bord.</Alert>}
+        {error && <Alert tone="red">{error}</Alert>}
+        <Field>
+          <Label htmlFor="email">
+            Email, identifiant ou téléphone <span className="text-error-500">*</span>
+          </Label>
+          <Input
+            id="email"
             placeholder="email, identifiant ou numéro de téléphone"
             autoComplete="username"
-            withAsterisk
-            {...form.getInputProps("email")}
-            key={form.key("email")}
+            aria-invalid={!!errors.email}
+            {...register("email")}
           />
+          {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
+        </Field>
+        <Field>
+          <Label htmlFor="password">
+            Mot de passe <span className="text-error-500">*</span>
+          </Label>
           <PasswordInput
-            label="Mot de passe"
+            id="password"
             placeholder="••••••••"
             autoComplete="current-password"
-            withAsterisk
-            {...form.getInputProps("password")}
-            key={form.key("password")}
+            aria-invalid={!!errors.password}
+            {...register("password")}
           />
-          <Button type="submit" loading={loading} fullWidth>
-            Se connecter
-          </Button>
-          <Anchor component={Link} href="/forgot-password" ta="center" size="sm">
-            Mot de passe oublié ?
-          </Anchor>
-        </Stack>
+          {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
+        </Field>
+        <Button type="submit" loading={loading} fullWidth>
+          Se connecter
+        </Button>
+        <Link href="/forgot-password" className="block text-center text-sm font-medium text-brand-700 hover:underline">
+          Mot de passe oublié ?
+        </Link>
       </form>
     </>
   );

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Checkbox, NumberInput, Select, Stack, Tabs, TextInput } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Banknote, Clock, FileSpreadsheet, Plus, Settings as SettingsIcon, HandCoins } from "lucide-react";
 import { FeeDeductionPanel } from "@/components/payroll/fee-deduction-panel";
 import { useAuth } from "@/providers/auth-provider";
@@ -32,9 +33,12 @@ import {
   getCompensation,
   setCompensation,
   getMonthlyPay,
+  getTheoreticalPay,
   generatePayslipFromHours,
+  generatePayslipFromTimetable,
   type PayMode,
   type MonthlyPay,
+  type TheoreticalMonthlyPay,
   type TeacherCompensation,
 } from "@/lib/api/payroll";
 import {
@@ -50,6 +54,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Input, Label, Field } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -60,25 +69,25 @@ const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = { DR
 export default function PayrollPage() {
   const { user } = useAuth();
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT")) {
-    return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Réservé à l&apos;administration / comptabilité.</div>;
+    return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration / comptabilité.</div>;
   }
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Paie</h1>
-        <p className="text-sm text-slate-500">Fiches de paie des enseignants et structures salariales</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Paie</h1>
+        <p className="text-sm text-gray-500">Fiches de paie des enseignants et structures salariales</p>
       </Reveal>
-      <Tabs defaultValue="payslips" color="brand" variant="pills" radius="md">
-        <Tabs.List>
-          <Tabs.Tab value="payslips" leftSection={<Banknote className="h-4 w-4" />}>Fiches de paie</Tabs.Tab>
-          <Tabs.Tab value="compensation" leftSection={<Clock className="h-4 w-4" />}>Rémunération & heures</Tabs.Tab>
-          <Tabs.Tab value="structures" leftSection={<SettingsIcon className="h-4 w-4" />}>Structures salariales</Tabs.Tab>
-          <Tabs.Tab value="deductions" leftSection={<HandCoins className="h-4 w-4" />}>Déductions scolarité</Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value="payslips" pt="lg"><PayslipsTab /></Tabs.Panel>
-        <Tabs.Panel value="compensation" pt="lg"><CompensationTab /></Tabs.Panel>
-        <Tabs.Panel value="structures" pt="lg"><StructuresTab /></Tabs.Panel>
-        <Tabs.Panel value="deductions" pt="lg"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT")} /></Tabs.Panel>
+      <Tabs defaultValue="payslips">
+        <TabsList>
+          <TabsTrigger value="payslips" icon={Banknote}>Fiches de paie</TabsTrigger>
+          <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>
+          <TabsTrigger value="structures" icon={SettingsIcon}>Structures salariales</TabsTrigger>
+          <TabsTrigger value="deductions" icon={HandCoins}>Déductions scolarité</TabsTrigger>
+        </TabsList>
+        <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
+        <TabsPanel value="compensation"><CompensationTab /></TabsPanel>
+        <TabsPanel value="structures"><StructuresTab /></TabsPanel>
+        <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT")} /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -109,9 +118,10 @@ function PayslipsTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Select className="max-w-[200px]" placeholder="Tous les statuts" clearable
-          data={(Object.keys(PAYSLIP_STATUS_LABEL) as Payslip["status"][]).map((s) => ({ value: s, label: PAYSLIP_STATUS_LABEL[s] }))}
-          value={status || null} onChange={(v) => setStatus((v ?? "") as Payslip["status"] | "")} />
+        <Select className="max-w-[200px]" value={status} onChange={(e) => setStatus(e.target.value as Payslip["status"] | "")}>
+          <option value="">Tous les statuts</option>
+          {(Object.keys(PAYSLIP_STATUS_LABEL) as Payslip["status"][]).map((s) => (<option key={s} value={s}>{PAYSLIP_STATUS_LABEL[s]}</option>))}
+        </Select>
         <div className="flex gap-2">
           <Button variant="secondary" leftSection={<FileSpreadsheet className="h-4 w-4" />} onClick={downloadBankFile}>Fichier bancaire</Button>
           <Button variant="secondary" leftSection={<Banknote className="h-4 w-4" />} onClick={() => setBatchOpen(true)}>Générer en lot</Button>
@@ -123,14 +133,14 @@ function PayslipsTab() {
         <Table>
           <THead><tr><TH>Enseignant</TH><TH>Période</TH><TH>Base</TH><TH>Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-slate-400">Aucune fiche.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
             {(q.data ?? []).map((p) => (
               <TR key={p.id}>
-                <TD className="font-medium text-slate-900">{teacherName.get(p.teacherId) ?? `#${p.teacherId}`}</TD>
+                <TD className="font-medium text-gray-900">{teacherName.get(p.teacherId) ?? `#${p.teacherId}`}</TD>
                 <TD>{p.periodLabel}</TD>
                 <TD>{formatGNF(p.baseSalary)}</TD>
                 <TD>{formatGNF(p.grossSalary)}</TD>
-                <TD className="font-semibold text-slate-900">{formatGNF(p.netSalary)}</TD>
+                <TD className="font-semibold text-gray-900">{formatGNF(p.netSalary)}</TD>
                 <TD><Badge tone={STATUS_TONE[p.status]}>{PAYSLIP_STATUS_LABEL[p.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
@@ -138,7 +148,7 @@ function PayslipsTab() {
                     <Button size="sm" variant="ghost" onClick={async () => { try { window.open(await getPayslipPdfObjectUrl(p.id), "_blank"); } catch (e) { notifyError(e); } }}>PDF</Button>
                     {p.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => act(approvePayslip(p.id))}>Valider</Button>}
                     {p.status === "VALIDATED" && <Button size="sm" variant="ghost" onClick={() => act(payPayslip(p.id))}>Payer</Button>}
-                    {p.status === "DRAFT" && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(p)}>Suppr.</Button>}
+                    {p.status === "DRAFT" && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(p)}>Suppr.</Button>}
                   </div>
                 </TD>
               </TR>
@@ -166,40 +176,64 @@ function PayslipsTab() {
   );
 }
 
+const generateSchema = z.object({
+  teacherId: z.string().min(1, "Requis"),
+  periodLabel: z.string().trim().min(1, "Requis"),
+  structureId: z.string(),
+  baseSalary: z.union([z.number(), z.literal("")]),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  absentDays: z.union([z.number(), z.literal("")]),
+  workingDays: z.union([z.number(), z.literal("")]),
+  overtimeHours: z.union([z.number(), z.literal("")]),
+  overtimeRate: z.union([z.number(), z.literal("")]),
+  overtimeMultiplier: z.string(),
+});
+type GenerateFormValues = z.infer<typeof generateSchema>;
+
 function GenerateForm({ teachers, structures, onCancel, onDone }: {
   teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null }[];
   structures: SalaryStructure[]; onCancel: () => void; onDone: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
-      teacherId: "", periodLabel: "", structureId: "", baseSalary: 0 as number | string, periodStart: "", periodEnd: "",
-      absentDays: 0 as number | string, workingDays: 26 as number | string,
-      overtimeHours: 0 as number | string, overtimeRate: 0 as number | string, overtimeMultiplier: "1.5",
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<GenerateFormValues>({
+    resolver: zodResolver(generateSchema),
+    defaultValues: {
+      teacherId: "", periodLabel: "", structureId: "", baseSalary: 0, periodStart: "", periodEnd: "",
+      absentDays: 0, workingDays: 26,
+      overtimeHours: 0, overtimeRate: 0, overtimeMultiplier: "1.5",
     },
-    validate: { teacherId: (v) => (v ? null : "Requis"), periodLabel: (v) => (v ? null : "Requis") },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  function onTeacher(value: string | null) {
-    form.setFieldValue("teacherId", value ?? "");
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachers],
+  );
+
+  function onTeacher(value: string) {
+    setValue("teacherId", value);
     const t = teachers.find((x) => String(x.id) === value);
-    if (t?.remunerationRate != null && t.remunerationRate !== "") form.setFieldValue("baseSalary", Number(t.remunerationRate));
+    if (t?.remunerationRate != null && t.remunerationRate !== "") setValue("baseSalary", Number(t.remunerationRate));
   }
 
   // Auto-remplit les jours d'absence depuis le pointage dès que l'enseignant + la période sont saisis.
-  const { teacherId, periodStart, periodEnd } = form.values;
+  const { teacherId, periodStart, periodEnd } = v;
   useEffect(() => {
     if (!teacherId || !periodStart || !periodEnd) return;
     let active = true;
     getTeacherAttendanceStats(Number(teacherId), periodStart, periodEnd)
-      .then((s) => { if (active) form.setFieldValue("absentDays", s.absentDays ?? 0); })
+      .then((s) => { if (active) setValue("absentDays", s.absentDays ?? 0); })
       .catch(() => { /* pointage indisponible : saisie manuelle */ });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teacherId, periodStart, periodEnd]);
 
-  async function submit(values: typeof form.values) {
+  async function submit(values: GenerateFormValues) {
     setLoading(true);
     try {
       const t = teachers.find((x) => String(x.id) === values.teacherId);
@@ -222,42 +256,77 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <Select label="Enseignant" withAsterisk searchable
-          data={teachers.map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))}
-          value={form.values.teacherId || null} onChange={onTeacher} />
-        <TextInput label="Période" withAsterisk placeholder="Ex. Juin 2026" {...form.getInputProps("periodLabel")} />
-        <div className="grid grid-cols-2 gap-3">
-          <DatePickerInput label="Du" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("periodStart")} />
-          <DatePickerInput label="Au" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("periodEnd")} />
-        </div>
-        <NumberInput label="Salaire de base (GNF)" thousandSeparator=" " min={0} {...form.getInputProps("baseSalary")} />
-        <Select label="Structure salariale" clearable placeholder="Aucune (base seule)"
-          data={structures.map((s) => ({ value: String(s.id), label: s.name }))}
-          value={form.values.structureId || null} onChange={(v) => form.setFieldValue("structureId", v ?? "")} />
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Enseignant <span className="text-error-500">*</span></Label>
+        <SearchableSelect value={v.teacherId} options={teacherOptions} onChange={onTeacher} triggerClassName="w-full justify-between px-3" />
+        {errors.teacherId && <p className="text-xs text-error-600">{errors.teacherId.message}</p>}
+      </Field>
+      <Field>
+        <Label>Période <span className="text-error-500">*</span></Label>
+        <Input placeholder="Ex. Juin 2026" value={v.periodLabel} onChange={(e) => setValue("periodLabel", e.target.value)} aria-invalid={!!errors.periodLabel} />
+        {errors.periodLabel && <p className="text-xs text-error-600">{errors.periodLabel.message}</p>}
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Du</Label>
+          <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable />
+        </Field>
+        <Field>
+          <Label>Au</Label>
+          <DatePicker value={v.periodEnd} onChange={(val) => setValue("periodEnd", val)} clearable />
+        </Field>
+      </div>
+      <Field>
+        <Label>Salaire de base (GNF)</Label>
+        <Input type="number" min={0} value={v.baseSalary} onChange={(e) => setValue("baseSalary", e.target.value === "" ? "" : Number(e.target.value))} />
+      </Field>
+      <Field>
+        <Label>Structure salariale</Label>
+        <Select value={v.structureId} onChange={(e) => setValue("structureId", e.target.value)}>
+          <option value="">Aucune (base seule)</option>
+          {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+        </Select>
+      </Field>
 
-        <div className="rounded-xl border border-slate-200 p-3">
-          <p className="mb-2 text-sm font-semibold text-slate-700">Pointage & heures supplémentaires</p>
-          <div className="grid grid-cols-2 gap-2">
-            <NumberInput label="Jours d'absence" min={0} {...form.getInputProps("absentDays")} />
-            <NumberInput label="Jours ouvrés (mois)" min={1} {...form.getInputProps("workingDays")} />
-          </div>
-          <p className="mt-1 text-xs text-slate-400">Jours d&apos;absence <strong>récupérés automatiquement</strong> du pointage sur la période (modifiable). Retenue = (base ÷ jours ouvrés) × jours d&apos;absence.</p>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <NumberInput label="Heures sup." min={0} {...form.getInputProps("overtimeHours")} />
-            <NumberInput label="Taux horaire (GNF)" min={0} thousandSeparator=" " {...form.getInputProps("overtimeRate")} />
-            <Select label="Coefficient" allowDeselect={false}
-              data={[{ value: "1", label: "×1" }, { value: "1.5", label: "×1.5 (ordinaire)" }, { value: "2", label: "×2 (week-end)" }, { value: "2.5", label: "×2.5 (férié)" }]}
-              {...form.getInputProps("overtimeMultiplier")} />
-          </div>
+      <div className="rounded-xl border border-gray-200 p-3">
+        <p className="mb-2 text-sm font-semibold text-gray-700">Pointage & heures supplémentaires</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Field>
+            <Label>Jours d&apos;absence</Label>
+            <Input type="number" min={0} value={v.absentDays} onChange={(e) => setValue("absentDays", e.target.value === "" ? "" : Number(e.target.value))} />
+          </Field>
+          <Field>
+            <Label>Jours ouvrés (mois)</Label>
+            <Input type="number" min={1} value={v.workingDays} onChange={(e) => setValue("workingDays", e.target.value === "" ? "" : Number(e.target.value))} />
+          </Field>
         </div>
+        <p className="mt-1 text-xs text-gray-400">Jours d&apos;absence <strong>récupérés automatiquement</strong> du pointage sur la période (modifiable). Retenue = (base ÷ jours ouvrés) × jours d&apos;absence.</p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Field>
+            <Label>Heures sup.</Label>
+            <Input type="number" min={0} value={v.overtimeHours} onChange={(e) => setValue("overtimeHours", e.target.value === "" ? "" : Number(e.target.value))} />
+          </Field>
+          <Field>
+            <Label>Taux horaire (GNF)</Label>
+            <Input type="number" min={0} value={v.overtimeRate} onChange={(e) => setValue("overtimeRate", e.target.value === "" ? "" : Number(e.target.value))} />
+          </Field>
+          <Field>
+            <Label>Coefficient</Label>
+            <Select value={v.overtimeMultiplier} onChange={(e) => setValue("overtimeMultiplier", e.target.value)}>
+              <option value="1">×1</option>
+              <option value="1.5">×1.5 (ordinaire)</option>
+              <option value="2">×2 (week-end)</option>
+              <option value="2.5">×2.5 (férié)</option>
+            </Select>
+          </Field>
+        </div>
+      </div>
 
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Calculer & créer</Button>
-        </div>
-      </Stack>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={loading}>Calculer & créer</Button>
+      </div>
     </form>
   );
 }
@@ -292,21 +361,21 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2 text-sm">
-        <div className="rounded-lg bg-slate-50 p-2"><p className="text-xs text-slate-500">Base</p><p className="font-semibold">{formatGNF(current.baseSalary)}</p></div>
-        <div className="rounded-lg bg-slate-50 p-2"><p className="text-xs text-slate-500">Brut</p><p className="font-semibold">{formatGNF(current.grossSalary)}</p></div>
-        <div className="rounded-lg bg-green-50 p-2"><p className="text-xs text-slate-500">Net</p><p className="font-semibold text-green-700">{formatGNF(current.netSalary)}</p></div>
+        <div className="rounded-lg bg-gray-50 p-2"><p className="text-xs text-gray-500">Base</p><p className="font-semibold">{formatGNF(current.baseSalary)}</p></div>
+        <div className="rounded-lg bg-gray-50 p-2"><p className="text-xs text-gray-500">Brut</p><p className="font-semibold">{formatGNF(current.grossSalary)}</p></div>
+        <div className="rounded-lg bg-success-50 p-2"><p className="text-xs text-gray-500">Net</p><p className="font-semibold text-success-700">{formatGNF(current.netSalary)}</p></div>
       </div>
       {linesQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
         <Table>
           <THead><tr><TH>Libellé</TH><TH>Type</TH><TH className="text-right">Montant</TH>{editable && <TH />}</tr></THead>
           <TBody>
-            {(linesQuery.data ?? []).length === 0 && <TR><TD colSpan={editable ? 4 : 3} className="py-6 text-center text-slate-400">Aucune ligne (base seule).</TD></TR>}
+            {(linesQuery.data ?? []).length === 0 && <TR><TD colSpan={editable ? 4 : 3} className="py-6 text-center text-gray-400">Aucune ligne (base seule).</TD></TR>}
             {(linesQuery.data ?? []).map((l) => (
               <TR key={l.id}>
                 <TD>{l.label}</TD>
                 <TD><Badge tone={l.lineType === "EARNING" ? "green" : "amber"}>{LINE_TYPE_LABEL[l.lineType]}</Badge></TD>
                 <TD className="text-right">{l.lineType === "DEDUCTION" ? "−" : "+"} {formatGNF(l.amount)}</TD>
-                {editable && <TD className="text-right"><Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(l.id)}>Retirer</Button></TD>}
+                {editable && <TD className="text-right"><Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(l.id)}>Retirer</Button></TD>}
               </TR>
             ))}
           </TBody>
@@ -314,20 +383,21 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
       )}
 
       {editable ? (
-        <div className="rounded-xl border border-slate-200 p-3">
-          <p className="mb-2 text-sm font-semibold text-slate-700">Ajouter une prime ou une retenue</p>
+        <div className="rounded-xl border border-gray-200 p-3">
+          <p className="mb-2 text-sm font-semibold text-gray-700">Ajouter une prime ou une retenue</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-            <TextInput className="sm:col-span-2" placeholder="Ex. Prime de transport" value={label} onChange={(e) => setLabel(e.currentTarget.value)} />
-            <Select data={(Object.keys(LINE_TYPE_LABEL) as PayslipLineType[]).map((t) => ({ value: t, label: LINE_TYPE_LABEL[t] }))}
-              allowDeselect={false} value={lineType} onChange={(v) => v && setLineType(v as PayslipLineType)} />
-            <NumberInput placeholder="Montant" thousandSeparator=" " min={0} value={amount} onChange={(v) => setAmount(typeof v === "number" ? v : "")} />
+            <Input className="sm:col-span-2" placeholder="Ex. Prime de transport" value={label} onChange={(e) => setLabel(e.target.value)} />
+            <Select value={lineType} onChange={(e) => setLineType(e.target.value as PayslipLineType)}>
+              {(Object.keys(LINE_TYPE_LABEL) as PayslipLineType[]).map((t) => (<option key={t} value={t}>{LINE_TYPE_LABEL[t]}</option>))}
+            </Select>
+            <Input type="number" placeholder="Montant" min={0} value={amount} onChange={(e) => setAmount(e.target.value === "" ? "" : Number(e.target.value))} />
           </div>
           <div className="mt-2 flex justify-end">
             <Button size="sm" loading={saving} onClick={add} leftSection={<Plus className="h-4 w-4" />}>Ajouter la ligne</Button>
           </div>
         </div>
       ) : (
-        <p className="text-xs text-slate-400">Le brut = base + gains ; le net = brut − retenues. Le détail est figé après validation.</p>
+        <p className="text-xs text-gray-400">Le brut = base + gains ; le net = brut − retenues. Le détail est figé après validation.</p>
       )}
     </div>
   );
@@ -338,8 +408,8 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
   structures: SalaryStructure[]; onCancel: () => void; onDone: (count: number) => void;
 }) {
   const [periodLabel, setPeriodLabel] = useState("");
-  const [periodStart, setPeriodStart] = useState<string | null>(null);
-  const [periodEnd, setPeriodEnd] = useState<string | null>(null);
+  const [periodStart, setPeriodStart] = useState<string>("");
+  const [periodEnd, setPeriodEnd] = useState<string>("");
   const [structureId, setStructureId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   // Par défaut : tous les enseignants inclus, base pré-remplie depuis leur taux de rémunération.
@@ -362,7 +432,7 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
     setLoading(true);
     try {
       const created = await generateBatch({
-        periodLabel: periodLabel.trim(), periodStart, periodEnd,
+        periodLabel: periodLabel.trim(), periodStart: periodStart || null, periodEnd: periodEnd || null,
         structureId: structureId ? Number(structureId) : null, wages,
       });
       onDone(created.length);
@@ -372,36 +442,49 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
   const selectedCount = rows.filter((r) => r.included).length;
 
   return (
-    <Stack gap="md">
-      <TextInput label="Période" withAsterisk placeholder="Ex. Mai 2026" value={periodLabel} onChange={(e) => setPeriodLabel(e.currentTarget.value)} />
+    <div className="space-y-4">
+      <Field>
+        <Label>Période <span className="text-error-500">*</span></Label>
+        <Input placeholder="Ex. Mai 2026" value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)} />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
-        <DatePickerInput label="Début (optionnel)" valueFormat="DD/MM/YYYY" clearable value={periodStart} onChange={setPeriodStart} />
-        <DatePickerInput label="Fin (optionnel)" valueFormat="DD/MM/YYYY" clearable value={periodEnd} onChange={setPeriodEnd} />
+        <Field>
+          <Label>Début (optionnel)</Label>
+          <DatePicker value={periodStart} onChange={setPeriodStart} clearable />
+        </Field>
+        <Field>
+          <Label>Fin (optionnel)</Label>
+          <DatePicker value={periodEnd} onChange={setPeriodEnd} clearable />
+        </Field>
       </div>
-      <Select label="Structure salariale (optionnel)" placeholder="Aucune" clearable
-        data={structures.map((s) => ({ value: String(s.id), label: s.name }))}
-        value={structureId || null} onChange={(v) => setStructureId(v ?? "")} />
+      <Field>
+        <Label>Structure salariale (optionnel)</Label>
+        <Select value={structureId} onChange={(e) => setStructureId(e.target.value)}>
+          <option value="">Aucune</option>
+          {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+        </Select>
+      </Field>
 
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-700">Enseignants ({selectedCount} sélectionné(s))</p>
+          <p className="text-sm font-semibold text-gray-700">Enseignants ({selectedCount} sélectionné(s))</p>
           <div className="flex gap-2 text-xs">
             <button type="button" className="text-brand-700 hover:underline" onClick={() => setRows((rs) => rs.map((r) => ({ ...r, included: true })))}>Tout cocher</button>
-            <button type="button" className="text-slate-500 hover:underline" onClick={() => setRows((rs) => rs.map((r) => ({ ...r, included: false })))}>Tout décocher</button>
+            <button type="button" className="text-gray-500 hover:underline" onClick={() => setRows((rs) => rs.map((r) => ({ ...r, included: false })))}>Tout décocher</button>
           </div>
         </div>
-        <div className="max-h-72 overflow-auto rounded-xl border border-slate-200">
+        <div className="max-h-72 overflow-auto rounded-xl border border-gray-200">
           <Table>
             <THead><tr><TH /><TH>Enseignant</TH><TH className="text-right">Salaire de base (GNF)</TH></tr></THead>
             <TBody>
-              {rows.length === 0 && <TR><TD colSpan={3} className="py-6 text-center text-slate-400">Aucun enseignant.</TD></TR>}
+              {rows.length === 0 && <TR><TD colSpan={3} className="py-6 text-center text-gray-400">Aucun enseignant.</TD></TR>}
               {rows.map((r) => (
                 <TR key={r.teacherId}>
-                  <TD><Checkbox checked={r.included} onChange={(e) => setRow(r.teacherId, { included: e.currentTarget.checked })} /></TD>
-                  <TD className="font-medium text-slate-900">{r.name}</TD>
+                  <TD><Checkbox checked={r.included} onChange={(e) => setRow(r.teacherId, { included: e.target.checked })} /></TD>
+                  <TD className="font-medium text-gray-900">{r.name}</TD>
                   <TD className="text-right">
-                    <NumberInput size="xs" thousandSeparator=" " min={0} disabled={!r.included}
-                      value={r.baseSalary} onChange={(v) => setRow(r.teacherId, { baseSalary: typeof v === "number" ? v : "" })} />
+                    <Input type="number" className="ml-auto h-9 w-32" min={0} disabled={!r.included}
+                      value={r.baseSalary} onChange={(e) => setRow(r.teacherId, { baseSalary: e.target.value === "" ? "" : Number(e.target.value) })} />
                   </TD>
                 </TR>
               ))}
@@ -414,7 +497,7 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button onClick={submit} loading={loading}>Générer les fiches</Button>
       </div>
-    </Stack>
+    </div>
   );
 }
 
@@ -437,16 +520,16 @@ function StructuresTab() {
         <Table>
           <THead><tr><TH>Nom</TH><TH>Code</TH><TH>Active</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-slate-400">Aucune structure. Créez-en une (ex. « Enseignant permanent »).</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucune structure. Créez-en une (ex. « Enseignant permanent »).</TD></TR>}
             {(q.data ?? []).map((s) => (
               <TR key={s.id}>
-                <TD className="font-medium text-slate-900">{s.name}</TD>
+                <TD className="font-medium text-gray-900">{s.name}</TD>
                 <TD>{s.code ?? "—"}</TD>
                 <TD>{s.active ? <Badge tone="green">Oui</Badge> : <Badge tone="gray">Non</Badge>}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setRulesFor(s)}>Règles</Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(s)}>Suppr.</Button>
+                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(s)}>Suppr.</Button>
                   </div>
                 </TD>
               </TR>
@@ -466,46 +549,71 @@ function StructuresTab() {
   );
 }
 
+const structureSchema = z.object({ name: z.string().trim().min(1, "Requis"), code: z.string() });
+type StructureFormValues = z.infer<typeof structureSchema>;
+
 function StructureForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({ mode: "controlled", initialValues: { name: "", code: "" }, validate: { name: (v) => (v ? null : "Requis") } });
-  async function submit(values: typeof form.values) {
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<StructureFormValues>({
+    resolver: zodResolver(structureSchema),
+    defaultValues: { name: "", code: "" },
+  });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+  async function submit(values: StructureFormValues) {
     setLoading(true);
     try { await createStructure({ name: values.name, code: values.code || null }); onDone(); }
     catch (err) { notifyError(err); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Nom" withAsterisk placeholder="Ex. Enseignant permanent" {...form.getInputProps("name")} />
-        <TextInput label="Code" placeholder="Ex. PERM" {...form.getInputProps("code")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Créer</Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Nom <span className="text-error-500">*</span></Label>
+        <Input placeholder="Ex. Enseignant permanent" value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
+        {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
+      </Field>
+      <Field>
+        <Label>Code</Label>
+        <Input placeholder="Ex. PERM" value={v.code} onChange={(e) => setValue("code", e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={loading}>Créer</Button>
+      </div>
     </form>
   );
 }
 
+const ruleSchema = z.object({
+  label: z.string().trim().min(1, "Requis"),
+  code: z.string(),
+  category: z.string(),
+  lineType: z.string(),
+  computation: z.string(),
+  value: z.union([z.number(), z.literal("")]),
+  sequence: z.union([z.number(), z.literal("")]),
+});
+type RuleFormValues = z.infer<typeof ruleSchema>;
+
 function RulesPanel({ structure }: { structure: SalaryStructure }) {
   const q = useQuery(() => listRules(structure.id), [structure.id]);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: { label: "", code: "", category: "", lineType: "EARNING" as PayslipLineType, computation: "FIXED" as RuleComputation, value: 0 as number | string, sequence: 10 as number | string },
-    validate: { label: (v) => (v ? null : "Requis") },
+  const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<RuleFormValues>({
+    resolver: zodResolver(ruleSchema),
+    defaultValues: { label: "", code: "", category: "", lineType: "EARNING", computation: "FIXED", value: 0, sequence: 10 },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
   const [adding, setAdding] = useState(false);
 
-  async function add(values: typeof form.values) {
+  async function add(values: RuleFormValues) {
     setAdding(true);
     try {
       await addRule(structure.id, {
         label: values.label, code: values.code || null, category: values.category || null,
-        lineType: values.lineType, computation: values.computation,
+        lineType: values.lineType as PayslipLineType, computation: values.computation as RuleComputation,
         value: Number(values.value) || 0, sequence: Number(values.sequence) || 10,
       });
-      form.reset();
+      reset();
       q.refetch();
     } catch (err) { notifyError(err); } finally { setAdding(false); }
   }
@@ -516,42 +624,67 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
         <Table>
           <THead><tr><TH>Libellé</TH><TH>Type</TH><TH>Calcul</TH><TH>Valeur</TH><TH /></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-6 text-center text-slate-400">Aucune règle.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-6 text-center text-gray-400">Aucune règle.</TD></TR>}
             {(q.data ?? []).map((r) => (
               <TR key={r.id}>
-                <TD className="font-medium">{r.label}{r.code ? <span className="ml-1 text-xs text-slate-400">({r.code})</span> : null}</TD>
+                <TD className="font-medium">{r.label}{r.code ? <span className="ml-1 text-xs text-gray-400">({r.code})</span> : null}</TD>
                 <TD><Badge tone={r.lineType === "EARNING" ? "green" : "amber"}>{LINE_TYPE_LABEL[r.lineType]}</Badge></TD>
-                <TD className="text-xs text-slate-600">{COMPUTATION_LABEL[r.computation]}</TD>
+                <TD className="text-xs text-gray-600">{COMPUTATION_LABEL[r.computation]}</TD>
                 <TD>{r.computation === "FIXED" ? formatGNF(r.value) : `${r.value} %`}</TD>
-                <TD className="text-right"><Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteRule(r.id).then(() => q.refetch()).catch(notifyError)}>Suppr.</Button></TD>
+                <TD className="text-right"><Button size="sm" variant="ghost" className="text-error-600" onClick={() => deleteRule(r.id).then(() => q.refetch()).catch(notifyError)}>Suppr.</Button></TD>
               </TR>
             ))}
           </TBody>
         </Table>
       )}
 
-      <form onSubmit={form.onSubmit(add)} className="rounded-xl border border-slate-200 p-3">
-        <p className="mb-2 text-sm font-semibold text-slate-700">Ajouter une règle</p>
-        <Stack gap="sm">
+      <form onSubmit={handleSubmit(add)} className="rounded-xl border border-gray-200 p-3">
+        <p className="mb-2 text-sm font-semibold text-gray-700">Ajouter une règle</p>
+        <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <TextInput label="Libellé" withAsterisk placeholder="Ex. Prime de logement" {...form.getInputProps("label")} />
-            <TextInput label="Code" placeholder="HRA" {...form.getInputProps("code")} />
+            <Field>
+              <Label>Libellé <span className="text-error-500">*</span></Label>
+              <Input placeholder="Ex. Prime de logement" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+              {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+            </Field>
+            <Field>
+              <Label>Code</Label>
+              <Input placeholder="HRA" value={v.code} onChange={(e) => setValue("code", e.target.value)} />
+            </Field>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Select label="Type" allowDeselect={false} data={[{ value: "EARNING", label: "Gain" }, { value: "DEDUCTION", label: "Retenue" }]} {...form.getInputProps("lineType")} />
-            <TextInput label="Catégorie" placeholder="Allowance / Deduction" {...form.getInputProps("category")} />
+            <Field>
+              <Label>Type</Label>
+              <Select value={v.lineType} onChange={(e) => setValue("lineType", e.target.value)}>
+                <option value="EARNING">Gain</option>
+                <option value="DEDUCTION">Retenue</option>
+              </Select>
+            </Field>
+            <Field>
+              <Label>Catégorie</Label>
+              <Input placeholder="Allowance / Deduction" value={v.category} onChange={(e) => setValue("category", e.target.value)} />
+            </Field>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <Select label="Calcul" allowDeselect={false}
-              data={(Object.keys(COMPUTATION_LABEL) as RuleComputation[]).map((c) => ({ value: c, label: COMPUTATION_LABEL[c] }))}
-              {...form.getInputProps("computation")} />
-            <NumberInput label="Valeur" min={0} {...form.getInputProps("value")} />
-            <NumberInput label="Ordre" min={0} {...form.getInputProps("sequence")} />
+            <Field>
+              <Label>Calcul</Label>
+              <Select value={v.computation} onChange={(e) => setValue("computation", e.target.value)}>
+                {(Object.keys(COMPUTATION_LABEL) as RuleComputation[]).map((c) => (<option key={c} value={c}>{COMPUTATION_LABEL[c]}</option>))}
+              </Select>
+            </Field>
+            <Field>
+              <Label>Valeur</Label>
+              <Input type="number" min={0} value={v.value} onChange={(e) => setValue("value", e.target.value === "" ? "" : Number(e.target.value))} />
+            </Field>
+            <Field>
+              <Label>Ordre</Label>
+              <Input type="number" min={0} value={v.sequence} onChange={(e) => setValue("sequence", e.target.value === "" ? "" : Number(e.target.value))} />
+            </Field>
           </div>
           <div className="flex justify-end">
             <Button type="submit" size="sm" loading={adding}>Ajouter la règle</Button>
           </div>
-        </Stack>
+        </div>
       </form>
     </div>
   );
@@ -560,8 +693,8 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
 // ── Rémunération (horaire/fixe) & paie mensuelle (heures réalisées − retards) ──────
 function CompensationTab() {
   const teachersQuery = useQuery(listTeachers, []);
-  const teachers = teachersQuery.data ?? [];
-  const [teacherId, setTeacherId] = useState<string | null>(null);
+  const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
+  const [teacherId, setTeacherId] = useState<string>("");
   const tid = teacherId ? Number(teacherId) : null;
 
   const compQuery = useQuery(() => (tid ? getCompensation(tid) : Promise.resolve(null)), [teacherId]);
@@ -570,11 +703,22 @@ function CompensationTab() {
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [y, m] = period.split("-").map(Number);
   const payQuery = useQuery(() => (tid ? getMonthlyPay(tid, y, m) : Promise.resolve(null)), [teacherId, period]);
+  const theoreticalQuery = useQuery(() => (tid ? getTheoreticalPay(tid, y, m) : Promise.resolve(null)), [teacherId, period]);
 
   const fmtH = (min: number) => `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
   const p: MonthlyPay | null | undefined = payQuery.data;
+  const tp: TheoreticalMonthlyPay | null | undefined = theoreticalQuery.data;
   const teacherName = teachers.find((t) => t.id === tid);
   const [genLoading, setGenLoading] = useState(false);
+  const [genTimetableLoading, setGenTimetableLoading] = useState(false);
+
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachers],
+  );
 
   async function genPayslip() {
     if (!tid) return;
@@ -585,29 +729,40 @@ function CompensationTab() {
     } catch (e) { notifyError(e); } finally { setGenLoading(false); }
   }
 
+  async function genPayslipFromTimetable() {
+    if (!tid) return;
+    setGenTimetableLoading(true);
+    try {
+      await generatePayslipFromTimetable(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null);
+      notifySuccess("Fiche de paie générée depuis l'emploi du temps (onglet Fiches de paie)");
+    } catch (e) { notifyError(e); } finally { setGenTimetableLoading(false); }
+  }
+
   return (
     <div className="space-y-5">
       <div className="max-w-md">
-        <Select label="Enseignant / personnel" placeholder="Choisir" searchable
-          data={teachers.map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))}
-          value={teacherId} onChange={setTeacherId} />
+        <Label>Enseignant / personnel</Label>
+        <SearchableSelect value={teacherId} options={teacherOptions} onChange={setTeacherId} triggerClassName="w-full justify-between px-3" />
       </div>
 
       {!tid ? (
-        <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">Sélectionnez une personne pour paramétrer sa rémunération.</p>
+        <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">Sélectionnez une personne pour paramétrer sa rémunération.</p>
       ) : (
         <>
           {compQuery.loading ? (
             <div className="flex justify-center py-6"><Spinner /></div>
           ) : (
             <CompForm key={teacherId} teacherId={tid} initial={compQuery.data ?? null} teacher={teacherName ?? null}
-              onSaved={() => { compQuery.refetch(); payQuery.refetch(); }} />
+              onSaved={() => { compQuery.refetch(); payQuery.refetch(); theoreticalQuery.refetch(); }} />
           )}
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-              <h3 className="text-sm font-semibold text-slate-700">Paie du mois</h3>
-              <TextInput type="month" label="Mois" value={period} onChange={(e) => setPeriod(e.currentTarget.value)} />
+              <h3 className="text-sm font-semibold text-gray-700">Paie du mois</h3>
+              <Field>
+                <Label>Mois</Label>
+                <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+              </Field>
             </div>
             {payQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : p ? (
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -619,9 +774,9 @@ function CompensationTab() {
                   { label: "Salaire fixe", value: p.payMode === "FIXED" ? formatGNF(p.fixedSalary) : "—" },
                   { label: "Net à payer", value: formatGNF(p.grossPay), strong: true },
                 ].map((c) => (
-                  <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-slate-50"}`}>
-                    <p className="text-xs text-slate-500">{c.label}</p>
-                    <p className={`mt-1 text-base font-bold ${c.warn ? "text-red-600" : "text-slate-900"}`}>{c.value}</p>
+                  <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-gray-50"}`}>
+                    <p className="text-xs text-gray-500">{c.label}</p>
+                    <p className={`mt-1 text-base font-bold ${c.warn ? "text-error-600" : "text-gray-900"}`}>{c.value}</p>
                   </div>
                 ))}
               </div>
@@ -629,6 +784,36 @@ function CompensationTab() {
             {p && (
               <div className="mt-3 flex justify-end">
                 <Button onClick={genPayslip} loading={genLoading}>Générer la fiche de paie</Button>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 text-sm font-semibold text-gray-700">
+              Paie automatique depuis l&apos;emploi du temps (§6) — par typologie de classe, sans saisie manuelle
+            </h3>
+            {theoreticalQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : tp ? (
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {[
+                  { label: "Heures classes normales", value: fmtH(tp.normalMinutes) },
+                  { label: "Heures classes d'examen", value: fmtH(tp.examMinutes) },
+                  { label: "Tarif normale", value: formatGNF(tp.hourlyRateNormal) },
+                  { label: "Tarif examen", value: formatGNF(tp.hourlyRateExam) },
+                  { label: "Salaire fixe", value: tp.payMode === "FIXED" ? formatGNF(tp.fixedSalary) : "—" },
+                  { label: "Net à payer", value: formatGNF(tp.grossPay), strong: true },
+                ].map((c) => (
+                  <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-gray-50"}`}>
+                    <p className="text-xs text-gray-500">{c.label}</p>
+                    <p className="mt-1 text-base font-bold text-gray-900">{c.value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {tp && (
+              <div className="mt-3 flex justify-end">
+                <Button onClick={genPayslipFromTimetable} loading={genTimetableLoading}>
+                  Générer la fiche depuis l&apos;emploi du temps
+                </Button>
               </div>
             )}
           </div>
@@ -649,39 +834,56 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
   const fbHourly = teacher?.remunerationType === "HORAIRE";
   const prefilled = !initial && fbRate > 0;
   const [payMode, setPayMode] = useState<PayMode>(initial?.payMode ?? (fbHourly ? "HOURLY" : "FIXED"));
-  const [hourlyRate, setHourlyRate] = useState<number | string>(initial ? Number(initial.hourlyRate) : (fbHourly ? fbRate : 0));
+  const [hourlyRateNormal, setHourlyRateNormal] = useState<number | string>(initial ? Number(initial.hourlyRateNormal) : (fbHourly ? fbRate : 0));
+  const [hourlyRateExam, setHourlyRateExam] = useState<number | string>(initial ? Number(initial.hourlyRateExam) : 0);
   const [fixedSalary, setFixedSalary] = useState<number | string>(initial ? Number(initial.fixedSalary) : (fbHourly ? 0 : fbRate));
   const [saving, setSaving] = useState(false);
 
   async function save() {
     setSaving(true);
     try {
-      await setCompensation(teacherId, { payMode, hourlyRate: Number(hourlyRate) || 0, fixedSalary: Number(fixedSalary) || 0 });
+      await setCompensation(teacherId, {
+        payMode, hourlyRateNormal: Number(hourlyRateNormal) || 0,
+        hourlyRateExam: Number(hourlyRateExam) || 0, fixedSalary: Number(fixedSalary) || 0,
+      });
       notifySuccess("Rémunération enregistrée");
       onSaved();
     } catch (e) { notifyError(e); } finally { setSaving(false); }
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">Mode de rémunération</h3>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Select label="Mode" allowDeselect={false} value={payMode}
-          data={[{ value: "HOURLY", label: "Horaire (aux heures réalisées)" }, { value: "FIXED", label: "Salaire fixe" }]}
-          onChange={(v) => setPayMode((v ?? "HOURLY") as PayMode)} />
-        <NumberInput label="Tarif horaire (GNF)" thousandSeparator=" " min={0} value={hourlyRate} onChange={setHourlyRate} />
-        <NumberInput label="Salaire fixe (GNF)" thousandSeparator=" " min={0} value={fixedSalary} onChange={setFixedSalary}
-          disabled={payMode === "HOURLY"} />
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold text-gray-700">Mode de rémunération</h3>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field>
+          <Label>Mode</Label>
+          <Select value={payMode} onChange={(e) => setPayMode(e.target.value as PayMode)}>
+            <option value="HOURLY">Horaire (aux heures réalisées)</option>
+            <option value="FIXED">Salaire fixe</option>
+          </Select>
+        </Field>
+        <Field>
+          <Label>Tarif horaire — classe normale (GNF)</Label>
+          <Input type="number" min={0} value={hourlyRateNormal} onChange={(e) => setHourlyRateNormal(e.target.value)} />
+        </Field>
+        <Field>
+          <Label>Tarif horaire — classe d&apos;examen (GNF)</Label>
+          <Input type="number" min={0} value={hourlyRateExam} onChange={(e) => setHourlyRateExam(e.target.value)} />
+        </Field>
+        <Field>
+          <Label>Salaire fixe (GNF)</Label>
+          <Input type="number" min={0} value={fixedSalary} onChange={(e) => setFixedSalary(e.target.value)} disabled={payMode === "HOURLY"} />
+        </Field>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         {prefilled
-          ? <p className="text-xs text-emerald-600">Pré-rempli depuis la fiche enseignant — enregistrez pour confirmer.</p>
+          ? <p className="text-xs text-success-600">Pré-rempli depuis la fiche enseignant — enregistrez pour confirmer.</p>
           : <span />}
         <Button onClick={save} loading={saving}>Enregistrer</Button>
       </div>
-      <p className="mt-2 text-xs text-slate-400">
+      <p className="mt-2 text-xs text-gray-400">
         Horaire : paie = heures effectives × tarif. Fixe : salaire fixe + heures de cours effectives × tarif
-        (direction qui enseigne aussi). Heures comptées quand la séance est « réalisée », moins les retards.
+        (direction qui enseigne aussi). Deux tarifs distincts selon la typologie de la classe (normale / examen).
       </p>
     </div>
   );

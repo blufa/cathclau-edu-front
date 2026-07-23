@@ -1,6 +1,6 @@
 "use client";
 
-import { Accordion } from "@mantine/core";
+import { Accordion } from "@/components/ui/accordion";
 
 const FAQ = [
   {
@@ -22,23 +22,5 @@ const FAQ = [
 ];
 
 export function LandingFaq() {
-  return (
-    <Accordion
-      variant="separated"
-      radius="lg"
-      chevronPosition="right"
-      classNames={{ control: "text-slate-900", item: "border border-slate-200 bg-white" }}
-    >
-      {FAQ.map((item) => (
-        <Accordion.Item key={item.q} value={item.q}>
-          <Accordion.Control>
-            <span className="text-base font-semibold text-slate-900">{item.q}</span>
-          </Accordion.Control>
-          <Accordion.Panel>
-            <p className="text-sm leading-relaxed text-slate-600">{item.a}</p>
-          </Accordion.Panel>
-        </Accordion.Item>
-      ))}
-    </Accordion>
-  );
+  return <Accordion items={FAQ} />;
 }

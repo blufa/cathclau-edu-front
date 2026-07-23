@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { NumberInput, Select as MantineSelect, Stack } from "@mantine/core";
 import { getCalculationSettings, updateCalculationSettings } from "@/lib/api/grading";
 import {
   AVERAGE_METHOD_LABEL,
@@ -12,6 +11,8 @@ import {
 } from "@/lib/types/grading";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export function CalculationSettingsPanel({ canWrite }: { canWrite: boolean }) {
@@ -42,41 +43,36 @@ export function CalculationSettingsPanel({ canWrite }: { canWrite: boolean }) {
   if (loading || !form) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   return (
-    <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-6">
-      <p className="mb-4 text-xs text-slate-400">
+    <div className="max-w-xl rounded-2xl border border-gray-200 bg-white p-6">
+      <p className="mb-4 text-xs text-gray-400">
         Méthode de calcul des moyennes, précision et politique d&apos;arrondi appliquées aux bulletins.
       </p>
-      <Stack gap="md">
-        <MantineSelect
-          label="Méthode de calcul"
-          disabled={!canWrite}
-          data={Object.entries(AVERAGE_METHOD_LABEL).map(([value, label]) => ({ value, label }))}
-          value={form.averageMethod}
-          onChange={(v) => v && setForm((s) => (s ? { ...s, averageMethod: v as AverageMethod } : s))}
-          allowDeselect={false}
-        />
-        <NumberInput
-          label="Nombre de décimales"
-          min={0}
-          max={4}
-          disabled={!canWrite}
-          value={form.decimals}
-          onChange={(v) => setForm((s) => (s ? { ...s, decimals: typeof v === "number" ? v : 2 } : s))}
-        />
-        <MantineSelect
-          label="Arrondi"
-          disabled={!canWrite}
-          data={Object.entries(ROUNDING_POLICY_LABEL).map(([value, label]) => ({ value, label }))}
-          value={form.rounding}
-          onChange={(v) => v && setForm((s) => (s ? { ...s, rounding: v as RoundingPolicy } : s))}
-          allowDeselect={false}
-        />
+      <div className="space-y-4">
+        <Field>
+          <Label>Méthode de calcul</Label>
+          <Select disabled={!canWrite} value={form.averageMethod}
+            onChange={(e) => setForm((s) => (s ? { ...s, averageMethod: e.target.value as AverageMethod } : s))}>
+            {Object.entries(AVERAGE_METHOD_LABEL).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Nombre de décimales</Label>
+          <Input type="number" min={0} max={4} disabled={!canWrite} value={form.decimals}
+            onChange={(e) => setForm((s) => (s ? { ...s, decimals: Number(e.target.value) || 0 } : s))} />
+        </Field>
+        <Field>
+          <Label>Arrondi</Label>
+          <Select disabled={!canWrite} value={form.rounding}
+            onChange={(e) => setForm((s) => (s ? { ...s, rounding: e.target.value as RoundingPolicy } : s))}>
+            {Object.entries(ROUNDING_POLICY_LABEL).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+          </Select>
+        </Field>
         {canWrite && (
           <div className="flex justify-end">
-            <Button onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+            <Button onClick={save} loading={saving}>Enregistrer</Button>
           </div>
         )}
-      </Stack>
+      </div>
     </div>
   );
 }

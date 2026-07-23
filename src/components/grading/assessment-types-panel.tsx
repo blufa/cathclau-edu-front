@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ColorInput, NumberInput, Stack, Switch, TextInput } from "@mantine/core";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import {
@@ -15,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Field, Input, Label } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -66,15 +67,15 @@ export function AssessmentTypesPanel({ canWrite }: { canWrite: boolean }) {
   const items = q.data ?? [];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <p className="text-sm text-slate-500">Types d&apos;évaluation propres à votre établissement</p>
-        {canWrite && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Ajouter</Button>}
+    <div className="rounded-2xl border border-gray-200 bg-white">
+      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+        <p className="text-sm text-gray-500">Types d&apos;évaluation propres à votre établissement</p>
+        {canWrite && <Button onClick={openCreate} leftSection={<Plus className="h-4 w-4" />}>Ajouter</Button>}
       </div>
       {q.loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : items.length === 0 ? (
-        <p className="px-4 py-10 text-center text-sm text-slate-400">Aucun type configuré.</p>
+        <p className="px-4 py-10 text-center text-sm text-gray-400">Aucun type configuré.</p>
       ) : (
         <Table>
           <THead>
@@ -87,21 +88,21 @@ export function AssessmentTypesPanel({ canWrite }: { canWrite: boolean }) {
             {items.map((t) => (
               <TR key={t.id}>
                 <TD className="font-mono text-xs">{t.code}</TD>
-                <TD className="font-medium text-slate-900">{t.label}</TD>
+                <TD className="font-medium text-gray-900">{t.label}</TD>
                 <TD>{t.defaultCoefficient ?? "—"}</TD>
                 <TD>{t.weight ?? "—"}</TD>
                 <TD>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-full ring-1 ring-slate-200" style={{ backgroundColor: t.color ?? "#e2e8f0" }} />
-                    <span className="text-xs text-slate-500">{t.color ?? "—"}</span>
+                    <span className="h-3 w-3 rounded-full ring-1 ring-gray-200" style={{ backgroundColor: t.color ?? "#e2e8f0" }} />
+                    <span className="text-xs text-gray-500">{t.color ?? "—"}</span>
                   </span>
                 </TD>
                 <TD><Badge tone={t.active ? "green" : "gray"}>{t.active ? "Actif" : "Inactif"}</Badge></TD>
                 {canWrite && (
                   <TD className="text-right">
                     <div className="inline-flex gap-1">
-                      <button onClick={() => openEdit(t)} aria-label="Modifier" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></button>
-                      <button onClick={() => remove(t)} aria-label="Supprimer" className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => openEdit(t)} aria-label="Modifier" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></button>
+                      <button onClick={() => remove(t)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </TD>
                 )}
@@ -112,18 +113,40 @@ export function AssessmentTypesPanel({ canWrite }: { canWrite: boolean }) {
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Modifier le type" : "Nouveau type d'évaluation"}>
-        <Stack gap="md">
-          <TextInput label="Code" required value={form.code} onChange={(e) => setForm({ ...form, code: e.currentTarget.value })} placeholder="DEVOIR" />
-          <TextInput label="Libellé" required value={form.label} onChange={(e) => setForm({ ...form, label: e.currentTarget.value })} placeholder="Devoir surveillé" />
-          <NumberInput label="Coefficient par défaut" min={0} step={0.5} decimalScale={2} value={form.defaultCoefficient ?? 1} onChange={(v) => setForm({ ...form, defaultCoefficient: typeof v === "number" ? v : 1 })} />
-          <NumberInput label="Poids" min={0} step={0.5} decimalScale={2} value={form.weight ?? 1} onChange={(v) => setForm({ ...form, weight: typeof v === "number" ? v : 1 })} />
-          <ColorInput label="Couleur" value={form.color ?? "#14b8a6"} onChange={(v) => setForm({ ...form, color: v })} />
-          <Switch label="Actif" checked={form.active ?? true} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
+        <div className="space-y-4">
+          <Field>
+            <Label>Code <span className="text-error-500">*</span></Label>
+            <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="DEVOIR" />
+          </Field>
+          <Field>
+            <Label>Libellé <span className="text-error-500">*</span></Label>
+            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Devoir surveillé" />
+          </Field>
+          <Field>
+            <Label>Coefficient par défaut</Label>
+            <Input type="number" min={0} step={0.5} value={form.defaultCoefficient ?? 1} onChange={(e) => setForm({ ...form, defaultCoefficient: Number(e.target.value) || 1 })} />
+          </Field>
+          <Field>
+            <Label>Poids</Label>
+            <Input type="number" min={0} step={0.5} value={form.weight ?? 1} onChange={(e) => setForm({ ...form, weight: Number(e.target.value) || 1 })} />
+          </Field>
+          <Field>
+            <Label>Couleur</Label>
+            <div className="flex items-center gap-2">
+              <input type="color" value={form.color ?? "#14b8a6"} onChange={(e) => setForm({ ...form, color: e.target.value })}
+                className="h-11 w-14 shrink-0 cursor-pointer rounded-lg border border-gray-300 bg-white p-1" />
+              <Input value={form.color ?? "#14b8a6"} onChange={(e) => setForm({ ...form, color: e.target.value })} className="max-w-[140px]" />
+            </div>
+          </Field>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.active ?? true} onChange={(checked) => setForm({ ...form, active: checked })} ariaLabel="Actif" />
+            <span className="text-sm text-gray-700">Actif</span>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
-            <Button onClick={submit} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+            <Button onClick={submit} loading={saving}>Enregistrer</Button>
           </div>
-        </Stack>
+        </div>
       </Modal>
     </div>
   );

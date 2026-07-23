@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Input, Select, TextInput, type OptionsFilter } from "@mantine/core";
+import { Input, Label } from "@/components/ui/input";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { cn } from "@/lib/utils";
 import {
   COUNTRY_OPTIONS,
   capNational,
@@ -17,7 +19,7 @@ interface PhoneInputProps {
   description?: React.ReactNode;
   /** Numéro au format E.164 (`+224620000000`) ; le pays est détecté à partir de l'indicatif. */
   value?: string;
-  /** Valeur initiale pour les formulaires non contrôlés (Mantine `mode: "uncontrolled"`). */
+  /** Valeur initiale pour les formulaires non contrôlés. */
   defaultValue?: string;
   onChange?: (value: string) => void;
   error?: React.ReactNode;
@@ -25,21 +27,18 @@ interface PhoneInputProps {
   disabled?: boolean;
 }
 
-// Sélecteur de pays : uniquement le drapeau une fois replié (pas de nom qui alourdit la ligne) —
-// mais on garde nom + indicatif pour la recherche et pour l'affichage des options dans la liste.
-const COUNTRY_BY_CODE = new Map(COUNTRY_OPTIONS.map((c) => [c.code, c]));
-const COUNTRY_DATA = COUNTRY_OPTIONS.map((c) => ({ value: c.code, label: c.flag }));
-
-/** Recherche par nom de pays, indicatif ou code ISO, même si le libellé affiché n'est que le drapeau. */
-const filterCountries: OptionsFilter = ({ options, search }) => {
-  const q = search.trim().toLowerCase();
-  if (!q) return options;
-  return options.filter((o) => {
-    if (!("value" in o)) return false;
-    const c = COUNTRY_BY_CODE.get(o.value as CountryCode);
-    return !!c && (c.name.toLowerCase().includes(q) || c.dial.includes(q) || c.code.toLowerCase().includes(q));
-  });
-};
+const COUNTRY_SELECT_OPTIONS: SearchableOption[] = COUNTRY_OPTIONS.map((c) => ({
+  value: c.code,
+  trigger: <span className="text-lg leading-none">{c.flag}</span>,
+  searchText: `${c.name} ${c.dial} ${c.code}`,
+  label: (
+    <span className="flex items-center gap-2">
+      <span className="text-lg leading-none">{c.flag}</span>
+      <span>{c.name}</span>
+      <span className="text-gray-400">+{c.dial}</span>
+    </span>
+  ),
+}));
 
 /**
  * Saisie standardisée d'un numéro : on choisit le pays (liste mondiale, recherchable par nom ou
@@ -75,9 +74,9 @@ export function PhoneInput({
     }
   }
 
-  function changeCountry(code: CountryCode) {
-    setCountry(code);
-    onChange?.(toE164(code, national));
+  function changeCountry(code: string) {
+    setCountry(code as CountryCode);
+    onChange?.(toE164(code as CountryCode, national));
   }
 
   function changeNational(input: string) {
@@ -87,43 +86,35 @@ export function PhoneInput({
   }
 
   return (
-    <Input.Wrapper label={label} description={description} error={error} withAsterisk={required}>
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 2 }}>
-        <Select
-          data={COUNTRY_DATA}
+    <div className="space-y-1.5">
+      {label && (
+        <Label>
+          {label}
+          {required && <span className="ml-0.5 text-error-500">*</span>}
+        </Label>
+      )}
+      {description && <p className="text-xs text-gray-500">{description}</p>}
+      <div className="flex items-start gap-2">
+        <SearchableSelect
           value={country}
-          searchable
-          allowDeselect={false}
+          options={COUNTRY_SELECT_OPTIONS}
+          onChange={changeCountry}
           disabled={disabled}
-          maxDropdownHeight={280}
-          nothingFoundMessage="Aucun pays"
-          comboboxProps={{ withinPortal: true, width: 240 }}
-          filter={filterCountries}
-          renderOption={({ option }) => {
-            const c = COUNTRY_BY_CODE.get(option.value as CountryCode);
-            return (
-              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 18 }}>{option.label}</span>
-                <span>{c?.name}</span>
-                <span style={{ color: "var(--mantine-color-dimmed)" }}>+{c?.dial}</span>
-              </span>
-            );
-          }}
-          aria-label="Pays"
-          style={{ width: 72, flex: "0 0 auto" }}
-          styles={{ input: { fontSize: 18, textAlign: "center", paddingInline: 4 } }}
-          onChange={(code) => code && changeCountry(code as CountryCode)}
+          ariaLabel="Pays"
+          triggerClassName="w-[4.5rem] flex-none"
+          noResultsLabel="Aucun pays"
         />
-        <TextInput
-          style={{ flex: 1, minWidth: 0 }}
+        <Input
+          className={cn("flex-1", error && "border-error-500")}
           inputMode="tel"
           placeholder={placeholderNational(country)}
           value={formatNational(country, national)}
           disabled={disabled}
-          error={!!error}
-          onChange={(e) => changeNational(e.currentTarget.value)}
+          aria-invalid={!!error}
+          onChange={(e) => changeNational(e.target.value)}
         />
       </div>
-    </Input.Wrapper>
+      {error && <p className="text-xs text-error-600">{error}</p>}
+    </div>
   );
 }

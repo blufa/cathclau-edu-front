@@ -1,13 +1,14 @@
-import { Loader } from "@mantine/core";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function Spinner({ className }: { className?: string }) {
-  return <Loader size="sm" color="indigo" className={className} />;
+  return <Loader2 className={cn("h-4 w-4 animate-spin text-brand-600", className)} />;
 }
 
 export function FullPageSpinner() {
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <Loader size="lg" color="indigo" />
+      <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
     </div>
   );
 }

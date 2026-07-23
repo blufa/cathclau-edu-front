@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Autocomplete, Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Button } from "@/components/ui/button";
+import { Label, Field, Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { createRoom } from "@/lib/api/academics";
 import type { Salle, TypeSalle } from "@/lib/types/academics";
 import { notifyError, notifySuccess } from "@/lib/feedback";
@@ -59,37 +62,52 @@ export function RoomAssistant({
   }
 
   return (
-    <Stack gap="md">
-      <Text size="sm" c="dimmed">
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
         Numérotation <strong>continue</strong> : l&apos;assistant reprend après la dernière salle
         (ex. « Salle 001 », « Salle 002 »… puis l&apos;étage suivant enchaîne « 003 », « 004 »…).
-      </Text>
-      <Group grow>
-        <Autocomplete label="Bâtiment" data={BUILDINGS} value={building} onChange={setBuilding} disabled={saving} />
-        <NumberInput label="Numéro de départ" min={1} allowDecimal={false} value={startNum} onChange={setStartNum} disabled={saving} />
-      </Group>
-      <Group grow>
-        <NumberInput label="Nombre de salles" min={1} max={40} allowDecimal={false} value={count} onChange={setCount} disabled={saving} />
-        <NumberInput label="Capacité (toutes)" min={0} allowDecimal={false} value={capacity} onChange={setCapacity} disabled={saving} />
-        <Select label="Type" data={ROOM_TYPE_OPTIONS} value={type} onChange={(v) => setType((v as TypeSalle) ?? "SALLE_COURS")} disabled={saving} />
-      </Group>
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Bâtiment</Label>
+          <Combobox value={building} onChange={setBuilding} options={BUILDINGS} />
+        </Field>
+        <Field>
+          <Label>Numéro de départ</Label>
+          <Input type="number" min={1} value={startNum} onChange={(e) => setStartNum(e.target.value)} disabled={saving} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field>
+          <Label>Nombre de salles</Label>
+          <Input type="number" min={1} max={40} value={count} onChange={(e) => setCount(e.target.value)} disabled={saving} />
+        </Field>
+        <Field>
+          <Label>Capacité (toutes)</Label>
+          <Input type="number" min={0} value={capacity} onChange={(e) => setCapacity(e.target.value)} disabled={saving} />
+        </Field>
+        <Field>
+          <Label>Type</Label>
+          <Select value={type} onChange={(e) => setType(e.target.value as TypeSalle)} disabled={saving}>
+            {ROOM_TYPE_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+          </Select>
+        </Field>
+      </div>
 
       {planned.length > 0 && (
-        <Text size="sm">
+        <p className="text-sm text-gray-700">
           <strong>{toCreate.length}</strong> salle{toCreate.length > 1 ? "s" : ""} à créer
           {skipped > 0 && ` (${skipped} déjà existante${skipped > 1 ? "s" : ""} ignorée${skipped > 1 ? "s" : ""})`}
           {toCreate.length > 0 && ` : ${toCreate.slice(0, 8).join(", ")}${toCreate.length > 8 ? "…" : ""}`}
-        </Text>
+        </p>
       )}
 
-      <Group justify="flex-end" gap="sm">
-        <Button variant="default" onClick={onCancel} disabled={saving}>
-          Annuler
-        </Button>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel} disabled={saving}>Annuler</Button>
         <Button onClick={handleCreate} loading={saving} disabled={toCreate.length === 0}>
           Créer {toCreate.length > 0 ? `(${toCreate.length})` : ""}
         </Button>
-      </Group>
-    </Stack>
+      </div>
+    </div>
   );
 }

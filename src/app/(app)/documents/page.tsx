@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { NumberInput, Select as MantineSelect, Stack, Tabs, Textarea, TextInput } from "@mantine/core";
-import { FileText, Plus } from "lucide-react";
+import { FileText, History, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -39,6 +38,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -112,10 +115,10 @@ export default function DocumentsPage() {
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
             <FileText className="h-6 w-6 text-brand-600" /> Documents & Modèles
           </h1>
-          <p className="text-sm text-slate-500">Modèles personnalisables (branding, variables, format) — génération, impression, PDF & Word</p>
+          <p className="text-sm text-gray-500">Modèles personnalisables (branding, variables, format) — génération, impression, PDF & Word</p>
         </div>
         {canManage && (
           <div className="flex gap-2">
@@ -125,22 +128,22 @@ export default function DocumentsPage() {
         )}
       </Reveal>
 
-      <Tabs defaultValue="templates" color="brand" variant="pills" radius="md">
-        <Tabs.List>
-          <Tabs.Tab value="templates">Modèles</Tabs.Tab>
-          <Tabs.Tab value="history">Historique</Tabs.Tab>
-        </Tabs.List>
+      <Tabs defaultValue="templates">
+        <TabsList>
+          <TabsTrigger value="templates" icon={FileText}>Modèles</TabsTrigger>
+          <TabsTrigger value="history" icon={History}>Historique</TabsTrigger>
+        </TabsList>
 
-        <Tabs.Panel value="templates" pt="lg">
+        <TabsPanel value="templates">
           {q.loading ? (
             <div className="flex justify-center py-10"><Spinner /></div>
           ) : (q.data ?? []).length === 0 ? (
-            <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">Aucun modèle. Créez-en un pour commencer.</p>
+            <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">Aucun modèle. Créez-en un pour commencer.</p>
           ) : (
             <div className="space-y-6">
               {[...byCategory.entries()].map(([cat, list]) => (
                 <div key={cat}>
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">{CATEGORY_LABEL[cat]}</h3>
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">{CATEGORY_LABEL[cat]}</h3>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {list.map((t) => (
                       <TemplateCard key={t.id} t={t} canManage={canManage}
@@ -152,9 +155,9 @@ export default function DocumentsPage() {
               ))}
             </div>
           )}
-        </Tabs.Panel>
+        </TabsPanel>
 
-        <Tabs.Panel value="history" pt="lg"><HistoryTab /></Tabs.Panel>
+        <TabsPanel value="history"><HistoryTab /></TabsPanel>
       </Tabs>
 
       <Modal open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }}
@@ -199,7 +202,7 @@ function TemplateCard({ t, canManage, onPreview, onGenerate, onEdit, onDefault, 
     <Card>
       <CardBody className="space-y-2">
         <button type="button" onClick={onPreview} title="Prévisualiser"
-          className="block h-44 w-full overflow-hidden rounded-lg border border-slate-200 bg-white">
+          className="block h-44 w-full overflow-hidden rounded-lg border border-gray-200 bg-white">
           {q.loading ? (
             <div className="flex h-full items-center justify-center"><Spinner /></div>
           ) : (
@@ -209,8 +212,8 @@ function TemplateCard({ t, canManage, onPreview, onGenerate, onEdit, onDefault, 
         </button>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="font-semibold text-slate-900">{t.name}</p>
-            <p className="text-xs text-slate-500">{DOC_TYPE_LABEL[t.documentType]} · {STYLE_LABEL[t.style]} · {t.pageFormat}</p>
+            <p className="font-semibold text-gray-900">{t.name}</p>
+            <p className="text-xs text-gray-500">{DOC_TYPE_LABEL[t.documentType]} · {STYLE_LABEL[t.style]} · {t.pageFormat}</p>
           </div>
           {t.isDefault && <Badge tone="green">Défaut</Badge>}
         </div>
@@ -219,7 +222,7 @@ function TemplateCard({ t, canManage, onPreview, onGenerate, onEdit, onDefault, 
           <Button size="sm" onClick={onGenerate}>Générer</Button>
           {canManage && <Button size="sm" variant="ghost" onClick={onEdit}>Modifier</Button>}
           {canManage && !t.isDefault && <Button size="sm" variant="ghost" onClick={onDefault}>Défaut</Button>}
-          {canManage && <Button size="sm" variant="ghost" className="text-red-600" onClick={onRemove}>Suppr.</Button>}
+          {canManage && <Button size="sm" variant="ghost" className="text-error-600" onClick={onRemove}>Suppr.</Button>}
         </div>
       </CardBody>
     </Card>
@@ -232,7 +235,7 @@ function PreviewPane({ template, context }: { template: DocumentTemplate; contex
   const html = q.data?.html ?? "";
   return (
     <div className="space-y-3">
-      <iframe title="preview" srcDoc={html} className="h-[60vh] w-full rounded-xl border border-slate-200 bg-white" />
+      <iframe title="preview" srcDoc={html} className="h-[60vh] w-full rounded-xl border border-gray-200 bg-white" />
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={() => downloadWord(html, template.name)}>Word</Button>
         <Button onClick={() => printHtml(html)}>Imprimer / PDF</Button>
@@ -255,25 +258,31 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
   const [ctx, setCtx] = useState<Record<string, string>>({});
   const [result, setResult] = useState<{ html: string; reference: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [subjectId, setSubjectId] = useState<string | null>(null);
-  const [financeId, setFinanceId] = useState<string | null>(null);
+  const [subjectId, setSubjectId] = useState("");
+  const [financeId, setFinanceId] = useState("");
   const [filling, setFilling] = useState(false);
 
   const studentsQuery = useQuery(() => (isTeacherDoc ? Promise.resolve([]) : searchStudents({ size: 1000 }).then((p) => p.content)), [isTeacherDoc]);
   const teachersQuery = useQuery(() => (isTeacherDoc ? listTeachers() : Promise.resolve([])), [isTeacherDoc]);
-  const options = isTeacherDoc
-    ? (teachersQuery.data ?? []).map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))
-    : (studentsQuery.data ?? []).map((s) => ({ value: String(s.id), label: `${s.firstName} ${s.lastName} (${s.studentNumber})` }));
+  const options: SearchableOption[] = useMemo(() => {
+    const src = isTeacherDoc
+      ? (teachersQuery.data ?? []).map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))
+      : (studentsQuery.data ?? []).map((s) => ({ value: String(s.id), label: `${s.firstName} ${s.lastName} (${s.studentNumber})` }));
+    return src.map((o) => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label }));
+  }, [isTeacherDoc, teachersQuery.data, studentsQuery.data]);
 
   const invoicesQuery = useQuery(() => (isInvoiceDoc && subjectId ? listInvoicesByStudent(Number(subjectId)) : Promise.resolve([])), [subjectId, isInvoiceDoc]);
   const paymentsQuery = useQuery(() => (isPaymentDoc && subjectId ? listPaymentsByStudent(Number(subjectId)) : Promise.resolve([])), [subjectId, isPaymentDoc]);
-  const financeOptions = isInvoiceDoc
-    ? (invoicesQuery.data ?? []).map((i) => ({ value: String(i.id), label: `${i.reference} · ${i.periodLabel ?? ""} · reste ${formatGNF(i.remainingBalance ?? i.totalAmount)}` }))
-    : (paymentsQuery.data ?? []).map((p) => ({ value: String(p.id), label: `${p.reference} · ${formatGNF(p.amount)} · ${p.paidAt?.slice(0, 10) ?? ""}` }));
+  const financeOptions: SearchableOption[] = useMemo(() => {
+    const src = isInvoiceDoc
+      ? (invoicesQuery.data ?? []).map((i) => ({ value: String(i.id), label: `${i.reference} · ${i.periodLabel ?? ""} · reste ${formatGNF(i.remainingBalance ?? i.totalAmount)}` }))
+      : (paymentsQuery.data ?? []).map((p) => ({ value: String(p.id), label: `${p.reference} · ${formatGNF(p.amount)} · ${p.paidAt?.slice(0, 10) ?? ""}` }));
+    return src.map((o) => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label }));
+  }, [isInvoiceDoc, invoicesQuery.data, paymentsQuery.data]);
 
-  async function pickSubject(value: string | null) {
+  async function pickSubject(value: string) {
     setSubjectId(value);
-    setFinanceId(null);
+    setFinanceId("");
     if (!value) return;
     setFilling(true);
     try {
@@ -281,7 +290,7 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
       setCtx((p) => ({ ...resolved, ...stripEmpty(p) })); // auto-fill, garde les saisies non vides
     } catch (err) { notifyError(err); } finally { setFilling(false); }
   }
-  async function pickFinance(value: string | null) {
+  async function pickFinance(value: string) {
     setFinanceId(value);
     if (!value) return;
     setFilling(true);
@@ -306,20 +315,29 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
 
   return (
     <div className="space-y-3">
-      <MantineSelect label={`Pré-remplir depuis un ${isTeacherDoc ? "enseignant" : "élève"} (facultatif)`}
-        placeholder={isTeacherDoc ? "Choisir un enseignant" : "Choisir un élève"} searchable clearable
-        data={options} value={subjectId} onChange={pickSubject} rightSection={filling ? <Spinner /> : null} />
+      <Field>
+        <Label>Pré-remplir depuis un {isTeacherDoc ? "enseignant" : "élève"} (facultatif)</Label>
+        <div className="flex items-center gap-2">
+          <SearchableSelect value={subjectId} options={options} onChange={pickSubject} triggerClassName="w-full justify-between px-3"
+            noResultsLabel={isTeacherDoc ? "Aucun enseignant" : "Aucun élève"} />
+          {filling && <Spinner className="h-4 w-4 shrink-0" />}
+        </div>
+      </Field>
       {isFinanceDoc && subjectId && (
-        <MantineSelect label={isInvoiceDoc ? "Facture" : "Paiement"} searchable clearable
-          placeholder={isInvoiceDoc ? "Choisir la facture" : "Choisir le paiement"}
-          data={financeOptions} value={financeId} onChange={pickFinance}
-          nothingFoundMessage={isInvoiceDoc ? "Aucune facture" : "Aucun paiement"} />
+        <Field>
+          <Label>{isInvoiceDoc ? "Facture" : "Paiement"}</Label>
+          <SearchableSelect value={financeId} options={financeOptions} onChange={pickFinance} triggerClassName="w-full justify-between px-3"
+            noResultsLabel={isInvoiceDoc ? "Aucune facture" : "Aucun paiement"} />
+        </Field>
       )}
       {vars.length > 0 && (
         <div className="grid gap-2 sm:grid-cols-2">
           {vars.map((v) => (
-            <TextInput key={v} label={v} placeholder={`{{${v}}}`} value={ctx[v] ?? ""}
-              onChange={(e) => setCtx((p) => ({ ...p, [v]: e.currentTarget.value }))} />
+            <Field key={v}>
+              <Label>{v}</Label>
+              <Input placeholder={`{{${v}}}`} value={ctx[v] ?? ""}
+                onChange={(e) => setCtx((p) => ({ ...p, [v]: e.target.value }))} />
+            </Field>
           ))}
         </div>
       )}
@@ -327,8 +345,8 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
         <Button onClick={generate} loading={loading}>Générer le document</Button>
       ) : (
         <>
-          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Document généré — réf. <strong>{result.reference}</strong></p>
-          <iframe title="doc" srcDoc={result.html} className="h-[55vh] w-full rounded-xl border border-slate-200 bg-white" />
+          <p className="rounded-lg bg-success-50 px-3 py-2 text-sm text-success-800">Document généré — réf. <strong>{result.reference}</strong></p>
+          <iframe title="doc" srcDoc={result.html} className="h-[55vh] w-full rounded-xl border border-gray-200 bg-white" />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setResult(null)}>Modifier</Button>
             <Button variant="secondary" onClick={() => downloadWord(result.html, result.reference)}>Word</Button>
@@ -346,7 +364,7 @@ function HistoryTab() {
   if (q.loading) return <div className="flex justify-center py-10"><Spinner /></div>;
   const docs = q.data ?? [];
   return docs.length === 0 ? (
-    <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">Aucun document généré.</p>
+    <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">Aucun document généré.</p>
   ) : (
     <Card><CardBody>
       <Table>
@@ -356,8 +374,8 @@ function HistoryTab() {
             <TR key={d.id}>
               <TD className="font-mono text-xs">{d.reference}</TD>
               <TD>{DOC_TYPE_LABEL[d.documentType]}</TD>
-              <TD className="text-sm text-slate-600">{d.title ?? "—"}</TD>
-              <TD className="text-sm text-slate-500">{d.generatedAt?.slice(0, 16).replace("T", " ") ?? "—"}</TD>
+              <TD className="text-sm text-gray-600">{d.title ?? "—"}</TD>
+              <TD className="text-sm text-gray-500">{d.generatedAt?.slice(0, 16).replace("T", " ") ?? "—"}</TD>
             </TR>
           ))}
         </TBody>
@@ -403,46 +421,60 @@ function TemplateEditor({ template, onCancel, onSaved }: {
   }
 
   return (
-    <Stack gap="sm">
+    <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextInput label="Nom du modèle" withAsterisk value={f.name} onChange={(e) => set("name", e.currentTarget.value)} />
-        <MantineSelect label="Catégorie" allowDeselect={false} value={f.category}
-          data={(Object.keys(CATEGORY_LABEL) as DocumentCategory[]).map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))}
-          onChange={(v) => set("category", (v ?? "ADMINISTRATIF") as DocumentCategory)} />
-        <MantineSelect label="Type de document" searchable allowDeselect={false} value={f.documentType}
-          data={(Object.keys(DOC_TYPE_LABEL) as DocumentType[]).map((t) => ({ value: t, label: DOC_TYPE_LABEL[t] }))}
-          onChange={(v) => set("documentType", (v ?? "AUTRE") as DocumentType)} />
-        <MantineSelect label="Style" allowDeselect={false} value={f.style}
-          data={(Object.keys(STYLE_LABEL) as DocumentStyle[]).map((s) => ({ value: s, label: STYLE_LABEL[s] }))}
-          onChange={(v) => set("style", (v ?? "MODERNE") as DocumentStyle)} />
+        <Field><Label>Nom du modèle <span className="text-error-500">*</span></Label><Input value={f.name} onChange={(e) => set("name", e.target.value)} /></Field>
+        <Field>
+          <Label>Catégorie</Label>
+          <Select value={f.category} onChange={(e) => set("category", e.target.value as DocumentCategory)}>
+            {(Object.keys(CATEGORY_LABEL) as DocumentCategory[]).map((c) => (<option key={c} value={c}>{CATEGORY_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Type de document</Label>
+          <Select value={f.documentType} onChange={(e) => set("documentType", e.target.value as DocumentType)}>
+            {(Object.keys(DOC_TYPE_LABEL) as DocumentType[]).map((t) => (<option key={t} value={t}>{DOC_TYPE_LABEL[t]}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Style</Label>
+          <Select value={f.style} onChange={(e) => set("style", e.target.value as DocumentStyle)}>
+            {(Object.keys(STYLE_LABEL) as DocumentStyle[]).map((s) => (<option key={s} value={s}>{STYLE_LABEL[s]}</option>))}
+          </Select>
+        </Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-4">
-        <MantineSelect label="Format" allowDeselect={false} value={f.pageFormat}
-          data={[{ value: "A4", label: "A4" }, { value: "A5", label: "A5" }]} onChange={(v) => set("pageFormat", (v ?? "A4") as PageFormat)} />
-        <TextInput label="Couleur" value={f.primaryColor ?? ""} onChange={(e) => set("primaryColor", e.currentTarget.value)} />
-        <TextInput label="Police" value={f.fontFamily ?? ""} onChange={(e) => set("fontFamily", e.currentTarget.value)} />
-        <TextInput label="Préfixe n°" placeholder="CERT" value={f.numberingPrefix ?? ""} onChange={(e) => set("numberingPrefix", e.currentTarget.value)} />
+        <Field>
+          <Label>Format</Label>
+          <Select value={f.pageFormat} onChange={(e) => set("pageFormat", e.target.value as PageFormat)}>
+            <option value="A4">A4</option>
+            <option value="A5">A5</option>
+          </Select>
+        </Field>
+        <Field><Label>Couleur</Label><Input value={f.primaryColor ?? ""} onChange={(e) => set("primaryColor", e.target.value)} /></Field>
+        <Field><Label>Police</Label><Input value={f.fontFamily ?? ""} onChange={(e) => set("fontFamily", e.target.value)} /></Field>
+        <Field><Label>Préfixe n°</Label><Input placeholder="CERT" value={f.numberingPrefix ?? ""} onChange={(e) => set("numberingPrefix", e.target.value)} /></Field>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextInput label="Logo (URL)" value={f.logoUrl ?? ""} onChange={(e) => set("logoUrl", e.currentTarget.value)} />
-        <TextInput label="Filigrane" placeholder="COPIE" value={f.watermarkText ?? ""} onChange={(e) => set("watermarkText", e.currentTarget.value)} />
-        <TextInput label="Signature (URL)" value={f.signatureUrl ?? ""} onChange={(e) => set("signatureUrl", e.currentTarget.value)} />
-        <TextInput label="Cachet (URL)" value={f.stampUrl ?? ""} onChange={(e) => set("stampUrl", e.currentTarget.value)} />
+        <Field><Label>Logo (URL)</Label><Input value={f.logoUrl ?? ""} onChange={(e) => set("logoUrl", e.target.value)} /></Field>
+        <Field><Label>Filigrane</Label><Input placeholder="COPIE" value={f.watermarkText ?? ""} onChange={(e) => set("watermarkText", e.target.value)} /></Field>
+        <Field><Label>Signature (URL)</Label><Input value={f.signatureUrl ?? ""} onChange={(e) => set("signatureUrl", e.target.value)} /></Field>
+        <Field><Label>Cachet (URL)</Label><Input value={f.stampUrl ?? ""} onChange={(e) => set("stampUrl", e.target.value)} /></Field>
       </div>
       <div className="grid grid-cols-4 gap-2">
-        <NumberInput label="Marge haut" min={0} value={f.marginTop} onChange={(v) => set("marginTop", Number(v) || 0)} />
-        <NumberInput label="Marge droite" min={0} value={f.marginRight} onChange={(v) => set("marginRight", Number(v) || 0)} />
-        <NumberInput label="Marge bas" min={0} value={f.marginBottom} onChange={(v) => set("marginBottom", Number(v) || 0)} />
-        <NumberInput label="Marge gauche" min={0} value={f.marginLeft} onChange={(v) => set("marginLeft", Number(v) || 0)} />
+        <Field><Label>Marge haut</Label><Input type="number" min={0} value={f.marginTop} onChange={(e) => set("marginTop", Number(e.target.value) || 0)} /></Field>
+        <Field><Label>Marge droite</Label><Input type="number" min={0} value={f.marginRight} onChange={(e) => set("marginRight", Number(e.target.value) || 0)} /></Field>
+        <Field><Label>Marge bas</Label><Input type="number" min={0} value={f.marginBottom} onChange={(e) => set("marginBottom", Number(e.target.value) || 0)} /></Field>
+        <Field><Label>Marge gauche</Label><Input type="number" min={0} value={f.marginLeft} onChange={(e) => set("marginLeft", Number(e.target.value) || 0)} /></Field>
       </div>
-      <Textarea label="En-tête (HTML, variables {{...}})" autosize minRows={2} value={f.headerHtml ?? ""} onChange={(e) => set("headerHtml", e.currentTarget.value)} />
-      <Textarea label="Corps (HTML)" autosize minRows={6} value={f.bodyHtml ?? ""} onChange={(e) => set("bodyHtml", e.currentTarget.value)} />
-      <Textarea label="Pied de page (HTML)" autosize minRows={2} value={f.footerHtml ?? ""} onChange={(e) => set("footerHtml", e.currentTarget.value)} />
-      <p className="text-xs text-slate-400">Variables : {`{{ecole.nom}} {{eleve.nom}} {{eleve.classe}} {{date}} {{reference}} {{logo}} {{signature}} {{cachet}}`}…</p>
+      <Field><Label>En-tête (HTML, variables {"{{...}}"})</Label><Textarea rows={2} value={f.headerHtml ?? ""} onChange={(e) => set("headerHtml", e.target.value)} /></Field>
+      <Field><Label>Corps (HTML)</Label><Textarea rows={6} value={f.bodyHtml ?? ""} onChange={(e) => set("bodyHtml", e.target.value)} /></Field>
+      <Field><Label>Pied de page (HTML)</Label><Textarea rows={2} value={f.footerHtml ?? ""} onChange={(e) => set("footerHtml", e.target.value)} /></Field>
+      <p className="text-xs text-gray-400">Variables : {`{{ecole.nom}} {{eleve.nom}} {{eleve.classe}} {{date}} {{reference}} {{logo}} {{signature}} {{cachet}}`}…</p>
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button onClick={submit} loading={loading}>Enregistrer</Button>
       </div>
-    </Stack>
+    </div>
   );
 }

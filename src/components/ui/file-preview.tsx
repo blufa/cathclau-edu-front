@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Modal as MantineModal } from "@mantine/core";
+import { Modal } from "@/components/ui/modal";
 import { Download, ExternalLink, Printer } from "lucide-react";
 
 function isPdf(url: string): boolean {
@@ -49,7 +49,7 @@ export function FilePreview({
   const pdf = url != null && isPdf(url);
   const image = url != null && !pdf && isImage(url);
   return (
-    <MantineModal opened={open} onClose={onClose} title={title ?? "Aperçu"} centered size="xl" radius="lg">
+    <Modal open={open} onClose={onClose} title={title ?? "Aperçu"} className="max-w-3xl">
       {!url ? (
         <p className="py-8 text-center text-sm text-slate-400">Aucun fichier.</p>
       ) : (
@@ -77,6 +77,6 @@ export function FilePreview({
           )}
         </div>
       )}
-    </MantineModal>
+    </Modal>
   );
 }

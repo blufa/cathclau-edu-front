@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { PasswordInput, Stack, Switch, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { UserPlus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -24,9 +25,11 @@ import { ApiError } from "@/lib/api/errors";
 import type { CreateUserInput, Role, User } from "@/lib/types/iam";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label } from "@/components/ui/input";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Reveal } from "@/components/public/reveal";
@@ -60,7 +63,7 @@ export default function UsersPage() {
 
   if (!allowed) {
     return (
-      <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">
         Accès réservé aux administrateurs de l&apos;école.
       </div>
     );
@@ -110,11 +113,11 @@ export default function UsersPage() {
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
             {initials(u)}
           </span>
-          <span className="font-medium text-slate-900">{fullName(u)}</span>
+          <span className="font-medium text-gray-900">{fullName(u)}</span>
         </div>
       ),
     },
-    { key: "email", header: "Email", accessor: (u) => u.email, render: (u) => <span className="text-slate-600">{u.email}</span> },
+    { key: "email", header: "Email", accessor: (u) => u.email, render: (u) => <span className="text-gray-600">{u.email}</span> },
     {
       key: "status",
       header: "Statut",
@@ -125,7 +128,7 @@ export default function UsersPage() {
       key: "lastLoginAt",
       header: "Dernière connexion",
       accessor: (u) => u.lastLoginAt?.slice(0, 10) ?? "",
-      render: (u) => <span className="text-slate-500">{u.lastLoginAt?.slice(0, 10) ?? "—"}</span>,
+      render: (u) => <span className="text-gray-500">{u.lastLoginAt?.slice(0, 10) ?? "—"}</span>,
     },
     {
       key: "actions",
@@ -145,7 +148,7 @@ export default function UsersPage() {
           <Button size="sm" variant="ghost" onClick={() => setResetting(u)}>
             Mot de passe
           </Button>
-          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(u)}>
+          <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(u)}>
             Suppr.
           </Button>
         </div>
@@ -157,8 +160,8 @@ export default function UsersPage() {
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Utilisateurs</h1>
-          <p className="text-sm text-slate-500">Comptes et accès de l&apos;établissement</p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Utilisateurs</h1>
+          <p className="text-sm text-gray-500">Comptes et accès de l&apos;établissement</p>
         </div>
         <Button onClick={() => setCreating(true)} leftSection={<UserPlus className="h-4 w-4" />}>
           Nouvel utilisateur
@@ -243,22 +246,22 @@ export default function UsersPage() {
       <Modal open={!!resetInfo} onClose={() => setResetInfo(null)} title="Mot de passe réinitialisé">
         {resetInfo && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Communiquez ces identifiants à <span className="font-medium text-slate-900">{resetInfo.name}</span>.
+            <p className="text-sm text-gray-600">
+              Communiquez ces identifiants à <span className="font-medium text-gray-900">{resetInfo.name}</span>.
               {resetInfo.mustChange
                 ? " Ce mot de passe est temporaire : il devra le changer à la prochaine connexion."
                 : " Ce mot de passe est définitif ; il pourra le changer lui-même plus tard s'il le souhaite."}
             </p>
             {resetInfo.username && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-500">Identifiant</p>
-                <p className="font-mono text-sm font-medium text-slate-900">{resetInfo.username}</p>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-xs text-gray-500">Identifiant</p>
+                <p className="font-mono text-sm font-medium text-gray-900">{resetInfo.username}</p>
               </div>
             )}
             <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
               <div>
-                <p className="text-xs text-slate-500">{resetInfo.mustChange ? "Mot de passe temporaire" : "Nouveau mot de passe"}</p>
-                <p className="font-mono text-lg font-bold tracking-wider text-slate-900">{resetInfo.password ?? "—"}</p>
+                <p className="text-xs text-gray-500">{resetInfo.mustChange ? "Mot de passe temporaire" : "Nouveau mot de passe"}</p>
+                <p className="font-mono text-lg font-bold tracking-wider text-gray-900">{resetInfo.password ?? "—"}</p>
               </div>
               {resetInfo.password && (
                 <Button size="sm" variant="secondary" onClick={() => {
@@ -269,7 +272,7 @@ export default function UsersPage() {
                 }}>Copier</Button>
               )}
             </div>
-            <p className="text-xs text-amber-700">Ce mot de passe ne sera plus affiché ensuite. Notez-le si nécessaire.</p>
+            <p className="text-xs text-warning-700">Ce mot de passe ne sera plus affiché ensuite. Notez-le si nécessaire.</p>
             <div className="flex justify-end">
               <Button onClick={() => setResetInfo(null)}>J&apos;ai noté</Button>
             </div>
@@ -281,27 +284,32 @@ export default function UsersPage() {
 }
 
 // ── Create form ────────────────────────────────────────────────────────────
+const createUserSchema = z.object({
+  firstName: z.string().trim().min(1, "Requis"),
+  lastName: z.string().trim().min(1, "Requis"),
+  email: z.string().regex(/^\S+@\S+\.\S+$/, "Email invalide"),
+  password: z.string().min(8, "8 caractères minimum"),
+  phone: z.string(),
+});
+type CreateUserFormValues = z.infer<typeof createUserSchema>;
+
 function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm<CreateUserInput>({
-    mode: "controlled",
-    initialValues: { firstName: "", lastName: "", email: "", password: "", phone: "" },
-    validate: {
-      firstName: (v) => (v ? null : "Requis"),
-      lastName: (v) => (v ? null : "Requis"),
-      email: (v) => (/^\S+@\S+\.\S+$/.test(v) ? null : "Email invalide"),
-      password: (v) => (v.length >= 8 ? null : "8 caractères minimum"),
-    },
+  const { handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<CreateUserFormValues>({
+    resolver: zodResolver(createUserSchema),
+    defaultValues: { firstName: "", lastName: "", email: "", password: "", phone: "" },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: CreateUserInput) {
+  async function submit(values: CreateUserFormValues) {
     setLoading(true);
     try {
-      await createUser(values);
+      await createUser(values as CreateUserInput);
       onCreated();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        form.setFieldError("email", "Cet email est déjà utilisé dans l'école");
+        setError("email", { message: "Cet email est déjà utilisé dans l'école" });
       } else {
         notifyError(err);
       }
@@ -311,46 +319,66 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <div className="grid grid-cols-2 gap-3">
-          <TextInput label="Prénom" withAsterisk {...form.getInputProps("firstName")} />
-          <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
-        </div>
-        <TextInput label="Email" withAsterisk {...form.getInputProps("email")} />
-        <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
-        <TextInput label="Mot de passe initial" type="password" withAsterisk {...form.getInputProps("password")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={loading}>
-            Créer
-          </Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Prénom <span className="text-error-500">*</span></Label>
+          <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
+          {errors.firstName && <p className="text-xs text-error-600">{errors.firstName.message}</p>}
+        </Field>
+        <Field>
+          <Label>Nom <span className="text-error-500">*</span></Label>
+          <Input value={v.lastName} onChange={(e) => setValue("lastName", e.target.value)} aria-invalid={!!errors.lastName} />
+          {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
+        </Field>
+      </div>
+      <Field>
+        <Label>Email <span className="text-error-500">*</span></Label>
+        <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />
+        {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
+      </Field>
+      <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
+      <Field>
+        <Label>Mot de passe initial <span className="text-error-500">*</span></Label>
+        <Input type="password" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
+        {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Annuler
+        </Button>
+        <Button type="submit" loading={loading}>
+          Créer
+        </Button>
+      </div>
     </form>
   );
 }
 
 // ── Edit form ───────────────────────────────────────────────────────────────
+const editUserSchema = z.object({
+  firstName: z.string().trim().min(1, "Requis"),
+  lastName: z.string().trim().min(1, "Requis"),
+  phone: z.string(),
+  active: z.boolean(),
+});
+type EditUserFormValues = z.infer<typeof editUserSchema>;
+
 function UserEditForm({ user, onCancel, onSaved }: { user: User; onCancel: () => void; onSaved: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<EditUserFormValues>({
+    resolver: zodResolver(editUserSchema),
+    defaultValues: {
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone ?? "",
       active: user.active,
     },
-    validate: {
-      firstName: (v) => (v ? null : "Requis"),
-      lastName: (v) => (v ? null : "Requis"),
-    },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: typeof form.values) {
+  async function submit(values: EditUserFormValues) {
     setLoading(true);
     try {
       await updateUser(user.id, values);
@@ -363,28 +391,32 @@ function UserEditForm({ user, onCancel, onSaved }: { user: User; onCancel: () =>
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <div className="grid grid-cols-2 gap-3">
-          <TextInput label="Prénom" withAsterisk {...form.getInputProps("firstName")} />
-          <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
-        </div>
-        <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
-        <Switch
-          label="Compte actif"
-          color="brand"
-          checked={form.values.active}
-          onChange={(e) => form.setFieldValue("active", e.currentTarget.checked)}
-        />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={loading}>
-            Enregistrer
-          </Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Prénom <span className="text-error-500">*</span></Label>
+          <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
+          {errors.firstName && <p className="text-xs text-error-600">{errors.firstName.message}</p>}
+        </Field>
+        <Field>
+          <Label>Nom <span className="text-error-500">*</span></Label>
+          <Input value={v.lastName} onChange={(e) => setValue("lastName", e.target.value)} aria-invalid={!!errors.lastName} />
+          {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
+        </Field>
+      </div>
+      <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
+      <div className="flex items-center gap-3">
+        <Switch checked={v.active} onChange={(checked) => setValue("active", checked)} ariaLabel="Compte actif" />
+        <span className="text-sm text-gray-700">Compte actif</span>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Annuler
+        </Button>
+        <Button type="submit" loading={loading}>
+          Enregistrer
+        </Button>
+      </div>
     </form>
   );
 }
@@ -419,20 +451,18 @@ function PasswordResetForm({
   }
 
   return (
-    <Stack gap="md">
-      <p className="text-sm text-slate-600">
+    <div className="space-y-4">
+      <p className="text-sm text-gray-600">
         Définissez un nouveau mot de passe pour{" "}
-        <span className="font-medium text-slate-900">{fullName(user)}</span>. Son ancien mot de passe et ses
+        <span className="font-medium text-gray-900">{fullName(user)}</span>. Son ancien mot de passe et ses
         sessions actives seront révoqués.
       </p>
-      <PasswordInput
-        label="Nouveau mot de passe"
-        description="Laissez vide pour générer un mot de passe temporaire automatiquement."
-        placeholder="8 caractères minimum"
-        value={password}
-        onChange={(e) => setPassword(e.currentTarget.value)}
-        error={tooShort ? "8 caractères minimum" : undefined}
-      />
+      <Field>
+        <Label>Nouveau mot de passe</Label>
+        <p className="text-xs text-gray-400">Laissez vide pour générer un mot de passe temporaire automatiquement.</p>
+        <Input type="password" placeholder="8 caractères minimum" value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={tooShort} />
+        {tooShort && <p className="text-xs text-error-600">8 caractères minimum</p>}
+      </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>
           Annuler
@@ -441,7 +471,7 @@ function PasswordResetForm({
           {chosen ? "Définir le mot de passe" : "Générer un mot de passe"}
         </Button>
       </div>
-    </Stack>
+    </div>
   );
 }
 
@@ -480,18 +510,18 @@ function UserRolesEditor({ user, roles }: { user: User; roles: Role[] }) {
         return (
           <div
             key={role.id}
-            className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"
+            className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3"
           >
             <div>
-              <p className="text-sm font-medium text-slate-900">{role.name}</p>
-              {role.description && <p className="text-xs text-slate-500">{role.description}</p>}
+              <p className="text-sm font-medium text-gray-900">{role.name}</p>
+              {role.description && <p className="text-xs text-gray-500">{role.description}</p>}
             </div>
             <Button
               size="sm"
               variant={assigned ? "ghost" : "primary"}
               loading={busy === role.id}
               onClick={() => toggle(role, assigned)}
-              className={assigned ? "text-red-600" : undefined}
+              className={assigned ? "text-error-600" : undefined}
             >
               {assigned ? "Retirer" : "Affecter"}
             </Button>

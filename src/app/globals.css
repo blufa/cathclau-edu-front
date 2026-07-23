@@ -1,19 +1,6 @@
 @import "tailwindcss";
 
 /*
- * Mantine + Tailwind coexistence (projet) — règle :
- *   • Mantine = composants fonctionnels (inputs, modals, tables, notifications, AppShell).
- *   • Tailwind + Aceternity UI = design, layout, animations, sections marketing.
- *
- * Isolation du preflight Tailwind :
- *   Tailwind v4 place son reset (preflight) dans la couche CSS `@layer base`.
- *   Les styles Mantine (`@mantine/core/styles.css`) sont importés AVANT et sont
- *   NON-layered. En cascade CSS, une déclaration non-layered l'emporte sur toute
- *   couche → le preflight Tailwind ne peut donc PAS écraser les composants Mantine.
- *   On évite ainsi de styliser deux fois le même élément.
- */
-
-/*
  * Design tokens — CathClau Edu (palette indigo/violet + accents).
  * Exposés en variables Tailwind v4 (@theme) pour les composants Aceternity.
  */
@@ -29,6 +16,76 @@
   --color-brand-700: #1e4fa8;
   --color-brand-800: #16365a;
   --color-brand-900: #0f2744;
+
+  /* Palette neutre — habillage admin "pro" (sidebar, cards, textes secondaires). */
+  --color-gray-25: #fcfcfd;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
+
+  /* Couleurs sémantiques (statuts, badges, alertes). */
+  --color-success-50: #ecfdf3;
+  --color-success-100: #d1fadf;
+  --color-success-500: #12b76a;
+  --color-success-600: #039855;
+  --color-success-700: #027a48;
+
+  --color-warning-50: #fffaeb;
+  --color-warning-100: #fef0c7;
+  --color-warning-500: #f79009;
+  --color-warning-600: #dc6803;
+  --color-warning-700: #b54708;
+
+  --color-error-50: #fef3f2;
+  --color-error-100: #fee4e2;
+  --color-error-500: #f04438;
+  --color-error-600: #d92d20;
+  --color-error-700: #b42318;
+
+  --color-info-50: #eff8ff;
+  --color-info-100: #d1e9ff;
+  --color-info-500: #2e90fa;
+  --color-info-600: #1570ef;
+  --color-info-700: #175cd3;
+
+  /* Police "pro" du kit admin (Outfit, comme le template TailAdmin) — sections marketing/Aceternity
+     gardent leur police système, seul le shell admin (layout.tsx) applique la classe Outfit. */
+  --font-outfit: var(--font-outfit-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Taille de police globale relevée (meilleure lisibilité pour un public non technicien) — seuls
+     les tokens de texte changent, l'échelle d'espacement (h-4, p-3, icônes…) reste intacte. */
+  --text-xs: 0.9375rem;
+  --text-xs--line-height: 1.375rem;
+  --text-sm: 1.0625rem;
+  --text-sm--line-height: 1.625rem;
+  --text-base: 1.1875rem;
+  --text-base--line-height: 1.875rem;
+  --text-lg: 1.3125rem;
+  --text-lg--line-height: 2rem;
+  --text-xl: 1.4375rem;
+  --text-xl--line-height: 2.125rem;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.375rem;
+  --text-3xl: 2.1875rem;
+  --text-3xl--line-height: 2.625rem;
+  --text-4xl: 2.625rem;
+  --text-4xl--line-height: 2.875rem;
+
+  /* Ombres "pro" pour cards/menus/inputs, valeurs identiques au style TailAdmin. */
+  --shadow-theme-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+  --shadow-theme-sm: 0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+  --shadow-theme-md: 0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-theme-lg: 0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+  --shadow-theme-xl: 0px 20px 24px -4px rgba(16, 24, 40, 0.08), 0px 8px 8px -4px rgba(16, 24, 40, 0.03);
+  --shadow-focus-ring: 0px 0px 0px 4px color-mix(in srgb, var(--color-brand-500) 12%, transparent);
 
   /* Animations utilisées par les composants Aceternity (classes `animate-*`). */
   --animate-aurora: aurora 60s linear infinite;
@@ -97,44 +154,6 @@
 /* Confort de lecture global. */
 html {
   scroll-behavior: smooth;
-}
-
-/* ── Form fields (clean admin style, brand-aware focus) ─────────────────────── */
-.mantine-InputWrapper-label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-slate-700, #334155);
-  margin-bottom: 0.375rem;
-}
-.mantine-Input-input,
-.mantine-NativeSelect-input,
-.mantine-Textarea-input {
-  border-color: #e2e8f0;            /* slate-200 */
-  border-radius: 0.5rem;            /* rounded-lg */
-  background-color: #fff;
-  color: #0f172a;                   /* slate-900 */
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.mantine-Input-input::placeholder { color: #94a3b8; } /* slate-400 */
-.mantine-Input-input:hover,
-.mantine-NativeSelect-input:hover { border-color: #cbd5e1; } /* slate-300 */
-.mantine-Input-input:focus,
-.mantine-Input-input:focus-within,
-.mantine-NativeSelect-input:focus,
-.mantine-Textarea-input:focus {
-  border-color: var(--color-brand-500);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 18%, transparent);
-  outline: none;
-}
-.mantine-Input-input[data-error],
-.mantine-Input-input[aria-invalid="true"] {
-  border-color: #ef4444; /* red-500 */
-}
-
-/* Mantine table hover → subtle brand tint (matches the headless DataTable). */
-.mantine-Table-table {
-  --table-hover-color: color-mix(in srgb, var(--color-brand-500) 8%, transparent);
-  --table-highlight-on-hover-color: color-mix(in srgb, var(--color-brand-500) 8%, transparent);
 }
 
 /* ── Pointer cursor on everything clickable ─────────────────────────────────── */

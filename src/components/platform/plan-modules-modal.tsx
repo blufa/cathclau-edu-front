@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Switch } from "@mantine/core";
 import { Lock } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import {
@@ -13,6 +12,7 @@ import {
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /** Manage the modules included in a plan (module M). */
@@ -60,26 +60,26 @@ export function PlanModulesModal({
           {(catalog.data ?? []).map((m) => {
             const on = activeSet.has(m.code);
             return (
-              <div key={m.code} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+              <div key={m.code} className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-900">{m.label}</span>
+                    <span className="text-sm font-medium text-gray-900">{m.label}</span>
                     {m.premium && (
                       <Badge tone="amber">
                         <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3" /> Premium</span>
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-gray-400">
                     {m.code}
                     {m.dependencies.length > 0 && ` · requiert ${m.dependencies.join(", ")}`}
                   </p>
                 </div>
                 <Switch
-                  color="brand"
                   checked={on}
                   disabled={busy === m.code}
-                  onChange={(e) => toggle(m.code, e.currentTarget.checked)}
+                  onChange={(checked) => toggle(m.code, checked)}
+                  ariaLabel={m.label}
                 />
               </div>
             );

@@ -1,0 +1,170 @@
+import axios, { type AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
+import { ApiError } from "./errors";
+import type { ProblemDetail } from "./types";
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/auth/tokens";
+import { getImpersonatedTenantId } from "@/lib/auth/impersonation";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8284/api/v1";
+
+/**
+ * Called when the session can no longer be recovered (refresh failed/absent on a 401).
+ * The auth provider registers a handler here to clear state and route to /login.
+ */
+let onSessionExpired: (() => void) | null = null;
+export function setSessionExpiredHandler(handler: (() => void) | null): void {
+  onSessionExpired = handler;
+}
+
+export interface RequestOptions {
+  /** JSON-serializable body; set automatically with the right Content-Type. */
+  body?: unknown;
+  /** Skip the Authorization header (used for login/refresh/public endpoints). */
+  auth?: boolean;
+  /** Query params appended to the URL (undefined/null values are dropped). */
+  query?: Record<string, string | number | boolean | undefined | null>;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+}
+
+declare module "axios" {
+  interface AxiosRequestConfig {
+    /** Mirrors RequestOptions.auth — read by the request/response interceptors below. Named
+     *  `requireAuth` (not `auth`) because axios already reserves `auth` for HTTP basic credentials. */
+    requireAuth?: boolean;
+    /** Set once a request has already been retried after a token refresh (prevents retry loops). */
+    _retried?: boolean;
+  }
+}
+
+const http = axios.create({ baseURL: BASE_URL });
+
+http.interceptors.request.use((config) => {
+  const withAuth = config.requireAuth !== false;
+  if (withAuth) {
+    const token = getAccessToken();
+    if (token) config.headers.set("Authorization", `Bearer ${token}`);
+    // SUPER_ADMIN impersonation: operate within the chosen school (ignored by the backend for
+    // tenant-scoped users, who carry their tenant in the JWT).
+    const impersonated = getImpersonatedTenantId();
+    if (impersonated != null) config.headers.set("X-Tenant-Id", String(impersonated));
+  }
+  return config;
+});
+
+// ── refresh: single-flight so concurrent 401s share one refresh round-trip ──
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+  try {
+    const res = await axios.post<{ accessToken: string; refreshToken: string }>(
+      `${BASE_URL}/auth/refresh`,
+      { refreshToken },
+      { headers: { "Content-Type": "application/json" } },
+    );
+    setTokens(res.data.accessToken, res.data.refreshToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function ensureRefreshed(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+/** Extracts the RFC7807 problem+json body, whether it came back as JSON or as a Blob (PDF endpoints). */
+async function toApiError(error: AxiosError): Promise<ApiError> {
+  const status = error.response?.status ?? 0;
+  const data = error.response?.data;
+  let problem: ProblemDetail | undefined;
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    try {
+      const text = await data.text();
+      problem = text ? (JSON.parse(text) as ProblemDetail) : undefined;
+    } catch {
+      /* ignore non-JSON error bodies */
+    }
+  } else if (data && typeof data === "object") {
+    problem = data as ProblemDetail;
+  }
+  return new ApiError(status, problem?.title ?? error.message, problem);
+}
+
+http.interceptors.response.use(
+  (res) => res,
+  async (error: AxiosError) => {
+    const config = error.config as InternalAxiosRequestConfig | undefined;
+    const withAuth = config?.requireAuth !== false;
+
+    if (error.response?.status === 401 && withAuth && config && !config._retried) {
+      const refreshed = await ensureRefreshed();
+      if (refreshed) {
+        config._retried = true;
+        return http(config);
+      }
+      clearTokens();
+      onSessionExpired?.();
+    }
+    return Promise.reject(await toApiError(error));
+  },
+);
+
+async function request<T>(path: string, method: string, options: RequestOptions): Promise<T> {
+  const config: AxiosRequestConfig = {
+    method,
+    url: path,
+    params: options.query,
+    data: options.body,
+    headers: options.headers,
+    requireAuth: options.auth,
+    signal: options.signal,
+  };
+  const res = await http.request<T>(config);
+  if (res.status === 204) return undefined as T;
+  const contentType = String(res.headers["content-type"] ?? "");
+  if (!contentType.includes("json")) return undefined as T;
+  return res.data;
+}
+
+/** Core request: attaches the JWT, transparently refreshes once on 401, parses problem+json. */
+export function apiFetch<T>(path: string, options: RequestOptions & { method?: string } = {}): Promise<T> {
+  const { method = "GET", ...rest } = options;
+  return request<T>(path, method, rest);
+}
+
+/**
+ * Fetches a binary endpoint (e.g. application/pdf) WITH the JWT, and returns a local object URL
+ * usable directly in an <iframe>/<img>. Avoids depending on third-party delivery (Cloudinary) and
+ * works around iframes not carrying the Authorization header.
+ */
+export async function apiBlobUrl(path: string, options: RequestOptions = {}): Promise<string> {
+  const res = await http.request<Blob>({
+    method: "GET",
+    url: path,
+    params: options.query,
+    headers: options.headers,
+    requireAuth: options.auth,
+    signal: options.signal,
+    responseType: "blob",
+  });
+  return URL.createObjectURL(res.data);
+}
+
+export const api = {
+  get: <T>(path: string, options?: RequestOptions) => request<T>(path, "GET", options ?? {}),
+  blobUrl: (path: string, options?: RequestOptions) => apiBlobUrl(path, options),
+  post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, "POST", { ...options, body }),
+  put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, "PUT", { ...options, body }),
+  patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(path, "PATCH", { ...options, body }),
+  delete: <T>(path: string, options?: RequestOptions) => request<T>(path, "DELETE", options ?? {}),
+};

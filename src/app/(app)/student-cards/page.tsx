@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Select as MantineSelect, Stack, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { IdCard, Plus, Search, Tags } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -29,15 +30,15 @@ import {
 } from "@/lib/types/student-card";
 import type { Student } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { FileUpload } from "@/components/ui/file-upload";
-import { StudentCardPreview } from "@/components/students/student-card-preview";
-import { Tabs } from "@mantine/core";
+import { StudentCardPreview } from "@/features/students/components/student-card-preview";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -49,21 +50,21 @@ export default function StudentCardsPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   if (!tenantId) {
-    return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Réservé aux comptes d&apos;établissement.</div>;
+    return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé aux comptes d&apos;établissement.</div>;
   }
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Cartes scolaires</h1>
-        <p className="text-sm text-slate-500">Émission des cartes élèves avec QR code signé</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Cartes scolaires</h1>
+        <p className="text-sm text-gray-500">Émission des cartes élèves avec QR code signé</p>
       </Reveal>
-      <Tabs defaultValue="cards" color="brand" variant="pills" radius="md">
-        <Tabs.List>
-          <Tabs.Tab value="cards" leftSection={<IdCard className="h-4 w-4" />}>Cartes</Tabs.Tab>
-          <Tabs.Tab value="templates" leftSection={<Tags className="h-4 w-4" />}>Modèles</Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value="cards" pt="lg"><CardsTab user={user} /></Tabs.Panel>
-        <Tabs.Panel value="templates" pt="lg"><TemplatesTab user={user} /></Tabs.Panel>
+      <Tabs defaultValue="cards">
+        <TabsList>
+          <TabsTrigger value="cards" icon={IdCard}>Cartes</TabsTrigger>
+          <TabsTrigger value="templates" icon={Tags}>Modèles</TabsTrigger>
+        </TabsList>
+        <TabsPanel value="cards"><CardsTab user={user} /></TabsPanel>
+        <TabsPanel value="templates"><TemplatesTab user={user} /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -109,13 +110,13 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
         <Table>
           <THead><tr><TH>N° carte</TH><TH>Élève</TH><TH>Matricule</TH><TH>Émission</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {rows.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-slate-400">Aucune carte.</TD></TR>}
+            {rows.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucune carte.</TD></TR>}
             {rows.map((c) => (
               <TR key={c.id}>
-                <TD className="font-mono text-xs text-slate-600">{c.cardNumber}</TD>
+                <TD className="font-mono text-xs text-gray-600">{c.cardNumber}</TD>
                 <TD>{studentName(c.studentId)}</TD>
                 <TD>{c.studentNumber ?? "—"}</TD>
-                <TD className="text-slate-500">{c.issueDate ?? "—"}</TD>
+                <TD className="text-gray-500">{c.issueDate ?? "—"}</TD>
                 <TD><Badge tone={STATUS_TONE[c.status]}>{CARD_STATUS_LABEL[c.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
@@ -123,7 +124,7 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                     {canEdit && c.status === "ACTIVE" && (
                       <>
                         <Button size="sm" variant="ghost" onClick={() => act(() => replaceCard(c.id), "Carte réémise")}>Réémettre</Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => confirmAction({ title: "Déclarer perdue", message: `Carte ${c.cardNumber}`, confirmLabel: "Déclarer perdue", danger: true, onConfirm: () => act(() => declareCardLost(c.id), "Carte déclarée perdue") })}>Perdue</Button>
+                        <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Déclarer perdue", message: `Carte ${c.cardNumber}`, confirmLabel: "Déclarer perdue", danger: true, onConfirm: () => act(() => declareCardLost(c.id), "Carte déclarée perdue") })}>Perdue</Button>
                       </>
                     )}
                   </div>
@@ -160,29 +161,29 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
   }
 
   return (
-    <Stack gap="md">
+    <div className="space-y-4">
       <form onSubmit={(e) => { e.preventDefault(); setQuery(search.trim()); }} className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input className="w-full pl-9" placeholder="Rechercher un élève (nom, matricule)…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Button type="submit" variant="secondary">Chercher</Button>
       </form>
-      {!defaultTemplate && <p className="text-xs text-amber-600">Aucun modèle de carte — créez-en un dans l&apos;onglet Modèles (le défaut sera utilisé).</p>}
+      {!defaultTemplate && <p className="text-xs text-warning-600">Aucun modèle de carte — créez-en un dans l&apos;onglet Modèles (le défaut sera utilisé).</p>}
       <div className="space-y-1">
         {(studentsQuery.data ?? []).map((s) => (
-          <div key={s.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+          <div key={s.id} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2">
             <div>
-              <p className="text-sm font-medium text-slate-900">{s.firstName} {s.lastName}</p>
-              <p className="text-xs text-slate-400">{s.studentNumber}{!s.photo && " · ⚠ pas de photo"}</p>
+              <p className="text-sm font-medium text-gray-900">{s.firstName} {s.lastName}</p>
+              <p className="text-xs text-gray-400">{s.studentNumber}{!s.photo && " · ⚠ pas de photo"}</p>
             </div>
             <Button size="sm" loading={loading === s.id} disabled={!s.photo} onClick={() => issue(s)}>Émettre</Button>
           </div>
         ))}
-        {query && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-slate-400">Aucun élève trouvé.</p>}
+        {query && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-gray-400">Aucun élève trouvé.</p>}
       </div>
       <div className="flex justify-end"><Button type="button" variant="secondary" onClick={onCancel}>Fermer</Button></div>
-    </Stack>
+    </div>
   );
 }
 
@@ -203,15 +204,15 @@ function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
         <Table>
           <THead><tr><TH>Nom</TH><TH>Orientation</TH><TH>Couleurs</TH><TH>Défaut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucun modèle.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun modèle.</TD></TR>}
             {(q.data ?? []).map((t) => (
               <TR key={t.id}>
-                <TD className="font-medium text-slate-900">{t.name}</TD>
+                <TD className="font-medium text-gray-900">{t.name}</TD>
                 <TD>{t.orientation === "PORTRAIT" ? "Portrait" : "Paysage"}</TD>
                 <TD>
                   <div className="flex gap-1">
-                    {t.primaryColor && <span className="h-4 w-4 rounded-full border border-slate-200" style={{ backgroundColor: t.primaryColor }} />}
-                    {t.secondaryColor && <span className="h-4 w-4 rounded-full border border-slate-200" style={{ backgroundColor: t.secondaryColor }} />}
+                    {t.primaryColor && <span className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: t.primaryColor }} />}
+                    {t.secondaryColor && <span className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: t.secondaryColor }} />}
                   </div>
                 </TD>
                 <TD>{t.isDefault ? <Badge tone="green">Défaut</Badge> : "—"}</TD>
@@ -220,7 +221,7 @@ function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                     <div className="flex justify-end gap-1">
                       {!t.isDefault && <Button size="sm" variant="ghost" onClick={() => act(() => setDefaultCardTemplate(t.id), "Modèle défini par défaut")}>Définir défaut</Button>}
                       <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>Modifier</Button>
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => confirmAction({ title: "Supprimer le modèle", message: t.name, confirmLabel: "Supprimer", danger: true, onConfirm: () => act(() => deleteCardTemplate(t.id), "Supprimé") })}>Suppr.</Button>
+                      <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Supprimer le modèle", message: t.name, confirmLabel: "Supprimer", danger: true, onConfirm: () => act(() => deleteCardTemplate(t.id), "Supprimé") })}>Suppr.</Button>
                     </div>
                   )}
                 </TD>
@@ -238,44 +239,65 @@ function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   );
 }
 
+const templateSchema = z.object({
+  name: z.string().trim().min(1, "Requis"),
+  orientation: z.string(),
+  primaryColor: z.string(),
+  secondaryColor: z.string(),
+  logoUrl: z.string(),
+});
+type TemplateFormValues = z.infer<typeof templateSchema>;
+
 function TemplateForm({ initial, onCancel, onCreated }: { initial?: CardTemplate | null; onCancel: () => void; onCreated: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<TemplateFormValues>({
+    resolver: zodResolver(templateSchema),
+    defaultValues: {
       name: initial?.name ?? "",
-      orientation: (initial?.orientation ?? "LANDSCAPE") as CardOrientation,
+      orientation: initial?.orientation ?? "LANDSCAPE",
       primaryColor: initial?.primaryColor ?? "#14b8a6",
       secondaryColor: initial?.secondaryColor ?? "#0f766e",
       logoUrl: initial?.logoUrl ?? "",
     },
-    validate: { name: (v) => (v ? null : "Requis") },
   });
-  async function submit(values: typeof form.values) {
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+
+  async function submit(values: TemplateFormValues) {
     setLoading(true);
     try {
-      if (initial) await updateCardTemplate(initial.id, values);
-      else await createCardTemplate(values);
+      const payload = { name: values.name, orientation: values.orientation as CardOrientation, primaryColor: values.primaryColor, secondaryColor: values.secondaryColor, logoUrl: values.logoUrl };
+      if (initial) await updateCardTemplate(initial.id, payload);
+      else await createCardTemplate(payload);
       onCreated();
     } catch (e) { notifyError(e); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Nom du modèle" withAsterisk {...form.getInputProps("name")} />
-        <MantineSelect label="Orientation" data={[{ value: "LANDSCAPE", label: "Paysage" }, { value: "PORTRAIT", label: "Portrait" }]} {...form.getInputProps("orientation")} />
-        <div className="grid grid-cols-2 gap-3">
-          <TextInput label="Couleur primaire" type="color" {...form.getInputProps("primaryColor")} />
-          <TextInput label="Couleur secondaire" type="color" {...form.getInputProps("secondaryColor")} />
-        </div>
-        <FileUpload label="Logo" variant="image" folder="cards/logos"
-          value={form.values.logoUrl}
-          onChange={(url) => form.setFieldValue("logoUrl", url ?? "")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Nom du modèle <span className="text-error-500">*</span></Label>
+        <Input value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
+        {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
+      </Field>
+      <Field>
+        <Label>Orientation</Label>
+        <Select value={v.orientation} onChange={(e) => setValue("orientation", e.target.value)}>
+          <option value="LANDSCAPE">Paysage</option>
+          <option value="PORTRAIT">Portrait</option>
+        </Select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field><Label>Couleur primaire</Label><Input type="color" value={v.primaryColor} onChange={(e) => setValue("primaryColor", e.target.value)} /></Field>
+        <Field><Label>Couleur secondaire</Label><Input type="color" value={v.secondaryColor} onChange={(e) => setValue("secondaryColor", e.target.value)} /></Field>
+      </div>
+      <Field>
+        <Label>Logo</Label>
+        <FileUpload variant="image" folder="cards/logos" value={v.logoUrl} onChange={(url) => setValue("logoUrl", url ?? "")} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
+      </div>
     </form>
   );
 }

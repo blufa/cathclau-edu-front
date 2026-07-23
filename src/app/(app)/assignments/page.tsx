@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { NumberInput, Select, Stack, Textarea, TextInput } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -29,6 +29,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -43,9 +46,13 @@ export default function AssignmentsPage() {
   const yearsQuery = useQuery(listAcademicYears, []);
   const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
   const classesQuery = useQuery(() => (cy ? listClasses(cy.id) : Promise.resolve([])), [cy?.id]);
-  const classes = classesQuery.data ?? [];
+  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   const [classId, setClassId] = useState<number | null>(null);
   const effectiveClassId = classId ?? classes[0]?.id ?? null;
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
 
   const subjectsQuery = useQuery(listSubjects, []);
   const subjectName = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
@@ -74,22 +81,23 @@ export default function AssignmentsPage() {
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Devoirs</h1>
-          <p className="text-sm text-slate-500">Devoirs à rendre par classe et suivi des rendus</p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Devoirs</h1>
+          <p className="text-sm text-gray-500">Devoirs à rendre par classe et suivi des rendus</p>
         </div>
         {canWrite && effectiveClassId && (
           <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau devoir</Button>
         )}
       </Reveal>
 
-      <Select
-        className="max-w-[260px]"
-        label="Classe"
-        searchable
-        data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
-        value={effectiveClassId != null ? String(effectiveClassId) : null}
-        onChange={(value) => setClassId(value ? Number(value) : null)}
-      />
+      <Field>
+        <Label>Classe</Label>
+        <SearchableSelect
+          value={effectiveClassId != null ? String(effectiveClassId) : ""}
+          options={classOptions}
+          onChange={(v) => setClassId(v ? Number(v) : null)}
+          triggerClassName="w-full max-w-[260px] justify-between px-3"
+        />
+      </Field>
 
       {q.loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
@@ -97,10 +105,10 @@ export default function AssignmentsPage() {
         <Table>
           <THead><tr><TH>Devoir</TH><TH>Matière</TH><TH>Échéance</TH><TH>Barème</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-slate-400">Aucun devoir pour cette classe.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun devoir pour cette classe.</TD></TR>}
             {(q.data ?? []).map((a) => (
               <TR key={a.id}>
-                <TD className="font-medium text-slate-900">{a.title}</TD>
+                <TD className="font-medium text-gray-900">{a.title}</TD>
                 <TD>{subjectName.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
                 <TD>{a.dueDate ?? "—"}</TD>
                 <TD>{a.maxScore != null ? `/${a.maxScore}` : "—"}</TD>
@@ -110,7 +118,7 @@ export default function AssignmentsPage() {
                     <Button size="sm" variant="ghost" onClick={() => setSubmissionsFor(a)}>Rendus</Button>
                     {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
                     {canWrite && <Button size="sm" variant="ghost" onClick={() => toggleStatus(a)}>{a.status === "OPEN" ? "Clôturer" : "Rouvrir"}</Button>}
-                    {canWrite && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(a)}>Suppr.</Button>}
+                    {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(a)}>Suppr.</Button>}
                   </div>
                 </TD>
               </TR>
@@ -134,24 +142,41 @@ export default function AssignmentsPage() {
   );
 }
 
+const assignmentSchema = z.object({
+  subjectId: z.string().min(1, "Requis"),
+  title: z.string().trim().min(1, "Requis"),
+  instructions: z.string(),
+  dueDate: z.string(),
+  maxScore: z.string(),
+});
+type AssignmentFormValues = z.infer<typeof assignmentSchema>;
+
 function AssignmentForm({ classId, initial, subjectName, onCancel, onCreated }: {
   classId: number; initial?: Assignment | null; subjectName: Map<number, string>; onCancel: () => void; onCreated: () => void;
 }) {
   const classSubjectsQuery = useQuery(() => listClassSubjects(classId), [classId]);
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<AssignmentFormValues>({
+    resolver: zodResolver(assignmentSchema),
+    defaultValues: {
       subjectId: initial?.subjectId ? String(initial.subjectId) : "",
       title: initial?.title ?? "",
       instructions: initial?.instructions ?? "",
       dueDate: initial?.dueDate ?? "",
-      maxScore: (initial?.maxScore != null ? Number(initial.maxScore) : 20) as number | string,
+      maxScore: initial?.maxScore != null ? String(initial.maxScore) : "20",
     },
-    validate: { subjectId: (v) => (v ? null : "Requis"), title: (v) => (v ? null : "Requis") },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+  const subjectOptions: SearchableOption[] = useMemo(
+    () => (classSubjectsQuery.data ?? []).map((cm) => {
+      const label = subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`;
+      return { value: String(cm.subjectId), trigger: label, label, searchText: label };
+    }),
+    [classSubjectsQuery.data, subjectName],
+  );
 
-  async function submit(values: typeof form.values) {
+  async function submit(values: AssignmentFormValues) {
     setLoading(true);
     try {
       const payload = {
@@ -169,22 +194,35 @@ function AssignmentForm({ classId, initial, subjectName, onCancel, onCreated }: 
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <Select label="Matière" withAsterisk searchable
-          data={[{ value: "", label: "— Choisir —" }, ...(classSubjectsQuery.data ?? []).map((cm) => ({ value: String(cm.subjectId), label: subjectName.get(cm.subjectId) ?? `#${cm.subjectId}` }))]}
-          {...form.getInputProps("subjectId")} />
-        <TextInput label="Titre" withAsterisk {...form.getInputProps("title")} />
-        <Textarea label="Consignes" autosize minRows={3} {...form.getInputProps("instructions")} />
-        <div className="grid grid-cols-2 gap-3">
-          <DatePickerInput label="Échéance" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("dueDate")} />
-          <NumberInput label="Barème (note sur)" min={1} {...form.getInputProps("maxScore")} />
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Matière <span className="text-error-500">*</span></Label>
+        <SearchableSelect value={v.subjectId} options={subjectOptions} onChange={(val) => setValue("subjectId", val)} triggerClassName="w-full justify-between px-3" />
+        {errors.subjectId && <p className="text-xs text-error-600">{errors.subjectId.message}</p>}
+      </Field>
+      <Field>
+        <Label>Titre <span className="text-error-500">*</span></Label>
+        <Input value={v.title} onChange={(e) => setValue("title", e.target.value)} aria-invalid={!!errors.title} />
+        {errors.title && <p className="text-xs text-error-600">{errors.title.message}</p>}
+      </Field>
+      <Field>
+        <Label>Consignes</Label>
+        <Textarea rows={3} value={v.instructions} onChange={(e) => setValue("instructions", e.target.value)} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Échéance</Label>
+          <DatePicker value={v.dueDate} clearable onChange={(val) => setValue("dueDate", val)} />
+        </Field>
+        <Field>
+          <Label>Barème (note sur)</Label>
+          <Input type="number" min={1} value={v.maxScore} onChange={(e) => setValue("maxScore", e.target.value)} />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
+      </div>
     </form>
   );
 }
@@ -212,17 +250,17 @@ function SubmissionsPanel({ assignment, canWrite }: { assignment: Assignment; ca
     <Table>
       <THead><tr><TH>Élève</TH><TH>État</TH><TH>Note</TH>{canWrite && <TH className="text-right">Noter</TH>}</tr></THead>
       <TBody>
-        {students.length === 0 && <TR><TD colSpan={canWrite ? 4 : 3} className="py-8 text-center text-slate-400">Aucun élève inscrit.</TD></TR>}
+        {students.length === 0 && <TR><TD colSpan={canWrite ? 4 : 3} className="py-8 text-center text-gray-400">Aucun élève inscrit.</TD></TR>}
         {students.map((st) => {
           const sub = subByStudent.get(st.id);
           return (
             <TR key={st.id}>
-              <TD className="font-medium text-slate-900">{st.firstName} {st.lastName}</TD>
-              <TD>{sub ? <Badge tone={SUB_TONE[sub.status]}>{SUBMISSION_STATUS_LABEL[sub.status]}</Badge> : <span className="text-slate-400">Non remis</span>}</TD>
+              <TD className="font-medium text-gray-900">{st.firstName} {st.lastName}</TD>
+              <TD>{sub ? <Badge tone={SUB_TONE[sub.status]}>{SUBMISSION_STATUS_LABEL[sub.status]}</Badge> : <span className="text-gray-400">Non remis</span>}</TD>
               <TD>{sub?.grade != null ? `${sub.grade}${assignment.maxScore != null ? `/${assignment.maxScore}` : ""}` : "—"}</TD>
               {canWrite && (
                 <TD className="text-right">
-                  {sub ? <GradeInline sub={sub} onGrade={grade} /> : <span className="text-xs text-slate-300">—</span>}
+                  {sub ? <GradeInline sub={sub} onGrade={grade} /> : <span className="text-xs text-gray-300">—</span>}
                 </TD>
               )}
             </TR>
@@ -238,8 +276,8 @@ function GradeInline({ sub, onGrade }: { sub: AssignmentSubmission; onGrade: (s:
   const [fb, setFb] = useState(sub.feedback ?? "");
   return (
     <div className="flex items-center justify-end gap-1">
-      <input className="w-14 rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Note" value={val} onChange={(e) => setVal(e.target.value)} />
-      <input className="w-32 rounded border border-slate-200 px-2 py-1 text-sm" placeholder="Appréciation" value={fb} onChange={(e) => setFb(e.target.value)} />
+      <input className="w-14 rounded border border-gray-200 px-2 py-1 text-sm" placeholder="Note" value={val} onChange={(e) => setVal(e.target.value)} />
+      <input className="w-32 rounded border border-gray-200 px-2 py-1 text-sm" placeholder="Appréciation" value={fb} onChange={(e) => setFb(e.target.value)} />
       <Button size="sm" onClick={() => onGrade(sub, val, fb)}>OK</Button>
     </div>
   );

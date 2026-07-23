@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { getMyTeacher, getTeacherSchedule } from "@/lib/api/staff";
-import { listSubjects } from "@/lib/api/academics";
+import { listAcademicYears, listClasses, listSubjects } from "@/lib/api/academics";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -27,6 +27,13 @@ export function MyAvailabilityManager() {
     () => new Map((subjectsQ.data ?? []).map((s) => [s.id, s.label])),
     [subjectsQ.data],
   );
+  const yearsQ = useQuery(listAcademicYears, []);
+  const currentYearId = (yearsQ.data ?? []).find((y) => y.current)?.id ?? (yearsQ.data ?? [])[0]?.id ?? null;
+  const classesQ = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
+  const classLabel = useMemo(
+    () => new Map((classesQ.data ?? []).map((c) => [c.id, c.label])),
+    [classesQ.data],
+  );
 
   if (meQ.loading) return <div className="flex justify-center py-6"><Spinner /></div>;
   if (!me) return <p className="text-sm text-slate-500">Aucun profil enseignant lié à votre compte.</p>;
@@ -49,7 +56,10 @@ export function MyAvailabilityManager() {
                   <ul className="space-y-1">
                     {slots.map((s) => (
                       <li key={s.id} className="text-sm text-slate-700">
-                        {hhmm(s.startTime)}–{hhmm(s.endTime)} · {subjectLabel.get(s.subjectId) ?? "Cours"}
+                        <span className="font-medium">{hhmm(s.startTime)}–{hhmm(s.endTime)}</span>
+                        {" · "}{subjectLabel.get(s.subjectId) ?? "Cours"}
+                        {" · "}
+                        <span className="text-amber-700">{classLabel.get(s.classId) ?? `Classe #${s.classId}`}</span>
                       </li>
                     ))}
                   </ul>

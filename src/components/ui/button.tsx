@@ -25,20 +25,19 @@ export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonE
  * --color-brand-* CSS variables). Primary uses a subtle brand gradient; others are flat.
  */
 const VARIANT: Record<Variant, string> = {
-  primary:
-    "bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-sm shadow-brand-600/20 hover:from-brand-600 hover:to-brand-700 focus-visible:ring-brand-500",
+  primary: "bg-brand-600 text-white shadow-theme-xs hover:bg-brand-700 focus-visible:ring-brand-500",
   secondary:
-    "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus-visible:ring-slate-300",
+    "border border-gray-300 bg-white text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-900 focus-visible:ring-gray-300",
   outline:
     "border border-brand-300 bg-transparent text-brand-700 hover:bg-brand-50 focus-visible:ring-brand-400",
-  ghost: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-300",
-  danger: "bg-red-600 text-white shadow-sm shadow-red-600/20 hover:bg-red-700 focus-visible:ring-red-400",
+  ghost: "bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-gray-300",
+  danger: "bg-error-600 text-white shadow-theme-xs hover:bg-error-700 focus-visible:ring-error-400",
 };
 
 const SIZE: Record<Size, string> = {
-  sm: "h-8 gap-1.5 px-3 text-[13px]",
-  md: "h-10 gap-2 px-4 text-sm",
-  lg: "h-11 gap-2 px-5 text-sm",
+  sm: "h-9 gap-1.5 px-3.5 text-[13px]",
+  md: "h-11 gap-2 px-4 text-sm",
+  lg: "h-12 gap-2 px-5 text-sm",
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(

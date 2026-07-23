@@ -22,7 +22,7 @@ type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 interface AuthContextValue {
   user: AuthUser | null;
   status: AuthStatus;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   /** SUPER_ADMIN-only: the school currently being impersonated, if any. */
@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const me = await authService.fetchMe();
     setUser(me);
     setStatus("authenticated");
+    return me;
   }, []);
 
   const clearSession = useCallback(() => {
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       await authService.login(email, password);
-      await loadUser();
+      return loadUser();
     },
     [loadUser],
   );
@@ -101,9 +102,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return user;
   }, [user, impersonatedTenantId]);
 
+  const refreshUser = useCallback(async () => {
+    await loadUser();
+  }, [loadUser]);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user: effectiveUser, status, login, logout, refreshUser: loadUser, impersonatedTenantId, setImpersonatedTenant }),
-    [effectiveUser, status, login, logout, loadUser, impersonatedTenantId, setImpersonatedTenant],
+    () => ({ user: effectiveUser, status, login, logout, refreshUser, impersonatedTenantId, setImpersonatedTenant }),
+    [effectiveUser, status, login, logout, refreshUser, impersonatedTenantId, setImpersonatedTenant],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
