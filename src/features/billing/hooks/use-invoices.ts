@@ -3,12 +3,14 @@ import { qk } from "@/lib/query";
 import type { InvoiceStatus } from "@/lib/types/billing";
 import { listFeesByTenant, listInvoicesByStatus, listInvoicesByStudent, listInvoicesByTenant } from "../api/billing";
 
-export function useInvoicesQuery(tenantId: number | null, status: InvoiceStatus | "", studentFilter: string) {
+export function useInvoicesQuery(tenantId: number | null, status: InvoiceStatus | "", studentFilter: string, academicYearId?: number | null) {
   return useQuery({
-    queryKey: qk.invoices.list({ tenantId, status, studentFilter }),
+    queryKey: qk.invoices.list({ tenantId, status, studentFilter, academicYearId }),
     queryFn: () => {
       if (studentFilter) return listInvoicesByStudent(Number(studentFilter));
-      return status ? listInvoicesByStatus(tenantId as number, status) : listInvoicesByTenant(tenantId as number);
+      // Le filtre statut ignore volontairement l'année (rarement combiné) ; le cas courant (liste
+      // par défaut) doit, lui, toujours être scopé à l'année pour ne pas mélanger les années.
+      return status ? listInvoicesByStatus(tenantId as number, status) : listInvoicesByTenant(tenantId as number, academicYearId);
     },
     enabled: tenantId != null,
   });

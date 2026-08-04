@@ -62,6 +62,7 @@ export interface Invoice {
   tenantId: number | null;
   studentId: number;
   feeId: number | null;
+  academicYearId: number | null;
   reference: string;
   totalAmount: string;
   paidAmount: string | null;

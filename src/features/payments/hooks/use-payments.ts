@@ -7,10 +7,10 @@ import {
   refundPayment,
 } from "../api/payments";
 
-export function usePaymentsQuery(tenantId: number | null) {
+export function usePaymentsQuery(tenantId: number | null, academicYearId?: number | null) {
   return useQuery({
-    queryKey: qk.payments.list({ tenantId }),
-    queryFn: () => listPaymentsByTenant(tenantId as number),
+    queryKey: qk.payments.list({ tenantId, academicYearId }),
+    queryFn: () => listPaymentsByTenant(tenantId as number, academicYearId),
     enabled: tenantId != null,
   });
 }

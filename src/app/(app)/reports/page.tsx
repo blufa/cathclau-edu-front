@@ -23,6 +23,17 @@ const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", 
 const pct = (v: string | number | null | undefined) => `${Number(v ?? 0).toFixed(2)} %`;
 const avg = (v: string | number | null | undefined) => Number(v ?? 0).toFixed(2);
 
+const TREND_LABEL: Record<"HAUSSE" | "BAISSE" | "STABLE", string> = {
+  HAUSSE: "Encaissements en hausse",
+  BAISSE: "Encaissements en baisse",
+  STABLE: "Encaissements stables",
+};
+const TREND_TONE: Record<"HAUSSE" | "BAISSE" | "STABLE", "green" | "red" | "gray"> = {
+  HAUSSE: "green",
+  BAISSE: "red",
+  STABLE: "gray",
+};
+
 export default function ReportsPage() {
   const now = new Date();
   const [periodId, setPeriodId] = useState<string | null>(null);
@@ -145,7 +156,14 @@ export default function ReportsPage() {
           </div>
         )}
         <Card>
-          <CardHeader><CardTitle>Prévisionnel de trésorerie (6 mois)</CardTitle></CardHeader>
+          <CardHeader className="flex items-center justify-between gap-4">
+            <CardTitle>Prévisionnel de trésorerie (6 mois)</CardTitle>
+            {!projection.loading && projection.data && (
+              <Badge tone={TREND_TONE[projection.data.collectionTrend]}>
+                {TREND_LABEL[projection.data.collectionTrend]}
+              </Badge>
+            )}
+          </CardHeader>
           <CardBody>
             {projection.loading ? (
               <CardSkeleton />

@@ -21,6 +21,8 @@ interface ClassFormProps {
   academicYearId: number;
   levels: Niveau[];
   rooms: Salle[];
+  /** Classes de l'année en cours — sert à retirer du choix les salles déjà affectées à une autre classe. */
+  classes: Classe[];
   submitLabel: string;
   onSubmit: (input: CreateClassInput) => Promise<void>;
   onCancel: () => void;
@@ -47,6 +49,7 @@ export function ClassForm({
   academicYearId,
   levels,
   rooms,
+  classes,
   submitLabel,
   onSubmit,
   onCancel,
@@ -62,6 +65,10 @@ export function ClassForm({
   const [createdLevels, setCreatedLevels] = useState<Niveau[]>([]);
   const allRooms = [...rooms, ...createdRooms.filter((c) => !rooms.some((r) => r.id === c.id))];
   const allLevels = [...levels, ...createdLevels.filter((c) => !levels.some((l) => l.id === c.id))];
+  // Salles déjà affectées à une AUTRE classe : retirées du choix pour éviter une double affectation.
+  const takenRoomIds = new Set(
+    classes.filter((c) => c.roomId != null && c.id !== initial?.id).map((c) => c.roomId as number),
+  );
 
   const { register, handleSubmit, watch, setValue, setError: setFieldError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -183,7 +190,9 @@ export function ClassForm({
                 }}
               >
                 <option value="">—</option>
-                {allRooms.map((r) => (<option key={r.id} value={String(r.id)}>{r.label}</option>))}
+                {allRooms
+                  .filter((r) => !takenRoomIds.has(r.id) || String(r.id) === values.roomId)
+                  .map((r) => (<option key={r.id} value={String(r.id)}>{r.label}</option>))}
               </Select>
             </Field>
             <Button type="button" variant="ghost" size="sm" className="mt-1 h-auto px-0 text-xs" onClick={() => setRoomModal(true)}>

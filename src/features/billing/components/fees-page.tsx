@@ -12,7 +12,6 @@ import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
   createFee,
   createInstallment,
-  generateWeightedTerms,
   deleteFee,
   deleteInstallment,
   listFeesByTenant,
@@ -306,6 +305,10 @@ function addMonths(monthValue: string, n: number): string {
   while (m > 12) { m -= 12; y += 1; }
   return `${y}-${String(m).padStart(2, "0")}`;
 }
+function monthShortLabel(monthValue: string): string {
+  const [, m] = monthValue.split("-").map(Number);
+  return MONTHS_FR[m - 1];
+}
 
 const installmentSchema = z.object({
   label: z.string().trim().min(1, "Requis"),
@@ -314,22 +317,20 @@ const installmentSchema = z.object({
 });
 type InstallmentFormValues = z.infer<typeof installmentSchema>;
 
+/** Nombre de mois de l'année scolaire — sert de référence pour vérifier la répartition des tranches. */
+const SCHOOL_YEAR_MONTHS = 9;
+
 function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolean }) {
   const q = useQuery(() => listInstallments(fee.id), [fee.id]);
   const [adding, setAdding] = useState(false);
-  const isMonthly = fee.type === "MONTHLY";
-  // Génération automatique des mois de l'année (mensualités).
+  // Mensualité ET transport sont des frais récurrents sur l'année scolaire (9 mois) : les deux
+  // profitent du générateur de tranches, pas seulement MONTHLY.
+  const isRecurring = fee.type === "MONTHLY" || fee.type === "TRANSPORT";
+  // Génération par tranches : l'école choisit le nombre de tranches et, pour chacune, le nombre de
+  // mois qu'elle couvre (ex. 3 tranches de 3 mois, ou 9 tranches d'1 mois pour un paiement mensuel).
   const [genMonth, setGenMonth] = useState("");
-  const [genCount, setGenCount] = useState<number | string>(9);
+  const [tranches, setTranches] = useState<number[]>([3, 3, 3]);
   const [generating, setGenerating] = useState(false);
-  // Génération trimestrielle pondérée (règlement financier : T1 40 % / T2 30 % / T3 30 %).
-  const [genAnnual, setGenAnnual] = useState<number | string>(Number(fee.amount) ? Number(fee.amount) * 9 : 0);
-  const [terms, setTerms] = useState([
-    { label: "Trimestre 1", percentage: 40 as number | string, dueDate: "" },
-    { label: "Trimestre 2", percentage: 30 as number | string, dueDate: "" },
-    { label: "Trimestre 3", percentage: 30 as number | string, dueDate: "" },
-  ]);
-  const [genTerms, setGenTerms] = useState(false);
   const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<InstallmentFormValues>({
     resolver: zodResolver(installmentSchema),
     defaultValues: { label: "", amount: 0, dueDate: "" },
@@ -337,38 +338,40 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
 
+  const totalMonths = tranches.reduce((s, n) => s + (Number(n) || 0), 0);
+
+  function setTrancheMonths(i: number, months: number) {
+    setTranches((prev) => prev.map((m, idx) => (idx === i ? months : m)));
+  }
+  function addTranche() { setTranches((prev) => [...prev, 1]); }
+  function removeTranche(i: number) { setTranches((prev) => prev.filter((_, idx) => idx !== i)); }
+
   async function add(values: InstallmentFormValues) {
     try {
       await createInstallment(fee.id, { label: values.label, amount: values.amount, dueDate: values.dueDate || null });
       reset(); setAdding(false); notifySuccess("Échéance ajoutée"); q.refetch();
     } catch (err) { notifyError(err); }
   }
-  async function generateYear() {
+  async function generateTranches() {
     if (!genMonth) { notifyError("Choisissez le mois de départ."); return; }
-    const count = Number(genCount);
-    if (!count || count < 1) { notifyError("Nombre de mois invalide."); return; }
+    if (tranches.some((m) => !m || m < 1)) { notifyError("Chaque tranche doit couvrir au moins un mois."); return; }
     setGenerating(true);
     try {
-      for (let k = 0; k < count; k++) {
-        const { label, dueDate } = monthToInstallment(addMonths(genMonth, k));
-        await createInstallment(fee.id, { label, amount: Number(fee.amount), dueDate });
+      let cursor = genMonth;
+      for (let i = 0; i < tranches.length; i++) {
+        const months = tranches[i];
+        const firstMonth = cursor;
+        const lastMonth = addMonths(cursor, months - 1);
+        const { dueDate } = monthToInstallment(lastMonth);
+        const label = months === 1
+          ? monthToInstallment(firstMonth).label
+          : `Tranche ${i + 1} (${monthShortLabel(firstMonth)} – ${monthShortLabel(lastMonth)})`;
+        await createInstallment(fee.id, { label, amount: Number(fee.amount) * months, dueDate });
+        cursor = addMonths(cursor, months);
       }
-      notifySuccess(`${count} mois générés`);
+      notifySuccess(`${tranches.length} tranche(s) générée(s)`);
       q.refetch();
     } catch (err) { notifyError(err); } finally { setGenerating(false); }
-  }
-  async function generateTrimesters() {
-    if (!genAnnual || Number(genAnnual) <= 0) { notifyError("Total annuel invalide."); return; }
-    setGenTerms(true);
-    try {
-      await generateWeightedTerms(fee.id, Number(genAnnual),
-        terms.map((t) => ({ label: t.label, percentage: Number(t.percentage) || 0, dueDate: t.dueDate || null })));
-      notifySuccess("Trimestres générés");
-      q.refetch();
-    } catch (err) { notifyError(err); } finally { setGenTerms(false); }
-  }
-  function setTerm(i: number, patch: Partial<{ percentage: number | string; dueDate: string }>) {
-    setTerms((ts) => ts.map((t, k) => (k === i ? { ...t, ...patch } : t)));
   }
   async function remove(id: number) {
     try { await deleteInstallment(id); notifySuccess("Échéance supprimée"); q.refetch(); } catch (err) { notifyError(err); }
@@ -377,54 +380,42 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-500">
-        {isMonthly
-          ? <>Montant mensuel : <strong>{formatGNF(fee.amount)}</strong> — chaque échéance est un mois (montant complet).</>
+        {isRecurring
+          ? <>Montant mensuel : <strong>{formatGNF(fee.amount)}</strong> — répartissez l&apos;année scolaire ({SCHOOL_YEAR_MONTHS} mois) en tranches ci-dessous.</>
           : <>Total du frais : <strong>{formatGNF(fee.amount)}</strong> — la somme des échéances doit l&apos;égaler.</>}
       </p>
 
-      {canWrite && isMonthly && (
-        <div className="flex flex-col gap-2 rounded-xl border border-brand-200 bg-brand-50/40 p-3 sm:flex-row sm:items-end">
+      {canWrite && isRecurring && (
+        <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
           <Field>
             <Label>Mois de départ</Label>
-            <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+            <Input type="month" className="sm:w-48" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
           </Field>
-          <Field>
-            <Label>Nombre de mois</Label>
-            <Input type="number" min={1} max={12} className="sm:w-40" value={genCount} onChange={(e) => setGenCount(e.target.value)} />
-          </Field>
-          <Button onClick={generateYear} loading={generating} disabled={!genMonth}>Générer les mois</Button>
-        </div>
-      )}
-
-      {canWrite && isMonthly && (
-        <div className="rounded-xl border border-warning-200 bg-warning-50/40 p-3">
-          <p className="mb-2 text-sm font-semibold text-gray-700">Ou facturation trimestrielle pondérée (40 / 30 / 30)</p>
-          <Field>
-            <Label>Total annuel (GNF)</Label>
-            <Input type="number" min={0} className="sm:w-56" value={genAnnual} onChange={(e) => setGenAnnual(e.target.value)} />
-          </Field>
-          <div className="mt-2 space-y-2">
-            {terms.map((t, i) => (
-              <div key={t.label} className="flex flex-wrap items-end gap-2">
-                <span className="w-24 text-sm text-gray-600">{t.label}</span>
+          <div className="space-y-2">
+            {tranches.map((months, i) => (
+              <div key={i} className="flex flex-wrap items-end gap-2">
+                <span className="w-20 text-sm text-gray-600">Tranche {i + 1}</span>
                 <Field>
-                  <Label>%</Label>
-                  <Input type="number" min={0} max={100} className="w-20" value={t.percentage} onChange={(e) => setTerm(i, { percentage: e.target.value })} />
+                  <Label>Nombre de mois</Label>
+                  <Input type="number" min={1} max={12} className="w-32" value={months} onChange={(e) => setTrancheMonths(i, Number(e.target.value))} />
                 </Field>
-                <Field>
-                  <Label>Échéance</Label>
-                  <DatePicker value={t.dueDate} onChange={(val) => setTerm(i, { dueDate: val })} clearable />
-                </Field>
-                <span className="text-xs text-gray-400">{genAnnual ? formatGNF(Math.round(Number(genAnnual) * (Number(t.percentage) || 0) / 100)) : ""}</span>
+                <span className="text-xs text-gray-400">= {formatGNF(Number(fee.amount) * (months || 0))}</span>
+                <Button type="button" variant="ghost" className="text-error-600" disabled={tranches.length === 1} onClick={() => removeTranche(i)}>✕</Button>
               </div>
             ))}
           </div>
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-gray-400">Réparti : {terms.reduce((s, t) => s + (Number(t.percentage) || 0), 0)} %</span>
-            <Button size="sm" onClick={generateTrimesters} loading={genTerms}>Générer les trimestres</Button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button type="button" variant="ghost" size="sm" onClick={addTranche}>+ Ajouter une tranche</Button>
+              <span className={`text-xs ${totalMonths === SCHOOL_YEAR_MONTHS ? "text-gray-400" : "text-warning-600"}`}>
+                Total : {totalMonths} / {SCHOOL_YEAR_MONTHS} mois
+              </span>
+            </div>
+            <Button onClick={generateTranches} loading={generating} disabled={!genMonth}>Générer les tranches</Button>
           </div>
         </div>
       )}
+
       {q.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
         <Table>
           <THead><tr><TH>Libellé</TH><TH>Montant</TH><TH>Échéance</TH><TH /></tr></THead>
@@ -441,9 +432,9 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
       )}
       {canWrite && (adding ? (
         <form onSubmit={handleSubmit(add)} className="space-y-3 rounded-xl border border-gray-200 p-3">
-          {fee.type === "MONTHLY" && (
+          {isRecurring && (
             <Field>
-              <Label>Mois (mensualité)</Label>
+              <Label>Mois</Label>
               <p className="text-xs text-gray-400">Renseigne le libellé et l&apos;échéance au 05 du mois suivant.</p>
               <Input
                 type="month"

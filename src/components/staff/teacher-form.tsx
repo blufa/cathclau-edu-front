@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery } from "@/hooks/use-query";
-import { listSubjects } from "@/lib/api/academics";
 import { ApiError } from "@/lib/api/errors";
 import { createUserWithRole } from "@/lib/api/iam";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
@@ -15,14 +13,16 @@ import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Combobox } from "@/components/ui/combobox";
 import { Stepper } from "@/components/ui/stepper";
+import { TeacherClassSubjectsAssignment } from "@/components/staff/teacher-class-subjects";
 
 interface TeacherFormProps {
   initial?: Teacher;
   submitLabel: string;
-  onSubmit: (input: CreateTeacherInput) => Promise<void>;
+  onSubmit: (input: CreateTeacherInput) => Promise<Teacher>;
   onCancel: () => void;
+  /** Appelé une fois l'étape « Affectations » terminée (ou ignorée) — ferme le formulaire. */
+  onFinish: () => void;
 }
 
 const schema = z
@@ -38,8 +38,6 @@ const schema = z
     diploma: z.string(),
     remunerationType: z.string(),
     remunerationRate: z.string(),
-    teachingAuthorizationNumber: z.string(),
-    cnssNumber: z.string(),
     createLogin: z.boolean(),
     password: z.string(),
   })
@@ -56,14 +54,15 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 const FIELD_STEP: Record<string, number> = { firstName: 0, lastName: 0, email: 0, password: 2 };
-const STEPS = [{ label: "Identité" }, { label: "Professionnel" }, { label: "Compte" }];
+const STEPS = [{ label: "Identité" }, { label: "Professionnel" }, { label: "Compte" }, { label: "Affectations" }];
+const DIPLOMAS = ["Licence", "Master", "BTS", "Doctorat", "Ingénieur"];
 
-export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: TeacherFormProps) {
+export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish }: TeacherFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [active, setActive] = useState(0);
-  const subjectsQuery = useQuery(listSubjects, []);
-  const subjectOptions = (subjectsQuery.data ?? []).map((s) => s.label);
+  // Connu dès le départ en édition (l'enseignant existe déjà) ; rempli après la création en mode création.
+  const [teacherId, setTeacherId] = useState<number | null>(initial?.id ?? null);
 
   const {
     handleSubmit, watch, setValue, setError: setFieldError, trigger,
@@ -82,8 +81,6 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
       diploma: initial?.diploma ?? "",
       remunerationType: initial?.remunerationType ?? "MENSUEL",
       remunerationRate: initial?.remunerationRate != null ? String(initial.remunerationRate) : "",
-      teachingAuthorizationNumber: initial?.teachingAuthorizationNumber ?? "",
-      cnssNumber: initial?.cnssNumber ?? "",
       createLogin: false,
       password: "",
     },
@@ -96,12 +93,12 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
       const ok = await trigger(["firstName", "lastName"]);
       if (!ok) return;
     }
-    setActive((s) => Math.min(s + 1, STEPS.length - 1));
+    setActive((s) => Math.min(s + 1, 2));
   }
   const prevStep = () => setActive((s) => Math.max(s - 1, 0));
 
   async function submit(values: FormValues) {
-    if (active < STEPS.length - 1) { void nextStep(); return; }
+    if (active < 2) { void nextStep(); return; }
     setError(null);
     setSubmitting(true);
     try {
@@ -113,7 +110,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
         );
         userId = user.id;
       }
-      await onSubmit({
+      const teacher = await onSubmit({
         userId,
         firstName: values.firstName,
         lastName: values.lastName,
@@ -125,10 +122,16 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
         employmentStatus: values.employmentStatus || null,
         diploma: values.diploma || null,
         remunerationType: values.remunerationType || null,
-        remunerationRate: values.remunerationRate === "" ? null : values.remunerationRate,
-        teachingAuthorizationNumber: values.teachingAuthorizationNumber || null,
-        cnssNumber: values.cnssNumber || null,
+        // Horaire : le taux se configure dans Paie (dépend des classes affectées), pas ici.
+        remunerationRate: values.remunerationType === "HORAIRE" || values.remunerationRate === ""
+          ? null : values.remunerationRate,
+        // Champs retirés du formulaire : on préserve la valeur existante (édition) plutôt que de
+        // l'écraser silencieusement au prochain enregistrement.
+        teachingAuthorizationNumber: initial?.teachingAuthorizationNumber ?? null,
+        cnssNumber: initial?.cnssNumber ?? null,
       });
+      setTeacherId(teacher.id);
+      setActive(3);
     } catch (err) {
       if (err instanceof ApiError) {
         const fieldErrors = err.fieldErrors;
@@ -143,6 +146,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
       } else {
         setError("Enregistrement impossible.");
       }
+    } finally {
       setSubmitting(false);
     }
   }
@@ -151,7 +155,15 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
     <form onSubmit={handleSubmit(submit)} className="space-y-5">
       {error && <div className="rounded-lg bg-error-50 px-3.5 py-2.5 text-sm text-error-700">{error}</div>}
 
-      <Stepper steps={STEPS} active={active} onStepClick={setActive} />
+      <Stepper
+        steps={STEPS}
+        active={active}
+        onStepClick={(i) => {
+          if (i === 3 && !teacherId) return; // affectations indisponibles tant que l'enseignant n'existe pas
+          if (i < 3 && active === 3) return; // pas de retour arrière une fois l'enregistrement effectué
+          setActive(i);
+        }}
+      />
 
       {active === 0 && (
         <div className="space-y-4 pt-2">
@@ -186,14 +198,18 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
               <Input placeholder="Auto-généré si vide" value={v.staffNumber} onChange={(e) => setValue("staffNumber", e.target.value)} />
             </Field>
             <Field>
-              <Label>Spécialité</Label>
-              <Combobox placeholder="Matière principale" options={subjectOptions} value={v.specialization} onChange={(val) => setValue("specialization", val)} />
+              <Label>Diplôme le plus élevé</Label>
+              <Select value={v.diploma} onChange={(e) => setValue("diploma", e.target.value)}>
+                <option value="">—</option>
+                {DIPLOMAS.map((d) => (<option key={d} value={d}>{d}</option>))}
+              </Select>
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Field>
-              <Label>Diplôme le plus élevé</Label>
-              <Input value={v.diploma} onChange={(e) => setValue("diploma", e.target.value)} />
+              <Label>Spécialité</Label>
+              <p className="text-xs text-gray-400">Domaine du diplôme — pas forcément la matière enseignée</p>
+              <Input placeholder="Ex. Informatique, Lettres modernes…" value={v.specialization} onChange={(e) => setValue("specialization", e.target.value)} />
             </Field>
             <Field>
               <Label>Statut</Label>
@@ -213,28 +229,24 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
                 <option value="FORFAIT">Forfait</option>
               </Select>
             </Field>
-            <Field>
-              <Label>
-                {v.remunerationType === "HORAIRE" ? "Taux horaire (GNF/h)"
-                  : v.remunerationType === "FORFAIT" ? "Montant forfaitaire (GNF)"
-                  : "Salaire mensuel (GNF)"}
-              </Label>
-              <Input type="number" min={0} value={v.remunerationRate} onChange={(e) => setValue("remunerationRate", e.target.value)} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field>
-              <Label>Date d&apos;embauche</Label>
-              <DatePicker value={v.hireDate} onChange={(val) => setValue("hireDate", val)} clearable />
-            </Field>
-            <Field>
-              <Label>N° autorisation d&apos;enseigner (SNEPUP)</Label>
-              <Input value={v.teachingAuthorizationNumber} onChange={(e) => setValue("teachingAuthorizationNumber", e.target.value)} />
-            </Field>
+            {v.remunerationType === "HORAIRE" ? (
+              <Field>
+                <Label>Taux horaire</Label>
+                <p className="text-xs text-gray-400 pt-2">
+                  Dépend des classes affectées (normales ou d&apos;examen — 10ème, Terminale, CM2…) :
+                  se configure dans <strong>Paie</strong> une fois les classes choisies ci-dessous.
+                </p>
+              </Field>
+            ) : (
+              <Field>
+                <Label>{v.remunerationType === "FORFAIT" ? "Montant forfaitaire (GNF)" : "Salaire mensuel (GNF)"}</Label>
+                <Input type="number" min={0} value={v.remunerationRate} onChange={(e) => setValue("remunerationRate", e.target.value)} />
+              </Field>
+            )}
           </div>
           <Field>
-            <Label>N° CNSS (optionnel)</Label>
-            <Input value={v.cnssNumber} onChange={(e) => setValue("cnssNumber", e.target.value)} />
+            <Label>Date d&apos;embauche</Label>
+            <DatePicker value={v.hireDate} onChange={(val) => setValue("hireDate", val)} clearable />
           </Field>
         </div>
       )}
@@ -265,14 +277,28 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
         </div>
       )}
 
+      {active === 3 && (
+        <div className="space-y-3 pt-2">
+          <p className="text-sm text-gray-500">
+            Facultatif — dès qu&apos;une classe et une matière sont choisies, l&apos;enseignant est directement
+            affecté et apparaît dans l&apos;emploi du temps de cette classe.
+          </p>
+          {teacherId && <TeacherClassSubjectsAssignment teacherId={teacherId} />}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 pt-2">
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+        {active < 3
+          ? <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+          : <span />}
         <div className="flex items-center gap-3">
-          {active > 0 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
-          {active < STEPS.length - 1 ? (
+          {active > 0 && active < 3 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
+          {active < 2 ? (
             <Button type="button" onClick={() => void nextStep()}>Suivant</Button>
-          ) : (
+          ) : active === 2 ? (
             <Button type="submit" loading={submitting}>{submitLabel}</Button>
+          ) : (
+            <Button type="button" onClick={onFinish}>Terminer</Button>
           )}
         </div>
       </div>

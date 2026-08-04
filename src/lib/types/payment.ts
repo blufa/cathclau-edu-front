@@ -26,6 +26,7 @@ export interface Payment {
   tenantId: number | null;
   invoiceId: number | null;
   studentId: number;
+  academicYearId: number | null;
   reference: string;
   amount: string;
   channel: PaymentChannel;
@@ -43,6 +44,8 @@ export interface InitiatePaymentInput {
   channel: PaymentChannel;
   type: PaymentType;
   payerNumber?: string | null;
+  /** Année scolaire de la facture réglée — évite que le paiement se retrouve mélangé aux autres années. */
+  academicYearId?: number | null;
 }
 
 export interface InitiatePaymentResponse {

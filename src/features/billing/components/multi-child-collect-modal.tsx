@@ -122,6 +122,7 @@ export function MultiChildCollectModal({
         monthsCount: selectedInvoices.length,
         remainingAfter,
         shares: selectedInvoices.map((i) => ({ invoiceId: i.id, amount: remainingOf(i) })),
+        academicYearId: selectedInvoices[0]?.academicYearId ?? null,
       });
       if (online) {
         pollIdRef.current = res.payment.id;

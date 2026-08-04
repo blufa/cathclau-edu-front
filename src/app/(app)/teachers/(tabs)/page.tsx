@@ -64,18 +64,18 @@ export default function TeachersPage() {
     });
   }, [q.data, search, activeFilter]);
 
-  async function handleCreate(input: CreateTeacherInput) {
-    await createTeacher(input);
-    setCreating(false);
+  async function handleCreate(input: CreateTeacherInput): Promise<Teacher> {
+    const teacher = await createTeacher(input);
     notifySuccess("Enseignant créé");
     q.refetch();
+    return teacher;
   }
-  async function handleUpdate(input: CreateTeacherInput) {
-    if (!editing) return;
-    await updateTeacher(editing.id, input);
-    setEditing(null);
+  async function handleUpdate(input: CreateTeacherInput): Promise<Teacher> {
+    if (!editing) throw new Error("no teacher being edited");
+    const teacher = await updateTeacher(editing.id, input);
     notifySuccess("Enseignant mis à jour");
     q.refetch();
+    return teacher;
   }
   async function toggleActive(t: Teacher) {
     try {
@@ -181,12 +181,16 @@ export default function TeachersPage() {
         exportFilename="enseignants.csv"
       />
 
-      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel enseignant">
-        {creating && <TeacherForm submitLabel="Créer" onSubmit={handleCreate} onCancel={() => setCreating(false)} />}
+      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel enseignant" className="max-w-2xl">
+        {creating && (
+          <TeacherForm submitLabel="Créer" onSubmit={handleCreate} onCancel={() => setCreating(false)}
+            onFinish={() => { setCreating(false); q.refetch(); }} />
+        )}
       </Modal>
-      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'enseignant">
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'enseignant" className="max-w-2xl">
         {editing && (
-          <TeacherForm initial={editing} submitLabel="Enregistrer" onSubmit={handleUpdate} onCancel={() => setEditing(null)} />
+          <TeacherForm initial={editing} submitLabel="Enregistrer" onSubmit={handleUpdate} onCancel={() => setEditing(null)}
+            onFinish={() => { setEditing(null); q.refetch(); }} />
         )}
       </Modal>
       <Modal open={!!badgeFor} onClose={() => { setBadgeFor(null); setBadgeQr(null); }} title="Badge enseignant">

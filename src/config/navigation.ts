@@ -17,7 +17,6 @@ import {
   MessagesSquare,
   School,
   Settings,
-  Calculator,
   Gauge,
   PiggyBank,
   ShieldAlert,
@@ -137,14 +136,9 @@ export const NAVIGATION: NavSection[] = [
           { label: "Transactions & reçus", href: "/payments/transactions", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "PAYMENTS" },
         ],
       },
-      {
-        label: "Comptabilité", icon: Calculator,
-        children: [
-          { label: "Comptabilité générale", href: "/accounting", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "ACCOUNTING" },
-          { label: "Rapprochement bancaire", href: "/accounting/reconciliation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "ACCOUNTING" },
-          { label: "Petite caisse", href: "/accounting/petty-cash", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], module: "ACCOUNTING" },
-        ],
-      },
+      // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
+      // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
+      // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).
       {
         label: "Budget & subventions", icon: PiggyBank,
         children: [

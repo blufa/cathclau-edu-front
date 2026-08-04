@@ -50,7 +50,15 @@ export default function InvoicesPage() {
 
   const [status, setStatus] = useState<InvoiceStatus | "">("");
   const [studentFilter, setStudentFilter] = useState<string>("");
-  const q = useInvoicesQuery(tenantId, status, studentFilter);
+  const yearsQuery = useQuery(listAcademicYears, []);
+  const years = useMemo(
+    () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
+    [yearsQuery.data],
+  );
+  const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
+  const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
+  const yearId = selectedYearId ?? defaultYearId;
+  const q = useInvoicesQuery(tenantId, status, studentFilter, yearId);
   const feesQuery = useFeesQuery(tenantId);
   // Résolution des noms d'élèves (la facture ne porte que l'ID).
   const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
@@ -123,6 +131,10 @@ export default function InvoicesPage() {
       </Reveal>
 
       <div className="flex flex-wrap items-center gap-3">
+        <Select className="max-w-[200px]" value={yearId ?? ""} onChange={(e) => setSelectedYearId(e.target.value ? Number(e.target.value) : null)}>
+          {years.length === 0 && <option value="">—</option>}
+          {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
+        </Select>
         <SearchableSelect
           value={studentFilter}
           options={[{ value: "", trigger: "Tous les élèves", label: "Tous les élèves", searchText: "tous" }, ...studentOptions]}
@@ -185,12 +197,12 @@ export default function InvoicesPage() {
       )}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle facture">
-        <InvoiceForm tenantId={tenantId} fees={feesQuery.data ?? []} onCancel={() => setCreating(false)}
+        <InvoiceForm tenantId={tenantId} academicYearId={yearId} fees={feesQuery.data ?? []} onCancel={() => setCreating(false)}
           onCreated={() => { setCreating(false); notifySuccess("Facture créée"); q.refetch(); }} />
       </Modal>
 
       <Modal open={bulk} onClose={() => setBulk(false)} title="Générer les factures d'une classe">
-        <BulkInvoiceForm tenantId={tenantId} fees={feesQuery.data ?? []} onCancel={() => setBulk(false)}
+        <BulkInvoiceForm tenantId={tenantId} academicYearId={yearId} fees={feesQuery.data ?? []} onCancel={() => setBulk(false)}
           onDone={(n) => { setBulk(false); notifySuccess(`${n} facture(s) générée(s)`); q.refetch(); }} />
       </Modal>
 
@@ -244,8 +256,8 @@ const invoiceSchema = z.object({
 });
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
-function InvoiceForm({ tenantId, fees, onCancel, onCreated }: {
-  tenantId: number; fees: SchoolFee[]; onCancel: () => void; onCreated: () => void;
+function InvoiceForm({ tenantId, academicYearId, fees, onCancel, onCreated }: {
+  tenantId: number; academicYearId: number | null; fees: SchoolFee[]; onCancel: () => void; onCreated: () => void;
 }) {
   const [search, setSearch] = useState("");
   const studentsQuery = useQuery(() => searchStudents({ search: search || undefined, size: 20 }).then((p) => p.content), [search]);
@@ -275,7 +287,7 @@ function InvoiceForm({ tenantId, fees, onCancel, onCreated }: {
   async function submit(values: InvoiceFormValues) {
     setLoading(true);
     try {
-      await createInvoice({ tenantId, studentId: Number(values.studentId), feeId: Number(values.feeId), reference: values.reference, totalAmount: values.totalAmount });
+      await createInvoice({ tenantId, studentId: Number(values.studentId), feeId: Number(values.feeId), reference: values.reference, totalAmount: values.totalAmount, academicYearId });
       onCreated();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -328,12 +340,10 @@ const bulkSchema = z.object({
 });
 type BulkFormValues = z.infer<typeof bulkSchema>;
 
-function BulkInvoiceForm({ tenantId, fees, onCancel, onDone }: {
-  tenantId: number; fees: SchoolFee[]; onCancel: () => void; onDone: (n: number) => void;
+function BulkInvoiceForm({ tenantId, academicYearId, fees, onCancel, onDone }: {
+  tenantId: number; academicYearId: number | null; fees: SchoolFee[]; onCancel: () => void; onDone: (n: number) => void;
 }) {
-  const yearsQuery = useQuery(listAcademicYears, []);
-  const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
-  const classesQuery = useQuery(() => (cy ? listClasses(cy.id) : Promise.resolve([])), [cy?.id]);
+  const classesQuery = useQuery(() => (academicYearId ? listClasses(academicYearId) : Promise.resolve([])), [academicYearId]);
   const [loading, setLoading] = useState(false);
   const { handleSubmit, watch, setValue, formState: { errors } } = useForm<BulkFormValues>({
     resolver: zodResolver(bulkSchema),
@@ -357,7 +367,7 @@ function BulkInvoiceForm({ tenantId, fees, onCancel, onDone }: {
   async function submit(values: BulkFormValues) {
     setLoading(true);
     try {
-      const res = await generateInvoicesBulk(tenantId, Number(values.classId), Number(values.feeId));
+      const res = await generateInvoicesBulk(tenantId, Number(values.classId), Number(values.feeId), academicYearId);
       onDone(res.length);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }

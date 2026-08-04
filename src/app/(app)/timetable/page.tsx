@@ -306,6 +306,7 @@ export default function TimetablePage() {
           slots={slotsQuery.data ?? []}
           classSubjects={classSubjects}
           subjects={subjects}
+          teacherName={teacherName}
           onChanged={() => slotsQuery.refetch()}
         />
       ) : (

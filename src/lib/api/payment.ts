@@ -10,8 +10,10 @@ import type {
   Receipt,
 } from "@/lib/types/payment";
 
-export function listPaymentsByTenant(tenantId: number): Promise<Payment[]> {
-  return api.get<Payment[]>(`/payments/tenant/${tenantId}`);
+/** Passer academicYearId pour ne voir que les paiements de l'année scolaire choisie (recommandé —
+ * sans ce filtre, tous les paiements de toutes les années créées se mélangent). */
+export function listPaymentsByTenant(tenantId: number, academicYearId?: number | null): Promise<Payment[]> {
+  return api.get<Payment[]>(`/payments/tenant/${tenantId}`, { query: { academicYearId: academicYearId ?? undefined } });
 }
 
 export function listPaymentsByInvoice(invoiceId: number): Promise<Payment[]> {
@@ -35,6 +37,7 @@ export interface GroupPaymentInput {
   monthsCount: number;
   remainingAfter: number;
   shares: { invoiceId: number; amount: number }[];
+  academicYearId?: number | null;
 }
 
 /**
