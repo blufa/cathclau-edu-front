@@ -41,12 +41,15 @@ export function TimetableGrid({
   slots,
   classSubjects,
   subjects,
+  teacherName,
   onChanged,
 }: {
   classId: number;
   slots: EmploiDuTemps[];
   classSubjects: ClasseMatiere[];
   subjects: Matiere[];
+  /** Nom de l'enseignant par identifiant — concaténé au libellé de chaque option du menu déroulant. */
+  teacherName?: Map<number, string>;
   onChanged: () => void;
 }) {
   const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
@@ -73,12 +76,15 @@ export function TimetableGrid({
       const byTeacher = new Map<number, string>();
       for (const c of codes) if (c.teacherId != null && c.code) byTeacher.set(c.teacherId, c.code);
       if (byTeacher.size === 0 && cs.teacherId != null) byTeacher.set(cs.teacherId, cs.code ?? "?");
-      return [...byTeacher.entries()].map(([teacherId, code]) => ({
-        value: `${cs.subjectId}:${teacherId}`,
-        label: `${label} (${code})`,
-      }));
+      return [...byTeacher.entries()].map(([teacherId, code]) => {
+        const name = teacherName?.get(teacherId);
+        return {
+          value: `${cs.subjectId}:${teacherId}`,
+          label: name ? `${label} (${code}) — ${name}` : `${label} (${code})`,
+        };
+      });
     });
-  }, [classSubjects, codesBySubject, subjectLabel]);
+  }, [classSubjects, codesBySubject, subjectLabel, teacherName]);
 
   // Un créneau fixe (ex. 08h–10h) peut contenir une séance plus courte (matières d'1h) : on
   // rattache l'entrée dont l'heure de début tombe dans la fenêtre du créneau, pas seulement celles

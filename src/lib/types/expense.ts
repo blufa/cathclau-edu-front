@@ -23,6 +23,9 @@ export interface Expense {
   tenantId: number | null;
   categoryId: number | null;
   supplierId: number | null;
+  /** Ligne du budget annuel (AnnualBudget) sur laquelle la dépense s'impute — son "réalisé" se met
+   * alors à jour automatiquement au paiement. */
+  budgetLineId: number | null;
   label: string;
   amount: string;
   currency: string;
@@ -42,6 +45,7 @@ export interface Expense {
 export interface ExpenseInput {
   categoryId?: number | null;
   supplierId?: number | null;
+  budgetLineId?: number | null;
   label: string;
   amount: number;
   currency?: string | null;

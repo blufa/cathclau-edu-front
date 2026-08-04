@@ -234,6 +234,7 @@ function MonthlyCollect({
         monthsCount: selectedMonths.length,
         remainingAfter,
         shares: selectedMonths.map((m) => ({ invoiceId: m.id, amount: remainingOf(m) })),
+        academicYearId: selectedMonths[0]?.academicYearId ?? null,
       });
       if (online) {
         // Une seule transaction Djomy pour le total : on ouvre le portail puis on attend la confirmation.

@@ -44,6 +44,7 @@ export function PayInvoiceForm({ invoice, tenantId, onDone }: { invoice: Invoice
         amount, channel,
         type: amount >= remaining ? "COMPLETE" : "PARTIAL",
         payerNumber: "614324299",
+        academicYearId: invoice.academicYearId,
       });
       if (res.redirectUrl) {
         notifySuccess("Ouverture du portail de paiement dans un nouvel onglet…");

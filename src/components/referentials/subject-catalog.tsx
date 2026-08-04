@@ -1,16 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@/hooks/use-query";
+import { getCatalogueMepua, importerMatieresMepua } from "@/lib/api/academics";
+import type { Matiere, SchoolCycle } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { createSubject } from "@/lib/api/academics";
-import type { Matiere } from "@/lib/types/academics";
+import { Field, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { notifyError, notifySuccess } from "@/lib/feedback";
-import { SUBJECT_CATALOG, SUBJECT_CATALOG_BY_CYCLE } from "@/lib/academics-subjects";
+
+const SERIES_LYCEE = [
+  { value: "SCIENCES", label: "11ème — Sciences (tronc commun)" },
+  { value: "SOCIALES", label: "11ème — Sciences Sociales (tronc commun)" },
+  { value: "SM", label: "Terminale — Sciences Mathématiques (SM)" },
+  { value: "SE", label: "Terminale — Sciences Expérimentales (SE)" },
+  { value: "SS", label: "Terminale — Sciences Sociales (SS)" },
+];
 
 /**
- * Sélecteur de matières depuis le catalogue prédéfini : l'utilisateur coche les matières à créer
- * (coefficient commun appliqué, modifiable ensuite). Les matières déjà présentes sont grisées.
+ * Import du catalogue officiel MEPUA (matière + coefficient déjà déterminé par le cycle/série),
+ * plutôt qu'une liste de matières sans coefficient à ressaisir une par une.
  */
 export function SubjectCatalogPicker({
   existing,
@@ -21,68 +31,85 @@ export function SubjectCatalogPicker({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
+  const [cycle, setCycle] = useState<SchoolCycle>("COLLEGE");
+  const [serie, setSerie] = useState(SERIES_LYCEE[0].value);
+  const [importing, setImporting] = useState(false);
+  const effectiveSerie = cycle === "LYCEE" ? serie : undefined;
+
+  const catalogueQuery = useQuery(() => getCatalogueMepua(cycle, effectiveSerie), [cycle, effectiveSerie]);
+  const catalogue = catalogueQuery.data ?? [];
   const existingLabels = new Set(existing.map((m) => m.label.trim().toLowerCase()));
 
-  function toggle(label: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  }
-
-  async function handleAdd() {
-    const toCreate = SUBJECT_CATALOG.filter((s) => selected.has(s) && !existingLabels.has(s.trim().toLowerCase()));
-    if (toCreate.length === 0) {
-      onCancel();
-      return;
-    }
-    setSaving(true);
+  async function handleImport() {
+    setImporting(true);
     try {
-      for (const label of toCreate) {
-        // Coefficient par défaut (1) : il se règle à l'affectation en classe et par évaluation.
-        await createSubject(label, 1);
+      const created = await importerMatieresMepua(cycle, effectiveSerie);
+      if (created.length === 0) {
+        notifySuccess("Toutes les matières de ce programme existent déjà.");
+      } else {
+        notifySuccess(`${created.length} matière${created.length > 1 ? "s importées" : " importée"} (coefficient officiel appliqué)`);
       }
-      notifySuccess(`${toCreate.length} matière${toCreate.length > 1 ? "s créées" : " créée"}`);
       onDone();
     } catch (err) {
       notifyError(err);
     } finally {
-      setSaving(false);
+      setImporting(false);
     }
   }
+
+  const importCount = catalogue.filter((m) => !existingLabels.has(m.libelle.trim().toLowerCase())).length;
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Cochez les matières à créer. Celles déjà présentes sont grisées. Le coefficient se définit
-        ensuite à l&apos;affectation en classe et par évaluation.
+        Le coefficient officiel de chaque matière est déterminé par le programme (cycle/série) — pas besoin de le saisir.
       </p>
-      {SUBJECT_CATALOG_BY_CYCLE.map((group) => (
-        <div key={group.cycle}>
-          <p className="mb-1.5 text-sm font-semibold text-gray-700">{group.cycle}</p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {group.subjects.map((label) => {
-              const already = existingLabels.has(label.trim().toLowerCase());
-              return (
-                <Checkbox
-                  key={`${group.cycle}-${label}`}
-                  label={already ? `${label} (déjà créée)` : label}
-                  checked={already || selected.has(label)}
-                  disabled={already || saving}
-                  onChange={() => toggle(label)}
-                />
-              );
-            })}
-          </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Cycle</Label>
+          <Select value={cycle} onChange={(e) => setCycle(e.target.value as SchoolCycle)}>
+            <option value="PRIMAIRE">Primaire</option>
+            <option value="COLLEGE">Collège</option>
+            <option value="LYCEE">Lycée</option>
+          </Select>
+        </Field>
+        {cycle === "LYCEE" && (
+          <Field>
+            <Label>Série</Label>
+            <Select value={serie} onChange={(e) => setSerie(e.target.value)}>
+              {SERIES_LYCEE.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+            </Select>
+          </Field>
+        )}
+      </div>
+
+      {catalogueQuery.loading ? (
+        <div className="flex justify-center py-8"><Spinner /></div>
+      ) : catalogue.length === 0 ? (
+        <p className="py-6 text-center text-sm text-gray-400">Aucun programme officiel pour ce choix.</p>
+      ) : (
+        <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+          {catalogue.map((m) => {
+            const already = existingLabels.has(m.libelle.trim().toLowerCase());
+            return (
+              <div key={m.code} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm">
+                <span className={already ? "text-gray-400" : "text-gray-800"}>
+                  {m.libelle} {already && <span className="text-xs">(déjà créée)</span>}
+                </span>
+                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                  Coef. {m.coefficient}
+                </span>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
+
       <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onCancel} disabled={saving}>Annuler</Button>
-        <Button onClick={handleAdd} loading={saving} disabled={selected.size === 0}>Ajouter la sélection</Button>
+        <Button variant="secondary" onClick={onCancel} disabled={importing}>Annuler</Button>
+        <Button onClick={handleImport} loading={importing} disabled={catalogue.length === 0 || importCount === 0}>
+          {importCount === 0 ? "Déjà toutes importées" : `Importer (${importCount})`}
+        </Button>
       </div>
     </div>
   );

@@ -1,23 +1,44 @@
 "use client";
 
-import { Banknote, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { useMemo } from "react";
+import {
+  AlertTriangle,
+  Award,
+  Banknote,
+  TrendingDown,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { listPaymentsByTenant } from "@/lib/api/payment";
 import { listExpenses } from "@/lib/api/expense";
+import { getCurrentAcademicYear, listAcademicYears } from "@/lib/api/academics";
+import { getFounderDashboard } from "@/lib/api/reporting";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatCardSkeleton, CardSkeleton } from "@/components/ui/skeleton";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
+const pct = (v: string | number | null | undefined) => `${Number(v ?? 0).toFixed(2)} %`;
+
+const ALERT_TONE: Record<string, "red" | "amber" | "blue"> = {
+  CRITICAL: "red",
+  WARNING: "amber",
+  INFO: "blue",
+};
 
 /**
- * Vision Fondateur (§5) : vue épurée, centrée sur la consolidation en temps réel des recettes de
- * l'école (scolarité, inscriptions, frais annexes — tous les paiements réussis) et la balance
- * globale (recettes - dépenses payées). Volontairement sans plan comptable ni écritures.
+ * Vision Fondateur (§14) : consolidation en temps réel des recettes de l'école, puis, pour l'année
+ * scolaire courante, le recouvrement détaillé (par classe, par mois/tranche, plus gros débiteurs),
+ * la masse salariale complète (enseignants + personnel) et les élèves pris en charge (exonérations,
+ * remises fratrie). Alertes automatiques et comparatif avec l'année précédente quand disponible.
  */
 export default function FounderDashboard() {
   const { user } = useAuth();
@@ -52,11 +73,41 @@ export default function FounderDashboard() {
     Dépenses: Math.round(expensesByMonth.get(k) ?? 0),
   }));
 
+  // ── Année scolaire courante + précédente (comparatif automatique, §V3) ────
+  const { data: currentYear } = useQuery(() => getCurrentAcademicYear(), []);
+  const { data: allYears } = useQuery(() => listAcademicYears(), []);
+  const previousYearId = useMemo(() => {
+    if (!currentYear || !allYears) return null;
+    const sorted = [...allYears].sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""));
+    const idx = sorted.findIndex((y) => y.id === currentYear.id);
+    return idx >= 0 && idx + 1 < sorted.length ? sorted[idx + 1].id : null;
+  }, [currentYear, allYears]);
+
+  const now = new Date();
+  const founderQuery = useQuery(
+    () =>
+      currentYear
+        ? getFounderDashboard(currentYear.id, {
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            compareAcademicYearId: previousYearId ?? undefined,
+          })
+        : Promise.resolve(null),
+    [currentYear?.id, previousYearId],
+  );
+  const founder = founderQuery.data;
+
+  const periodTrend = (founder?.recovery.byPeriod ?? []).map((p) => ({
+    name: p.periodLabel,
+    Facturé: Math.round(Number(p.invoiced)),
+    Encaissé: Math.round(Number(p.collected)),
+  }));
+
   return (
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Vision Fondateur</h1>
-        <p className="text-sm text-gray-500">Recettes de l&apos;école et balance globale, en temps réel</p>
+        <p className="text-sm text-gray-500">Recettes de l&apos;école, recouvrement, masse salariale et élèves pris en charge</p>
       </Reveal>
 
       {loading ? (
@@ -89,6 +140,138 @@ export default function FounderDashboard() {
           </CardBody>
         </Card>
       )}
+
+      {/* ── Alertes automatiques ─────────────────────────────────────────── */}
+      {!founderQuery.loading && (founder?.alerts ?? []).length > 0 && (
+        <div className="space-y-2">
+          {founder!.alerts.map((a) => (
+            <div key={a.code} className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+              <div className="flex-1">
+                <Badge tone={ALERT_TONE[a.level] ?? "gray"}>{a.level}</Badge>
+                <span className="ml-2 text-sm text-gray-700">{a.message}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Recouvrement de l'année scolaire courante ────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">
+          Recouvrement — {currentYear?.label ?? "année scolaire courante"}
+        </h2>
+        {founderQuery.loading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard title="Facturé" value={formatGNF(founder?.recovery.overall.invoiced)} icon={Wallet} accent="indigo" />
+            <StatCard title="Encaissé" value={formatGNF(founder?.recovery.overall.collected)} icon={TrendingUp} accent="emerald" />
+            <StatCard title="Impayés" value={formatGNF(founder?.recovery.overall.outstanding)} icon={AlertTriangle} accent="rose"
+              hint={`${founder?.recovery.overall.unpaidInvoices ?? 0} facture(s)`} />
+            <StatCard title="Taux de recouvrement" value={pct(founder?.recovery.overall.recoveryRate)} icon={Award} accent="teal" />
+          </div>
+        )}
+
+        {founder?.comparison && (
+          <p className="text-xs text-gray-500">
+            Vs année précédente : facturé {Number(founder.comparison.invoicedDelta) >= 0 ? "+" : ""}
+            {formatGNF(founder.comparison.invoicedDelta)}, encaissé {Number(founder.comparison.collectedDelta) >= 0 ? "+" : ""}
+            {formatGNF(founder.comparison.collectedDelta)}, taux de recouvrement {Number(founder.comparison.recoveryRateDelta) >= 0 ? "+" : ""}
+            {Number(founder.comparison.recoveryRateDelta).toFixed(2)} pt.
+          </p>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle>Recouvrement par mois / tranche</CardTitle></CardHeader>
+            <CardBody>
+              {periodTrend.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">Pas encore de factures pour cette année.</p>
+              ) : (
+                <BarTrendChart data={periodTrend} valueFormatter={(v) => formatGNF(v)}
+                  series={[{ key: "Facturé", name: "Facturé", color: "#6366f1" }, { key: "Encaissé", name: "Encaissé", color: "#10b981" }]} />
+              )}
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Recouvrement par classe</CardTitle></CardHeader>
+            <CardBody>
+              <Table>
+                <THead><TR><TH>Classe</TH><TH>Facturé</TH><TH>Impayés</TH><TH>Taux</TH></TR></THead>
+                <TBody>
+                  {(founder?.recovery.byClass ?? []).map((c) => (
+                    <TR key={c.classId}>
+                      <TD>{c.className}</TD>
+                      <TD>{formatGNF(c.invoiced)}</TD>
+                      <TD>{formatGNF(c.outstanding)}</TD>
+                      <TD>{pct(c.recoveryRate)}</TD>
+                    </TR>
+                  ))}
+                  {!founderQuery.loading && !(founder?.recovery.byClass ?? []).length && (
+                    <TR><TD colSpan={4} className="text-gray-400">Aucune facture pour cette année.</TD></TR>
+                  )}
+                </TBody>
+              </Table>
+            </CardBody>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle>Plus gros débiteurs</CardTitle></CardHeader>
+          <CardBody>
+            <Table>
+              <THead><TR><TH>Élève</TH><TH>Classe</TH><TH>Reste dû</TH></TR></THead>
+              <TBody>
+                {(founder?.recovery.topDebtors ?? []).map((d) => (
+                  <TR key={d.studentId}>
+                    <TD className="font-medium">{d.studentName}</TD>
+                    <TD>{d.className ?? "—"}</TD>
+                    <TD>{formatGNF(d.outstanding)}</TD>
+                  </TR>
+                ))}
+                {!founderQuery.loading && !(founder?.recovery.topDebtors ?? []).length && (
+                  <TR><TD colSpan={3} className="text-gray-400">Aucun impayé.</TD></TR>
+                )}
+              </TBody>
+            </Table>
+          </CardBody>
+        </Card>
+      </section>
+
+      {/* ── Masse salariale ──────────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Masse salariale du mois</h2>
+        {founderQuery.loading ? (
+          <div className="grid gap-4 sm:grid-cols-3"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard title="Enseignants" value={formatGNF(founder?.payroll.teacherMonthlyPayroll)} icon={Users} accent="indigo"
+              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s)`} />
+            <StatCard title="Personnel administratif" value={formatGNF(founder?.payroll.staffMonthlyPayroll)} icon={Users} accent="teal"
+              hint={`${founder?.payroll.staffCount ?? 0} membre(s)`} />
+            <StatCard title="Total masse salariale" value={formatGNF(founder?.payroll.totalMonthlyPayroll)} icon={Wallet} accent="rose" />
+          </div>
+        )}
+      </section>
+
+      {/* ── Élèves pris en charge ────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Élèves pris en charge</h2>
+        {founderQuery.loading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard title="Exonérations actives" value={founder?.subsidy.activeExemptionsCount ?? 0} icon={Users} accent="indigo"
+              hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s), ${founder?.subsidy.partialExemptions ?? 0} partielle(s)`} />
+            <StatCard title="Remises fratrie appliquées" value={formatGNF(founder?.subsidy.familyDiscountAmount)} icon={Wallet} accent="teal" />
+            <StatCard title="Élèves à jour sur l'année" value={founder?.subsidy.studentsFullySettledMonthlyFees ?? 0} icon={Award} accent="emerald"
+              hint="Toutes les mensualités payées" />
+            <StatCard title="Économie estimée (paiement anticipé)" value={formatGNF(founder?.subsidy.estimatedEarlyPaymentSavings)} icon={Banknote} accent="rose"
+              hint="Estimation à 5 % — aucune remise réelle appliquée aujourd'hui" />
+          </div>
+        )}
+      </section>
     </div>
   );
 }

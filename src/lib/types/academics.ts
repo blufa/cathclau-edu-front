@@ -40,6 +40,13 @@ export interface Matiere {
   syllabus: string | null;
 }
 
+/** Entrée du catalogue officiel MEPUA : matière + coefficient pour un cycle/série donné. */
+export interface MatiereModele {
+  code: string;
+  libelle: string;
+  coefficient: string;
+}
+
 export type TypePeriode = "TRIMESTRE" | "SEMESTRE";
 export type SchoolCycle = "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR";
 

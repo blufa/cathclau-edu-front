@@ -45,3 +45,13 @@ export function updateBudgetLine(lineId: number, input: BudgetLineInput): Promis
 export function deleteBudgetLine(lineId: number): Promise<void> {
   return api.delete<void>(`/annual-budgets/lines/${lineId}`);
 }
+
+/** Récupère (ou génère à la demande) l'URL du PDF récapitulatif du budget. */
+export function getBudgetPdf(id: number): Promise<{ url?: string }> {
+  return api.get<{ url?: string }>(`/annual-budgets/${id}/pdf`);
+}
+
+/** Flux PDF du budget servi par le backend (object URL local) — indépendant de Cloudinary. */
+export function getBudgetPdfObjectUrl(id: number): Promise<string> {
+  return api.blobUrl(`/annual-budgets/${id}/pdf/download`);
+}

@@ -56,6 +56,8 @@ export interface CashflowProjection {
   outstandingReceivables: string;
   avgMonthlyCollection: string;
   recurringPayroll: string;
+  /** Tendance des encaissements mensuels (régression linéaire simple, §6) : HAUSSE, BAISSE ou STABLE. */
+  collectionTrend: "HAUSSE" | "BAISSE" | "STABLE";
   months: ProjectionMonth[];
 }
 
@@ -105,4 +107,79 @@ export interface PerformanceDashboard {
 
 export function getTeacherPerformance(year: number, month: number): Promise<PerformanceDashboard> {
   return api.get<PerformanceDashboard>("/dashboard/hr/performance", { query: { year, month } });
+}
+
+// ── Vision Fondateur ───────────────────────────────────────────────────────
+export interface ClassRecoveryRow {
+  classId: number;
+  className: string;
+  invoiced: string;
+  collected: string;
+  outstanding: string;
+  recoveryRate: string;
+}
+export interface PeriodRecoveryRow {
+  periodLabel: string;
+  invoiced: string;
+  collected: string;
+  outstanding: string;
+  recoveryRate: string;
+}
+export interface TopDebtorRow {
+  studentId: number;
+  studentName: string;
+  classId: number | null;
+  className: string | null;
+  outstanding: string;
+}
+export interface RecoveryView {
+  overall: FinanceDashboard;
+  byClass: ClassRecoveryRow[];
+  byPeriod: PeriodRecoveryRow[];
+  topDebtors: TopDebtorRow[];
+}
+export interface PayrollMassSummary {
+  totalHourlyRateNormal: string;
+  totalHourlyRateExam: string;
+  teacherMonthlyPayroll: string;
+  staffMonthlyPayroll: string;
+  totalMonthlyPayroll: string;
+  teacherCount: number;
+  staffCount: number;
+}
+export interface SubsidyStats {
+  activeExemptionsCount: number;
+  totalExemptions: number;
+  partialExemptions: number;
+  familyDiscountAmount: string;
+  studentsFullySettledMonthlyFees: number;
+  estimatedEarlyPaymentSavings: string;
+}
+export interface FounderAlert {
+  level: "INFO" | "WARNING" | "CRITICAL";
+  code: string;
+  message: string;
+}
+export interface FounderYearComparison {
+  compareAcademicYearId: number;
+  invoicedDelta: string;
+  collectedDelta: string;
+  recoveryRateDelta: string;
+}
+export interface FounderDashboard {
+  academicYearId: number;
+  recovery: RecoveryView;
+  payroll: PayrollMassSummary;
+  subsidy: SubsidyStats;
+  alerts: FounderAlert[];
+  comparison: FounderYearComparison | null;
+}
+
+export function getFounderDashboard(
+  academicYearId: number,
+  options?: { year?: number; month?: number; compareAcademicYearId?: number; topDebtors?: number },
+): Promise<FounderDashboard> {
+  return api.get<FounderDashboard>("/dashboard/founder", {
+    query: { academicYearId, ...options },
+  });
 }

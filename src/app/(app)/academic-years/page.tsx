@@ -157,15 +157,14 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
       </Field>
       <Field>
         <Label>Cycle</Label>
-        <p className="text-xs text-gray-400">Primaire = trimestres ; collège/lycée/supérieur = semestres.</p>
+        <p className="text-xs text-gray-400">Primaire = trimestres ; secondaire/supérieur = semestres.</p>
         <Select value={v.cycle} onChange={(e) => {
           const c = e.target.value as SchoolCycle;
           setValue("cycle", c);
           setValue("type", c === "PRIMAIRE" ? "TRIMESTRE" : "SEMESTRE");
         }}>
           <option value="PRIMAIRE">Primaire</option>
-          <option value="COLLEGE">Collège</option>
-          <option value="LYCEE">Lycée</option>
+          <option value="COLLEGE">Secondaire</option>
           <option value="SUPERIEUR">Supérieur</option>
         </Select>
       </Field>

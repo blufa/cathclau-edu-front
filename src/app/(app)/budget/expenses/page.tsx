@@ -1,22 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Building2, LineChart, Plus, Receipt, Tags, Wallet } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   approveExpense,
-  createBudget,
   createExpense,
   updateExpense,
   createExpenseCategory,
   createSupplier,
-  deleteBudget,
   deleteExpense,
   deleteExpenseCategory,
   deleteSupplier,
-  listBudgets,
   listExpenseCategories,
   listExpenses,
   listSuppliers,
@@ -25,6 +22,8 @@ import {
   submitExpense,
   updateSupplier,
 } from "@/lib/api/expense";
+import { listBudgets, getBudgetLines } from "@/lib/api/budget";
+import type { AnnualBudget } from "@/lib/types/budget";
 import { listPaymentsByTenant } from "@/lib/api/payment";
 import {
   EXPENSE_PAYMENT_MODE_LABEL,
@@ -48,7 +47,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
-import { BarBreakdownChart, type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
+import { type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
+import { PieBreakdownChart } from "@/components/charts/pie-breakdown-chart";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -74,21 +74,19 @@ export default function ExpensesPage() {
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Dépenses</h1>
         <p className="text-sm text-gray-500">Saisie, validation et paiement des dépenses de l&apos;école</p>
       </Reveal>
-      <Tabs defaultValue="expenses">
+      <Tabs defaultValue="categories">
         <TabsList>
+          <TabsTrigger value="categories" icon={Tags}>Catégories</TabsTrigger>
           <TabsTrigger value="expenses" icon={Receipt}>Dépenses</TabsTrigger>
-          <TabsTrigger value="budgets" icon={Wallet}>Budgets</TabsTrigger>
           <TabsTrigger value="reports" icon={LineChart}>Rapports</TabsTrigger>
           <TabsTrigger value="treasury" icon={LineChart}>Trésorerie</TabsTrigger>
           <TabsTrigger value="suppliers" icon={Building2}>Fournisseurs</TabsTrigger>
-          <TabsTrigger value="categories" icon={Tags}>Catégories</TabsTrigger>
         </TabsList>
+        <TabsPanel value="categories"><CategoriesTab /></TabsPanel>
         <TabsPanel value="expenses"><ExpensesTab user={user} /></TabsPanel>
-        <TabsPanel value="budgets"><BudgetsTab user={user} /></TabsPanel>
         <TabsPanel value="reports"><ReportsTab /></TabsPanel>
         <TabsPanel value="treasury"><TreasuryTab tenantId={tenantId} /></TabsPanel>
         <TabsPanel value="suppliers"><SuppliersTab /></TabsPanel>
-        <TabsPanel value="categories"><CategoriesTab /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -183,6 +181,15 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
   const [reference, setReference] = useState(initial?.reference ?? "");
   const [justificationUrl, setJustificationUrl] = useState(initial?.justificationUrl ?? "");
 
+  // Budget annuel : le comptable peut imputer la dépense sur une ligne du budget en cours — son
+  // "réalisé" se met alors à jour automatiquement au paiement (pas besoin de le ressaisir).
+  const budgetsQuery = useQuery(() => listBudgets(), []);
+  const budgets = useMemo(() => budgetsQuery.data ?? [], [budgetsQuery.data]);
+  const [budgetId, setBudgetId] = useState("");
+  const linesQuery = useQuery(() => (budgetId ? getBudgetLines(Number(budgetId)) : Promise.resolve([])), [budgetId]);
+  const expenseLines = useMemo(() => (linesQuery.data ?? []).filter((l) => l.lineType === "EXPENSE"), [linesQuery.data]);
+  const [budgetLineId, setBudgetLineId] = useState(initial?.budgetLineId ? String(initial.budgetLineId) : "");
+
   async function submit() {
     if (!label.trim()) { notifyError("Libellé requis"); return; }
     if (!(Number(amount) > 0)) { notifyError("Montant requis"); return; }
@@ -191,6 +198,7 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
       const payload = {
         categoryId: categoryId ? Number(categoryId) : null,
         supplierId: supplierId ? Number(supplierId) : null,
+        budgetLineId: budgetLineId ? Number(budgetLineId) : null,
         label, amount: Number(amount), expenseDate: expenseDate || null,
         paymentMode, reference: reference || null, justificationUrl: justificationUrl || null,
       };
@@ -224,6 +232,22 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
           {suppliers.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
         </Select>
       </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Budget annuel (optionnel)</Label>
+          <Select value={budgetId} onChange={(e) => { setBudgetId(e.target.value); setBudgetLineId(""); }}>
+            <option value="">—</option>
+            {budgets.map((b: AnnualBudget) => (<option key={b.id} value={b.id}>{b.label} ({b.academicYear})</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Ligne du budget</Label>
+          <Select value={budgetLineId} disabled={!budgetId} onChange={(e) => setBudgetLineId(e.target.value)}>
+            <option value="">{budgetId ? "—" : "Choisir un budget d'abord"}</option>
+            {expenseLines.map((l) => (<option key={l.id} value={l.id}>{l.category}</option>))}
+          </Select>
+        </Field>
+      </div>
       <Field>
         <Label>Mode de paiement</Label>
         <Select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as ExpensePaymentMode)}>
@@ -366,72 +390,6 @@ function CategoriesTab() {
   );
 }
 
-// ── Budgets tab ──────────────────────────────────────────────────────────────
-function BudgetsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
-  const budgetsQuery = useQuery(() => listBudgets(), []);
-  const categoriesQuery = useQuery(() => listExpenseCategories(), []);
-  const categoryName = new Map((categoriesQuery.data ?? []).map((c) => [c.id, c.name]));
-
-  const [categoryId, setCategoryId] = useState("");
-  const [academicYear, setAcademicYear] = useState("");
-  const [allocatedAmount, setAllocatedAmount] = useState("0");
-  async function add() {
-    if (!categoryId || !academicYear.trim()) { notifyError("Catégorie et année requises"); return; }
-    try { await createBudget(Number(categoryId), academicYear, Number(allocatedAmount) || 0); setCategoryId(""); setAcademicYear(""); setAllocatedAmount("0"); notifySuccess("Budget enregistré"); budgetsQuery.refetch(); }
-    catch (err) { notifyError(err); }
-  }
-  function remove(id: number) {
-    confirmAction({ title: "Supprimer le budget", message: "Supprimer cette allocation ?", confirmLabel: "Supprimer", danger: true,
-      onConfirm: async () => { try { await deleteBudget(id); notifySuccess("Supprimé"); budgetsQuery.refetch(); } catch (err) { notifyError(err); } } });
-  }
-
-  return (
-    <div className="space-y-4">
-      {canEdit && (
-        <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-4">
-          <Field>
-            <Label>Catégorie</Label>
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">—</option>
-              {(categoriesQuery.data ?? []).map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-            </Select>
-          </Field>
-          <Field><Label>Année</Label><Input placeholder="2025-2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} /></Field>
-          <Field><Label>Montant alloué (GNF)</Label><Input type="number" min={0} value={allocatedAmount} onChange={(e) => setAllocatedAmount(e.target.value)} /></Field>
-          <Button onClick={add}>Allouer</Button>
-        </div>
-      )}
-      {budgetsQuery.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
-        <div className="space-y-3">
-          {(budgetsQuery.data ?? []).length === 0 && <p className="py-8 text-center text-sm text-gray-400">Aucun budget alloué.</p>}
-          {(budgetsQuery.data ?? []).map((b) => {
-            const used = Number(b.consumedAmount);
-            const alloc = Number(b.allocatedAmount);
-            const pct = alloc > 0 ? Math.min(Math.round((used / alloc) * 100), 100) : 0;
-            const over = used > alloc;
-            return (
-              <div key={b.id} className="rounded-2xl border border-gray-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">{categoryName.get(b.categoryId) ?? `#${b.categoryId}`} <span className="text-xs font-normal text-gray-400">· {b.academicYear}</span></span>
-                  <span className="text-sm text-gray-600">{formatGNF(used)} / {formatGNF(alloc)}</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-                  <div className={`h-full rounded-full ${over ? "bg-error-500" : pct >= 85 ? "bg-warning-500" : "bg-brand-500"}`} style={{ width: `${over ? 100 : pct}%` }} />
-                </div>
-                <div className="mt-1 flex items-center justify-between">
-                  {over ? <span className="text-xs text-error-600">Dépassement de {formatGNF(used - alloc)}</span> : <span className="text-xs text-gray-400">{pct}% consommé</span>}
-                  {canEdit && <button className="text-xs text-error-600 hover:underline" onClick={() => remove(b.id)}>Supprimer</button>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Reports tab ──────────────────────────────────────────────────────────────
 function ReportsTab() {
   const expensesQuery = useQuery(() => listExpenses("PAID"), []);
@@ -468,7 +426,7 @@ function ReportsTab() {
       </div>
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Par catégorie</h3>
-        <BarBreakdownChart data={catSlices} centerLabel="dépenses" valueFormatter={(v) => formatGNF(v)} />
+        <PieBreakdownChart data={catSlices} centerLabel="dépenses" valueFormatter={(v) => formatGNF(v)} />
       </div>
       <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-3">
         <h3 className="mb-3 text-sm font-semibold text-gray-700">Par fournisseur</h3>
@@ -503,6 +461,11 @@ function TreasuryTab({ tenantId }: { tenantId: number }) {
 
   if (paymentsQuery.loading || expensesQuery.loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
+  const splitSlices: BreakdownItem[] = [
+    { name: "Entrées", value: Math.round(Math.max(income, 0)), color: "#14b8a6" },
+    { name: "Sorties", value: Math.round(Math.max(outflow, 0)), color: "#f43f5e" },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
@@ -510,10 +473,16 @@ function TreasuryTab({ tenantId }: { tenantId: number }) {
         <StatCard title="Sorties (dépenses payées)" value={formatGNF(outflow)} icon={Wallet} accent="rose" />
         <StatCard title="Solde de trésorerie" value={formatGNF(balance)} icon={LineChart} accent={balance >= 0 ? "teal" : "amber"} />
       </div>
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">Entrées vs sorties (6 derniers mois)</h3>
-        {data.length === 0 ? <p className="py-8 text-center text-sm text-gray-400">Aucune donnée.</p> :
-          <BarTrendChart data={data} valueFormatter={(v) => formatGNF(v)} series={[{ key: "Entrées", name: "Entrées", color: "#14b8a6" }, { key: "Sorties", name: "Sorties", color: "#f43f5e" }]} />}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 lg:col-span-2">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Entrées vs sorties (6 derniers mois)</h3>
+          {data.length === 0 ? <p className="py-8 text-center text-sm text-gray-400">Aucune donnée.</p> :
+            <BarTrendChart data={data} valueFormatter={(v) => formatGNF(v)} series={[{ key: "Entrées", name: "Entrées", color: "#14b8a6" }, { key: "Sorties", name: "Sorties", color: "#f43f5e" }]} />}
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Répartition entrées / sorties</h3>
+          <PieBreakdownChart data={splitSlices} centerLabel="au total" valueFormatter={(v) => formatGNF(v)} />
+        </div>
       </div>
     </div>
   );

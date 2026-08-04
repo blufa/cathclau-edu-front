@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
+import { listAcademicYears } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import {
   PAYMENT_CHANNEL_LABEL,
@@ -39,7 +40,15 @@ export default function PaymentsListPage() {
   const tenantId = user?.tenantId ?? null;
   const canRefund = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
 
-  const q = usePaymentsQuery(tenantId);
+  const yearsQuery = useLegacyQuery(listAcademicYears, []);
+  const years = useMemo(
+    () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
+    [yearsQuery.data],
+  );
+  const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
+  const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
+  const yearId = selectedYearId ?? defaultYearId;
+  const q = usePaymentsQuery(tenantId, yearId);
   const [status, setStatus] = useState<PaymentStatus | "">("");
   const studentsQuery = useLegacyQuery(() => searchStudents({ size: 1000 }), []);
   const studentName = useMemo(() => {
@@ -101,10 +110,16 @@ export default function PaymentsListPage() {
         <p className="text-sm text-gray-500">Encaissements et reçus</p>
       </Reveal>
 
-      <Select className="max-w-[200px]" value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus | "")}>
-        <option value="">Tous les statuts</option>
-        {(Object.keys(PAYMENT_STATUS_LABEL) as PaymentStatus[]).map((s) => (<option key={s} value={s}>{PAYMENT_STATUS_LABEL[s]}</option>))}
-      </Select>
+      <div className="flex flex-wrap items-center gap-3">
+        <Select className="max-w-[200px]" value={yearId ?? ""} onChange={(e) => setSelectedYearId(e.target.value ? Number(e.target.value) : null)}>
+          {years.length === 0 && <option value="">—</option>}
+          {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
+        </Select>
+        <Select className="max-w-[200px]" value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus | "")}>
+          <option value="">Tous les statuts</option>
+          {(Object.keys(PAYMENT_STATUS_LABEL) as PaymentStatus[]).map((s) => (<option key={s} value={s}>{PAYMENT_STATUS_LABEL[s]}</option>))}
+        </Select>
+      </div>
 
       {q.isLoading ? (
         <div className="flex justify-center py-12"><Spinner /></div>

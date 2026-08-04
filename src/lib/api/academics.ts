@@ -14,9 +14,11 @@ import type {
   EnrollmentCountInfo,
   JourSemaine,
   Matiere,
+  MatiereModele,
   Niveau,
   Periode,
   Salle,
+  SchoolCycle,
   StatutAnneeScolaire,
 } from "@/lib/types/academics";
 
@@ -188,6 +190,15 @@ export function updateSubject(id: number, label: string, coefficient: number, sy
 }
 export function deleteSubject(id: number): Promise<void> {
   return api.delete<void>(`/academics/subjects/${id}`);
+}
+
+/** Aperçu du catalogue officiel MEPUA (matière + coefficient) pour un cycle (série requise au lycée). */
+export function getCatalogueMepua(cycle: SchoolCycle, serie?: string): Promise<MatiereModele[]> {
+  return api.get<MatiereModele[]>("/academics/subjects/catalogue-mepua", { query: { cycle, serie } });
+}
+/** Importe les matières/coefficients MEPUA du cycle (et série) comme matières du tenant ; ignore celles déjà créées. */
+export function importerMatieresMepua(cycle: SchoolCycle, serie?: string): Promise<Matiere[]> {
+  return api.post<Matiere[]>("/academics/subjects/importer-mepua", undefined, { query: { cycle, serie } });
 }
 
 // ── Génération automatique d'emploi du temps (selon disponibilités) ─────────────

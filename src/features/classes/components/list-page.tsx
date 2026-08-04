@@ -225,6 +225,7 @@ export default function ClassesListPage() {
               academicYearId={yearId}
               levels={levels}
               rooms={rooms}
+              classes={classes}
               submitLabel="Créer"
               onSubmit={handleCreate}
               onCancel={() => setCreating(false)}
@@ -240,6 +241,7 @@ export default function ClassesListPage() {
                 academicYearId={yearId}
                 levels={levels}
                 rooms={rooms}
+                classes={classes}
                 submitLabel="Enregistrer"
                 onSubmit={handleUpdate}
                 onCancel={() => setEditing(null)}

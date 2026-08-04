@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Wallet } from "lucide-react";
+import { FileText, Plus, Wallet } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -15,6 +15,7 @@ import {
   deleteBudget,
   deleteBudgetLine,
   getBudgetLines,
+  getBudgetPdfObjectUrl,
   getBudgetSummary,
   listBudgets,
   rejectBudget,
@@ -23,18 +24,22 @@ import {
 import {
   BUDGET_LINE_TYPE_LABEL,
   BUDGET_STATUS_LABEL,
+  FINANCING_MODE_LABEL,
   type AnnualBudget,
   type BudgetLine,
   type BudgetLineType,
+  type FinancingMode,
 } from "@/lib/types/budget";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Select } from "@/components/ui/select";
 import { Field, Input, Label, Textarea } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { FilePreview } from "@/components/ui/file-preview";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -132,6 +137,7 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
   const [editingHeader, setEditingHeader] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
+  const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
   // Le comptable ne peut modifier les lignes qu'avant validation (brouillon ou rejeté).
   const editable = canWrite && (budget.status === "DRAFT" || budget.status === "REJECTED");
 
@@ -141,6 +147,12 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
       title: "Supprimer la ligne", message: `Supprimer « ${l.category} » ?`, confirmLabel: "Supprimer", danger: true,
       onConfirm: async () => { try { await deleteBudgetLine(l.id); notifySuccess("Ligne supprimée"); refresh(); } catch (e) { notifyError(e); } },
     });
+  }
+  async function showPdf() {
+    try {
+      const url = await getBudgetPdfObjectUrl(budget.id);
+      setPreview({ url, title: `Budget — ${budget.label}` });
+    } catch (e) { notifyError(e); }
   }
 
   const lines = linesQuery.data ?? [];
@@ -157,6 +169,7 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
           <span className="text-sm text-gray-400">{budget.academicYear}</span>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" variant="ghost" leftSection={<FileText className="h-4 w-4" />} onClick={showPdf}>PDF</Button>
           {editable && <Button size="sm" variant="ghost" onClick={() => setEditingHeader(true)}>Modifier</Button>}
           {editable && <Button size="sm" onClick={onSubmit}>Soumettre</Button>}
           {canApprove && budget.status === "SUBMITTED" && <Button size="sm" onClick={onApprove}>Approuver</Button>}
@@ -165,6 +178,13 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
           {canApprove && <Button size="sm" variant="ghost" className="text-error-600" onClick={onDelete}>Supprimer</Button>}
         </div>
       </div>
+
+      {budget.financingMode && budget.financingMode !== "NONE" && (
+        <div className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-800">
+          <strong>Financement :</strong> {FINANCING_MODE_LABEL[budget.financingMode]}
+          {budget.financingAmount ? ` — ${formatGNF(budget.financingAmount)}` : ""}
+        </div>
+      )}
 
       {budget.status === "REJECTED" && budget.rejectionReason && (
         <div className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-800">
@@ -218,6 +238,8 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
           </div>
         </div>
       </Modal>
+
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
     </div>
   );
 }
@@ -259,7 +281,13 @@ function LineSection({ title, type, lines, canWrite, onAdd, onEdit, onRemove }: 
                 const v = Number(l.actualAmount) - Number(l.plannedAmount);
                 return (
                   <TR key={l.id}>
-                    <TD className="font-medium text-gray-900">{l.category}{l.notes ? <span className="block text-xs text-gray-400">{l.notes}</span> : null}</TD>
+                    <TD className="font-medium text-gray-900">
+                      {l.category}
+                      {l.quantity != null && l.unitPrice != null && (
+                        <span className="block text-xs text-gray-400">{l.quantity} × {formatGNF(l.unitPrice)}</span>
+                      )}
+                      {l.notes ? <span className="block text-xs text-gray-400">{l.notes}</span> : null}
+                    </TD>
                     <TD className="text-right">{formatGNF(l.plannedAmount)}</TD>
                     <TD className="text-right">{formatGNF(l.actualAmount)}</TD>
                     <TD className={`text-right text-sm ${(type === "REVENUE" ? v : -v) >= 0 ? "text-success-600" : "text-error-600"}`}>{v >= 0 ? "+" : ""}{formatGNF(String(v))}</TD>
@@ -285,23 +313,47 @@ function BudgetForm({ initial, onCancel, onDone }: { initial?: AnnualBudget | nu
   const [label, setLabel] = useState(initial?.label ?? "");
   const [academicYear, setAcademicYear] = useState(initial?.academicYear ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [financingMode, setFinancingMode] = useState<FinancingMode>(initial?.financingMode ?? "NONE");
+  const [financingAmount, setFinancingAmount] = useState(initial?.financingAmount ? String(Number(initial.financingAmount)) : "0");
   async function submit() {
     if (!label.trim() || !academicYear.trim()) { notifyError("Libellé et année requis"); return; }
     setLoading(true);
-    try { onDone(initial ? await updateBudget(initial.id, { label, academicYear, notes }) : await createBudget({ label, academicYear, notes })); }
+    try {
+      const payload = {
+        label, academicYear, notes,
+        financingMode,
+        financingAmount: financingMode !== "NONE" ? Number(financingAmount) || 0 : null,
+      };
+      onDone(initial ? await updateBudget(initial.id, payload) : await createBudget(payload));
+    }
     catch (err) { notifyError(err); } finally { setLoading(false); }
   }
   return (
     <div className="space-y-4">
       <Field>
         <Label>Libellé <span className="text-error-500">*</span></Label>
-        <Input placeholder="Budget 2025-2026" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <Input placeholder="Budget 2025-2026, Budget kermesse…" value={label} onChange={(e) => setLabel(e.target.value)} />
       </Field>
       <Field>
         <Label>Année scolaire <span className="text-error-500">*</span></Label>
         <Input placeholder="2025-2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} />
       </Field>
       <Field><Label>Notes</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Financement</Label>
+          <p className="text-xs text-gray-400">Si un événement (kermesse, sortie…) dépasse la trésorerie courante</p>
+          <Select value={financingMode} onChange={(e) => setFinancingMode(e.target.value as FinancingMode)}>
+            {(Object.keys(FINANCING_MODE_LABEL) as FinancingMode[]).map((m) => (<option key={m} value={m}>{FINANCING_MODE_LABEL[m]}</option>))}
+          </Select>
+        </Field>
+        {financingMode !== "NONE" && (
+          <Field>
+            <Label>Montant à {financingMode === "COLLECTE" ? "collecter" : "emprunter"} (GNF)</Label>
+            <Input type="number" min={0} value={financingAmount} onChange={(e) => setFinancingAmount(e.target.value)} />
+          </Field>
+        )}
+      </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="button" onClick={submit} loading={loading}>{initial ? "Enregistrer" : "Créer"}</Button>
@@ -315,16 +367,25 @@ function LineForm({ budgetId, type, initial, onCancel, onDone }: {
 }) {
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState(initial?.category ?? "");
+  // Quantité × prix unitaire (optionnel — ex. « 50 chaises à louer ») : quand les deux sont
+  // renseignés, le montant se calcule automatiquement plutôt que d'être ressaisi.
+  const [useQuantity, setUseQuantity] = useState(initial?.quantity != null);
+  const [quantity, setQuantity] = useState(initial?.quantity != null ? String(initial.quantity) : "1");
+  const [unitPrice, setUnitPrice] = useState(initial?.unitPrice != null ? String(Number(initial.unitPrice)) : "0");
   const [plannedAmount, setPlannedAmount] = useState(initial?.plannedAmount != null ? String(Number(initial.plannedAmount)) : "0");
   const [actualAmount, setActualAmount] = useState(initial?.actualAmount != null ? String(Number(initial.actualAmount)) : "0");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const computedAmount = useQuantity ? (Number(quantity) || 0) * (Number(unitPrice) || 0) : Number(plannedAmount) || 0;
+
   async function submit() {
     if (!category.trim()) { notifyError("Catégorie requise"); return; }
     setLoading(true);
     try {
       const payload = {
         lineType: type, category,
-        plannedAmount: Number(plannedAmount) || 0, actualAmount: Number(actualAmount) || 0,
+        quantity: useQuantity ? Number(quantity) || 0 : null,
+        unitPrice: useQuantity ? Number(unitPrice) || 0 : null,
+        plannedAmount: computedAmount, actualAmount: Number(actualAmount) || 0,
         notes: notes || null,
       };
       if (initial) await updateBudgetLine(initial.id, payload);
@@ -336,13 +397,26 @@ function LineForm({ budgetId, type, initial, onCancel, onDone }: {
     <div className="space-y-4">
       <p className="text-sm text-gray-500">{BUDGET_LINE_TYPE_LABEL[type]}</p>
       <Field>
-        <Label>Catégorie <span className="text-error-500">*</span></Label>
-        <Input placeholder={type === "REVENUE" ? "Frais de scolarité, subvention…" : "Salaires, fournitures…"} value={category} onChange={(e) => setCategory(e.target.value)} />
+        <Label>Catégorie / article <span className="text-error-500">*</span></Label>
+        <Input placeholder={type === "REVENUE" ? "Frais de scolarité, subvention…" : "Chaises à louer, sonorisation, salaires…"} value={category} onChange={(e) => setCategory(e.target.value)} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field><Label>Montant prévu (GNF)</Label><Input type="number" min={0} value={plannedAmount} onChange={(e) => setPlannedAmount(e.target.value)} /></Field>
-        <Field><Label>Réalisé (GNF)</Label><Input type="number" min={0} value={actualAmount} onChange={(e) => setActualAmount(e.target.value)} /></Field>
+      <div className="flex items-center gap-2">
+        <input type="checkbox" id="use-quantity" checked={useQuantity} onChange={(e) => setUseQuantity(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+        <label htmlFor="use-quantity" className="cursor-pointer text-sm text-gray-700">Cet article se chiffre par quantité × prix unitaire</label>
       </div>
+      {useQuantity ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Field><Label>Quantité</Label><Input type="number" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
+          <Field><Label>Prix unitaire (GNF)</Label><Input type="number" min={0} value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} /></Field>
+        </div>
+      ) : (
+        <Field><Label>Montant prévu (GNF)</Label><Input type="number" min={0} value={plannedAmount} onChange={(e) => setPlannedAmount(e.target.value)} /></Field>
+      )}
+      {useQuantity && (
+        <p className="text-sm text-gray-500">Montant calculé : <strong className="text-gray-900">{formatGNF(computedAmount)}</strong></p>
+      )}
+      <Field><Label>Réalisé (GNF)</Label><Input type="number" min={0} value={actualAmount} onChange={(e) => setActualAmount(e.target.value)} /></Field>
       <Field><Label>Notes</Label><Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
