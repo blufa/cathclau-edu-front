@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { NumberInput, Select as MantineSelect, Stack, Switch, TextInput } from "@mantine/core";
 import { Plus, Pencil, Trash2, Calculator } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import {
@@ -17,6 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Input, Label, Field } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -67,15 +69,15 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <p className="text-sm text-slate-500">Retenue sur salaire au titre des frais de scolarité des enfants du personnel</p>
+      <div className="rounded-2xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+          <p className="text-sm text-gray-500">Retenue sur salaire au titre des frais de scolarité des enfants du personnel</p>
           {canWrite && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Ajouter</Button>}
         </div>
         {q.loading ? (
           <div className="flex justify-center py-12"><Spinner /></div>
         ) : items.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-slate-400">Aucune règle de déduction.</p>
+          <p className="px-4 py-10 text-center text-sm text-gray-400">Aucune règle de déduction.</p>
         ) : (
           <Table>
             <THead>
@@ -84,7 +86,7 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
             <TBody>
               {items.map((r) => (
                 <TR key={r.id}>
-                  <TD className="font-medium text-slate-900">{r.label}</TD>
+                  <TD className="font-medium text-gray-900">{r.label}</TD>
                   <TD>{r.amountPerChild != null ? formatGNF(r.amountPerChild) : "—"}</TD>
                   <TD>{r.maxChildren ?? "—"}</TD>
                   <TD>{r.cap != null ? formatGNF(r.cap) : "—"}</TD>
@@ -92,8 +94,8 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
                   {canWrite && (
                     <TD className="text-right">
                       <div className="inline-flex gap-1">
-                        <button onClick={() => openEdit(r)} aria-label="Modifier" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></button>
-                        <button onClick={() => remove(r)} aria-label="Supprimer" className="rounded-lg p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => openEdit(r)} aria-label="Modifier" className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></button>
+                        <button onClick={() => remove(r)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </TD>
                   )}
@@ -107,17 +109,32 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
       <PreviewCard />
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Modifier la règle" : "Nouvelle règle de déduction"}>
-        <Stack gap="md">
-          <TextInput label="Libellé" required value={form.label} onChange={(e) => setForm({ ...form, label: e.currentTarget.value })} placeholder="Ex. Scolarité enfants du personnel" />
-          <NumberInput label="Montant par enfant (GNF)" min={0} thousandSeparator=" " value={form.amountPerChild ?? undefined} onChange={(v) => setForm({ ...form, amountPerChild: typeof v === "number" ? v : null })} />
-          <NumberInput label="Nombre d'enfants max (optionnel)" min={1} value={form.maxChildren ?? undefined} onChange={(v) => setForm({ ...form, maxChildren: typeof v === "number" ? v : null })} />
-          <NumberInput label="Plafond total (GNF, optionnel)" min={0} thousandSeparator=" " value={form.cap ?? undefined} onChange={(v) => setForm({ ...form, cap: typeof v === "number" ? v : null })} />
-          <Switch label="Active" checked={form.active ?? true} onChange={(e) => setForm({ ...form, active: e.currentTarget.checked })} />
+        <div className="space-y-4">
+          <Field>
+            <Label>Libellé <span className="text-error-500">*</span></Label>
+            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex. Scolarité enfants du personnel" />
+          </Field>
+          <Field>
+            <Label>Montant par enfant (GNF)</Label>
+            <Input type="number" min={0} value={form.amountPerChild ?? ""} onChange={(e) => setForm({ ...form, amountPerChild: e.target.value === "" ? null : Number(e.target.value) })} />
+          </Field>
+          <Field>
+            <Label>Nombre d&apos;enfants max (optionnel)</Label>
+            <Input type="number" min={1} value={form.maxChildren ?? ""} onChange={(e) => setForm({ ...form, maxChildren: e.target.value === "" ? null : Number(e.target.value) })} />
+          </Field>
+          <Field>
+            <Label>Plafond total (GNF, optionnel)</Label>
+            <Input type="number" min={0} value={form.cap ?? ""} onChange={(e) => setForm({ ...form, cap: e.target.value === "" ? null : Number(e.target.value) })} />
+          </Field>
+          <div className="flex items-center gap-3">
+            <Switch checked={form.active ?? true} onChange={(checked) => setForm({ ...form, active: checked })} ariaLabel="Active" />
+            <span className="text-sm text-gray-700">Active</span>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setOpen(false)}>Annuler</Button>
             <Button onClick={submit} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
           </div>
-        </Stack>
+        </div>
       </Modal>
     </div>
   );
@@ -127,9 +144,17 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
 function PreviewCard() {
   const teachersQuery = useQuery(listTeachers, []);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
-  const [teacherId, setTeacherId] = useState<number | null>(null);
+  const [teacherId, setTeacherId] = useState<string>("");
   const [result, setResult] = useState<FeeDeduction | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachers],
+  );
 
   async function run(id: number) {
     setLoading(true);
@@ -138,24 +163,24 @@ function PreviewCard() {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
         <Calculator className="h-4 w-4 text-brand-600" /> Simuler une déduction
       </h3>
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[240px]">
-          <label className="mb-1 block text-xs text-slate-500">Enseignant / membre du personnel</label>
-          <MantineSelect
-            placeholder="Choisir…" searchable
-            data={teachers.map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))}
-            value={teacherId ? String(teacherId) : null}
-            onChange={(v) => { const id = v ? Number(v) : null; setTeacherId(id); if (id) run(id); }}
+          <Label>Enseignant / membre du personnel</Label>
+          <SearchableSelect
+            value={teacherId}
+            options={teacherOptions}
+            onChange={(id) => { setTeacherId(id); if (id) run(Number(id)); }}
+            triggerClassName="w-full justify-between px-3"
           />
         </div>
         {loading ? <Spinner /> : result && (
           <div className="rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-3 text-sm">
-            <span className="text-slate-600">{result.label ?? "Déduction"} — {result.childrenCount} enfant(s) : </span>
-            <span className="font-semibold text-slate-900">{result.amount != null ? formatGNF(result.amount) : "—"}</span>
+            <span className="text-gray-600">{result.label ?? "Déduction"} — {result.childrenCount} enfant(s) : </span>
+            <span className="font-semibold text-gray-900">{result.amount != null ? formatGNF(result.amount) : "—"}</span>
           </div>
         )}
       </div>

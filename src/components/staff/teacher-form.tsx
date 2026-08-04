@@ -1,55 +1,75 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, Autocomplete, Button, Group, Select, NumberInput, PasswordInput, SimpleGrid, Stack, Stepper, Switch, TextInput } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
-import { useForm } from "@mantine/form";
-import { Check } from "lucide-react";
-import { useQuery } from "@/hooks/use-query";
-import { listSubjects } from "@/lib/api/academics";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { ApiError } from "@/lib/api/errors";
 import { createUserWithRole } from "@/lib/api/iam";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { Button } from "@/components/ui/button";
+import { Field, Input, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Stepper } from "@/components/ui/stepper";
+import { TeacherClassSubjectsAssignment } from "@/components/staff/teacher-class-subjects";
 
 interface TeacherFormProps {
   initial?: Teacher;
   submitLabel: string;
-  onSubmit: (input: CreateTeacherInput) => Promise<void>;
+  onSubmit: (input: CreateTeacherInput) => Promise<Teacher>;
   onCancel: () => void;
+  /** Appelé une fois l'étape « Affectations » terminée (ou ignorée) — ferme le formulaire. */
+  onFinish: () => void;
 }
 
-interface FormValues {
-  firstName: string;
-  lastName: string;
-  staffNumber: string;
-  specialization: string;
-  phone: string;
-  email: string;
-  hireDate: string;
-  employmentStatus: string;
-  diploma: string;
-  remunerationType: string;
-  remunerationRate: string | number;
-  teachingAuthorizationNumber: string;
-  cnssNumber: string;
-  createLogin: boolean;
-  password: string;
-}
+const schema = z
+  .object({
+    firstName: z.string().trim().min(1, "Prénom requis"),
+    lastName: z.string().trim().min(1, "Nom requis"),
+    staffNumber: z.string(),
+    specialization: z.string(),
+    phone: z.string(),
+    email: z.string(),
+    hireDate: z.string(),
+    employmentStatus: z.string(),
+    diploma: z.string(),
+    remunerationType: z.string(),
+    remunerationRate: z.string(),
+    createLogin: z.boolean(),
+    password: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.createLogin && !/^\S+@\S+$/.test(v.email)) {
+      ctx.addIssue({ code: "custom", path: ["email"], message: "Email requis pour l'accès" });
+    } else if (v.email && !/^\S+@\S+$/.test(v.email)) {
+      ctx.addIssue({ code: "custom", path: ["email"], message: "Email invalide" });
+    }
+    if (v.createLogin && v.password.length < 6) {
+      ctx.addIssue({ code: "custom", path: ["password"], message: "Mot de passe (6 caractères min.)" });
+    }
+  });
+type FormValues = z.infer<typeof schema>;
 
 const FIELD_STEP: Record<string, number> = { firstName: 0, lastName: 0, email: 0, password: 2 };
-const STEPS = 3;
+const STEPS = [{ label: "Identité" }, { label: "Professionnel" }, { label: "Compte" }, { label: "Affectations" }];
+const DIPLOMAS = ["Licence", "Master", "BTS", "Doctorat", "Ingénieur"];
 
-export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: TeacherFormProps) {
+export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish }: TeacherFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [active, setActive] = useState(0);
-  const subjectsQuery = useQuery(listSubjects, []);
-  const subjectOptions = (subjectsQuery.data ?? []).map((s) => s.label);
+  // Connu dès le départ en édition (l'enseignant existe déjà) ; rempli après la création en mode création.
+  const [teacherId, setTeacherId] = useState<number | null>(initial?.id ?? null);
 
-  const form = useForm<FormValues>({
-    mode: "controlled",
-    initialValues: {
+  const {
+    handleSubmit, watch, setValue, setError: setFieldError, trigger,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
       firstName: initial?.firstName ?? "",
       lastName: initial?.lastName ?? "",
       staffNumber: initial?.staffNumber ?? "",
@@ -60,42 +80,25 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
       employmentStatus: initial?.employmentStatus ?? "PERMANENT",
       diploma: initial?.diploma ?? "",
       remunerationType: initial?.remunerationType ?? "MENSUEL",
-      remunerationRate: initial?.remunerationRate ?? "",
-      teachingAuthorizationNumber: initial?.teachingAuthorizationNumber ?? "",
-      cnssNumber: initial?.cnssNumber ?? "",
+      remunerationRate: initial?.remunerationRate != null ? String(initial.remunerationRate) : "",
       createLogin: false,
       password: "",
     },
-    validate: {
-      firstName: (v) => (v.trim() ? null : "Prénom requis"),
-      lastName: (v) => (v.trim() ? null : "Nom requis"),
-      email: (v, vals) => {
-        if (vals.createLogin) return /^\S+@\S+$/.test(v) ? null : "Email requis pour l'accès";
-        return !v || /^\S+@\S+$/.test(v) ? null : "Email invalide";
-      },
-      password: (v, vals) => (vals.createLogin && v.length < 6 ? "Mot de passe (6 caractères min.)" : null),
-    },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  function nextStep() {
+  async function nextStep() {
     if (active === 0) {
-      const a = form.validateField("firstName");
-      const b = form.validateField("lastName");
-      if (a.hasError || b.hasError) return;
+      const ok = await trigger(["firstName", "lastName"]);
+      if (!ok) return;
     }
-    setActive((s) => Math.min(s + 1, STEPS - 1));
+    setActive((s) => Math.min(s + 1, 2));
   }
   const prevStep = () => setActive((s) => Math.max(s - 1, 0));
 
-  function handleErrors(errors: Record<string, React.ReactNode>) {
-    const firstKey = Object.keys(errors)[0];
-    if (firstKey && FIELD_STEP[firstKey] != null) setActive(FIELD_STEP[firstKey]);
-  }
-
-  async function handleSubmit(values: FormValues) {
-    // Garde-fou : une soumission (clic "Suivant" mal typé, ou touche Entrée) ne doit jamais
-    // enregistrer avant le dernier step — on avance simplement.
-    if (active < STEPS - 1) { nextStep(); return; }
+  async function submit(values: FormValues) {
+    if (active < 2) { void nextStep(); return; }
     setError(null);
     setSubmitting(true);
     try {
@@ -107,8 +110,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
         );
         userId = user.id;
       }
-      const rate = values.remunerationRate === "" || values.remunerationRate == null ? null : String(values.remunerationRate);
-      await onSubmit({
+      const teacher = await onSubmit({
         userId,
         firstName: values.firstName,
         lastName: values.lastName,
@@ -120,123 +122,186 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel }: Teache
         employmentStatus: values.employmentStatus || null,
         diploma: values.diploma || null,
         remunerationType: values.remunerationType || null,
-        remunerationRate: rate,
-        teachingAuthorizationNumber: values.teachingAuthorizationNumber || null,
-        cnssNumber: values.cnssNumber || null,
+        // Horaire : le taux se configure dans Paie (dépend des classes affectées), pas ici.
+        remunerationRate: values.remunerationType === "HORAIRE" || values.remunerationRate === ""
+          ? null : values.remunerationRate,
+        // Champs retirés du formulaire : on préserve la valeur existante (édition) plutôt que de
+        // l'écraser silencieusement au prochain enregistrement.
+        teachingAuthorizationNumber: initial?.teachingAuthorizationNumber ?? null,
+        cnssNumber: initial?.cnssNumber ?? null,
       });
+      setTeacherId(teacher.id);
+      setActive(3);
     } catch (err) {
       if (err instanceof ApiError) {
         const fieldErrors = err.fieldErrors;
-        if (Object.keys(fieldErrors).length > 0) form.setErrors(fieldErrors);
-        else setError(err.userMessage);
+        const fields = Object.keys(fieldErrors);
+        if (fields.length > 0) {
+          for (const [field, message] of Object.entries(fieldErrors)) setFieldError(field as keyof FormValues, { message });
+          const firstStep = FIELD_STEP[fields[0]];
+          if (firstStep != null) setActive(firstStep);
+        } else {
+          setError(err.userMessage);
+        }
       } else {
         setError("Enregistrement impossible.");
       }
+    } finally {
       setSubmitting(false);
     }
   }
 
-  const v = form.getValues();
-
   return (
-    <form onSubmit={form.onSubmit(handleSubmit, handleErrors)}>
-      <Stack gap="md">
-        {error && <Alert color="red" variant="light">{error}</Alert>}
+    <form onSubmit={handleSubmit(submit)} className="space-y-5">
+      {error && <div className="rounded-lg bg-error-50 px-3.5 py-2.5 text-sm text-error-700">{error}</div>}
 
-        <div className="overflow-x-auto pb-1">
-        <Stepper
-          active={active}
-          onStepClick={setActive}
-          size="sm"
-          color="brand"
-          radius="xl"
-          wrap={false}
-          completedIcon={<Check className="h-4 w-4" />}
-          classNames={{ separator: "mx-1" }}
-        >
-          {/* Step 1 — Identity */}
-          <Stepper.Step label="Identité">
-            <Stack gap="md" pt="md">
-              <SimpleGrid cols={2}>
-                <TextInput label="Prénom" withAsterisk {...form.getInputProps("firstName")} />
-                <TextInput label="Nom" withAsterisk {...form.getInputProps("lastName")} />
-              </SimpleGrid>
-              <SimpleGrid cols={2}>
-                <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
-                <TextInput label="Email" type="email" {...form.getInputProps("email")} />
-              </SimpleGrid>
-            </Stack>
-          </Stepper.Step>
+      <Stepper
+        steps={STEPS}
+        active={active}
+        onStepClick={(i) => {
+          if (i === 3 && !teacherId) return; // affectations indisponibles tant que l'enseignant n'existe pas
+          if (i < 3 && active === 3) return; // pas de retour arrière une fois l'enregistrement effectué
+          setActive(i);
+        }}
+      />
 
-          {/* Step 2 — Professional */}
-          <Stepper.Step label="Professionnel">
-            <Stack gap="md" pt="md">
-              <SimpleGrid cols={2}>
-                <TextInput label="Matricule" placeholder="Auto-généré si vide" {...form.getInputProps("staffNumber")} />
-                <Autocomplete label="Spécialité" placeholder="Matière principale" data={subjectOptions} {...form.getInputProps("specialization")} />
-              </SimpleGrid>
-              <SimpleGrid cols={2}>
-                <TextInput label="Diplôme le plus élevé" {...form.getInputProps("diploma")} />
-                <Select label="Statut" allowDeselect={false} data={[
-                  { value: "PERMANENT", label: "Permanent" },
-                  { value: "VACATAIRE", label: "Vacataire" },
-                  { value: "CONTRACTUEL", label: "Contractuel" },
-                ]} {...form.getInputProps("employmentStatus")} />
-              </SimpleGrid>
-              <SimpleGrid cols={2}>
-                <Select label="Type de rémunération" allowDeselect={false} data={[
-                  { value: "MENSUEL", label: "Mensuel" },
-                  { value: "HORAIRE", label: "Horaire" },
-                  { value: "FORFAIT", label: "Forfait" },
-                ]} {...form.getInputProps("remunerationType")} />
-                <NumberInput
-                  label={v.remunerationType === "HORAIRE" ? "Taux horaire (GNF/h)"
-                    : v.remunerationType === "FORFAIT" ? "Montant forfaitaire (GNF)"
-                    : "Salaire mensuel (GNF)"}
-                  thousandSeparator=" " min={0} {...form.getInputProps("remunerationRate")} />
-              </SimpleGrid>
-              <SimpleGrid cols={2}>
-                <DatePickerInput label="Date d'embauche" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("hireDate")} />
-                <TextInput label="N° autorisation d'enseigner (SNEPUP)" {...form.getInputProps("teachingAuthorizationNumber")} />
-              </SimpleGrid>
-              <TextInput label="N° CNSS (optionnel)" {...form.getInputProps("cnssNumber")} />
-            </Stack>
-          </Stepper.Step>
-
-          {/* Step 3 — Account & summary */}
-          <Stepper.Step label="Compte">
-            <Stack gap="md" pt="md">
-              <div className="rounded-xl border border-slate-200 p-3">
-                <Switch color="brand" label="Créer un accès (espace enseignant)" {...form.getInputProps("createLogin", { type: "checkbox" })} />
-                {v.createLogin && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs text-slate-400">L&apos;enseignant se connectera avec son <strong>email</strong> et ce mot de passe.</p>
-                    <PasswordInput label="Mot de passe" placeholder="••••••••" {...form.getInputProps("password")} />
-                  </div>
-                )}
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                <p className="font-medium text-slate-700">Récapitulatif</p>
-                <p>{v.firstName} {v.lastName}{v.specialization ? ` · ${v.specialization}` : ""}</p>
-                <p className="text-slate-500">{[v.employmentStatus, v.remunerationType, v.remunerationRate ? `${v.remunerationRate} GNF` : null].filter(Boolean).join(" · ") || "—"}</p>
-              </div>
-            </Stack>
-          </Stepper.Step>
-        </Stepper>
+      {active === 0 && (
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <Label>Prénom <span className="text-error-500">*</span></Label>
+              <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
+              {errors.firstName && <p className="text-xs text-error-600">{errors.firstName.message}</p>}
+            </Field>
+            <Field>
+              <Label>Nom <span className="text-error-500">*</span></Label>
+              <Input value={v.lastName} onChange={(e) => setValue("lastName", e.target.value)} aria-invalid={!!errors.lastName} />
+              {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
+            <Field>
+              <Label>Email</Label>
+              <Input type="email" value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />
+              {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
+            </Field>
+          </div>
         </div>
+      )}
 
-        <Group justify="space-between" gap="sm">
-          <Button type="button" variant="default" onClick={onCancel} disabled={submitting}>Annuler</Button>
-          <Group gap="sm">
-            {active > 0 && <Button type="button" variant="default" onClick={prevStep} disabled={submitting}>Précédent</Button>}
-            {active < STEPS - 1 ? (
-              <Button type="button" onClick={nextStep}>Suivant</Button>
+      {active === 1 && (
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <Label>Matricule</Label>
+              <Input placeholder="Auto-généré si vide" value={v.staffNumber} onChange={(e) => setValue("staffNumber", e.target.value)} />
+            </Field>
+            <Field>
+              <Label>Diplôme le plus élevé</Label>
+              <Select value={v.diploma} onChange={(e) => setValue("diploma", e.target.value)}>
+                <option value="">—</option>
+                {DIPLOMAS.map((d) => (<option key={d} value={d}>{d}</option>))}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <Label>Spécialité</Label>
+              <p className="text-xs text-gray-400">Domaine du diplôme — pas forcément la matière enseignée</p>
+              <Input placeholder="Ex. Informatique, Lettres modernes…" value={v.specialization} onChange={(e) => setValue("specialization", e.target.value)} />
+            </Field>
+            <Field>
+              <Label>Statut</Label>
+              <Select value={v.employmentStatus} onChange={(e) => setValue("employmentStatus", e.target.value)}>
+                <option value="PERMANENT">Permanent</option>
+                <option value="VACATAIRE">Vacataire</option>
+                <option value="CONTRACTUEL">Contractuel</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field>
+              <Label>Type de rémunération</Label>
+              <Select value={v.remunerationType} onChange={(e) => setValue("remunerationType", e.target.value)}>
+                <option value="MENSUEL">Mensuel</option>
+                <option value="HORAIRE">Horaire</option>
+                <option value="FORFAIT">Forfait</option>
+              </Select>
+            </Field>
+            {v.remunerationType === "HORAIRE" ? (
+              <Field>
+                <Label>Taux horaire</Label>
+                <p className="text-xs text-gray-400 pt-2">
+                  Dépend des classes affectées (normales ou d&apos;examen — 10ème, Terminale, CM2…) :
+                  se configure dans <strong>Paie</strong> une fois les classes choisies ci-dessous.
+                </p>
+              </Field>
             ) : (
-              <Button type="submit" loading={submitting}>{submitLabel}</Button>
+              <Field>
+                <Label>{v.remunerationType === "FORFAIT" ? "Montant forfaitaire (GNF)" : "Salaire mensuel (GNF)"}</Label>
+                <Input type="number" min={0} value={v.remunerationRate} onChange={(e) => setValue("remunerationRate", e.target.value)} />
+              </Field>
             )}
-          </Group>
-        </Group>
-      </Stack>
+          </div>
+          <Field>
+            <Label>Date d&apos;embauche</Label>
+            <DatePicker value={v.hireDate} onChange={(val) => setValue("hireDate", val)} clearable />
+          </Field>
+        </div>
+      )}
+
+      {active === 2 && (
+        <div className="space-y-4 pt-2">
+          <div className="rounded-xl border border-gray-200 p-3">
+            <div className="flex items-center gap-3">
+              <Switch checked={v.createLogin} onChange={(checked) => setValue("createLogin", checked)} ariaLabel="Créer un accès" />
+              <span className="text-sm text-gray-700">Créer un accès (espace enseignant)</span>
+            </div>
+            {v.createLogin && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-gray-400">L&apos;enseignant se connectera avec son <strong>email</strong> et ce mot de passe.</p>
+                <Field>
+                  <Label>Mot de passe</Label>
+                  <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
+                  {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
+                </Field>
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
+            <p className="font-medium text-gray-700">Récapitulatif</p>
+            <p>{v.firstName} {v.lastName}{v.specialization ? ` · ${v.specialization}` : ""}</p>
+            <p className="text-gray-500">{[v.employmentStatus, v.remunerationType, v.remunerationRate ? `${v.remunerationRate} GNF` : null].filter(Boolean).join(" · ") || "—"}</p>
+          </div>
+        </div>
+      )}
+
+      {active === 3 && (
+        <div className="space-y-3 pt-2">
+          <p className="text-sm text-gray-500">
+            Facultatif — dès qu&apos;une classe et une matière sont choisies, l&apos;enseignant est directement
+            affecté et apparaît dans l&apos;emploi du temps de cette classe.
+          </p>
+          {teacherId && <TeacherClassSubjectsAssignment teacherId={teacherId} />}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 pt-2">
+        {active < 3
+          ? <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+          : <span />}
+        <div className="flex items-center gap-3">
+          {active > 0 && active < 3 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
+          {active < 2 ? (
+            <Button type="button" onClick={() => void nextStep()}>Suivant</Button>
+          ) : active === 2 ? (
+            <Button type="submit" loading={submitting}>{submitLabel}</Button>
+          ) : (
+            <Button type="button" onClick={onFinish}>Terminer</Button>
+          )}
+        </div>
+      </div>
     </form>
   );
 }

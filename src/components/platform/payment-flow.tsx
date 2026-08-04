@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Alert, Stack, Text } from "@mantine/core";
 import { useSubscription } from "@/providers/subscription-provider";
 import { confirmPaymentViaDjomy, getMyInvoices, initiatePayment } from "@/lib/api/platform";
 import { ApiError } from "@/lib/api/errors";
@@ -110,9 +109,9 @@ export function PaymentFlow() {
   }
   if (!invoice) {
     return (
-      <Alert color="red" variant="light">
+      <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-700">
         Facture introuvable. <Link href="/subscription/invoices" className="underline">Retour aux factures</Link>
-      </Alert>
+      </div>
     );
   }
 
@@ -123,11 +122,11 @@ export function PaymentFlow() {
       <Card>
         <CardHeader><CardTitle>Statut du paiement</CardTitle></CardHeader>
         <CardBody>
-          <Stack align="center" gap="md" py="md">
+          <div className="flex flex-col items-center gap-4 py-4 text-center">
             {!done && !timedOut && (
               <>
                 <Spinner />
-                <Text c="dimmed">En attente de confirmation du paiement…</Text>
+                <p className="text-sm text-gray-500">En attente de confirmation du paiement…</p>
                 {status && <PaymentStatusBadge status={status} />}
                 {redirectUrl && (
                   <Button component="a" href={redirectUrl} target="_blank">Ouvrir la page de paiement</Button>
@@ -138,8 +137,8 @@ export function PaymentFlow() {
             {status === "SUCCESSFUL" && (
               <>
                 <div className="text-4xl">✅</div>
-                <Text fw={600}>Paiement réussi</Text>
-                <Text c="dimmed" size="sm">Votre abonnement a été mis à jour.</Text>
+                <p className="font-semibold text-gray-900">Paiement réussi</p>
+                <p className="text-sm text-gray-500">Votre abonnement a été mis à jour.</p>
                 <Button component={Link} href="/dashboard">Retour au tableau de bord</Button>
               </>
             )}
@@ -147,7 +146,7 @@ export function PaymentFlow() {
             {status === "FAILED" && (
               <>
                 <div className="text-4xl">❌</div>
-                <Text fw={600}>Paiement échoué</Text>
+                <p className="font-semibold text-gray-900">Paiement échoué</p>
                 <Button variant="secondary" onClick={() => { setPaymentId(null); setStatus(null); pollRef.current = 0; setTimedOut(false); }}>
                   Réessayer
                 </Button>
@@ -155,12 +154,12 @@ export function PaymentFlow() {
             )}
 
             {timedOut && !done && (
-              <Alert color="yellow" variant="light">
+              <div className="rounded-lg bg-warning-50 px-4 py-3 text-sm text-warning-800">
                 Le paiement est toujours en attente. Vous pouvez fermer cette page : l&apos;abonnement sera
                 activé automatiquement dès que le paiement Djomy est confirmé.
-              </Alert>
+              </div>
             )}
-          </Stack>
+          </div>
         </CardBody>
       </Card>
     );
@@ -171,23 +170,23 @@ export function PaymentFlow() {
     <Card>
       <CardHeader><CardTitle>Paiement de la facture {invoice.reference}</CardTitle></CardHeader>
       <CardBody>
-        <Stack gap="lg">
+        <div className="space-y-5">
           <div className="rounded-lg bg-gray-50 p-4 text-sm">
             <div className="flex justify-between"><span className="text-gray-500">Facture</span><span className="font-mono">{invoice.reference}</span></div>
             <div className="flex justify-between"><span className="text-gray-500">Montant à payer</span><span className="font-semibold">{formatGNF(invoice.remainingBalance)}</span></div>
           </div>
 
-          {error && <Alert color="red" variant="light">{error}</Alert>}
+          {error && <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-700">{error}</div>}
 
-          <Text size="sm" c="dimmed">Paiement via Djomy (mobile money / carte). Vous serez redirigé vers le portail sécurisé.</Text>
+          <p className="text-sm text-gray-500">Paiement via Djomy (mobile money / carte). Vous serez redirigé vers le portail sécurisé.</p>
 
           <Button onClick={pay} loading={submitting} fullWidth>
             Payer {formatGNF(invoice.remainingBalance)}
           </Button>
-          <Text size="xs" c="dimmed" ta="center">
+          <p className="text-center text-xs text-gray-400">
             Le succès du paiement est confirmé par le fournisseur. Ne fermez pas la page pendant le traitement.
-          </Text>
-        </Stack>
+          </p>
+        </div>
       </CardBody>
     </Card>
   );

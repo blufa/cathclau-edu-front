@@ -49,9 +49,11 @@ export interface TeacherClassInfo {
 
 /** A subject assignment of the teacher (academics ClassSubjectPublicInfo). */
 export interface TeacherSubjectInfo {
+  classId: number;
   subjectId: number;
   coefficient: string;
   teacherId: number;
+  teacherCode: string | null;
 }
 
 /** A timetable slot (academics ScheduleSlotPublicInfo). */

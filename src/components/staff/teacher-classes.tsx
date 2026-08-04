@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MultiSelect, Select } from "@mantine/core";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { getAssignedClasses, setAssignedClasses } from "@/lib/api/staff";
 import type { AnneeScolaire, Classe, Niveau } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /**
@@ -64,10 +65,13 @@ function ClassPicker({
       [...classes]
         .filter((c) => !levelFilter || String(c.levelId) === levelFilter)
         .sort((a, b) => (levelOrder.get(a.levelId ?? -1) ?? 0) - (levelOrder.get(b.levelId ?? -1) ?? 0)
-          || (a.label ?? "").localeCompare(b.label ?? "", "fr", { numeric: true }))
-        .map((c) => ({ value: String(c.id), label: c.label })),
+          || (a.label ?? "").localeCompare(b.label ?? "", "fr", { numeric: true })),
     [classes, levelFilter, levelOrder],
   );
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
+  }
 
   async function save() {
     setSaving(true);
@@ -80,23 +84,28 @@ function ClassPicker({
 
   return (
     <div className="space-y-3">
-      <Select
-        label="Filtrer par niveau"
-        className="sm:w-56"
-        data={[{ value: "", label: "Tous les niveaux" }, ...levels.map((l) => ({ value: String(l.id), label: l.label }))]}
-        value={levelFilter}
-        onChange={(value) => setLevelFilter(value ?? "")}
-      />
-      <MultiSelect
-        label="Classes enseignées"
-        placeholder="Sélectionner les classes"
-        searchable
-        data={options}
-        value={selected}
-        onChange={setSelected}
-        readOnly={!canWrite}
-        description={currentYear ? `Année ${currentYear.label}` : undefined}
-      />
+      <Field>
+        <Label>Filtrer par niveau</Label>
+        <Select className="sm:w-56" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+          <option value="">Tous les niveaux</option>
+          {levels.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
+        </Select>
+      </Field>
+      <Field>
+        <Label>Classes enseignées</Label>
+        {currentYear && <p className="text-xs text-gray-400">Année {currentYear.label}</p>}
+        <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+          {options.length === 0 && <p className="px-1 py-2 text-sm text-gray-400">Aucune classe.</p>}
+          {options.map((c) => (
+            <label key={c.id} className={`flex items-center gap-2 text-sm ${canWrite ? "cursor-pointer" : "opacity-60"}`}>
+              <input type="checkbox" disabled={!canWrite} checked={selected.includes(String(c.id))}
+                onChange={() => toggle(String(c.id))}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+              {c.label}
+            </label>
+          ))}
+        </div>
+      </Field>
       {canWrite && (
         <div className="flex justify-end">
           <Button onClick={save} loading={saving}>Enregistrer</Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -13,7 +13,6 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { Checkbox, Menu } from "@mantine/core";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Columns3, Download, Inbox, Search } from "lucide-react";
 import type { Page } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -69,6 +68,33 @@ interface DataTableProps<T> {
 
 const alignClass = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
+function TableCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  ariaLabel: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = !!indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={onChange}
+      className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600 focus:ring-3 focus:ring-brand-500/20"
+    />
+  );
+}
+
 export function DataTable<T>({
   columns,
   page,
@@ -97,6 +123,19 @@ export function DataTable<T>({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const columnMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!columnMenuOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target as Node)) {
+        setColumnMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [columnMenuOpen]);
 
   const columnDefs = useMemo<ColumnDef<T>[]>(() => {
     const defs: ColumnDef<T>[] = columns.map((col) => ({
@@ -111,20 +150,16 @@ export function DataTable<T>({
       defs.unshift({
         id: "__select",
         header: ({ table }) => (
-          <Checkbox
-            size="xs"
-            color="brand"
-            aria-label="Tout sélectionner"
+          <TableCheckbox
+            ariaLabel="Tout sélectionner"
             checked={table.getIsAllRowsSelected()}
             indeterminate={table.getIsSomeRowsSelected()}
             onChange={table.getToggleAllRowsSelectedHandler()}
           />
         ),
         cell: ({ row }) => (
-          <Checkbox
-            size="xs"
-            color="brand"
-            aria-label="Sélectionner la ligne"
+          <TableCheckbox
+            ariaLabel="Sélectionner la ligne"
             checked={row.getIsSelected()}
             onChange={row.getToggleSelectedHandler()}
           />
@@ -216,29 +251,37 @@ export function DataTable<T>({
           <div className="ml-auto flex items-center gap-2">
             {toolbar}
             {columnToggle && (
-              <Menu position="bottom-end" closeOnItemClick={false} shadow="md" radius="md">
-                <Menu.Target>
-                  <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
-                    <Columns3 className="h-4 w-4" /> Colonnes
-                  </button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  {table.getAllLeafColumns().filter((c) => c.id !== "__select").map((c) => {
-                    const def = columns.find((col) => col.key === c.id);
-                    return (
-                      <Menu.Item key={c.id} onClick={() => c.toggleVisibility()}>
-                        <Checkbox
-                          size="xs"
-                          color="brand"
-                          readOnly
-                          checked={c.getIsVisible()}
-                          label={typeof def?.header === "string" ? def.header : c.id}
-                        />
-                      </Menu.Item>
-                    );
-                  })}
-                </Menu.Dropdown>
-              </Menu>
+              <div ref={columnMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setColumnMenuOpen((v) => !v)}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-600 transition hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                >
+                  <Columns3 className="h-4 w-4" /> Colonnes
+                </button>
+                {columnMenuOpen && (
+                  <div className="absolute right-0 z-50 mt-1.5 w-56 rounded-xl border border-gray-200 bg-white p-1.5 shadow-theme-lg">
+                    {table.getAllLeafColumns().filter((c) => c.id !== "__select").map((c) => {
+                      const def = columns.find((col) => col.key === c.id);
+                      const columnLabel = typeof def?.header === "string" ? def.header : c.id;
+                      return (
+                        <label
+                          key={c.id}
+                          className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={c.getIsVisible()}
+                            onChange={() => c.toggleVisibility()}
+                            className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600"
+                          />
+                          {columnLabel}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
             {exportable && (
               <button

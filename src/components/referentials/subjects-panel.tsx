@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Autocomplete, Button, Group, Stack, Textarea } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Label, Field, Textarea } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { useQuery } from "@/hooks/use-query";
 import { createSubject, deleteSubject, listSubjects, updateSubject } from "@/lib/api/academics";
 import type { Matiere } from "@/lib/types/academics";
@@ -12,6 +16,12 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { SUBJECT_CATALOG } from "@/lib/academics-subjects";
 import { SubjectCatalogPicker } from "@/components/referentials/subject-catalog";
+
+const subjectSchema = z.object({
+  label: z.string().trim().min(1, "Libellé requis"),
+  syllabus: z.string(),
+});
+type SubjectFormValues = z.infer<typeof subjectSchema>;
 
 function SubjectForm({
   initial,
@@ -23,18 +33,14 @@ function SubjectForm({
   onCancel: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
-  const form = useForm({
-    mode: "uncontrolled",
-    initialValues: {
-      label: initial?.label ?? "",
-      syllabus: initial?.syllabus ?? "",
-    },
-    validate: {
-      label: (v) => (v.trim() ? null : "Libellé requis"),
-    },
+  const { handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<SubjectFormValues>({
+    resolver: zodResolver(subjectSchema),
+    defaultValues: { label: initial?.label ?? "", syllabus: initial?.syllabus ?? "" },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: { label: string; syllabus: string }) {
+  async function submit(values: SubjectFormValues) {
     setSubmitting(true);
     try {
       // Le coefficient n'est plus saisi à la matière : il se définit à l'affectation en classe et à
@@ -42,37 +48,33 @@ function SubjectForm({
       const coefficient = initial?.coefficient ? Number(initial.coefficient) : 1;
       await onSubmit(values.label, coefficient, values.syllabus || undefined);
     } catch (err) {
-      if (err instanceof ApiError) form.setErrors(err.fieldErrors);
+      if (err instanceof ApiError) {
+        for (const [field, message] of Object.entries(err.fieldErrors)) setError(field as keyof SubjectFormValues, { message });
+      }
       notifyError(err);
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <Autocomplete
-          label="Libellé"
-          description="Choisissez une matière proposée ou saisissez la vôtre"
-          withAsterisk
-          placeholder="Mathématiques"
-          data={SUBJECT_CATALOG}
-          {...form.getInputProps("label")}
-          key={form.key("label")}
-        />
-        <Textarea label="Programme" autosize minRows={2} {...form.getInputProps("syllabus")} key={form.key("syllabus")} />
-        <p className="text-xs text-gray-400">
-          Le coefficient se définit lors de l&apos;affectation de la matière à une classe, et par évaluation.
-        </p>
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={submitting}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={submitting}>
-            Enregistrer
-          </Button>
-        </Group>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <p className="text-xs text-gray-400">Choisissez une matière proposée ou saisissez la vôtre</p>
+        <Combobox value={v.label} onChange={(val) => setValue("label", val)} options={SUBJECT_CATALOG} placeholder="Mathématiques" />
+        {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+      </Field>
+      <Field>
+        <Label>Programme</Label>
+        <Textarea rows={2} value={v.syllabus} onChange={(e) => setValue("syllabus", e.target.value)} />
+      </Field>
+      <p className="text-xs text-gray-400">
+        Le coefficient se définit lors de l&apos;affectation de la matière à une classe, et par évaluation.
+      </p>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+        <Button type="submit" loading={submitting}>Enregistrer</Button>
+      </div>
     </form>
   );
 }
@@ -116,14 +118,12 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
   }
 
   return (
-    <Stack gap="md">
+    <div className="space-y-4">
       {canWrite && (
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={() => setAssisting(true)}>
-            Catalogue
-          </Button>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setAssisting(true)}>Catalogue</Button>
           <Button onClick={() => setCreating(true)}>Nouvelle matière</Button>
-        </Group>
+        </div>
       )}
       <Table>
         <THead>
@@ -145,14 +145,10 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
               <TD className="font-medium">{m.label}</TD>
               <TD className="text-right">
                 {canWrite && (
-                  <Group justify="flex-end" gap="xs">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(m)}>
-                      Modifier
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(m)}>
-                      Suppr.
-                    </Button>
-                  </Group>
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(m)}>Modifier</Button>
+                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(m)}>Suppr.</Button>
+                  </div>
                 )}
               </TD>
             </TR>
@@ -178,6 +174,6 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier la matière">
         {editing && <SubjectForm initial={editing} onSubmit={handleUpdate} onCancel={() => setEditing(null)} />}
       </Modal>
-    </Stack>
+    </div>
   );
 }

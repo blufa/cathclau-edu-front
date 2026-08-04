@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Group, Select, NumberInput, Stack, Textarea, TextInput, Title } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -31,11 +31,14 @@ import {
   type AcademicEvent,
   type AcademicEventType,
 } from "@/lib/types/calendar";
-import { ApiError } from "@/lib/api/errors";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -57,137 +60,141 @@ function schoolYearLabel(year: number): string {
   return `${year} - ${year + 1}`;
 }
 
+const yearSchema = z.object({ label: z.string().trim().min(1, "Libellé requis"), startDate: z.string(), endDate: z.string() });
+type YearFormValues = z.infer<typeof yearSchema>;
+
 function YearForm({ onSubmit, onCancel }: { onSubmit: (input: CreateAcademicYearInput) => Promise<void>; onCancel: () => void }) {
   const [submitting, setSubmitting] = useState(false);
-  const form = useForm({
-    mode: "uncontrolled",
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<YearFormValues>({
+    resolver: zodResolver(yearSchema),
     // Pré-rempli avec l'année scolaire courante (ex. « 2026 - 2027 »), dérivée de la date de début.
-    initialValues: { label: schoolYearLabel(new Date().getFullYear()), startDate: "", endDate: "" },
-    validate: { label: (v) => (v.trim() ? null : "Libellé requis") },
+    defaultValues: { label: schoolYearLabel(new Date().getFullYear()), startDate: "", endDate: "" },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: { label: string; startDate: string; endDate: string }) {
+  async function submit(values: YearFormValues) {
     setSubmitting(true);
     try {
       await onSubmit({ label: values.label, startDate: values.startDate || null, endDate: values.endDate || null });
     } catch (err) {
-      if (err instanceof ApiError) form.setErrors(err.fieldErrors);
       notifyError(err);
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk placeholder="2026 - 2027" {...form.getInputProps("label")} key={form.key("label")} />
-        <Group grow>
-          <DatePickerInput
-            label="Début"
-            valueFormat="DD/MM/YYYY"
-            clearable
-            {...form.getInputProps("startDate")}
-            key={form.key("startDate")}
-            onChange={(val) => {
-              form.setFieldValue("startDate", val ?? "");
-              const yr = val ? new Date(val).getFullYear() : NaN;
-              if (!Number.isNaN(yr)) form.setFieldValue("label", schoolYearLabel(yr));
-            }}
-          />
-          <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} key={form.key("endDate")} />
-        </Group>
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={submitting}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={submitting}>
-            Créer
-          </Button>
-        </Group>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <Input placeholder="2026 - 2027" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+        {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Début</Label>
+          <DatePicker value={v.startDate} clearable onChange={(val) => {
+            setValue("startDate", val);
+            const yr = val ? new Date(val).getFullYear() : NaN;
+            if (!Number.isNaN(yr)) setValue("label", schoolYearLabel(yr));
+          }} />
+        </Field>
+        <Field>
+          <Label>Fin</Label>
+          <DatePicker value={v.endDate} clearable onChange={(val) => setValue("endDate", val)} />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+        <Button type="submit" loading={submitting}>Créer</Button>
+      </div>
     </form>
   );
 }
 
+const periodSchema = z.object({
+  label: z.string().trim().min(1, "Libellé requis"),
+  cycle: z.string(),
+  type: z.string(),
+  sortOrder: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+});
+type PeriodFormValues = z.infer<typeof periodSchema>;
+
 function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInput) => Promise<void>; onCancel: () => void }) {
   const [submitting, setSubmitting] = useState(false);
-  const form = useForm({
-    mode: "uncontrolled",
-    initialValues: {
-      label: "",
-      cycle: "PRIMAIRE" as SchoolCycle,
-      type: "TRIMESTRE" as TypePeriode,
-      sortOrder: 1 as number | string,
-      startDate: "",
-      endDate: "",
-    },
-    validate: { label: (v) => (v.trim() ? null : "Libellé requis") },
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<PeriodFormValues>({
+    resolver: zodResolver(periodSchema),
+    defaultValues: { label: "", cycle: "PRIMAIRE", type: "TRIMESTRE", sortOrder: "1", startDate: "", endDate: "" },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: { label: string; cycle: SchoolCycle; type: TypePeriode; sortOrder: number | string; startDate: string; endDate: string }) {
+  async function submit(values: PeriodFormValues) {
     setSubmitting(true);
     try {
       await onSubmit({
         label: values.label,
-        cycle: values.cycle,
-        type: values.type,
+        cycle: values.cycle as SchoolCycle,
+        type: values.type as TypePeriode,
         sortOrder: Number(values.sortOrder),
         startDate: values.startDate || null,
         endDate: values.endDate || null,
       });
     } catch (err) {
-      if (err instanceof ApiError) form.setErrors(err.fieldErrors);
       notifyError(err);
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk placeholder="1er trimestre" {...form.getInputProps("label")} key={form.key("label")} />
-        <Select
-          label="Cycle"
-          description="Primaire = trimestres ; collège/lycée/supérieur = semestres."
-          data={[
-            { value: "PRIMAIRE", label: "Primaire" },
-            { value: "COLLEGE", label: "Collège" },
-            { value: "LYCEE", label: "Lycée" },
-            { value: "SUPERIEUR", label: "Supérieur" },
-          ]}
-          {...form.getInputProps("cycle")}
-          key={form.key("cycle")}
-          onChange={(value) => {
-            const c = (value ?? "") as SchoolCycle;
-            form.setFieldValue("cycle", c);
-            form.setFieldValue("type", c === "PRIMAIRE" ? "TRIMESTRE" : "SEMESTRE");
-          }}
-        />
-        <Group grow>
-          <Select
-            label="Type"
-            data={[
-              { value: "TRIMESTRE", label: "Trimestre" },
-              { value: "SEMESTRE", label: "Semestre" },
-            ]}
-            {...form.getInputProps("type")}
-            key={form.key("type")}
-          />
-          <NumberInput label="Ordre" min={1} allowDecimal={false} {...form.getInputProps("sortOrder")} key={form.key("sortOrder")} />
-        </Group>
-        <Group grow>
-          <DatePickerInput label="Début" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("startDate")} key={form.key("startDate")} />
-          <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} key={form.key("endDate")} />
-        </Group>
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={submitting}>
-            Annuler
-          </Button>
-          <Button type="submit" loading={submitting}>
-            Créer
-          </Button>
-        </Group>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <Input placeholder="1er trimestre" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+        {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+      </Field>
+      <Field>
+        <Label>Cycle</Label>
+        <p className="text-xs text-gray-400">Primaire = trimestres ; secondaire/supérieur = semestres.</p>
+        <Select value={v.cycle} onChange={(e) => {
+          const c = e.target.value as SchoolCycle;
+          setValue("cycle", c);
+          setValue("type", c === "PRIMAIRE" ? "TRIMESTRE" : "SEMESTRE");
+        }}>
+          <option value="PRIMAIRE">Primaire</option>
+          <option value="COLLEGE">Secondaire</option>
+          <option value="SUPERIEUR">Supérieur</option>
+        </Select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Type</Label>
+          <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
+            <option value="TRIMESTRE">Trimestre</option>
+            <option value="SEMESTRE">Semestre</option>
+          </Select>
+        </Field>
+        <Field>
+          <Label>Ordre</Label>
+          <Input type="number" min={1} value={v.sortOrder} onChange={(e) => setValue("sortOrder", e.target.value)} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Début</Label>
+          <DatePicker value={v.startDate} clearable onChange={(val) => setValue("startDate", val)} />
+        </Field>
+        <Field>
+          <Label>Fin</Label>
+          <DatePicker value={v.endDate} clearable onChange={(val) => setValue("endDate", val)} />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
+        <Button type="submit" loading={submitting}>Créer</Button>
+      </div>
     </form>
   );
 }
@@ -211,7 +218,7 @@ function CalendarSection({ year, canWrite }: { year: AnneeScolaire; canWrite: bo
         {canWrite && <Button size="sm" onClick={() => setCreating(true)}>Nouvel événement</Button>}
       </CardHeader>
       <CardBody className="p-0">
-        <p className="px-4 pt-3 text-xs text-slate-400">Jours fériés, vacances et événements de l&apos;année (annotent l&apos;emploi du temps).</p>
+        <p className="px-4 pt-3 text-xs text-gray-400">Jours fériés, vacances et événements de l&apos;année (annotent l&apos;emploi du temps).</p>
         {q.loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : (
@@ -225,7 +232,7 @@ function CalendarSection({ year, canWrite }: { year: AnneeScolaire; canWrite: bo
                   <TD className="font-medium">{e.title}</TD>
                   <TD>{e.startDate}</TD>
                   <TD>{e.endDate ?? "—"}</TD>
-                  <TD className="text-right">{canWrite && <Button size="sm" variant="subtle" color="red" onClick={() => remove(e)}>Suppr.</Button>}</TD>
+                  <TD className="text-right">{canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(e)}>Suppr.</Button>}</TD>
                 </TR>
               ))}
             </TBody>
@@ -240,40 +247,66 @@ function CalendarSection({ year, canWrite }: { year: AnneeScolaire; canWrite: bo
   );
 }
 
+const eventSchema = z.object({
+  title: z.string().trim().min(1, "Requis"),
+  eventType: z.string(),
+  startDate: z.string().min(1, "Requis"),
+  endDate: z.string(),
+  description: z.string(),
+});
+type EventFormValues = z.infer<typeof eventSchema>;
+
 function EventForm({ yearId, onCancel, onDone }: { yearId: number; onCancel: () => void; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: { title: "", eventType: "HOLIDAY" as AcademicEventType, startDate: "", endDate: "", description: "" },
-    validate: { title: (v) => (v ? null : "Requis"), startDate: (v) => (v ? null : "Requis") },
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<EventFormValues>({
+    resolver: zodResolver(eventSchema),
+    defaultValues: { title: "", eventType: "HOLIDAY", startDate: "", endDate: "", description: "" },
   });
-  async function submit(values: typeof form.values) {
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+
+  async function submit(values: EventFormValues) {
     setLoading(true);
     try {
       await createEvent({
-        academicYearId: yearId, title: values.title, eventType: values.eventType,
+        academicYearId: yearId, title: values.title, eventType: values.eventType as AcademicEventType,
         startDate: values.startDate, endDate: values.endDate || null, description: values.description || null,
       });
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Titre" withAsterisk {...form.getInputProps("title")} />
-        <Select label="Type" allowDeselect={false}
-          data={(Object.keys(EVENT_TYPE_LABEL) as AcademicEventType[]).map((t) => ({ value: t, label: EVENT_TYPE_LABEL[t] }))}
-          {...form.getInputProps("eventType")} />
-        <Group grow>
-          <DatePickerInput label="Début" withAsterisk valueFormat="DD/MM/YYYY" {...form.getInputProps("startDate")} />
-          <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} />
-        </Group>
-        <Textarea label="Description" autosize minRows={2} {...form.getInputProps("description")} />
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Ajouter</Button>
-        </Group>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Titre <span className="text-error-500">*</span></Label>
+        <Input value={v.title} onChange={(e) => setValue("title", e.target.value)} aria-invalid={!!errors.title} />
+        {errors.title && <p className="text-xs text-error-600">{errors.title.message}</p>}
+      </Field>
+      <Field>
+        <Label>Type</Label>
+        <Select value={v.eventType} onChange={(e) => setValue("eventType", e.target.value)}>
+          {(Object.keys(EVENT_TYPE_LABEL) as AcademicEventType[]).map((t) => (<option key={t} value={t}>{EVENT_TYPE_LABEL[t]}</option>))}
+        </Select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Début <span className="text-error-500">*</span></Label>
+          <DatePicker value={v.startDate} onChange={(val) => setValue("startDate", val)} />
+          {errors.startDate && <p className="text-xs text-error-600">{errors.startDate.message}</p>}
+        </Field>
+        <Field>
+          <Label>Fin</Label>
+          <DatePicker value={v.endDate} clearable onChange={(val) => setValue("endDate", val)} />
+        </Field>
+      </div>
+      <Field>
+        <Label>Description</Label>
+        <Textarea rows={2} value={v.description} onChange={(e) => setValue("description", e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={loading}>Ajouter</Button>
+      </div>
     </form>
   );
 }
@@ -415,7 +448,7 @@ export default function AcademicYearsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <Title order={2}>Années scolaires</Title>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Années scolaires</h1>
           <p className="text-sm text-gray-500">Calendrier scolaire, statut et périodes</p>
         </div>
         {canWrite && <Button onClick={() => setCreating(true)}>Nouvelle année</Button>}
@@ -447,7 +480,7 @@ export default function AcademicYearsPage() {
             {years.map((y) => (
               <TR key={y.id}>
                 <TD className="font-medium">
-                  <button className="text-indigo-600 hover:underline" onClick={() => setSelected(y)}>
+                  <button className="text-brand-600 hover:underline" onClick={() => setSelected(y)}>
                     {y.label}
                   </button>
                 </TD>
@@ -460,14 +493,14 @@ export default function AcademicYearsPage() {
                 <TD>{y.current ? <Badge tone="indigo">Courante</Badge> : "—"}</TD>
                 <TD className="text-right">
                   {canWrite && (
-                    <Group justify="flex-end" gap="xs">
+                    <div className="inline-flex justify-end gap-1">
                       {!y.current && y.status !== "ARCHIVEE" && (
                         <Button size="sm" variant="ghost" onClick={() => handleSetCurrent(y)}>
                           Définir courante
                         </Button>
                       )}
                       {y.status === "PLANIFIEE" && (
-                        <Button size="sm" variant="ghost" className="text-green-700" onClick={() => handleStatus(y, "EN_COURS", "Démarrer")}>
+                        <Button size="sm" variant="ghost" className="text-success-700" onClick={() => handleStatus(y, "EN_COURS", "Démarrer")}>
                           Démarrer
                         </Button>
                       )}
@@ -477,11 +510,11 @@ export default function AcademicYearsPage() {
                         </Button>
                       )}
                       {y.status === "CLOTUREE" && (
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleStatus(y, "ARCHIVEE", "Archiver")}>
+                        <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleStatus(y, "ARCHIVEE", "Archiver")}>
                           Archiver
                         </Button>
                       )}
-                    </Group>
+                    </div>
                   )}
                 </TD>
               </TR>

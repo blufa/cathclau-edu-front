@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Tabs, Select as MantineSelect } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
 import { CalendarCheck, ClipboardList, ScanLine, UserCheck } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -37,6 +35,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { FilePreview } from "@/components/ui/file-preview";
+import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
@@ -66,7 +67,11 @@ export default function AttendancePage() {
     () => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])),
     [effectiveYearId],
   );
-  const classes = classesQuery.data ?? [];
+  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
 
   const [classId, setClassId] = useState<number | null>(null);
   const [date, setDate] = useState(todayIso());
@@ -97,8 +102,8 @@ export default function AttendancePage() {
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Présences</h1>
-          <p className="text-sm text-slate-500">Appel de classe et suivi de l&apos;assiduité</p>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Présences</h1>
+          <p className="text-sm text-gray-500">Appel de classe et suivi de l&apos;assiduité</p>
         </div>
         <LinkButton href="/attendance/scan" variant="outline" leftSection={<ScanLine className="h-4 w-4" />}>
           Scanner les cartes
@@ -108,7 +113,7 @@ export default function AttendancePage() {
       {/* Shared selectors */}
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="mb-1 block text-xs text-slate-500">Année</label>
+          <label className="mb-1 block text-xs text-gray-500">Année</label>
           <Select
             className="max-w-[200px]"
             value={effectiveYearId ?? ""}
@@ -120,20 +125,17 @@ export default function AttendancePage() {
           </Select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">Classe</label>
-          <MantineSelect
-            className="max-w-[220px]"
-            searchable
-            clearable
-            placeholder="— Choisir —"
-            data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
-            value={classId != null ? String(classId) : null}
+          <label className="mb-1 block text-xs text-gray-500">Classe</label>
+          <SearchableSelect
+            value={classId != null ? String(classId) : ""}
+            options={classOptions}
             onChange={(v) => setClassId(v ? Number(v) : null)}
+            triggerClassName="w-full max-w-[220px] justify-between px-3"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">Date</label>
-          <DatePickerInput value={date || null} onChange={(v) => setDate(v ?? "")} valueFormat="DD/MM/YYYY" className="max-w-[180px]" />
+          <label className="mb-1 block text-xs text-gray-500">Date</label>
+          <DatePicker value={date} onChange={(v) => setDate(v)} className="max-w-[180px]" />
         </div>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "absents"} onClick={openAbsentees}>
@@ -145,38 +147,38 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      <Tabs defaultValue="appel" color="brand" variant="pills" radius="md">
-        <Tabs.List>
-          <Tabs.Tab value="appel" leftSection={<ClipboardList className="h-4 w-4" />}>Appel de classe</Tabs.Tab>
-          <Tabs.Tab value="suivi" leftSection={<CalendarCheck className="h-4 w-4" />}>Suivi & corrections</Tabs.Tab>
+      <Tabs defaultValue="appel">
+        <TabsList>
+          <TabsTrigger value="appel" icon={ClipboardList}>Appel de classe</TabsTrigger>
+          <TabsTrigger value="suivi" icon={CalendarCheck}>Suivi & corrections</TabsTrigger>
           {canManageStaff && (
-            <Tabs.Tab value="staff" leftSection={<UserCheck className="h-4 w-4" />}>Présences enseignants</Tabs.Tab>
+            <TabsTrigger value="staff" icon={UserCheck}>Présences enseignants</TabsTrigger>
           )}
-        </Tabs.List>
+        </TabsList>
 
-        <Tabs.Panel value="appel" pt="lg">
+        <TabsPanel value="appel">
           {classId ? (
             <RollCall classId={classId} date={date} students={students} loading={studentsQuery.loading} canWrite={canWrite} />
           ) : (
             <SelectClassHint />
           )}
-        </Tabs.Panel>
+        </TabsPanel>
 
-        <Tabs.Panel value="suivi" pt="lg">
+        <TabsPanel value="suivi">
           {classId ? (
             <AttendanceLog classId={classId} date={date} students={students} canWrite={canWrite} />
           ) : (
             <SelectClassHint />
           )}
-        </Tabs.Panel>
+        </TabsPanel>
 
         {canManageStaff && (
-          <Tabs.Panel value="staff" pt="lg">
+          <TabsPanel value="staff">
             <div className="space-y-6">
               <TeacherRollCall date={date} />
               <TeacherMonthlyRecap />
             </div>
-          </Tabs.Panel>
+          </TabsPanel>
         )}
       </Tabs>
 
@@ -224,7 +226,7 @@ function RollCall({ classId, date, students, loading, canWrite }: {
   }
 
   if (loading) return <div className="flex justify-center py-10"><Spinner /></div>;
-  if (students.length === 0) return <p className="py-8 text-center text-sm text-slate-400">Aucun élève dans cette classe.</p>;
+  if (students.length === 0) return <p className="py-8 text-center text-sm text-gray-400">Aucun élève dans cette classe.</p>;
 
   return (
     <div className="space-y-4">
@@ -241,7 +243,7 @@ function RollCall({ classId, date, students, loading, canWrite }: {
             const status = statusOf(s.id);
             return (
               <TR key={s.id}>
-                <TD className="font-medium text-slate-900">{s.firstName} {s.lastName}</TD>
+                <TD className="font-medium text-gray-900">{s.firstName} {s.lastName}</TD>
                 <TD>
                   <div className="flex gap-1">
                     {(["PRESENT", "ABSENT", "LATE"] as AttendanceStatus[]).map((st) => (
@@ -251,9 +253,9 @@ function RollCall({ classId, date, students, loading, canWrite }: {
                         onClick={() => setStatus(s.id, st)}
                         className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
                           status === st
-                            ? st === "PRESENT" ? "bg-emerald-600 text-white"
-                              : st === "ABSENT" ? "bg-red-600 text-white" : "bg-amber-500 text-white"
-                            : "border border-slate-200 text-slate-500 hover:bg-slate-50"
+                            ? st === "PRESENT" ? "bg-success-600 text-white"
+                              : st === "ABSENT" ? "bg-error-600 text-white" : "bg-warning-500 text-white"
+                            : "border border-gray-200 text-gray-500 hover:bg-gray-50"
                         }`}
                       >
                         {ATTENDANCE_STATUS_LABEL[st]}
@@ -324,20 +326,20 @@ function AttendanceLog({ classId, date, students, canWrite }: {
   }
 
   if (loading) return <div className="flex justify-center py-10"><Spinner /></div>;
-  if (error) return <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Impossible de charger les présences.</p>;
+  if (error) return <p className="rounded-xl bg-error-50 px-4 py-3 text-sm text-error-700">Impossible de charger les présences.</p>;
   const rows = data ?? [];
   const alerts = alertsQuery.data ?? [];
 
   return (
     <div className="space-y-3">
       {alerts.length > 0 && (
-        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">
           <strong>Alerte assiduité</strong> — {alerts.length} élève(s) avec ≥ 2 absences non justifiées ce mois (convocation parents recommandée) :{" "}
           {alerts.map((a) => `${nameOf.get(a.studentId) ?? `#${a.studentId}`} (${a.unjustifiedCount})`).join(", ")}.
         </div>
       )}
       {rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400">Aucune présence enregistrée pour cette date.</p>
+        <p className="py-8 text-center text-sm text-gray-400">Aucune présence enregistrée pour cette date.</p>
       ) : (
         <Table>
           <THead>
@@ -346,9 +348,9 @@ function AttendanceLog({ classId, date, students, canWrite }: {
           <TBody>
             {rows.map((r) => (
               <TR key={r.id}>
-                <TD className="font-medium text-slate-900">{nameOf.get(r.studentId) ?? `#${r.studentId}`}</TD>
+                <TD className="font-medium text-gray-900">{nameOf.get(r.studentId) ?? `#${r.studentId}`}</TD>
                 <TD><Badge tone={STATUS_TONE[r.status]}>{ATTENDANCE_STATUS_LABEL[r.status]}</Badge></TD>
-                <TD className="text-slate-600">{r.reason ?? "—"}</TD>
+                <TD className="text-gray-600">{r.reason ?? "—"}</TD>
                 <TD>
                   {r.status === "PRESENT" ? "—" : (
                     <div className="flex items-center gap-1">
@@ -358,7 +360,7 @@ function AttendanceLog({ classId, date, students, canWrite }: {
                       {canWrite && (
                         <>
                           <Button size="sm" variant="ghost" onClick={() => justify(r, true)} aria-label="Justifier">✓</Button>
-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => justify(r, false)} aria-label="Non justifiée">✕</Button>
+                          <Button size="sm" variant="ghost" className="text-error-600" onClick={() => justify(r, false)} aria-label="Non justifiée">✕</Button>
                         </>
                       )}
                     </div>
@@ -395,7 +397,7 @@ function AttendanceLog({ classId, date, students, canWrite }: {
 // ── Hints ────────────────────────────────────────────────────────────────────
 function SelectClassHint() {
   return (
-    <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+    <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
       Sélectionnez une classe pour faire l&apos;appel ou consulter les présences.
     </p>
   );
@@ -422,7 +424,7 @@ function TeacherRollCall({ date }: { date: string }) {
   }
 
   if (teachersQuery.loading) return <div className="flex justify-center py-10"><Spinner /></div>;
-  if (teachers.length === 0) return <p className="py-8 text-center text-sm text-slate-400">Aucun enseignant.</p>;
+  if (teachers.length === 0) return <p className="py-8 text-center text-sm text-gray-400">Aucun enseignant.</p>;
 
   return (
     <Table>
@@ -432,8 +434,8 @@ function TeacherRollCall({ date }: { date: string }) {
       <TBody>
         {teachers.map((t) => (
           <TR key={t.id}>
-            <TD className="font-medium text-slate-900">{t.firstName} {t.lastName}</TD>
-            <TD className="font-mono text-xs text-slate-500">{t.staffNumber}</TD>
+            <TD className="font-medium text-gray-900">{t.firstName} {t.lastName}</TD>
+            <TD className="font-mono text-xs text-gray-500">{t.staffNumber}</TD>
             <TD className="text-right">
               <div className="inline-flex items-center gap-2">
                 {done[t.id] && (
@@ -441,8 +443,8 @@ function TeacherRollCall({ date }: { date: string }) {
                     {done[t.id] === "PRESENT" ? "Présent" : "Absent"}
                   </Badge>
                 )}
-                <Button size="sm" variant="ghost" className="text-emerald-700" disabled={busy === t.id} onClick={() => mark(t, "PRESENT")}>Présent</Button>
-                <Button size="sm" variant="ghost" className="text-red-600" disabled={busy === t.id} onClick={() => mark(t, "ABSENT")}>Absent</Button>
+                <Button size="sm" variant="ghost" className="text-success-700" disabled={busy === t.id} onClick={() => mark(t, "PRESENT")}>Présent</Button>
+                <Button size="sm" variant="ghost" className="text-error-600" disabled={busy === t.id} onClick={() => mark(t, "ABSENT")}>Absent</Button>
               </div>
             </TD>
           </TR>
@@ -468,23 +470,23 @@ function TeacherMonthlyRecap() {
   const fmtH = (mins: number) => `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")}`;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">Récap mensuel — pointage enseignant</h3>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold text-gray-700">Récap mensuel — pointage enseignant</h3>
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="mb-1 block text-xs text-slate-500">Enseignant</label>
+          <label className="mb-1 block text-xs text-gray-500">Enseignant</label>
           <Select className="max-w-[240px]" value={teacherId ?? ""} onChange={(e) => setTeacherId(e.target.value || null)}>
             <option value="">Choisir…</option>
             {teachers.map((t) => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
           </Select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-500">Mois</label>
+          <label className="mb-1 block text-xs text-gray-500">Mois</label>
           <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
         </div>
       </div>
       {!teacherId ? (
-        <p className="mt-4 text-sm text-slate-400">Sélectionnez un enseignant.</p>
+        <p className="mt-4 text-sm text-gray-400">Sélectionnez un enseignant.</p>
       ) : sumQuery.loading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : s ? (
@@ -497,14 +499,14 @@ function TeacherMonthlyRecap() {
             { label: "Absences (heures)", value: fmtH(s.absentMinutes), warn: s.absentMinutes > 0 },
             { label: "Heures effectives", value: fmtH(s.effectiveMinutes), strong: true },
           ].map((c) => (
-            <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-slate-50"}`}>
-              <p className="text-xs text-slate-500">{c.label}</p>
-              <p className={`mt-1 text-lg font-bold ${c.warn ? "text-red-600" : "text-slate-900"}`}>{c.value}</p>
+            <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-gray-50"}`}>
+              <p className="text-xs text-gray-500">{c.label}</p>
+              <p className={`mt-1 text-lg font-bold ${c.warn ? "text-error-600" : "text-gray-900"}`}>{c.value}</p>
             </div>
           ))}
         </div>
       ) : null}
-      <p className="mt-3 text-xs text-slate-400">Heures effectives = heures dues du mois − absences − retard cumulé. Le retard est calculé à chaque pointage (arrivée vs début du 1ᵉʳ cours du jour).</p>
+      <p className="mt-3 text-xs text-gray-400">Heures effectives = heures dues du mois − absences − retard cumulé. Le retard est calculé à chaque pointage (arrivée vs début du 1ᵉʳ cours du jour).</p>
     </div>
   );
 }

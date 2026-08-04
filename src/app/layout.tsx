@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
-import "@mantine/core/styles.css";
-import "@mantine/notifications/styles.css";
-import "@mantine/dates/styles.css";
+import { Outfit } from "next/font/google";
 import "./globals.css";
-import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from "@mantine/core";
-import { ModalsProvider } from "@mantine/modals";
-import { Notifications } from "@mantine/notifications";
-import { theme } from "@/lib/theme";
+import { Toaster } from "sonner";
 import { QueryProvider } from "@/providers/query-provider";
 import { AuthProvider } from "@/providers/auth-provider";
+import { ConfirmDialogHost } from "@/lib/feedback";
+
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit-sans", display: "swap" });
 
 export const metadata: Metadata = {
   title: "CathClau Edu — Gestion scolaire",
@@ -21,19 +19,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" {...mantineHtmlProps} className="h-full antialiased">
-      <head>
-        <ColorSchemeScript />
-      </head>
-      <body className="min-h-full" suppressHydrationWarning>
-        <MantineProvider theme={theme}>
-          <Notifications position="top-right" />
-          <ModalsProvider>
-            <QueryProvider>
-              <AuthProvider>{children}</AuthProvider>
-            </QueryProvider>
-          </ModalsProvider>
-        </MantineProvider>
+    <html lang="fr" className={`h-full antialiased ${outfit.variable}`}>
+      <body className="min-h-full font-outfit" suppressHydrationWarning>
+        <Toaster position="top-right" richColors closeButton />
+        <ConfirmDialogHost />
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

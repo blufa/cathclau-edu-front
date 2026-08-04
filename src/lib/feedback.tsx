@@ -1,18 +1,18 @@
 "use client";
 
-import { notifications } from "@mantine/notifications";
-import { modals } from "@mantine/modals";
-import { Text } from "@mantine/core";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Modal } from "@/components/ui/modal";
 import { ApiError } from "@/lib/api/errors";
 
 export function notifySuccess(message: string, title = "Succès") {
-  notifications.show({ title, message, color: "green" });
+  toast.success(title, { description: message });
 }
 
 /** Shows an error toast, extracting the server-side problem detail when available. */
 export function notifyError(error: unknown, fallback = "Une erreur est survenue") {
   const message = error instanceof ApiError ? error.userMessage : fallback;
-  notifications.show({ title: "Erreur", message, color: "red" });
+  toast.error("Erreur", { description: message });
 }
 
 interface ConfirmOptions {
@@ -23,16 +23,64 @@ interface ConfirmOptions {
   onConfirm: () => void | Promise<void>;
 }
 
-/** Opens a Mantine confirm modal; runs onConfirm on validation. */
-export function confirmAction({ title, message, confirmLabel = "Confirmer", danger, onConfirm }: ConfirmOptions) {
-  modals.openConfirmModal({
-    title,
-    centered: true,
-    children: <Text size="sm">{message}</Text>,
-    labels: { confirm: confirmLabel, cancel: "Annuler" },
-    confirmProps: danger ? { color: "red" } : undefined,
-    onConfirm: () => {
-      void onConfirm();
-    },
-  });
+type ConfirmListener = (opts: ConfirmOptions | null) => void;
+let confirmListener: ConfirmListener | null = null;
+
+/** Ouvre une boîte de confirmation Tailwind (rendue par `ConfirmDialogHost`, monté une fois dans le layout racine). */
+export function confirmAction(opts: ConfirmOptions) {
+  confirmListener?.(opts);
+}
+
+/** À monter une seule fois près de la racine de l'app (voir `src/app/layout.tsx`). */
+export function ConfirmDialogHost() {
+  const [active, setActive] = useState<ConfirmOptions | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    confirmListener = setActive;
+    return () => {
+      confirmListener = null;
+    };
+  }, []);
+
+  if (!active) return null;
+
+  async function handleConfirm() {
+    if (!active) return;
+    setBusy(true);
+    try {
+      await active.onConfirm();
+    } finally {
+      setBusy(false);
+      setActive(null);
+    }
+  }
+
+  return (
+    <Modal open onClose={() => (busy ? undefined : setActive(null))} title={active.title} className="max-w-sm">
+      <p className="text-sm text-gray-600">{active.message}</p>
+      <div className="mt-6 flex justify-end gap-3">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setActive(null)}
+          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={handleConfirm}
+          className={
+            active.danger
+              ? "rounded-lg bg-error-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-error-700 disabled:opacity-50"
+              : "rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+          }
+        >
+          {active.confirmLabel ?? "Confirmer"}
+        </button>
+      </div>
+    </Modal>
+  );
 }

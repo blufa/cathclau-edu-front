@@ -14,9 +14,11 @@ import type {
   EnrollmentCountInfo,
   JourSemaine,
   Matiere,
+  MatiereModele,
   Niveau,
   Periode,
   Salle,
+  SchoolCycle,
   StatutAnneeScolaire,
 } from "@/lib/types/academics";
 
@@ -67,10 +69,14 @@ export function getEnrollmentCount(id: number): Promise<EnrollmentCountInfo> {
 export function listClassSubjects(classId: number): Promise<ClasseMatiere[]> {
   return api.get<ClasseMatiere[]>(`/academics/classes/${classId}/subjects`);
 }
-export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number): Promise<ClasseMatiere> {
+export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number, code?: string): Promise<ClasseMatiere> {
   return api.post<ClasseMatiere>(`/academics/classes/${classId}/subjects`, undefined, {
-    query: { subjectId, teacherId, coefficient },
+    query: { subjectId, teacherId, coefficient, code },
   });
+}
+/** Codes déjà attribués pour cette matière (ex. CH1, CH2), toutes classes confondues — pour la grille horaire. */
+export function getTeacherCodesForSubject(subjectId: number): Promise<ClasseMatiere[]> {
+  return api.get<ClasseMatiere[]>(`/academics/subjects/${subjectId}/teacher-codes`);
 }
 /** Désigne (ou retire avec teacherId=null) le professeur principal de la classe. */
 export function setClassHeadTeacher(classId: number, teacherId: number | null): Promise<Classe> {
@@ -184,6 +190,15 @@ export function updateSubject(id: number, label: string, coefficient: number, sy
 }
 export function deleteSubject(id: number): Promise<void> {
   return api.delete<void>(`/academics/subjects/${id}`);
+}
+
+/** Aperçu du catalogue officiel MEPUA (matière + coefficient) pour un cycle (série requise au lycée). */
+export function getCatalogueMepua(cycle: SchoolCycle, serie?: string): Promise<MatiereModele[]> {
+  return api.get<MatiereModele[]>("/academics/subjects/catalogue-mepua", { query: { cycle, serie } });
+}
+/** Importe les matières/coefficients MEPUA du cycle (et série) comme matières du tenant ; ignore celles déjà créées. */
+export function importerMatieresMepua(cycle: SchoolCycle, serie?: string): Promise<Matiere[]> {
+  return api.post<Matiere[]>("/academics/subjects/importer-mepua", undefined, { query: { cycle, serie } });
 }
 
 // ── Génération automatique d'emploi du temps (selon disponibilités) ─────────────

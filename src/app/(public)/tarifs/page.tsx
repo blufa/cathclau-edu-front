@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Accordion, Center, SegmentedControl, Table } from "@mantine/core";
 import { Check, Minus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { listPlans } from "@/lib/api/platform";
@@ -10,8 +9,11 @@ import { PlanCard } from "@/components/platform/plan-card";
 import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
 import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
+import { Table, THead, TH, TBody, TR, TD } from "@/components/ui/table";
+import { Accordion } from "@/components/ui/accordion";
 import { formatGNF } from "@/lib/format";
 import { planPrice } from "@/lib/platform-utils";
+import { cn } from "@/lib/utils";
 import type { BillingPeriod, Plan } from "@/lib/types/platform";
 
 const PLAN_ORDER = ["STARTER", "STANDARD", "PREMIUM"];
@@ -32,9 +34,10 @@ const FAQ = [
   { q: "Quels moyens de paiement acceptez-vous ?", a: "Orange Money, MTN MoMo, Wave et cartes Visa/MasterCard." },
 ];
 
-function sortPlans(plans: Plan[]): Plan[] {
-  return [...plans].sort((a, b) => PLAN_ORDER.indexOf(a.code) - PLAN_ORDER.indexOf(b.code));
-}
+const PERIODS: { label: string; value: BillingPeriod }[] = [
+  { label: "Mensuel", value: "MONTHLY" },
+  { label: "Annuel (remisé)", value: "ANNUAL" },
+];
 
 function ComparisonCell({ value }: { value: string | boolean }) {
   if (typeof value === "boolean") {
@@ -47,6 +50,26 @@ function ComparisonCell({ value }: { value: string | boolean }) {
     );
   }
   return <span className="font-medium text-slate-800">{value}</span>;
+}
+
+function PeriodToggle({ value, onChange }: { value: BillingPeriod; onChange: (v: BillingPeriod) => void }) {
+  return (
+    <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+      {PERIODS.map((p) => (
+        <button
+          key={p.value}
+          type="button"
+          onClick={() => onChange(p.value)}
+          className={cn(
+            "rounded-full px-4 py-1.5 text-sm font-medium transition",
+            value === p.value ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900",
+          )}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export default function TarifsPage() {
@@ -71,16 +94,9 @@ export default function TarifsPage() {
           <p className="mx-auto mt-5 max-w-xl text-lg text-slate-600">
             Essai gratuit de 30 jours, sans carte bancaire. Annulez à tout moment.
           </p>
-          <Center mt="lg">
-            <SegmentedControl
-              value={period}
-              onChange={(v) => setPeriod(v as BillingPeriod)}
-              data={[
-                { label: "Mensuel", value: "MONTHLY" },
-                { label: "Annuel (remisé)", value: "ANNUAL" },
-              ]}
-            />
-          </Center>
+          <div className="mt-6 flex justify-center">
+            <PeriodToggle value={period} onChange={setPeriod} />
+          </div>
         </Reveal>
       </AuroraBackground>
 
@@ -112,39 +128,39 @@ export default function TarifsPage() {
             <h2 className="text-center text-2xl font-bold tracking-tight text-slate-900">
               Comparatif détaillé
             </h2>
-            <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-200">
-              <Table striped highlightOnHover withRowBorders verticalSpacing="sm">
-                <Table.Thead className="bg-slate-50">
-                  <Table.Tr>
-                    <Table.Th>Fonctionnalité</Table.Th>
+            <div className="mt-8">
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Fonctionnalité</TH>
                     {PLAN_ORDER.map((code) => (
-                      <Table.Th key={code} style={{ textAlign: "center" }}>{code}</Table.Th>
+                      <TH key={code} className="text-center">{code}</TH>
                     ))}
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  <Table.Tr>
-                    <Table.Td>Prix ({period === "ANNUAL" ? "annuel" : "mensuel"})</Table.Td>
+                  </TR>
+                </THead>
+                <TBody>
+                  <TR>
+                    <TD>Prix ({period === "ANNUAL" ? "annuel" : "mensuel"})</TD>
                     {PLAN_ORDER.map((code) => {
                       const plan = plans.find((p) => p.code === code);
                       return (
-                        <Table.Td key={code} style={{ textAlign: "center", fontWeight: 600 }}>
+                        <TD key={code} className="text-center font-semibold">
                           {plan ? formatGNF(planPrice(plan, period)) : "—"}
-                        </Table.Td>
+                        </TD>
                       );
                     })}
-                  </Table.Tr>
+                  </TR>
                   {COMPARISON.map((row) => (
-                    <Table.Tr key={row.label}>
-                      <Table.Td>{row.label}</Table.Td>
+                    <TR key={row.label}>
+                      <TD>{row.label}</TD>
                       {PLAN_ORDER.map((code) => (
-                        <Table.Td key={code} style={{ textAlign: "center" }}>
+                        <TD key={code} className="text-center">
                           <ComparisonCell value={row.values[code]} />
-                        </Table.Td>
+                        </TD>
                       ))}
-                    </Table.Tr>
+                    </TR>
                   ))}
-                </Table.Tbody>
+                </TBody>
               </Table>
             </div>
           </Reveal>
@@ -156,17 +172,14 @@ export default function TarifsPage() {
             <h2 className="text-center text-2xl font-bold tracking-tight text-slate-900">
               Questions fréquentes
             </h2>
-            <Accordion mt="lg" variant="separated" radius="lg">
-              {FAQ.map((f) => (
-                <Accordion.Item key={f.q} value={f.q}>
-                  <Accordion.Control>{f.q}</Accordion.Control>
-                  <Accordion.Panel>{f.a}</Accordion.Panel>
-                </Accordion.Item>
-              ))}
-            </Accordion>
+            <Accordion items={FAQ} className="mt-8" />
           </Reveal>
         </section>
       </div>
     </>
   );
+}
+
+function sortPlans(plans: Plan[]): Plan[] {
+  return [...plans].sort((a, b) => PLAN_ORDER.indexOf(a.code) - PLAN_ORDER.indexOf(b.code));
 }

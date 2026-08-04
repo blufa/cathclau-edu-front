@@ -58,6 +58,10 @@ export interface SchoolProfile {
   director: string | null;
   accreditationNumber: string | null;
   openingAuthorization: string | null;
+  /** Devise de l'établissement (phrase courte et formelle), imprimée au verso des badges/cartes. */
+  motto: string | null;
+  /** Slogan de l'établissement, imprimé au verso des badges/cartes. */
+  slogan: string | null;
   /** Numéro marchand de reversement (Mobile Money) où la plateforme reverse les fonds de l'école. */
   payoutMerchantNumber: string | null;
   /** Opérateur du numéro marchand (ORANGE_MONEY, MTN_MONEY, WAVE…). */
@@ -72,7 +76,7 @@ export interface SchoolProfile {
 export type SchoolProfileInput = Pick<
   SchoolProfile,
   "schoolName" | "logo" | "brandColor" | "address" | "city" | "country" | "phone" | "email"
-  | "website" | "director" | "accreditationNumber" | "openingAuthorization"
+  | "website" | "director" | "accreditationNumber" | "openingAuthorization" | "motto" | "slogan"
   | "payoutMerchantNumber" | "payoutOperator" | "payoutAccountName"
 >;
 

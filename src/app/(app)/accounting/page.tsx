@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Select, NumberInput, Stack, Switch, Tabs, TextInput } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
-import { useForm } from "@mantine/form";
 import { Banknote, BookText, CalendarRange, FileSpreadsheet, ListTree, NotebookPen, Plus, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -60,6 +57,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Field, Input, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -71,31 +74,31 @@ export default function AccountingPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   if (!tenantId) {
-    return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Réservé aux comptes d&apos;établissement.</div>;
+    return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé aux comptes d&apos;établissement.</div>;
   }
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Comptabilité</h1>
-        <p className="text-sm text-slate-500">Caisses, banques et trésorerie (comptabilité simple)</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Comptabilité</h1>
+        <p className="text-sm text-gray-500">Caisses, banques et trésorerie (comptabilité simple)</p>
       </Reveal>
-      <Tabs defaultValue="treasury" color="brand" variant="pills" radius="md">
-        <Tabs.List>
-          <Tabs.Tab value="treasury" leftSection={<Banknote className="h-4 w-4" />}>Trésorerie</Tabs.Tab>
-          <Tabs.Tab value="accounts" leftSection={<ListTree className="h-4 w-4" />}>Plan comptable</Tabs.Tab>
-          <Tabs.Tab value="journals" leftSection={<BookText className="h-4 w-4" />}>Journaux</Tabs.Tab>
-          <Tabs.Tab value="entries" leftSection={<NotebookPen className="h-4 w-4" />}>Écritures</Tabs.Tab>
-          <Tabs.Tab value="reports" leftSection={<FileSpreadsheet className="h-4 w-4" />}>États</Tabs.Tab>
-          <Tabs.Tab value="fiscal" leftSection={<CalendarRange className="h-4 w-4" />}>Exercices</Tabs.Tab>
-          <Tabs.Tab value="settings" leftSection={<SettingsIcon className="h-4 w-4" />}>Paramètres</Tabs.Tab>
-        </Tabs.List>
-        <Tabs.Panel value="treasury" pt="lg"><TreasuryTab user={user} /></Tabs.Panel>
-        <Tabs.Panel value="accounts" pt="lg"><ChartTab user={user} /></Tabs.Panel>
-        <Tabs.Panel value="journals" pt="lg"><JournalsTab user={user} /></Tabs.Panel>
-        <Tabs.Panel value="entries" pt="lg"><EntriesTab user={user} /></Tabs.Panel>
-        <Tabs.Panel value="reports" pt="lg"><ReportsTab /></Tabs.Panel>
-        <Tabs.Panel value="fiscal" pt="lg"><FiscalTab user={user} /></Tabs.Panel>
-        <Tabs.Panel value="settings" pt="lg"><SettingsTab user={user} /></Tabs.Panel>
+      <Tabs defaultValue="treasury">
+        <TabsList>
+          <TabsTrigger value="treasury" icon={Banknote}>Trésorerie</TabsTrigger>
+          <TabsTrigger value="accounts" icon={ListTree}>Plan comptable</TabsTrigger>
+          <TabsTrigger value="journals" icon={BookText}>Journaux</TabsTrigger>
+          <TabsTrigger value="entries" icon={NotebookPen}>Écritures</TabsTrigger>
+          <TabsTrigger value="reports" icon={FileSpreadsheet}>États</TabsTrigger>
+          <TabsTrigger value="fiscal" icon={CalendarRange}>Exercices</TabsTrigger>
+          <TabsTrigger value="settings" icon={SettingsIcon}>Paramètres</TabsTrigger>
+        </TabsList>
+        <TabsPanel value="treasury"><TreasuryTab user={user} /></TabsPanel>
+        <TabsPanel value="accounts"><ChartTab user={user} /></TabsPanel>
+        <TabsPanel value="journals"><JournalsTab user={user} /></TabsPanel>
+        <TabsPanel value="entries"><EntriesTab user={user} /></TabsPanel>
+        <TabsPanel value="reports"><ReportsTab /></TabsPanel>
+        <TabsPanel value="fiscal"><FiscalTab user={user} /></TabsPanel>
+        <TabsPanel value="settings"><SettingsTab user={user} /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -127,23 +130,23 @@ function TreasuryTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
     <div className="space-y-6">
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Caisses & banques</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Caisses & banques</h3>
           {canEdit && <Button size="sm" onClick={() => setNewAccount(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau compte</Button>}
         </div>
         {accountsQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {accounts.length === 0 && <p className="text-sm text-slate-400">Aucun compte. Créez une caisse ou une banque.</p>}
+            {accounts.length === 0 && <p className="text-sm text-gray-400">Aucun compte. Créez une caisse ou une banque.</p>}
             {accounts.map((a) => (
-              <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div key={a.id} className="rounded-2xl border border-gray-200 bg-white p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-900">{a.label}</span>
+                  <span className="text-sm font-semibold text-gray-900">{a.label}</span>
                   <Badge tone={a.type === "CASH" ? "amber" : "indigo"}>{ACCOUNT_TYPE_LABEL[a.type]}</Badge>
                 </div>
-                <p className="mt-2 text-xl font-bold text-slate-900">{formatGNF(a.currentBalance ?? 0)}</p>
+                <p className="mt-2 text-xl font-bold text-gray-900">{formatGNF(a.currentBalance ?? 0)}</p>
                 {canEdit && (
                   <div className="mt-2 flex gap-3 text-xs">
                     <button className="text-brand-700 hover:underline" onClick={() => adjust(a)}>Ajuster</button>
-                    <button className="text-red-600 hover:underline" onClick={() => confirmAction({ title: "Supprimer le compte", message: a.label, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteAccount(a.id); notifySuccess("Supprimé"); accountsQuery.refetch(); } catch (e) { notifyError(e); } } })}>Supprimer</button>
+                    <button className="text-error-600 hover:underline" onClick={() => confirmAction({ title: "Supprimer le compte", message: a.label, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteAccount(a.id); notifySuccess("Supprimé"); accountsQuery.refetch(); } catch (e) { notifyError(e); } } })}>Supprimer</button>
                   </div>
                 )}
               </div>
@@ -154,28 +157,28 @@ function TreasuryTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Mouvements de trésorerie</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Mouvements de trésorerie</h3>
           {canEdit && accounts.length > 0 && <Button size="sm" variant="secondary" onClick={() => setNewMovement(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau mouvement</Button>}
         </div>
         {movementsQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <Table>
             <THead><tr><TH>Date</TH><TH>Compte</TH><TH>Sens</TH><TH>Catégorie</TH><TH>Libellé</TH><TH>Montant</TH><TH>Rappr.</TH><TH className="text-right" /></tr></THead>
             <TBody>
-              {(movementsQuery.data ?? []).length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-slate-400">Aucun mouvement.</TD></TR>}
+              {(movementsQuery.data ?? []).length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucun mouvement.</TD></TR>}
               {(movementsQuery.data ?? []).map((m) => (
                 <TR key={m.id}>
-                  <TD className="text-slate-500">{m.date ?? "—"}</TD>
+                  <TD className="text-gray-500">{m.date ?? "—"}</TD>
                   <TD>{accountName.get(m.accountId) ?? `#${m.accountId}`}</TD>
                   <TD><Badge tone={m.direction === "IN" ? "green" : "red"}>{DIRECTION_LABEL[m.direction]}</Badge></TD>
                   <TD>{m.category ? CATEGORY_LABEL[m.category] : "—"}</TD>
-                  <TD className="text-slate-700">{m.label ?? (m.referenceType !== "MANUAL" ? `Auto (${m.referenceType})` : "—")}</TD>
-                  <TD className="font-medium text-slate-900">{formatGNF(m.amount)}</TD>
+                  <TD className="text-gray-700">{m.label ?? (m.referenceType !== "MANUAL" ? `Auto (${m.referenceType})` : "—")}</TD>
+                  <TD className="font-medium text-gray-900">{formatGNF(m.amount)}</TD>
                   <TD>{m.reconciled ? "✓" : "—"}</TD>
                   <TD className="text-right">
                     {canEdit && (
                       <div className="flex justify-end gap-1">
                         {!m.reconciled && <Button size="sm" variant="ghost" onClick={() => reconcile(m.id)}>Rapprocher</Button>}
-                        {m.referenceType === "MANUAL" && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => removeMovement(m.id)}>Suppr.</Button>}
+                        {m.referenceType === "MANUAL" && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => removeMovement(m.id)}>Suppr.</Button>}
                       </div>
                     )}
                   </TD>
@@ -198,75 +201,111 @@ function TreasuryTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
 function AccountForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({ mode: "controlled", initialValues: { label: "", type: "CASH" as TreasuryAccountType, bank: "", accountNumber: "", initialBalance: 0, currency: "GNF" }, validate: { label: (v) => (v ? null : "Requis") } });
-  async function submit(values: typeof form.values) {
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState<TreasuryAccountType>("CASH");
+  const [bank, setBank] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [initialBalance, setInitialBalance] = useState("0");
+  async function submit() {
+    if (!label.trim()) { notifyError("Libellé requis"); return; }
     setLoading(true);
-    try { await createAccount(values); onCreated(); } catch (e) { notifyError(e); } finally { setLoading(false); }
+    try { await createAccount({ label, type, bank, accountNumber, initialBalance: Number(initialBalance) || 0, currency: "GNF" }); onCreated(); } catch (e) { notifyError(e); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Libellé" withAsterisk {...form.getInputProps("label")} />
-        <Select label="Type" data={(Object.keys(ACCOUNT_TYPE_LABEL) as TreasuryAccountType[]).map((t) => ({ value: t, label: ACCOUNT_TYPE_LABEL[t] }))} {...form.getInputProps("type")} />
-        {form.values.type === "BANK" && (
-          <div className="grid grid-cols-2 gap-3">
-            <TextInput label="Banque" {...form.getInputProps("bank")} />
-            <TextInput label="N° compte" {...form.getInputProps("accountNumber")} />
-          </div>
-        )}
-        <NumberInput label="Solde initial (GNF)" {...form.getInputProps("initialBalance")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Créer</Button>
+    <div className="space-y-4">
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Type</Label>
+        <Select value={type} onChange={(e) => setType(e.target.value as TreasuryAccountType)}>
+          {(Object.keys(ACCOUNT_TYPE_LABEL) as TreasuryAccountType[]).map((t) => (<option key={t} value={t}>{ACCOUNT_TYPE_LABEL[t]}</option>))}
+        </Select>
+      </Field>
+      {type === "BANK" && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field><Label>Banque</Label><Input value={bank} onChange={(e) => setBank(e.target.value)} /></Field>
+          <Field><Label>N° compte</Label><Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} /></Field>
         </div>
-      </Stack>
-    </form>
+      )}
+      <Field>
+        <Label>Solde initial (GNF)</Label>
+        <Input type="number" value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="button" onClick={submit} loading={loading}>Créer</Button>
+      </div>
+    </div>
   );
 }
 
 function MovementForm({ accounts, onCancel, onCreated }: { accounts: TreasuryAccount[]; onCancel: () => void; onCreated: () => void }) {
   const [loading, setLoading] = useState(false);
-  const form = useForm({
-    mode: "controlled",
-    initialValues: { accountId: String(accounts[0]?.id ?? ""), direction: "IN" as CashFlowDirection, amount: 0, date: "", category: "OTHER" as CashFlowCategory, label: "" },
-    validate: { accountId: (v) => (v ? null : "Requis"), amount: (v) => (v > 0 ? null : "Montant requis") },
-  });
-  async function submit(values: typeof form.values) {
+  const [accountId, setAccountId] = useState(String(accounts[0]?.id ?? ""));
+  const [direction, setDirection] = useState<CashFlowDirection>("IN");
+  const [amount, setAmount] = useState("0");
+  const [date, setDate] = useState("");
+  const [category, setCategory] = useState<CashFlowCategory>("OTHER");
+  const [label, setLabel] = useState("");
+  async function submit() {
+    if (!accountId) { notifyError("Compte requis"); return; }
+    if (!(Number(amount) > 0)) { notifyError("Montant requis"); return; }
     setLoading(true);
     try {
-      await createMovement({ accountId: Number(values.accountId), direction: values.direction, amount: values.amount, date: values.date || null, category: values.category, label: values.label || null });
+      await createMovement({ accountId: Number(accountId), direction, amount: Number(amount), date: date || null, category, label: label || null });
       onCreated();
     } catch (e) { notifyError(e); } finally { setLoading(false); }
   }
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <Select label="Compte" withAsterisk data={accounts.map((a) => ({ value: String(a.id), label: a.label }))} {...form.getInputProps("accountId")} />
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Sens" data={(Object.keys(DIRECTION_LABEL) as CashFlowDirection[]).map((d) => ({ value: d, label: DIRECTION_LABEL[d] }))} {...form.getInputProps("direction")} />
-          <NumberInput label="Montant (GNF)" min={0} {...form.getInputProps("amount")} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Catégorie" data={(Object.keys(CATEGORY_LABEL) as CashFlowCategory[]).map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))} {...form.getInputProps("category")} />
-          <DatePickerInput label="Date" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("date")} />
-        </div>
-        <TextInput label="Libellé" {...form.getInputProps("label")} />
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>Enregistrer</Button>
-        </div>
-      </Stack>
-    </form>
+    <div className="space-y-4">
+      <Field>
+        <Label>Compte <span className="text-error-500">*</span></Label>
+        <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+          {accounts.map((a) => (<option key={a.id} value={a.id}>{a.label}</option>))}
+        </Select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Sens</Label>
+          <Select value={direction} onChange={(e) => setDirection(e.target.value as CashFlowDirection)}>
+            {(Object.keys(DIRECTION_LABEL) as CashFlowDirection[]).map((d) => (<option key={d} value={d}>{DIRECTION_LABEL[d]}</option>))}
+          </Select>
+        </Field>
+        <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Catégorie</Label>
+          <Select value={category} onChange={(e) => setCategory(e.target.value as CashFlowCategory)}>
+            {(Object.keys(CATEGORY_LABEL) as CashFlowCategory[]).map((c) => (<option key={c} value={c}>{CATEGORY_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+        <Field><Label>Date</Label><DatePicker value={date} clearable onChange={setDate} /></Field>
+      </div>
+      <Field><Label>Libellé</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="button" onClick={submit} loading={loading}>Enregistrer</Button>
+      </div>
+    </div>
   );
 }
 
 function FiscalTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
   const q = useQuery(() => listFiscalYears(), []);
-  const form = useForm({ mode: "controlled", initialValues: { label: "", startDate: "", endDate: "" }, validate: { label: (v) => (v ? null : "Requis") } });
-  async function add(values: typeof form.values) {
-    try { await createFiscalYear({ label: values.label, startDate: values.startDate || null, endDate: values.endDate || null }); form.reset(); notifySuccess("Exercice créé"); q.refetch(); }
-    catch (e) { notifyError(e); }
+  const [label, setLabel] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  async function add() {
+    if (!label.trim()) { notifyError("Libellé requis"); return; }
+    try {
+      await createFiscalYear({ label, startDate: startDate || null, endDate: endDate || null });
+      setLabel(""); setStartDate(""); setEndDate("");
+      notifySuccess("Exercice créé"); q.refetch();
+    } catch (e) { notifyError(e); }
   }
   function close(id: number) {
     confirmAction({ title: "Clôturer l'exercice", message: "L'exercice deviendra en lecture seule.", confirmLabel: "Clôturer", danger: true,
@@ -275,27 +314,28 @@ function FiscalTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
       {canEdit && (
-        <form onSubmit={form.onSubmit(add)} className="rounded-2xl border border-slate-200 bg-white p-5">
-          <Stack gap="md">
-            <h3 className="text-sm font-semibold text-slate-700">Nouvel exercice</h3>
-            <TextInput label="Libellé" placeholder="Exercice 2025-2026" withAsterisk {...form.getInputProps("label")} />
-            <div className="grid grid-cols-2 gap-3">
-              <DatePickerInput label="Début" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("startDate")} />
-              <DatePickerInput label="Fin" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("endDate")} />
-            </div>
-            <Button type="submit">Créer</Button>
-          </Stack>
-        </form>
+        <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-sm font-semibold text-gray-700">Nouvel exercice</h3>
+          <Field>
+            <Label>Libellé <span className="text-error-500">*</span></Label>
+            <Input placeholder="Exercice 2025-2026" value={label} onChange={(e) => setLabel(e.target.value)} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field><Label>Début</Label><DatePicker value={startDate} clearable onChange={setStartDate} /></Field>
+            <Field><Label>Fin</Label><DatePicker value={endDate} clearable onChange={setEndDate} /></Field>
+          </div>
+          <Button onClick={add}>Créer</Button>
+        </div>
       )}
       <div>
         {q.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <Table>
             <THead><tr><TH>Exercice</TH><TH>Début</TH><TH>Fin</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
             <TBody>
-              {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucun exercice.</TD></TR>}
+              {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun exercice.</TD></TR>}
               {(q.data ?? []).map((f) => (
                 <TR key={f.id}>
-                  <TD className="font-medium text-slate-900">{f.label}</TD>
+                  <TD className="font-medium text-gray-900">{f.label}</TD>
                   <TD>{f.startDate ?? "—"}</TD><TD>{f.endDate ?? "—"}</TD>
                   <TD><Badge tone={FISCAL_TONE[f.status]}>{FISCAL_STATUS_LABEL[f.status]}</Badge></TD>
                   <TD className="text-right">{canEdit && f.status === "OPEN" && <Button size="sm" variant="ghost" onClick={() => close(f.id)}>Clôturer</Button>}</TD>
@@ -314,40 +354,50 @@ function SettingsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const q = useQuery(() => getAccountingSettings(), []);
   const [loading, setLoading] = useState(false);
   const s = q.data;
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
-      mode: (s?.mode ?? "SIMPLE") as AccountingMode,
-      currency: s?.currency ?? "GNF",
-      fiscalYearStartMonth: s?.fiscalYearStartMonth ?? 9,
-      vatApplicable: s?.vatApplicable ?? false,
-      defaultVatRate: Number(s?.defaultVatRate ?? 0),
-      autoNumbering: s?.autoNumbering ?? true,
-    },
-  });
-  // Sync form once the settings load.
-  if (s && !form.isDirty() && form.values.currency !== (s.currency ?? "GNF")) {
-    form.setValues({ mode: s.mode, currency: s.currency ?? "GNF", fiscalYearStartMonth: s.fiscalYearStartMonth ?? 9, vatApplicable: s.vatApplicable ?? false, defaultVatRate: Number(s.defaultVatRate ?? 0), autoNumbering: s.autoNumbering ?? true });
+  const [mode, setMode] = useState<AccountingMode>("SIMPLE");
+  const [currency, setCurrency] = useState("GNF");
+  const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState("9");
+  const [vatApplicable, setVatApplicable] = useState(false);
+  const [defaultVatRate, setDefaultVatRate] = useState("0");
+  const [autoNumbering, setAutoNumbering] = useState(true);
+  const [synced, setSynced] = useState(false);
+  if (s && !synced) {
+    setMode(s.mode); setCurrency(s.currency ?? "GNF"); setFiscalYearStartMonth(String(s.fiscalYearStartMonth ?? 9));
+    setVatApplicable(s.vatApplicable ?? false); setDefaultVatRate(String(s.defaultVatRate ?? 0)); setAutoNumbering(s.autoNumbering ?? true);
+    setSynced(true);
   }
-  async function submit(values: typeof form.values) {
+  async function submit() {
     setLoading(true);
-    try { await updateAccountingSettings(values); notifySuccess("Paramètres enregistrés"); q.refetch(); } catch (e) { notifyError(e); } finally { setLoading(false); }
+    try {
+      await updateAccountingSettings({ mode, currency, fiscalYearStartMonth: Number(fiscalYearStartMonth) || 9, vatApplicable, defaultVatRate: Number(defaultVatRate) || 0, autoNumbering });
+      notifySuccess("Paramètres enregistrés"); q.refetch();
+    } catch (e) { notifyError(e); } finally { setLoading(false); }
   }
   if (q.loading) return <div className="flex justify-center py-12"><Spinner /></div>;
   return (
-    <form onSubmit={form.onSubmit(submit)} className="max-w-lg">
-      <Stack gap="md">
-        <Select label="Mode comptable" data={[{ value: "SIMPLE", label: "Simple (caisse / banque)" }, { value: "DOUBLE_ENTRY", label: "Partie double (SYSCOHADA)" }]} {...form.getInputProps("mode")} />
-        <div className="grid grid-cols-2 gap-3">
-          <TextInput label="Devise" {...form.getInputProps("currency")} />
-          <NumberInput label="Mois de début d'exercice" min={1} max={12} {...form.getInputProps("fiscalYearStartMonth")} />
-        </div>
-        <Switch label="TVA applicable" color="brand" checked={form.values.vatApplicable} onChange={(e) => form.setFieldValue("vatApplicable", e.currentTarget.checked)} />
-        {form.values.vatApplicable && <NumberInput label="Taux de TVA par défaut (%)" min={0} {...form.getInputProps("defaultVatRate")} />}
-        <Switch label="Numérotation automatique" color="brand" checked={form.values.autoNumbering} onChange={(e) => form.setFieldValue("autoNumbering", e.currentTarget.checked)} />
-        {canEdit && <div className="flex justify-end"><Button type="submit" loading={loading}>Enregistrer</Button></div>}
-      </Stack>
-    </form>
+    <div className="max-w-lg space-y-4">
+      <Field>
+        <Label>Mode comptable</Label>
+        <Select value={mode} onChange={(e) => setMode(e.target.value as AccountingMode)}>
+          <option value="SIMPLE">Simple (caisse / banque)</option>
+          <option value="DOUBLE_ENTRY">Partie double (SYSCOHADA)</option>
+        </Select>
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field><Label>Devise</Label><Input value={currency} onChange={(e) => setCurrency(e.target.value)} /></Field>
+        <Field><Label>Mois de début d&apos;exercice</Label><Input type="number" min={1} max={12} value={fiscalYearStartMonth} onChange={(e) => setFiscalYearStartMonth(e.target.value)} /></Field>
+      </div>
+      <div className="flex items-center gap-3">
+        <Switch checked={vatApplicable} onChange={setVatApplicable} ariaLabel="TVA applicable" />
+        <span className="text-sm text-gray-700">TVA applicable</span>
+      </div>
+      {vatApplicable && <Field><Label>Taux de TVA par défaut (%)</Label><Input type="number" min={0} value={defaultVatRate} onChange={(e) => setDefaultVatRate(e.target.value)} /></Field>}
+      <div className="flex items-center gap-3">
+        <Switch checked={autoNumbering} onChange={setAutoNumbering} ariaLabel="Numérotation automatique" />
+        <span className="text-sm text-gray-700">Numérotation automatique</span>
+      </div>
+      {canEdit && <div className="flex justify-end"><Button onClick={submit} loading={loading}>Enregistrer</Button></div>}
+    </div>
   );
 }
 
@@ -357,9 +407,17 @@ const ENTRY_STATUS_TONE: Record<JournalEntryStatus, "gray" | "green" | "indigo">
 function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
   const q = useQuery(() => listChartOfAccounts(), []);
-  const form = useForm({ mode: "controlled", initialValues: { accountNumber: "", label: "", accountClass: 4, type: "ASSET" as AccountType }, validate: { accountNumber: (v) => (v ? null : "Requis"), label: (v) => (v ? null : "Requis") } });
-  async function add(values: typeof form.values) {
-    try { await createChartAccount(values); form.reset(); notifySuccess("Compte ajouté"); q.refetch(); } catch (e) { notifyError(e); }
+  const [accountNumber, setAccountNumber] = useState("");
+  const [label, setLabel] = useState("");
+  const [accountClass, setAccountClass] = useState("4");
+  const [type, setType] = useState<AccountType>("ASSET");
+  async function add() {
+    if (!accountNumber.trim() || !label.trim()) { notifyError("N° compte et libellé requis"); return; }
+    try {
+      await createChartAccount({ accountNumber, label, accountClass: Number(accountClass) || 4, type });
+      setAccountNumber(""); setLabel("");
+      notifySuccess("Compte ajouté"); q.refetch();
+    } catch (e) { notifyError(e); }
   }
   function remove(a: ChartOfAccount) {
     confirmAction({ title: "Supprimer le compte", message: `${a.accountNumber} ${a.label}`, confirmLabel: "Supprimer", danger: true,
@@ -368,32 +426,35 @@ function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr]">
       {canEdit && (
-        <form onSubmit={form.onSubmit(add)} className="rounded-2xl border border-slate-200 bg-white p-5">
-          <Stack gap="md">
-            <h3 className="text-sm font-semibold text-slate-700">Nouveau compte</h3>
-            <TextInput label="N° compte" placeholder="411, 521, 701…" withAsterisk {...form.getInputProps("accountNumber")} />
-            <TextInput label="Libellé" withAsterisk {...form.getInputProps("label")} />
-            <div className="grid grid-cols-2 gap-3">
-              <NumberInput label="Classe" min={1} max={8} {...form.getInputProps("accountClass")} />
-              <Select label="Type" data={(Object.keys(ACCOUNT_TYPE_LABEL_SYS) as AccountType[]).map((t) => ({ value: t, label: ACCOUNT_TYPE_LABEL_SYS[t] }))} {...form.getInputProps("type")} />
-            </div>
-            <Button type="submit">Ajouter</Button>
-          </Stack>
-        </form>
+        <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-sm font-semibold text-gray-700">Nouveau compte</h3>
+          <Field><Label>N° compte <span className="text-error-500">*</span></Label><Input placeholder="411, 521, 701…" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} /></Field>
+          <Field><Label>Libellé <span className="text-error-500">*</span></Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field><Label>Classe</Label><Input type="number" min={1} max={8} value={accountClass} onChange={(e) => setAccountClass(e.target.value)} /></Field>
+            <Field>
+              <Label>Type</Label>
+              <Select value={type} onChange={(e) => setType(e.target.value as AccountType)}>
+                {(Object.keys(ACCOUNT_TYPE_LABEL_SYS) as AccountType[]).map((t) => (<option key={t} value={t}>{ACCOUNT_TYPE_LABEL_SYS[t]}</option>))}
+              </Select>
+            </Field>
+          </div>
+          <Button onClick={add}>Ajouter</Button>
+        </div>
       )}
       <div>
         {q.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <Table>
             <THead><tr><TH>N°</TH><TH>Libellé</TH><TH>Classe</TH><TH>Type</TH><TH /></tr></THead>
             <TBody>
-              {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucun compte. Ajoutez votre plan SYSCOHADA.</TD></TR>}
+              {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun compte. Ajoutez votre plan SYSCOHADA.</TD></TR>}
               {(q.data ?? []).map((a) => (
                 <TR key={a.id}>
-                  <TD className="font-mono text-xs text-slate-600">{a.accountNumber}</TD>
-                  <TD className="font-medium text-slate-900">{a.label}</TD>
+                  <TD className="font-mono text-xs text-gray-600">{a.accountNumber}</TD>
+                  <TD className="font-medium text-gray-900">{a.label}</TD>
                   <TD>{a.accountClass ?? "—"}</TD>
                   <TD>{a.type ? ACCOUNT_TYPE_LABEL_SYS[a.type] : "—"}</TD>
-                  <TD className="text-right">{canEdit && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(a)}>Suppr.</Button>}</TD>
+                  <TD className="text-right">{canEdit && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(a)}>Suppr.</Button>}</TD>
                 </TR>
               ))}
             </TBody>
@@ -408,35 +469,36 @@ function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 function JournalsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
   const q = useQuery(() => listJournals(), []);
-  const form = useForm({ mode: "controlled", initialValues: { code: "", label: "", type: "" }, validate: { code: (v) => (v ? null : "Requis") } });
-  async function add(values: typeof form.values) {
-    try { await createJournal(values); form.reset(); notifySuccess("Journal créé"); q.refetch(); } catch (e) { notifyError(e); }
+  const [code, setCode] = useState("");
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState("");
+  async function add() {
+    if (!code.trim()) { notifyError("Code requis"); return; }
+    try { await createJournal({ code, label, type }); setCode(""); setLabel(""); setType(""); notifySuccess("Journal créé"); q.refetch(); } catch (e) { notifyError(e); }
   }
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.6fr]">
       {canEdit && (
-        <form onSubmit={form.onSubmit(add)} className="rounded-2xl border border-slate-200 bg-white p-5">
-          <Stack gap="md">
-            <h3 className="text-sm font-semibold text-slate-700">Nouveau journal</h3>
-            <TextInput label="Code" placeholder="VT, AC, BQ, CA, OD" withAsterisk {...form.getInputProps("code")} />
-            <TextInput label="Libellé" {...form.getInputProps("label")} />
-            <TextInput label="Type" {...form.getInputProps("type")} />
-            <Button type="submit">Créer</Button>
-          </Stack>
-        </form>
+        <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-sm font-semibold text-gray-700">Nouveau journal</h3>
+          <Field><Label>Code <span className="text-error-500">*</span></Label><Input placeholder="VT, AC, BQ, CA, OD" value={code} onChange={(e) => setCode(e.target.value)} /></Field>
+          <Field><Label>Libellé</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
+          <Field><Label>Type</Label><Input value={type} onChange={(e) => setType(e.target.value)} /></Field>
+          <Button onClick={add}>Créer</Button>
+        </div>
       )}
       <div>
         {q.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <Table>
             <THead><tr><TH>Code</TH><TH>Libellé</TH><TH>Type</TH><TH /></tr></THead>
             <TBody>
-              {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-slate-400">Aucun journal.</TD></TR>}
+              {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucun journal.</TD></TR>}
               {(q.data ?? []).map((j) => (
                 <TR key={j.id}>
-                  <TD className="font-mono text-xs text-slate-600">{j.code}</TD>
-                  <TD className="font-medium text-slate-900">{j.label ?? "—"}</TD>
+                  <TD className="font-mono text-xs text-gray-600">{j.code}</TD>
+                  <TD className="font-medium text-gray-900">{j.label ?? "—"}</TD>
                   <TD>{j.type ?? "—"}</TD>
-                  <TD className="text-right">{canEdit && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => confirmAction({ title: "Supprimer le journal", message: j.code, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteJournal(j.id); notifySuccess("Supprimé"); q.refetch(); } catch (e) { notifyError(e); } } })}>Suppr.</Button>}</TD>
+                  <TD className="text-right">{canEdit && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Supprimer le journal", message: j.code, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteJournal(j.id); notifySuccess("Supprimé"); q.refetch(); } catch (e) { notifyError(e); } } })}>Suppr.</Button>}</TD>
                 </TR>
               ))}
             </TBody>
@@ -467,12 +529,12 @@ function EntriesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
         <Table>
           <THead><tr><TH>Pièce</TH><TH>Date</TH><TH>Libellé</TH><TH>Débit</TH><TH>Crédit</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-slate-400">Aucune écriture.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucune écriture.</TD></TR>}
             {(q.data ?? []).map((e) => (
               <TR key={e.id}>
-                <TD className="font-mono text-xs text-slate-600">{e.pieceNumber}</TD>
-                <TD className="text-slate-500">{e.date ?? "—"}</TD>
-                <TD className="font-medium text-slate-900">{e.label ?? "—"}</TD>
+                <TD className="font-mono text-xs text-gray-600">{e.pieceNumber}</TD>
+                <TD className="text-gray-500">{e.date ?? "—"}</TD>
+                <TD className="font-medium text-gray-900">{e.label ?? "—"}</TD>
                 <TD>{formatGNF(e.totalDebit ?? 0)}</TD>
                 <TD>{formatGNF(e.totalCredit ?? 0)}</TD>
                 <TD><Badge tone={ENTRY_STATUS_TONE[e.status]}>{ENTRY_STATUS_LABEL[e.status]}</Badge></TD>
@@ -480,7 +542,7 @@ function EntriesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                   {canEdit && e.status === "DRAFT" && (
                     <div className="flex justify-end gap-1">
                       <Button size="sm" onClick={() => act(() => validateJournalEntry(e.id), "Écriture validée")}>Valider</Button>
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => act(() => deleteJournalEntry(e.id), "Supprimée")}>Suppr.</Button>
+                      <Button size="sm" variant="ghost" className="text-error-600" onClick={() => act(() => deleteJournalEntry(e.id), "Supprimée")}>Suppr.</Button>
                     </div>
                   )}
                 </TD>
@@ -536,37 +598,50 @@ function EntryForm({ journals, accounts, years, onCancel, onCreated }: {
   }
 
   return (
-    <Stack gap="md">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Select label="Journal" data={journals.map((j) => ({ value: String(j.id), label: j.code }))} value={journalId} onChange={(value) => setJournalId(value ?? "")} />
-        <Select label="Exercice" data={[{ value: "", label: "—" }, ...years.map((y) => ({ value: String(y.id), label: y.label }))]} value={fiscalYearId} onChange={(value) => setFiscalYearId(value ?? "")} />
+        <Field>
+          <Label>Journal</Label>
+          <Select value={journalId} onChange={(e) => setJournalId(e.target.value)}>
+            {journals.map((j) => (<option key={j.id} value={j.id}>{j.code}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Exercice</Label>
+          <Select value={fiscalYearId} onChange={(e) => setFiscalYearId(e.target.value)}>
+            <option value="">—</option>
+            {years.map((y) => (<option key={y.id} value={y.id}>{y.label}</option>))}
+          </Select>
+        </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <DatePickerInput label="Date" value={date || null} onChange={(v) => setDate(v ?? "")} valueFormat="DD/MM/YYYY" />
-        <TextInput label="Libellé" value={label} onChange={(e) => setLabel(e.currentTarget.value)} />
+        <Field><Label>Date</Label><DatePicker value={date} onChange={setDate} /></Field>
+        <Field><Label>Libellé</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-700">Lignes</span>
+          <span className="text-sm font-semibold text-gray-700">Lignes</span>
           <button type="button" className="text-xs text-brand-700 hover:underline" onClick={() => setLines((ls) => [...ls, { chartOfAccountId: 0, label: "", debit: 0, credit: 0 }])}>+ Ligne</button>
         </div>
         {lines.map((l, i) => (
           <div key={i} className="grid grid-cols-[1fr_90px_90px] gap-2">
-            <Select data={[{ value: "0", label: "— Compte —" }, ...accounts.map((a) => ({ value: String(a.id), label: `${a.accountNumber} ${a.label}` }))]}
-              value={String(l.chartOfAccountId)} onChange={(value) => setLine(i, { chartOfAccountId: Number(value ?? 0) })} />
-            <NumberInput placeholder="Débit" min={0} value={Number(l.debit ?? 0)} onChange={(v) => setLine(i, { debit: Number(v) || 0, credit: 0 })} />
-            <NumberInput placeholder="Crédit" min={0} value={Number(l.credit ?? 0)} onChange={(v) => setLine(i, { credit: Number(v) || 0, debit: 0 })} />
+            <Select value={String(l.chartOfAccountId)} onChange={(e) => setLine(i, { chartOfAccountId: Number(e.target.value) || 0 })}>
+              <option value="0">— Compte —</option>
+              {accounts.map((a) => (<option key={a.id} value={a.id}>{a.accountNumber} {a.label}</option>))}
+            </Select>
+            <input className="h-11 rounded-lg border border-gray-300 px-2 text-sm shadow-theme-xs outline-none focus:border-brand-300" placeholder="Débit" type="number" min={0} value={Number(l.debit ?? 0)} onChange={(e) => setLine(i, { debit: Number(e.target.value) || 0, credit: 0 })} />
+            <input className="h-11 rounded-lg border border-gray-300 px-2 text-sm shadow-theme-xs outline-none focus:border-brand-300" placeholder="Crédit" type="number" min={0} value={Number(l.credit ?? 0)} onChange={(e) => setLine(i, { credit: Number(e.target.value) || 0, debit: 0 })} />
           </div>
         ))}
       </div>
-      <div className={`rounded-xl px-3 py-2 text-sm ${balanced ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+      <div className={`rounded-xl px-3 py-2 text-sm ${balanced ? "bg-success-50 text-success-700" : "bg-warning-50 text-warning-700"}`}>
         Total débit {formatGNF(totalDebit)} · Total crédit {formatGNF(totalCredit)} {balanced ? "· équilibré ✓" : "· déséquilibré"}
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="button" loading={loading} disabled={!balanced} onClick={submit}>Créer</Button>
       </div>
-    </Stack>
+    </div>
   );
 }
 
@@ -579,41 +654,41 @@ function ReportsTab() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Compte de résultat</h3>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Compte de résultat</h3>
           {incomeQuery.loading ? <Spinner /> : (
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Produits</span><span className="font-medium">{formatGNF(incomeQuery.data?.produits ?? 0)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Charges</span><span className="font-medium">{formatGNF(incomeQuery.data?.charges ?? 0)}</span></div>
-              <div className="flex justify-between border-t border-slate-100 pt-1"><span className="font-semibold">Résultat net</span><span className="font-bold text-brand-700">{formatGNF(incomeQuery.data?.resultatNet ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Produits</span><span className="font-medium">{formatGNF(incomeQuery.data?.produits ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Charges</span><span className="font-medium">{formatGNF(incomeQuery.data?.charges ?? 0)}</span></div>
+              <div className="flex justify-between border-t border-gray-100 pt-1"><span className="font-semibold">Résultat net</span><span className="font-bold text-brand-700">{formatGNF(incomeQuery.data?.resultatNet ?? 0)}</span></div>
             </div>
           )}
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Bilan</h3>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">Bilan</h3>
           {sheetQuery.loading ? <Spinner /> : (
             <div className="space-y-1 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Actif</span><span className="font-medium">{formatGNF(sheetQuery.data?.actif ?? 0)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">Passif</span><span className="font-medium">{formatGNF(sheetQuery.data?.passif ?? 0)}</span></div>
-              <div className="flex justify-between border-t border-slate-100 pt-1"><span className="font-semibold">Résultat net</span><span className="font-bold text-brand-700">{formatGNF(sheetQuery.data?.resultatNet ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Actif</span><span className="font-medium">{formatGNF(sheetQuery.data?.actif ?? 0)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Passif</span><span className="font-medium">{formatGNF(sheetQuery.data?.passif ?? 0)}</span></div>
+              <div className="flex justify-between border-t border-gray-100 pt-1"><span className="font-semibold">Résultat net</span><span className="font-bold text-brand-700">{formatGNF(sheetQuery.data?.resultatNet ?? 0)}</span></div>
             </div>
           )}
         </div>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700">Balance générale</h3>
+      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">Balance générale</h3>
         {balanceQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <Table>
             <THead><tr><TH>N°</TH><TH>Compte</TH><TH>Débit</TH><TH>Crédit</TH><TH>Solde</TH></tr></THead>
             <TBody>
-              {(balanceQuery.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-8 text-center text-slate-400">Aucune écriture validée.</TD></TR>}
+              {(balanceQuery.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-8 text-center text-gray-400">Aucune écriture validée.</TD></TR>}
               {(balanceQuery.data ?? []).map((r) => (
                 <TR key={r.accountId}>
-                  <TD className="font-mono text-xs text-slate-600">{r.accountNumber}</TD>
+                  <TD className="font-mono text-xs text-gray-600">{r.accountNumber}</TD>
                   <TD>{r.label}</TD>
                   <TD>{formatGNF(r.debit)}</TD>
                   <TD>{formatGNF(r.credit)}</TD>
-                  <TD className="font-medium text-slate-900">{formatGNF(r.balance)}</TD>
+                  <TD className="font-medium text-gray-900">{formatGNF(r.balance)}</TD>
                 </TR>
               ))}
             </TBody>
@@ -629,44 +704,42 @@ function ReportsTab() {
 function GeneralLedgerCard() {
   const accountsQuery = useQuery(() => listChartOfAccounts(), []);
   const accounts = accountsQuery.data ?? [];
-  const [accountId, setAccountId] = useState<number | null>(null);
+  const [accountId, setAccountId] = useState("");
   const ledgerQuery = useQuery(
-    () => (accountId ? getGeneralLedger(accountId) : Promise.resolve([])),
+    () => (accountId ? getGeneralLedger(Number(accountId)) : Promise.resolve([])),
     [accountId],
   );
   const rows = ledgerQuery.data ?? [];
+  const accountOptions: SearchableOption[] = accounts.map((a) => {
+    const label = `${a.accountNumber} — ${a.label}`;
+    return { value: String(a.id), trigger: label, label, searchText: label };
+  });
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-700">Grand livre — mouvements d&apos;un compte</h3>
+        <h3 className="text-sm font-semibold text-gray-700">Grand livre — mouvements d&apos;un compte</h3>
         <div className="min-w-[260px]">
-          <Select
-            placeholder="Choisir un compte…" searchable clearable
-            data={accounts.map((a) => ({ value: String(a.id), label: `${a.accountNumber} — ${a.label}` }))}
-            value={accountId ? String(accountId) : null}
-            onChange={(v) => setAccountId(v ? Number(v) : null)}
-            nothingFoundMessage="Aucun compte"
-          />
+          <SearchableSelect value={accountId} options={accountOptions} onChange={setAccountId} triggerClassName="w-full justify-between px-3" noResultsLabel="Aucun compte" />
         </div>
       </div>
       {!accountId ? (
-        <p className="py-6 text-center text-sm text-slate-400">Sélectionnez un compte pour afficher ses écritures et son solde progressif.</p>
+        <p className="py-6 text-center text-sm text-gray-400">Sélectionnez un compte pour afficher ses écritures et son solde progressif.</p>
       ) : ledgerQuery.loading ? (
         <div className="flex justify-center py-8"><Spinner /></div>
       ) : (
         <Table>
           <THead><tr><TH>Date</TH><TH>Pièce</TH><TH>Libellé</TH><TH>Débit</TH><TH>Crédit</TH><TH>Solde</TH></tr></THead>
           <TBody>
-            {rows.length === 0 && <TR><TD colSpan={6} className="py-8 text-center text-slate-400">Aucun mouvement sur ce compte.</TD></TR>}
+            {rows.length === 0 && <TR><TD colSpan={6} className="py-8 text-center text-gray-400">Aucun mouvement sur ce compte.</TD></TR>}
             {rows.map((r, i) => (
               <TR key={i}>
                 <TD className="whitespace-nowrap text-sm">{r.date ?? "—"}</TD>
-                <TD className="font-mono text-xs text-slate-500">{r.pieceNumber ?? "—"}</TD>
+                <TD className="font-mono text-xs text-gray-500">{r.pieceNumber ?? "—"}</TD>
                 <TD>{r.label ?? "—"}</TD>
                 <TD>{formatGNF(r.debit)}</TD>
                 <TD>{formatGNF(r.credit)}</TD>
-                <TD className="font-medium text-slate-900">{formatGNF(r.runningBalance)}</TD>
+                <TD className="font-medium text-gray-900">{formatGNF(r.runningBalance)}</TD>
               </TR>
             ))}
           </TBody>

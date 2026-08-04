@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Switch } from "@mantine/core";
 import { Calculator, Lock } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { listModuleCatalog, listTenantModules, presetTenantAccountingOnly, setTenantModuleActive } from "@/lib/api/platform";
@@ -9,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 /** Effective modules of a tenant, with per-tenant activation overrides (module M). */
@@ -72,10 +72,10 @@ export function TenantModulesPanel({ tenantId }: { tenantId: number }) {
               const tm = byCode.get(m.code);
               const on = !!tm?.active;
               return (
-                <div key={m.code} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-2.5">
+                <div key={m.code} className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-2.5">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-900">{m.label}</span>
+                      <span className="text-sm font-medium text-gray-900">{m.label}</span>
                       {m.premium && (
                         <Badge tone="amber">
                           <span className="inline-flex items-center gap-1"><Lock className="h-3 w-3" /> Premium</span>
@@ -83,10 +83,10 @@ export function TenantModulesPanel({ tenantId }: { tenantId: number }) {
                       )}
                     </div>
                     {tm?.expirationDate && (
-                      <p className="text-xs text-amber-600">Expire le {tm.expirationDate}</p>
+                      <p className="text-xs text-warning-600">Expire le {tm.expirationDate}</p>
                     )}
                   </div>
-                  <Switch color="brand" checked={on} disabled={busy === m.code} onChange={(e) => toggle(m.code, e.currentTarget.checked)} />
+                  <Switch checked={on} disabled={busy === m.code} onChange={(checked) => toggle(m.code, checked)} ariaLabel={m.label} />
                 </div>
               );
             })}

@@ -12,17 +12,18 @@ import { resolveTenantSlug } from "@/lib/branding/tenant-slug";
 import { applyBrandColor } from "@/lib/branding/palette";
 import type { SchoolBranding } from "@/lib/types/platform";
 import { Reveal } from "@/components/public/reveal";
+import { roleHome } from "@/lib/auth/role-access";
 
-/** Layout for unauthenticated pages: already-authenticated users are bounced to the dashboard. */
+/** Layout for unauthenticated pages: already-authenticated users are bounced to their own space. */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const router = useRouter();
   const branding = getBranding();
   const [school, setSchool] = useState<SchoolBranding | null>(null);
 
   useEffect(() => {
-    if (status === "authenticated") router.replace("/dashboard");
-  }, [status, router]);
+    if (status === "authenticated") router.replace(roleHome(user));
+  }, [status, user, router]);
 
   // Apply the tenant's public branding (logo + colour) on the login/signup screens.
   useEffect(() => {

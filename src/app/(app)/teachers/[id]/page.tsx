@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Title } from "@mantine/core";
 import { useQuery } from "@/hooks/use-query";
 import {
   getTeacher,
@@ -84,10 +83,10 @@ export default function TeacherDetailPage() {
   if (teacherQuery.error || !teacherQuery.data) {
     return (
       <div className="space-y-4">
-        <Link href="/teachers" className="text-sm text-indigo-600 hover:underline">
+        <Link href="/teachers" className="text-sm text-brand-600 hover:underline">
           ← Retour aux enseignants
         </Link>
-        <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">Enseignant introuvable.</p>
+        <p className="rounded-md bg-error-50 px-4 py-3 text-sm text-error-700">Enseignant introuvable.</p>
       </div>
     );
   }
@@ -99,19 +98,19 @@ export default function TeacherDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/teachers" className="text-sm text-indigo-600 hover:underline">
+      <Link href="/teachers" className="text-sm text-brand-600 hover:underline">
         ← Retour aux enseignants
       </Link>
 
       <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-xl font-semibold text-indigo-700">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700">
           {t.firstName[0]}
           {t.lastName[0]}
         </div>
         <div>
-          <Title order={2}>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
             {t.firstName} {t.lastName}
-          </Title>
+          </h1>
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm text-gray-500">{t.staffNumber}</span>
             <Badge tone={t.active ? "green" : "gray"}>{t.active ? "Actif" : "Inactif"}</Badge>
@@ -188,7 +187,7 @@ export default function TeacherDetailPage() {
               <ul className="space-y-2">
                 {classes.map((c) => (
                   <li key={c.id} className="text-sm">
-                    <Link href={`/classes/${c.id}`} className="font-medium text-indigo-600 hover:underline">
+                    <Link href={`/classes/${c.id}`} className="font-medium text-brand-600 hover:underline">
                       {c.label}
                     </Link>
                     {c.levelLabel && <span className="text-gray-500"> · {c.levelLabel}</span>}
@@ -247,7 +246,7 @@ export default function TeacherDetailPage() {
                     </TD>
                     <TD>{subjectLabel.get(slot.subjectId) ?? `#${slot.subjectId}`}</TD>
                     <TD>
-                      <Link href={`/classes/${slot.classId}`} className="text-indigo-600 hover:underline">
+                      <Link href={`/classes/${slot.classId}`} className="text-brand-600 hover:underline">
                         #{slot.classId}
                       </Link>
                     </TD>

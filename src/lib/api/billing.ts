@@ -72,8 +72,10 @@ export function setRecoveryStage(id: number, stage: import("@/lib/types/billing"
 }
 
 // ── Invoices ─────────────────────────────────────────────────────────────
-export function listInvoicesByTenant(tenantId: number): Promise<Invoice[]> {
-  return api.get<Invoice[]>(`/billing/invoices/tenant/${tenantId}`);
+/** Passer academicYearId pour ne voir que les factures de l'année scolaire choisie (recommandé —
+ * sans ce filtre, toutes les factures de toutes les années créées se mélangent). */
+export function listInvoicesByTenant(tenantId: number, academicYearId?: number | null): Promise<Invoice[]> {
+  return api.get<Invoice[]>(`/billing/invoices/tenant/${tenantId}`, { query: { academicYearId: academicYearId ?? undefined } });
 }
 
 export function listInvoicesByStatus(tenantId: number, status: InvoiceStatus): Promise<Invoice[]> {
@@ -100,17 +102,18 @@ export function createInvoice(input: {
   feeId: number;
   reference: string;
   totalAmount: number;
+  academicYearId?: number | null;
 }): Promise<Invoice> {
   return api.post<Invoice>("/billing/invoices", input);
 }
 
-export function generateInvoicesBulk(tenantId: number | null, classId: number, feeId: number): Promise<Invoice[]> {
-  return api.post<Invoice[]>("/billing/invoices/generate-bulk", { tenantId, classId, feeId });
+export function generateInvoicesBulk(tenantId: number | null, classId: number, feeId: number, academicYearId?: number | null): Promise<Invoice[]> {
+  return api.post<Invoice[]>("/billing/invoices/generate-bulk", { tenantId, classId, feeId, academicYearId });
 }
 
 /** Génère une facture par mois (échéance) d'un frais MENSUALITE pour un élève. */
-export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number): Promise<Invoice[]> {
-  return api.post<Invoice[]>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId });
+export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<Invoice[]> {
+  return api.post<Invoice[]>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
 }
 
 export function applyInvoicePayment(id: number, amount: number): Promise<Invoice> {

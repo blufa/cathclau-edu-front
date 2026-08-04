@@ -49,23 +49,41 @@ export function getTeacherSchedule(id: number): Promise<TeacherScheduleSlot[]> {
   return api.get<TeacherScheduleSlot[]>(`/staff/teachers/${id}/schedule`);
 }
 
-// ── Disponibilités de l'enseignant (jour + plage horaire) ────────────────────
+// ── Disponibilités de l'enseignant (jour + plage horaire + classe/matière) ────
 export interface TeacherAvailability {
   id: number;
   teacherId: number;
   day: string;
   startTime: string;
   endTime: string;
+  schoolClassId: number | null;
+  subjectId: number | null;
 }
 
 export function getTeacherAvailability(id: number): Promise<TeacherAvailability[]> {
   return api.get<TeacherAvailability[]>(`/staff/teachers/${id}/availability`);
 }
-export function addTeacherAvailability(id: number, input: { day: string; startTime: string; endTime: string }): Promise<TeacherAvailability> {
+export function addTeacherAvailability(
+  id: number,
+  input: { day: string; startTime: string; endTime: string; schoolClassId: number; subjectId: number },
+): Promise<TeacherAvailability> {
   return api.post<TeacherAvailability>(`/staff/teachers/${id}/availability`, input);
 }
 export function deleteTeacherAvailability(slotId: number): Promise<void> {
   return api.delete<void>(`/staff/teachers/availability/${slotId}`);
+}
+
+// ── Charge horaire mensuelle (§2 grille horaire) ─────────────────────────────
+export interface TeacherMonthlyWorkload {
+  teacherId: number;
+  year: number;
+  month: number;
+  totalMonthlyMinutes: number;
+  totalMonthlyHours: string;
+  sessionCount: number;
+}
+export function getTeacherMonthlyWorkload(id: number, year: number, month: number): Promise<TeacherMonthlyWorkload> {
+  return api.get<TeacherMonthlyWorkload>(`/staff/teachers/${id}/workload/monthly`, { query: { year, month } });
 }
 
 // ── Classes enseignées (affectation directe, checklist sur la fiche) ──────────

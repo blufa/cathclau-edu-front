@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Stack, TextInput } from "@mantine/core";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useQuery } from "@/hooks/use-query";
 import { changeTenantStatus, deleteTenant, getTenantDetail, updateTenant } from "@/lib/api/platform";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
@@ -14,6 +15,7 @@ import { TenantModulesPanel } from "@/components/platform/tenant-modules-panel";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { Field, Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -84,7 +86,7 @@ function TenantDetail() {
   }
 
   if (loading && !data) return <div className="flex justify-center py-16"><Spinner /></div>;
-  if (error || !data) return <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">École introuvable.</p>;
+  if (error || !data) return <p className="rounded-md bg-error-50 px-4 py-3 text-sm text-error-700">École introuvable.</p>;
 
   const t = data.tenant;
 
@@ -92,7 +94,7 @@ function TenantDetail() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/platform/tenants" className="text-sm text-indigo-600 hover:underline">← Écoles</Link>
+          <Link href="/platform/tenants" className="text-sm text-brand-600 hover:underline">← Écoles</Link>
           <h1 className="mt-1 text-2xl font-semibold text-gray-900">{t.schoolName}</h1>
           <div className="mt-1"><TenantStatusBadge status={t.status} /></div>
         </div>
@@ -100,7 +102,7 @@ function TenantDetail() {
           <Button variant="secondary" onClick={() => setEditing(true)}>Modifier</Button>
           {t.status === "SUSPENDED" && <Button variant="ghost" onClick={() => doStatus("ACTIVATE", t.schoolName)}>Activer</Button>}
           {(t.status === "ACTIVE" || t.status === "TRIAL") && <Button variant="ghost" onClick={() => doStatus("SUSPEND", t.schoolName)}>Suspendre</Button>}
-          {t.status !== "ARCHIVED" && <Button variant="ghost" className="text-red-600" onClick={() => doDelete(t.schoolName)}>Archiver</Button>}
+          {t.status !== "ARCHIVED" && <Button variant="ghost" className="text-error-600" onClick={() => doDelete(t.schoolName)}>Archiver</Button>}
         </div>
       </div>
 
@@ -151,44 +153,85 @@ function TenantDetail() {
   );
 }
 
+const schema = z.object({
+  schoolName: z.string().trim().min(1, "Nom requis"),
+  email: z.string(),
+  phone: z.string(),
+  city: z.string(),
+  country: z.string(),
+  director: z.string(),
+  logo: z.string(),
+  brandColor: z.string(),
+  website: z.string(),
+});
+type FormValues = z.infer<typeof schema>;
+
 function EditTenantForm({ tenant, onCancel, onSaved }: { tenant: Tenant; onCancel: () => void; onSaved: () => void }) {
-  const form = useForm<UpdateTenantInput>({
-    mode: "controlled",
-    initialValues: {
+  const [submitting, setSubmitting] = useState(false);
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
       schoolName: tenant.schoolName, email: tenant.email ?? "", phone: tenant.phone ?? "",
       city: tenant.city ?? "", country: tenant.country ?? "", director: tenant.director ?? "",
       logo: "", brandColor: "", website: "",
     },
-    validate: { schoolName: (v) => (v.trim() ? null : "Nom requis") },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
-  async function submit(values: UpdateTenantInput) {
+  async function submit(values: FormValues) {
+    setSubmitting(true);
     try {
-      await updateTenant(tenant.id, values);
+      await updateTenant(tenant.id, values as UpdateTenantInput);
       notifySuccess("École mise à jour");
       onSaved();
     } catch (err) {
       notifyError(err);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <TextInput label="Nom" withAsterisk {...form.getInputProps("schoolName")} />
-        <TextInput label="Email" {...form.getInputProps("email")} />
-        <PhoneInput label="Téléphone" {...form.getInputProps("phone")} />
-        <TextInput label="Ville" {...form.getInputProps("city")} />
-        <TextInput label="Pays" {...form.getInputProps("country")} />
-        <TextInput label="Directeur" {...form.getInputProps("director")} />
-        <TextInput label="Logo (URL)" {...form.getInputProps("logo")} />
-        <TextInput label="Couleur de marque" placeholder="#4f46e5" {...form.getInputProps("brandColor")} />
-        <TextInput label="Site web" {...form.getInputProps("website")} />
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit">Enregistrer</Button>
-        </div>
-      </Stack>
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Nom <span className="text-error-500">*</span></Label>
+        <Input value={v.schoolName} onChange={(e) => setValue("schoolName", e.target.value)} aria-invalid={!!errors.schoolName} />
+        {errors.schoolName && <p className="text-xs text-error-600">{errors.schoolName.message}</p>}
+      </Field>
+      <Field>
+        <Label>Email</Label>
+        <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} />
+      </Field>
+      <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
+      <Field>
+        <Label>Ville</Label>
+        <Input value={v.city} onChange={(e) => setValue("city", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Pays</Label>
+        <Input value={v.country} onChange={(e) => setValue("country", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Directeur</Label>
+        <Input value={v.director} onChange={(e) => setValue("director", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Logo (URL)</Label>
+        <Input value={v.logo} onChange={(e) => setValue("logo", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Couleur de marque</Label>
+        <Input placeholder="#4f46e5" value={v.brandColor} onChange={(e) => setValue("brandColor", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Site web</Label>
+        <Input value={v.website} onChange={(e) => setValue("website", e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={submitting}>Enregistrer</Button>
+      </div>
     </form>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { Tabs, Title } from "@mantine/core";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
+import { Layers, DoorOpen, BookOpen } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { LevelsPanel } from "@/components/referentials/levels-panel";
@@ -14,26 +15,26 @@ export default function ReferentialsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <Title order={2}>Référentiels</Title>
+        <h1 className="text-2xl font-semibold text-gray-900">Référentiels</h1>
         <p className="text-sm text-gray-500">Niveaux, salles et matières de l&apos;établissement</p>
       </div>
 
-      <Tabs defaultValue="levels" keepMounted={false}>
-        <Tabs.List mb="md">
-          <Tabs.Tab value="levels">Niveaux</Tabs.Tab>
-          <Tabs.Tab value="rooms">Salles</Tabs.Tab>
-          <Tabs.Tab value="subjects">Matières</Tabs.Tab>
-        </Tabs.List>
+      <Tabs defaultValue="levels">
+        <TabsList>
+          <TabsTrigger value="levels" icon={Layers}>Niveaux</TabsTrigger>
+          <TabsTrigger value="rooms" icon={DoorOpen}>Salles</TabsTrigger>
+          <TabsTrigger value="subjects" icon={BookOpen}>Matières</TabsTrigger>
+        </TabsList>
 
-        <Tabs.Panel value="levels">
+        <TabsPanel value="levels">
           <LevelsPanel canWrite={canWrite} />
-        </Tabs.Panel>
-        <Tabs.Panel value="rooms">
+        </TabsPanel>
+        <TabsPanel value="rooms">
           <RoomsPanel canWrite={canWrite} />
-        </Tabs.Panel>
-        <Tabs.Panel value="subjects">
+        </TabsPanel>
+        <TabsPanel value="subjects">
           <SubjectsPanel canWrite={canWrite} />
-        </Tabs.Panel>
+        </TabsPanel>
       </Tabs>
     </div>
   );

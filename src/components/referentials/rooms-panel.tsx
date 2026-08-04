@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Group, Stack, Switch } from "@mantine/core";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useQuery } from "@/hooks/use-query";
 import {
   createRoom,
@@ -66,14 +67,12 @@ export function RoomsPanel({ canWrite }: { canWrite: boolean }) {
   }
 
   return (
-    <Stack gap="md">
+    <div className="space-y-4">
       {canWrite && (
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={() => setAssisting(true)}>
-            Assistant (en lot)
-          </Button>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setAssisting(true)}>Assistant (en lot)</Button>
           <Button onClick={() => setCreating(true)}>Nouvelle salle</Button>
-        </Group>
+        </div>
       )}
       <Table>
         <THead>
@@ -105,19 +104,15 @@ export function RoomsPanel({ canWrite }: { canWrite: boolean }) {
                   checked={r.available}
                   onChange={() => toggleAvailability(r)}
                   disabled={!canWrite}
-                  size="sm"
+                  ariaLabel="Disponible"
                 />
               </TD>
               <TD className="text-right">
                 {canWrite && (
-                  <Group justify="flex-end" gap="xs">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
-                      Modifier
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(r)}>
-                      Suppr.
-                    </Button>
-                  </Group>
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>Modifier</Button>
+                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(r)}>Suppr.</Button>
+                  </div>
                 )}
               </TD>
             </TR>
@@ -143,6 +138,6 @@ export function RoomsPanel({ canWrite }: { canWrite: boolean }) {
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier la salle">
         {editing && <RoomForm initial={editing} onSubmit={handleUpdate} onCancel={() => setEditing(null)} />}
       </Modal>
-    </Stack>
+    </div>
   );
 }

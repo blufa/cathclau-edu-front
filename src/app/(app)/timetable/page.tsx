@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ActionIcon, Button, Group, Select, Paper, SegmentedControl, Stack, Text, Title } from "@mantine/core";
+import { Pencil, X } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -23,12 +23,17 @@ import {
 import { listTeachers } from "@/lib/api/staff";
 import { listEvents } from "@/lib/api/calendar";
 import { EVENT_TYPE_LABEL, type AcademicEvent } from "@/lib/types/calendar";
-import { DatePickerInput } from "@mantine/dates";
 import type { CreateScheduleInput, EmploiDuTemps, JourSemaine } from "@/lib/types/academics";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { ScheduleForm } from "@/components/timetable/schedule-form";
+import { TimetableGrid } from "@/components/timetable/timetable-grid";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { cn } from "@/lib/utils";
 
 const DAYS: { key: JourSemaine; label: string }[] = [
   { key: "LUNDI", label: "Lundi" },
@@ -41,11 +46,33 @@ const DAYS: { key: JourSemaine; label: string }[] = [
 
 const hhmm = (t: string) => t?.slice(0, 5) ?? "";
 
+/** Petit sélecteur à deux options (remplace Mantine SegmentedControl). */
+function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
+  return (
+    <div className="inline-flex gap-1 rounded-lg bg-gray-100 p-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            value === o.value ? "bg-white text-gray-900 shadow-theme-xs" : "text-gray-500 hover:text-gray-700",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function TimetablePage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
   const [mode, setMode] = useState<"class" | "teacher">("class");
+  const [view, setView] = useState<"liste" | "grille">("liste");
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
   const [classId, setClassId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
@@ -89,6 +116,11 @@ export default function TimetablePage() {
     [teachers],
   );
   const classLabel = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
+
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
 
   // Semaine affichée → dates de chaque jour, pour annoter les jours fériés / vacances du calendrier.
   const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -192,16 +224,16 @@ export default function TimetablePage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <Title order={2}>Emploi du temps</Title>
+          <h1 className="text-2xl font-semibold text-gray-900">Emploi du temps</h1>
           <p className="text-sm text-gray-500">Planning hebdomadaire (détection de conflits)</p>
         </div>
-        <Group gap="sm">
-          <Button variant="default" onClick={printTimetable} disabled={(slotsQuery.data ?? []).length === 0}>
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={printTimetable} disabled={(slotsQuery.data ?? []).length === 0}>
             Imprimer / Télécharger
           </Button>
           {canWrite && mode === "class" && (
             <>
-              <Button variant="light" onClick={() => setGenOpen(true)} disabled={classes.length === 0}>
+              <Button variant="outline" onClick={() => setGenOpen(true)} disabled={classes.length === 0}>
                 Générer automatiquement
               </Button>
               <Button onClick={() => setCreating(true)} disabled={!effectiveClassId}>
@@ -209,52 +241,74 @@ export default function TimetablePage() {
               </Button>
             </>
           )}
-        </Group>
+        </div>
       </div>
 
-      <Group gap="sm" align="flex-end">
-        <SegmentedControl
+      <div className="flex flex-wrap items-end gap-3">
+        <Segmented
           value={mode}
-          onChange={(v) => setMode(v as "class" | "teacher")}
-          data={[
-            { value: "class", label: "Par classe" },
-            { value: "teacher", label: "Par enseignant" },
-          ]}
+          onChange={setMode}
+          options={[{ value: "class", label: "Par classe" }, { value: "teacher", label: "Par enseignant" }]}
         />
         {mode === "class" ? (
           <>
-            <Select
-              label="Année"
-              value={yearId != null ? String(yearId) : null}
-              onChange={(value) => {
-                setSelectedYearId(value ? Number(value) : null);
-                setClassId(null);
-              }}
-              data={years.map((y) => ({ value: String(y.id), label: y.label + (y.current ? " (courante)" : "") }))}
-            />
-            <Select
-              label="Classe"
-              searchable
-              value={effectiveClassId != null ? String(effectiveClassId) : null}
-              onChange={(value) => setClassId(value ? Number(value) : null)}
-              data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
-            />
+            <div className="w-48">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Année</label>
+              <Select
+                value={yearId != null ? String(yearId) : ""}
+                onChange={(e) => { setSelectedYearId(e.target.value ? Number(e.target.value) : null); setClassId(null); }}
+              >
+                {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
+              </Select>
+            </div>
+            <div className="w-56">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Classe</label>
+              <SearchableSelect
+                value={effectiveClassId != null ? String(effectiveClassId) : ""}
+                options={classOptions}
+                onChange={(val) => setClassId(val ? Number(val) : null)}
+                triggerClassName="w-full justify-between px-3"
+              />
+            </div>
           </>
         ) : (
-          <Select
-            label="Enseignant"
-            value={effectiveTeacherId != null ? String(effectiveTeacherId) : null}
-            onChange={(value) => setTeacherId(value ? Number(value) : null)}
-            data={teachers.map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))}
-          />
+          <div className="w-64">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Enseignant</label>
+            <Select
+              value={effectiveTeacherId != null ? String(effectiveTeacherId) : ""}
+              onChange={(e) => setTeacherId(e.target.value ? Number(e.target.value) : null)}
+            >
+              {teachers.map((t) => (<option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>))}
+            </Select>
+          </div>
         )}
-        <DatePickerInput label="Semaine" valueFormat="DD/MM/YYYY" value={weekDate} onChange={(v) => setWeekDate(v ?? isoLocal(new Date()))} />
-      </Group>
+        {mode === "class" && (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Vue</label>
+            <Segmented value={view} onChange={setView} options={[{ value: "liste", label: "Liste" }, { value: "grille", label: "Grille" }]} />
+          </div>
+        )}
+        {view === "liste" && (
+          <div className="w-44">
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Semaine</label>
+            <DatePicker value={weekDate} onChange={(v) => setWeekDate(v || isoLocal(new Date()))} />
+          </div>
+        )}
+      </div>
 
       {slotsQuery.loading ? (
         <div className="flex justify-center py-16">
           <Spinner className="h-8 w-8" />
         </div>
+      ) : mode === "class" && view === "grille" && effectiveClassId ? (
+        <TimetableGrid
+          classId={effectiveClassId}
+          slots={slotsQuery.data ?? []}
+          classSubjects={classSubjects}
+          subjects={subjects}
+          teacherName={teacherName}
+          onChanged={() => slotsQuery.refetch()}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {DAYS.map((d, i) => {
@@ -264,48 +318,46 @@ export default function TimetablePage() {
             return (
               <div key={d.key} className={hol ? "space-y-2 opacity-60" : "space-y-2"}>
                 <div className="flex items-baseline justify-between">
-                  <Text fw={600} size="sm" c="dimmed" tt="uppercase">
-                    {d.label}
-                  </Text>
-                  <span className="text-xs text-slate-400">{ddmm(date)}</span>
+                  <span className="text-sm font-semibold uppercase text-gray-400">{d.label}</span>
+                  <span className="text-xs text-gray-400">{ddmm(date)}</span>
                 </div>
                 {hol && (
-                  <div className="rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
+                  <div className="rounded-md bg-error-50 px-2 py-1 text-xs font-medium text-error-700">
                     {EVENT_TYPE_LABEL[hol.eventType]} — {hol.title}
                   </div>
                 )}
                 {slots.length === 0 && !hol && <p className="text-xs text-gray-300">—</p>}
                 {slots.map((s) => (
-                  <Paper key={s.id} withBorder radius="md" p="xs" className="bg-indigo-50/40">
-                    <Group justify="space-between" wrap="nowrap" gap={4}>
-                      <Text size="xs" fw={600} c="indigo">
+                  <div key={s.id} className="rounded-lg border border-gray-200 bg-brand-50/40 p-2">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-semibold text-brand-700">
                         {hhmm(s.startTime)} – {hhmm(s.endTime)}
-                      </Text>
+                      </span>
                       {canWrite && mode === "class" && (
-                        <Group gap={2} wrap="nowrap">
-                          <ActionIcon size="xs" variant="subtle" onClick={() => setEditing(s)} aria-label="Modifier">
-                            ✎
-                          </ActionIcon>
-                          <ActionIcon size="xs" variant="subtle" color="red" onClick={() => handleDelete(s)} aria-label="Supprimer">
-                            ✕
-                          </ActionIcon>
-                        </Group>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => setEditing(s)} aria-label="Modifier" className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-brand-700">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button type="button" onClick={() => handleDelete(s)} aria-label="Supprimer" className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-error-600">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
                       )}
-                    </Group>
-                    <Text size="sm" fw={500}>
+                    </div>
+                    <p className="text-sm font-medium text-gray-800">
                       {subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`}
-                    </Text>
-                    <Text size="xs" c="dimmed">
+                    </p>
+                    <p className="text-xs text-gray-500">
                       {mode === "class"
                         ? (s.teacherId ? (teacherName.get(s.teacherId) ?? `#${s.teacherId}`) : "—")
                         : (
-                          <Link href={`/classes/${s.schoolClassId}`} className="text-indigo-600 hover:underline">
+                          <Link href={`/classes/${s.schoolClassId}`} className="text-brand-600 hover:underline">
                             {classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`}
                           </Link>
                         )}
                       {s.roomId ? ` · ${roomLabel.get(s.roomId) ?? `#${s.roomId}`}` : ""}
-                    </Text>
-                  </Paper>
+                    </p>
+                  </div>
                 ))}
               </div>
             );
@@ -399,10 +451,9 @@ function AutoGenPanel({ classes, defaultClassId, onClose, onApplied }: {
   }
 
   return (
-    <Stack gap="md">
-      <SegmentedControl value={scope} onChange={(v) => setScope(v as "current" | "all")}
-        data={[{ label: "Toutes les classes", value: "all" }, { label: "Classe courante", value: "current" }]} />
-      <p className="text-xs text-slate-400">
+    <div className="space-y-4">
+      <Segmented value={scope} onChange={setScope} options={[{ value: "all", label: "Toutes les classes" }, { value: "current", label: "Classe courante" }]} />
+      <p className="text-xs text-gray-400">
         Remplit l&apos;emploi du temps directement à partir des <strong>disponibilités déclarées</strong> par les
         enseignants : chaque créneau disponible devient une séance de l&apos;une de ses classes, sans conflit.
         Aucun nombre de séances à saisir. Les conflits avec l&apos;existant sont ignorés à l&apos;application.
@@ -411,19 +462,19 @@ function AutoGenPanel({ classes, defaultClassId, onClose, onApplied }: {
         <Button onClick={generate} loading={loading}>Générer</Button>
       ) : (
         <>
-          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm">
             <p><strong>{proposal.slots.length}</strong> créneau(x) proposé(s) depuis les disponibilités.</p>
             {proposal.teachersWithoutAvailability.length > 0 && (
-              <p className="text-amber-700">{proposal.teachersWithoutAvailability.length} enseignant(s) sans disponibilité déclarée — non planifié(s).</p>
+              <p className="text-warning-700">{proposal.teachersWithoutAvailability.length} enseignant(s) sans disponibilité déclarée — non planifié(s).</p>
             )}
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="default" onClick={() => setProposal(null)}>Recommencer</Button>
+            <Button variant="secondary" onClick={() => setProposal(null)}>Recommencer</Button>
             <Button onClick={apply} loading={applying} disabled={proposal.slots.length === 0}>Appliquer</Button>
           </div>
         </>
       )}
-      <div className="flex justify-end"><Button variant="subtle" onClick={onClose}>Fermer</Button></div>
-    </Stack>
+      <div className="flex justify-end"><Button variant="ghost" onClick={onClose}>Fermer</Button></div>
+    </div>
   );
 }

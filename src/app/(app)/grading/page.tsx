@@ -2,9 +2,10 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Select as MantineSelect, MultiSelect, NumberInput, Stack, Tabs, TextInput } from "@mantine/core";
-import { DatePickerInput } from "@mantine/dates";
-import { useForm } from "@mantine/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { BookOpen, FileText, GraduationCap, Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -60,6 +61,9 @@ import {
 import type { ClasseMatiere } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { Input, Label, Field } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -85,7 +89,11 @@ export default function GradingPage() {
     () => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])),
     [effectiveYearId],
   );
-  const classes = classesQuery.data ?? [];
+  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
   // Deep-link from the teacher space: /grading?class=ID preselects the class.
   const searchParams = useSearchParams();
   const [classId, setClassId] = useState<number | null>(() => {
@@ -96,47 +104,49 @@ export default function GradingPage() {
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Notes, examens & bulletins</h1>
-        <p className="text-sm text-slate-500">Évaluations, saisie des notes, examens et bulletins par classe</p>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Notes, examens & bulletins</h1>
+        <p className="text-sm text-gray-500">Évaluations, saisie des notes, examens et bulletins par classe</p>
       </Reveal>
 
       <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="mb-1 block text-xs text-slate-500">Année</label>
-          <Select className="max-w-[200px]" value={effectiveYearId ?? ""} onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}>
+        <div className="w-48">
+          <Label>Année</Label>
+          <Select value={effectiveYearId ?? ""} onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}>
             {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
           </Select>
         </div>
-        <div>
-          <label className="mb-1 block text-xs text-slate-500">Classe</label>
-          <MantineSelect className="max-w-[220px]" searchable clearable placeholder="— Choisir —"
-            data={classes.map((c) => ({ value: String(c.id), label: c.label }))}
-            value={classId != null ? String(classId) : null}
-            onChange={(v) => setClassId(v ? Number(v) : null)} />
+        <div className="w-56">
+          <Label>Classe</Label>
+          <SearchableSelect
+            value={classId != null ? String(classId) : ""}
+            options={classOptions}
+            onChange={(v) => setClassId(v ? Number(v) : null)}
+            triggerClassName="w-full justify-between px-3"
+          />
         </div>
       </div>
 
       {!classId ? (
-        <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+        <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
           Sélectionnez une classe.
         </p>
       ) : (
-        <Tabs defaultValue="evaluations" color="brand" variant="pills" radius="md">
-          <Tabs.List>
-            <Tabs.Tab value="evaluations" leftSection={<BookOpen className="h-4 w-4" />}>Évaluations</Tabs.Tab>
-            <Tabs.Tab value="exams" leftSection={<GraduationCap className="h-4 w-4" />}>Examens</Tabs.Tab>
-            <Tabs.Tab value="reports" leftSection={<FileText className="h-4 w-4" />}>Bulletins</Tabs.Tab>
-          </Tabs.List>
-          <Tabs.Panel value="evaluations" pt="lg">
+        <Tabs defaultValue="evaluations">
+          <TabsList>
+            <TabsTrigger value="evaluations" icon={BookOpen}>Évaluations</TabsTrigger>
+            <TabsTrigger value="exams" icon={GraduationCap}>Examens</TabsTrigger>
+            <TabsTrigger value="reports" icon={FileText}>Bulletins</TabsTrigger>
+          </TabsList>
+          <TabsPanel value="evaluations">
             <EvaluationsTab classId={classId} className={classes.find((c) => c.id === classId)?.label ?? ""}
               yearId={effectiveYearId} canWrite={canWrite} canEditExisting={canEditExisting} />
-          </Tabs.Panel>
-          <Tabs.Panel value="exams" pt="lg">
+          </TabsPanel>
+          <TabsPanel value="exams">
             <ExamsTab classId={classId} yearId={effectiveYearId} canManage={canManage} />
-          </Tabs.Panel>
-          <Tabs.Panel value="reports" pt="lg">
+          </TabsPanel>
+          <TabsPanel value="reports">
             <ReportCardsTab classId={classId} yearId={effectiveYearId} canManage={canManage} />
-          </Tabs.Panel>
+          </TabsPanel>
         </Tabs>
       )}
     </div>
@@ -167,8 +177,8 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
   // Relevé de notes par matière (PDF backend, moyenne calculée selon le paramétrage de l'établissement).
   const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
-  const [releveSubject, setReleveSubject] = useState<string | null>(null);
-  const [relevePeriod, setRelevePeriod] = useState<string | null>(null);
+  const [releveSubject, setReleveSubject] = useState<string>("");
+  const [relevePeriod, setRelevePeriod] = useState<string>("");
   const [releveUrl, setReleveUrl] = useState<string | null>(null);
   const [releveLoading, setReleveLoading] = useState(false);
   async function openReleve() {
@@ -300,17 +310,27 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
     });
   }
 
+  const subjectFilterOptions: SearchableOption[] = useMemo(
+    () => distinctSubjects.map((sid) => {
+      const label = subjectLabel.get(sid) ?? `#${sid}`;
+      return { value: String(sid), trigger: label, label, searchText: label };
+    }),
+    [distinctSubjects, subjectLabel],
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         {distinctSubjects.length > 0 ? (
           <div className="flex flex-wrap items-end gap-2">
-            <MantineSelect placeholder="Matière" clearable searchable style={{ minWidth: 200 }} label="Relevé de notes"
-              data={distinctSubjects.map((sid) => ({ value: String(sid), label: subjectLabel.get(sid) ?? `#${sid}` }))}
-              value={releveSubject} onChange={setReleveSubject} />
-            <MantineSelect placeholder="Période" clearable style={{ minWidth: 170 }}
-              data={(periodsQuery.data ?? []).map((p) => ({ value: String(p.id), label: p.label }))}
-              value={relevePeriod} onChange={setRelevePeriod} />
+            <Field>
+              <Label>Relevé de notes</Label>
+              <SearchableSelect value={releveSubject} options={subjectFilterOptions} onChange={setReleveSubject} triggerClassName="w-[200px] justify-between px-3" noResultsLabel="Aucune matière" />
+            </Field>
+            <Select className="max-w-[170px]" value={relevePeriod} onChange={(e) => setRelevePeriod(e.target.value)}>
+              <option value="">Période</option>
+              {(periodsQuery.data ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
+            </Select>
             <Button variant="secondary" disabled={!releveSubject || !relevePeriod} loading={releveLoading} onClick={openReleve}>
               Relevé (PDF)
             </Button>
@@ -329,24 +349,24 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
           </THead>
           <TBody>
             {groups.length === 0 && (
-              <TR><TD colSpan={8} className="py-10 text-center text-slate-400">Aucune évaluation.</TD></TR>
+              <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucune évaluation.</TD></TR>
             )}
             {groups.map((g) => (
               <Fragment key={`${g.subjectId}|${g.monthKey}`}>
                 <TR>
-                  <TD colSpan={7} className="bg-slate-50 font-semibold text-slate-700">
+                  <TD colSpan={7} className="bg-gray-50 font-semibold text-gray-700">
                     {subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`} · {monthLabelOf(g.monthKey)}
-                    <span className="ml-2 font-normal text-slate-400">
+                    <span className="ml-2 font-normal text-gray-400">
                       {g.evals.length} évaluation{g.evals.length > 1 ? "s" : ""}
                     </span>
                   </TD>
-                  <TD className="bg-slate-50 text-right">
+                  <TD className="bg-gray-50 text-right">
                     <Button size="sm" variant="secondary" onClick={() => printMonthly(g)}>Relevé du mois</Button>
                   </TD>
                 </TR>
                 {g.evals.map((a) => (
                   <TR key={a.id}>
-                    <TD className="pl-6 font-medium text-slate-900">{a.label}</TD>
+                    <TD className="pl-6 font-medium text-gray-900">{a.label}</TD>
                     <TD>{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
                     <TD>{a.teacherId ? (teacherLabel.get(a.teacherId) ?? `#${a.teacherId}`) : "—"}</TD>
                     <TD><Badge tone="indigo">{ASSESSMENT_TYPE_LABEL[a.type]}</Badge></TD>
@@ -358,7 +378,7 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
                         <Button size="sm" variant="ghost" onClick={() => printGradeSheet(a)}>Fiche de notes</Button>
                         {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
-                        {canWrite && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
+                        {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
                       </div>
                     </TD>
                   </TR>
@@ -388,6 +408,14 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
 }
 
 // ── Examens tab ──────────────────────────────────────────────────────────────
+const examSchema = z.object({
+  periodId: z.string().min(1, "Requis"),
+  type: z.string(),
+  label: z.string().trim().min(1, "Requis"),
+  scheduledDate: z.string(),
+});
+type ExamFormValues = z.infer<typeof examSchema>;
+
 function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: number | null; canManage: boolean }) {
   const examsQuery = useQuery(() => listExamsByClass(classId), [classId]);
   const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
@@ -414,15 +442,16 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
     });
   }
 
-  const form = useForm({
-    mode: "controlled",
-    initialValues: { periodId: "", type: "SEMESTER" as ExamType, label: "", scheduledDate: "" },
-    validate: { periodId: (v) => (v ? null : "Requis"), label: (v) => (v ? null : "Requis") },
+  const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<ExamFormValues>({
+    resolver: zodResolver(examSchema),
+    defaultValues: { periodId: "", type: "SEMESTER", label: "", scheduledDate: "" },
   });
-  async function submit(values: typeof form.values) {
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+  async function submit(values: ExamFormValues) {
     try {
-      await createExam({ classId, periodId: Number(values.periodId), type: values.type, label: values.label, scheduledDate: values.scheduledDate || null });
-      setCreating(false); form.reset(); notifySuccess("Examen planifié"); examsQuery.refetch();
+      await createExam({ classId, periodId: Number(values.periodId), type: values.type as ExamType, label: values.label, scheduledDate: values.scheduledDate || null });
+      setCreating(false); reset(); notifySuccess("Examen planifié"); examsQuery.refetch();
     } catch (err) { notifyError(err); }
   }
 
@@ -440,11 +469,11 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
           <THead><tr><TH>Examen</TH><TH>Type</TH><TH>Date</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
             {(examsQuery.data ?? []).length === 0 && (
-              <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucun examen.</TD></TR>
+              <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun examen.</TD></TR>
             )}
             {(examsQuery.data ?? []).map((e) => (
               <TR key={e.id}>
-                <TD className="font-medium text-slate-900">{e.label}</TD>
+                <TD className="font-medium text-gray-900">{e.label}</TD>
                 <TD>{EXAM_TYPE_LABEL[e.type]}</TD>
                 <TD>{e.scheduledDate ?? "—"}</TD>
                 <TD><Badge tone={e.status === "COMPLETED" ? "green" : e.status === "ONGOING" ? "amber" : "gray"}>{EXAM_STATUS_LABEL[e.status]}</Badge></TD>
@@ -454,7 +483,7 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
                     {canManage && <Button size="sm" variant="ghost" onClick={() => setSupervisingFor(e)}>Surveillance</Button>}
                     {canManage && e.status === "PLANNED" && <Button size="sm" variant="ghost" onClick={() => changeStatus(e, "start")}>Démarrer</Button>}
                     {canManage && e.status === "ONGOING" && <Button size="sm" variant="ghost" onClick={() => changeStatus(e, "complete")}>Terminer</Button>}
-                    {canManage && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDelete(e)}>Suppr.</Button>}
+                    {canManage && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(e)}>Suppr.</Button>}
                   </div>
                 </TD>
               </TR>
@@ -464,21 +493,34 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
       )}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Planifier un examen">
-        <form onSubmit={form.onSubmit(submit)}>
-          <Stack gap="md">
-            <MantineSelect label="Période" withAsterisk
-              data={[{ value: "", label: "— Choisir —" }, ...(periodsQuery.data ?? []).map((p) => ({ value: String(p.id), label: p.label }))]}
-              {...form.getInputProps("periodId")} />
-            <MantineSelect label="Type"
-              data={(Object.keys(EXAM_TYPE_LABEL) as ExamType[]).map((t) => ({ value: t, label: EXAM_TYPE_LABEL[t] }))}
-              {...form.getInputProps("type")} />
-            <TextInput label="Libellé" withAsterisk {...form.getInputProps("label")} />
-            <DatePickerInput label="Date" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("scheduledDate")} />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setCreating(false)}>Annuler</Button>
-              <Button type="submit">Planifier</Button>
-            </div>
-          </Stack>
+        <form onSubmit={handleSubmit(submit)} className="space-y-4">
+          <Field>
+            <Label>Période <span className="text-error-500">*</span></Label>
+            <Select value={v.periodId} onChange={(e) => setValue("periodId", e.target.value)}>
+              <option value="">— Choisir —</option>
+              {(periodsQuery.data ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
+            </Select>
+            {errors.periodId && <p className="text-xs text-error-600">{errors.periodId.message}</p>}
+          </Field>
+          <Field>
+            <Label>Type</Label>
+            <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
+              {(Object.keys(EXAM_TYPE_LABEL) as ExamType[]).map((t) => (<option key={t} value={t}>{EXAM_TYPE_LABEL[t]}</option>))}
+            </Select>
+          </Field>
+          <Field>
+            <Label>Libellé <span className="text-error-500">*</span></Label>
+            <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+            {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+          </Field>
+          <Field>
+            <Label>Date</Label>
+            <DatePicker value={v.scheduledDate} onChange={(val) => setValue("scheduledDate", val)} clearable />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setCreating(false)}>Annuler</Button>
+            <Button type="submit">Planifier</Button>
+          </div>
         </form>
       </Modal>
 
@@ -500,8 +542,19 @@ function SupervisionPane({ exam }: { exam: Exam }) {
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const roomLabel = useMemo(() => new Map(rooms.map((r) => [r.id, r.label])), [rooms]);
   const teacherLabel = useMemo(() => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachers]);
-  const [roomId, setRoomId] = useState<string | null>(null);
-  const [teacherId, setTeacherId] = useState<string | null>(null);
+  const roomOptions: SearchableOption[] = useMemo(
+    () => rooms.map((r) => ({ value: String(r.id), trigger: r.label, label: r.label, searchText: r.label })),
+    [rooms],
+  );
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachers],
+  );
+  const [roomId, setRoomId] = useState<string>("");
+  const [teacherId, setTeacherId] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   async function add() {
@@ -510,7 +563,7 @@ function SupervisionPane({ exam }: { exam: Exam }) {
     try {
       await assignExamSupervisor(exam.id, Number(roomId), Number(teacherId));
       notifySuccess("Surveillant affecté");
-      setTeacherId(null);
+      setTeacherId("");
       q.refetch();
     } catch (err) { notifyError(err); } finally { setSaving(false); }
   }
@@ -522,22 +575,26 @@ function SupervisionPane({ exam }: { exam: Exam }) {
   const supervisions = q.data ?? [];
 
   return (
-    <Stack gap="md">
-      <p className="text-xs text-slate-500">
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
         Affectez les enseignants surveillants par salle. Un même surveillant ne peut pas être sur deux examens le même jour.
       </p>
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-        <MantineSelect label="Salle" searchable placeholder="Salle" data={rooms.map((r) => ({ value: String(r.id), label: r.label }))}
-          value={roomId} onChange={setRoomId} />
-        <MantineSelect label="Surveillant" searchable placeholder="Enseignant" data={teachers.map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))}
-          value={teacherId} onChange={setTeacherId} />
+        <Field>
+          <Label>Salle</Label>
+          <SearchableSelect value={roomId} options={roomOptions} onChange={setRoomId} triggerClassName="w-full justify-between px-3" />
+        </Field>
+        <Field>
+          <Label>Surveillant</Label>
+          <SearchableSelect value={teacherId} options={teacherOptions} onChange={setTeacherId} triggerClassName="w-full justify-between px-3" />
+        </Field>
         <Button onClick={add} loading={saving}>Ajouter</Button>
       </div>
 
       {q.loading ? (
         <div className="flex justify-center py-6"><Spinner /></div>
       ) : supervisions.length === 0 ? (
-        <p className="rounded-lg bg-slate-50 px-3 py-6 text-center text-sm text-slate-400">Aucun surveillant affecté.</p>
+        <p className="rounded-lg bg-gray-50 px-3 py-6 text-center text-sm text-gray-400">Aucun surveillant affecté.</p>
       ) : (
         <Table>
           <THead><tr><TH>Salle</TH><TH>Surveillant</TH><TH className="text-right">Actions</TH></tr></THead>
@@ -547,14 +604,14 @@ function SupervisionPane({ exam }: { exam: Exam }) {
                 <TD>{roomLabel.get(s.roomId) ?? `#${s.roomId}`}</TD>
                 <TD>{teacherLabel.get(s.teacherId) ?? `#${s.teacherId}`}</TD>
                 <TD className="text-right">
-                  <Button size="sm" variant="ghost" className="text-red-600" onClick={() => remove(s.id)}>Retirer</Button>
+                  <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(s.id)}>Retirer</Button>
                 </TD>
               </TR>
             ))}
           </TBody>
         </Table>
       )}
-    </Stack>
+    </div>
   );
 }
 
@@ -594,9 +651,9 @@ function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearI
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <label className="mb-1 block text-xs text-slate-500">Période</label>
-          <Select className="max-w-[240px]" value={effectivePeriod ?? ""} onChange={(e) => setPeriodId(e.target.value ? Number(e.target.value) : null)}>
+        <div className="w-56">
+          <Label>Période</Label>
+          <Select value={effectivePeriod ?? ""} onChange={(e) => setPeriodId(e.target.value ? Number(e.target.value) : null)}>
             <option value="">— Choisir —</option>
             {periods.map((p) => (<option key={p.id} value={p.id}>{p.label}{p.closed ? " (clôturée)" : ""}</option>))}
           </Select>
@@ -613,11 +670,11 @@ function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearI
           <THead><tr><TH>Élève</TH><TH>Moyenne</TH><TH>Rang</TH><TH>Mention</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
             {(cardsQuery.data ?? []).length === 0 && (
-              <TR><TD colSpan={6} className="py-10 text-center text-slate-400">Aucun bulletin pour cette période.</TD></TR>
+              <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun bulletin pour cette période.</TD></TR>
             )}
             {(cardsQuery.data ?? []).map((c) => (
               <TR key={c.id}>
-                <TD className="font-medium text-slate-900">#{c.studentId}</TD>
+                <TD className="font-medium text-gray-900">#{c.studentId}</TD>
                 <TD>{c.overallAverage ?? "—"}</TD>
                 <TD>{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
                 <TD>{c.honor ?? "—"}</TD>
@@ -657,19 +714,19 @@ function ReportCardDetail({ card }: { card: ReportCard }) {
           { l: "Moy. classe", v: card.classAverage ?? "—" },
           { l: "Mention", v: card.honor ?? "—" },
         ].map((i) => (
-          <div key={i.l} className="rounded-xl border border-slate-200 p-3 text-center">
-            <div className="text-lg font-bold text-slate-900">{i.v}</div>
-            <div className="text-xs text-slate-500">{i.l}</div>
+          <div key={i.l} className="rounded-xl border border-gray-200 p-3 text-center">
+            <div className="text-lg font-bold text-gray-900">{i.v}</div>
+            <div className="text-xs text-gray-500">{i.l}</div>
           </div>
         ))}
       </div>
-      {card.decision && <p className="text-sm text-slate-700">Décision : <strong>{card.decision}</strong></p>}
+      {card.decision && <p className="text-sm text-gray-700">Décision : <strong>{card.decision}</strong></p>}
       <Table>
         <THead><tr><TH>Matière</TH><TH>Moy.</TH><TH>Coef.</TH><TH>Moy. pond.</TH><TH>Rang</TH></tr></THead>
         <TBody>
           {(linesQuery.data ?? []).map((l) => (
             <TR key={l.id}>
-              <TD className="font-medium text-slate-900">{subjectLabel.get(l.subjectId) ?? `#${l.subjectId}`}</TD>
+              <TD className="font-medium text-gray-900">{subjectLabel.get(l.subjectId) ?? `#${l.subjectId}`}</TD>
               <TD>{l.subjectAverage ?? "—"}</TD>
               <TD>{l.coefficient ?? "—"}</TD>
               <TD>{l.weightedAverage ?? "—"}</TD>
@@ -700,24 +757,34 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   const teacherName = useMemo(() => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachersQuery.data]);
   const classSubjects: ClasseMatiere[] = subjectsQuery.data ?? [];
 
-  const form = useForm({
-    mode: "controlled",
-    initialValues: {
-      subjectIds: initial ? [String(initial.subjectId)] : ([] as string[]),
+  const [subjectIds, setSubjectIds] = useState<string[]>(initial ? [String(initial.subjectId)] : []);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
+
+  const schema = z.object({
+    periodId: z.string().min(1, "Requis"),
+    type: z.string(),
+    assessmentTypeId: z.string(),
+    label: z.string().trim().min(1, "Requis"),
+    date: z.string(),
+    coefficient: z.number(),
+    maxScore: z.number().min(1),
+  });
+  type FormValues = z.infer<typeof schema>;
+
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
       periodId: initial ? String(initial.periodId) : "",
-      type: initial ? initial.type : ("HOMEWORK" as AssessmentType),
+      type: initial ? initial.type : "HOMEWORK",
       assessmentTypeId: initial?.assessmentTypeId != null ? String(initial.assessmentTypeId) : "",
       label: initial?.label ?? "",
       date: initial?.date ?? "",
       coefficient: initial ? Number(initial.coefficient) : 1,
       maxScore: initial ? Number(initial.maxScore) : 20,
     },
-    validate: {
-      subjectIds: (v) => (v.length ? null : "Choisissez au moins une matière"),
-      periodId: (v) => (v ? null : "Requis"),
-      label: (v) => (v ? null : "Requis"),
-    },
   });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
 
   // Coefficient d'une matière POUR CETTE CLASSE (ClasseMatiere), sinon coef par défaut de la matière.
   function coefFor(sid: string): number {
@@ -725,18 +792,29 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
     if (cm?.coefficient != null && !Number.isNaN(Number(cm.coefficient))) return Number(cm.coefficient);
     const subj = (allSubjects.data ?? []).find((s) => String(s.id) === sid);
     if (subj?.coefficient != null && !Number.isNaN(Number(subj.coefficient))) return Number(subj.coefficient);
-    return Number(form.values.coefficient) || 1;
+    return Number(v.coefficient) || 1;
   }
 
-  async function submit(values: typeof form.values) {
+  function toggleSubject(sid: string) {
+    const next = subjectIds.includes(sid) ? subjectIds.filter((s) => s !== sid) : [...subjectIds, sid];
+    setSubjectIds(next);
+    setSubjectError(null);
+    if (next.length === 1) {
+      const c = coefFor(next[0]);
+      if (c > 0) setValue("coefficient", c);
+    }
+  }
+
+  async function submit(values: FormValues) {
+    if (subjectIds.length === 0) { setSubjectError("Choisissez au moins une matière"); return; }
     setLoading(true);
     try {
-      const multi = values.subjectIds.length > 1;
+      const multi = subjectIds.length > 1;
       const build = (sid: string): AssessmentInput => {
         const cm = classSubjects.find((c) => String(c.subjectId) === sid);
         return {
           classId, subjectId: Number(sid), teacherId: cm?.teacherId ?? null,
-          periodId: Number(values.periodId), type: values.type,
+          periodId: Number(values.periodId), type: values.type as AssessmentType,
           assessmentTypeId: values.assessmentTypeId ? Number(values.assessmentTypeId) : null,
           label: values.label,
           date: values.date || null,
@@ -746,9 +824,9 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
       };
       if (isEdit && initial) {
         // Modification : une seule matière.
-        await updateAssessment(initial.id, build(values.subjectIds[0]));
+        await updateAssessment(initial.id, build(subjectIds[0]));
       } else {
-        for (const sid of values.subjectIds) {
+        for (const sid of subjectIds) {
           await createAssessment(build(sid));
         }
       }
@@ -761,79 +839,105 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   }
 
   return (
-    <form onSubmit={form.onSubmit(submit)}>
-      <Stack gap="md">
-        <MultiSelect label="Matière(s)" withAsterisk searchable
-          disabled={isEdit}
-          placeholder="Une ou plusieurs matières"
-          description={isEdit ? "La matière ne se change pas ici (supprimez et recréez si besoin)." : "Sélectionnez plusieurs matières pour créer l'évaluation d'un coup (ex. composition)."}
-          data={classSubjects.map((cm) => ({ value: String(cm.subjectId), label: subjectName.get(cm.subjectId) ?? `#${cm.subjectId}` }))}
-          {...form.getInputProps("subjectIds")}
-          onChange={(vals) => {
-            form.setFieldValue("subjectIds", vals);
-            // Une seule matière → on pré-remplit le coefficient (éditable).
-            if (vals.length === 1) {
-              const c = coefFor(vals[0]);
-              if (c > 0) form.setFieldValue("coefficient", c);
-            }
-          }} />
-        {form.values.subjectIds.length > 0 && (
-          <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-            <p className="mb-1 text-xs font-medium text-slate-500">Enseignant(s) — affecté(s) à cette classe</p>
-            {form.values.subjectIds.map((sid) => {
-              const cm = classSubjects.find((c) => String(c.subjectId) === sid);
-              return (
-                <div key={sid} className="flex justify-between py-0.5">
-                  <span className="text-slate-700">{subjectName.get(Number(sid)) ?? `#${sid}`}</span>
-                  <span className={cm?.teacherId ? "text-slate-600" : "text-amber-600"}>
-                    {cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : "aucun enseignant affecté"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {!periodsQuery.loading && (periodsQuery.data ?? []).length === 0 && (
-          <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Aucune période pour cette année. Créez d&apos;abord des <strong>trimestres / semestres</strong> dans « Années scolaires », puis revenez ajouter l&apos;évaluation.
-          </div>
-        )}
-        <MantineSelect label="Période" withAsterisk
-          data={[{ value: "", label: "— Choisir —" }, ...(periodsQuery.data ?? []).map((p) => ({ value: String(p.id), label: `${p.label}${p.closed ? " (clôturée)" : ""}`, disabled: p.closed }))]}
-          {...form.getInputProps("periodId")} />
-        <MantineSelect label="Type"
-          data={(Object.keys(ASSESSMENT_TYPE_LABEL) as AssessmentType[]).map((t) => ({ value: t, label: ASSESSMENT_TYPE_LABEL[t] }))}
-          {...form.getInputProps("type")} />
-        {typeConfigs.length > 0 && (
-          <MantineSelect
-            label="Paramètre de notation"
-            description="Barème/type d'évaluation configuré (Notes → Paramètres). Facultatif : pré-remplit le coefficient."
-            clearable
-            data={typeConfigs.map((c) => ({ value: String(c.id), label: c.label }))}
-            value={form.values.assessmentTypeId || null}
-            onChange={(v) => {
-              form.setFieldValue("assessmentTypeId", v ?? "");
-              const cfg = typeConfigs.find((c) => String(c.id) === v);
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Matière(s) <span className="text-error-500">*</span></Label>
+        <p className="text-xs text-gray-400">
+          {isEdit ? "La matière ne se change pas ici (supprimez et recréez si besoin)." : "Sélectionnez plusieurs matières pour créer l'évaluation d'un coup (ex. composition)."}
+        </p>
+        <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+          {classSubjects.map((cm) => (
+            <label key={cm.subjectId} className={`flex items-center gap-2 text-sm ${isEdit ? "opacity-60" : "cursor-pointer"}`}>
+              <input type="checkbox" disabled={isEdit} checked={subjectIds.includes(String(cm.subjectId))}
+                onChange={() => toggleSubject(String(cm.subjectId))}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+              {subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}
+            </label>
+          ))}
+        </div>
+        {subjectError && <p className="text-xs text-error-600">{subjectError}</p>}
+      </Field>
+      {subjectIds.length > 0 && (
+        <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+          <p className="mb-1 text-xs font-medium text-gray-500">Enseignant(s) — affecté(s) à cette classe</p>
+          {subjectIds.map((sid) => {
+            const cm = classSubjects.find((c) => String(c.subjectId) === sid);
+            return (
+              <div key={sid} className="flex justify-between py-0.5">
+                <span className="text-gray-700">{subjectName.get(Number(sid)) ?? `#${sid}`}</span>
+                <span className={cm?.teacherId ? "text-gray-600" : "text-warning-600"}>
+                  {cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : "aucun enseignant affecté"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!periodsQuery.loading && (periodsQuery.data ?? []).length === 0 && (
+        <div className="rounded-md bg-warning-50 px-3 py-2 text-sm text-warning-800">
+          Aucune période pour cette année. Créez d&apos;abord des <strong>trimestres / semestres</strong> dans « Années scolaires », puis revenez ajouter l&apos;évaluation.
+        </div>
+      )}
+      <Field>
+        <Label>Période <span className="text-error-500">*</span></Label>
+        <Select value={v.periodId} onChange={(e) => setValue("periodId", e.target.value)}>
+          <option value="">— Choisir —</option>
+          {(periodsQuery.data ?? []).map((p) => (<option key={p.id} value={p.id} disabled={p.closed}>{p.label}{p.closed ? " (clôturée)" : ""}</option>))}
+        </Select>
+        {errors.periodId && <p className="text-xs text-error-600">{errors.periodId.message}</p>}
+      </Field>
+      <Field>
+        <Label>Type</Label>
+        <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
+          {(Object.keys(ASSESSMENT_TYPE_LABEL) as AssessmentType[]).map((t) => (<option key={t} value={t}>{ASSESSMENT_TYPE_LABEL[t]}</option>))}
+        </Select>
+      </Field>
+      {typeConfigs.length > 0 && (
+        <Field>
+          <Label>Paramètre de notation</Label>
+          <p className="text-xs text-gray-400">Barème/type d&apos;évaluation configuré (Notes → Paramètres). Facultatif : pré-remplit le coefficient.</p>
+          <Select
+            value={v.assessmentTypeId}
+            onChange={(e) => {
+              const val = e.target.value;
+              setValue("assessmentTypeId", val);
+              const cfg = typeConfigs.find((c) => String(c.id) === val);
               const coef = cfg?.defaultCoefficient != null ? Number(cfg.defaultCoefficient) : NaN;
-              if (!Number.isNaN(coef) && coef > 0) form.setFieldValue("coefficient", coef);
+              if (!Number.isNaN(coef) && coef > 0) setValue("coefficient", coef);
             }}
-          />
+          >
+            <option value="">— Aucun —</option>
+            {typeConfigs.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
+          </Select>
+        </Field>
+      )}
+      <Field>
+        <Label>Libellé <span className="text-error-500">*</span></Label>
+        <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+        {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
+      </Field>
+      <Field>
+        <Label>Date</Label>
+        <DatePicker value={v.date} onChange={(val) => setValue("date", val)} clearable />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Note sur</Label>
+          <Input type="number" min={1} value={v.maxScore} onChange={(e) => setValue("maxScore", Number(e.target.value))} />
+        </Field>
+        {subjectIds.length > 1 ? (
+          <div className="flex items-end pb-2 text-xs text-gray-500">Coefficient : automatique par matière (selon la classe).</div>
+        ) : (
+          <Field>
+            <Label>Coefficient</Label>
+            <Input type="number" min={0} step={0.5} value={v.coefficient} onChange={(e) => setValue("coefficient", Number(e.target.value))} />
+          </Field>
         )}
-        <TextInput label="Libellé" withAsterisk {...form.getInputProps("label")} />
-        <DatePickerInput label="Date" valueFormat="DD/MM/YYYY" clearable {...form.getInputProps("date")} />
-        <div className="grid grid-cols-2 gap-3">
-          <NumberInput label="Note sur" min={1} {...form.getInputProps("maxScore")} />
-          {form.values.subjectIds.length > 1 ? (
-            <div className="flex items-end pb-1 text-xs text-slate-500">Coefficient : automatique par matière (selon la classe).</div>
-          ) : (
-            <NumberInput label="Coefficient" min={0} step={0.5} {...form.getInputProps("coefficient")} />
-          )}
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-          <Button type="submit" loading={loading}>{isEdit ? "Enregistrer" : "Créer"}</Button>
-        </div>
-      </Stack>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="submit" loading={loading}>{isEdit ? "Enregistrer" : "Créer"}</Button>
+      </div>
     </form>
   );
 }
@@ -882,13 +986,13 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
   return (
     <div className="space-y-4">
       {locked && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning-50 px-4 py-2 text-sm text-warning-800">
           <span>Notes validées et verrouillées.</span>
           {canEditExisting && <Button size="sm" variant="outline" onClick={unlockAll}>Déverrouiller</Button>}
         </div>
       )}
       {!locked && !canEditExisting && (
-        <p className="rounded-xl bg-slate-50 px-4 py-2 text-xs text-slate-500">Vous pouvez saisir les notes manquantes. Une note déjà saisie n&apos;est modifiable que par la direction.</p>
+        <p className="rounded-xl bg-gray-50 px-4 py-2 text-xs text-gray-500">Vous pouvez saisir les notes manquantes. Une note déjà saisie n&apos;est modifiable que par la direction.</p>
       )}
       <div className="max-h-[55vh] overflow-y-auto">
         <Table>
@@ -902,12 +1006,12 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
               const readOnly = locked || !canWrite || (alreadyEntered && !canEditExisting);
               return (
                 <TR key={s.id}>
-                  <TD className="font-medium text-slate-900">{s.firstName} {s.lastName}</TD>
+                  <TD className="font-medium text-gray-900">{s.firstName} {s.lastName}</TD>
                   <TD>
                     <input type="number" min={0} max={max} disabled={readOnly} value={v}
                       onChange={(e) => setValues((p) => ({ ...p, [s.id]: e.target.value }))}
-                      className={`h-9 w-24 rounded-lg border px-2 text-sm outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${bad ? "border-red-400 bg-red-50 text-red-700" : "border-slate-200 focus:border-brand-400"}`} />
-                    {alreadyEntered && !canEditExisting && !locked && <span className="ml-2 text-[10px] text-slate-400">saisie verrouillée</span>}
+                      className={`h-9 w-24 rounded-lg border px-2 text-sm outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${bad ? "border-error-400 bg-error-50 text-error-700" : "border-gray-300 focus:border-brand-400"}`} />
+                    {alreadyEntered && !canEditExisting && !locked && <span className="ml-2 text-[10px] text-gray-400">saisie verrouillée</span>}
                   </TD>
                 </TR>
               );
@@ -916,7 +1020,7 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
         </Table>
       </div>
       {canWrite && !locked && (
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
           <Button variant="secondary" onClick={save} loading={saving}>Enregistrer</Button>
           <Button onClick={validate}>Valider & verrouiller</Button>
         </div>

@@ -93,25 +93,45 @@ export function getTeacherAttendanceStats(teacherId: number, from?: string | nul
 export type PayMode = "HOURLY" | "FIXED";
 export interface TeacherCompensation {
   id: number; tenantId: number | null; teacherId: number;
-  payMode: PayMode; hourlyRate: string; fixedSalary: string;
+  payMode: PayMode;
+  /** Tarif horaire pour les classes normales / classes d'examen (§6). */
+  hourlyRateNormal: string; hourlyRateExam: string;
+  fixedSalary: string;
 }
 export interface MonthlyPay {
   teacherId: number; year: number; month: number; payMode: string;
   realizedMinutes: number; lateMinutes: number; effectiveMinutes: number;
   hourlyRate: string; fixedSalary: string; teachingPay: string; grossPay: string;
 }
+/** Paie calculée automatiquement depuis l'emploi du temps validé, par typologie de classe (§6). */
+export interface TheoreticalMonthlyPay {
+  teacherId: number; year: number; month: number; payMode: string;
+  normalMinutes: number; examMinutes: number;
+  hourlyRateNormal: string; hourlyRateExam: string; fixedSalary: string;
+  teachingPay: string; grossPay: string;
+}
 export function getCompensation(teacherId: number): Promise<TeacherCompensation | null> {
   return api.get<TeacherCompensation>(`/payroll/compensation/${teacherId}`).catch(() => null);
 }
-export function setCompensation(teacherId: number, input: { payMode: PayMode; hourlyRate: number; fixedSalary: number }): Promise<TeacherCompensation> {
+export function setCompensation(
+  teacherId: number,
+  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number },
+): Promise<TeacherCompensation> {
   return api.put<TeacherCompensation>(`/payroll/compensation/${teacherId}`, input);
 }
 export function getMonthlyPay(teacherId: number, year: number, month: number): Promise<MonthlyPay> {
   return api.get<MonthlyPay>(`/payroll/teachers/${teacherId}/monthly-pay`, { query: { year, month } });
 }
+export function getTheoreticalPay(teacherId: number, year: number, month: number): Promise<TheoreticalMonthlyPay> {
+  return api.get<TheoreticalMonthlyPay>(`/payroll/teachers/${teacherId}/theoretical-pay`, { query: { year, month } });
+}
 /** Génère automatiquement la fiche de paie du mois (brut basé sur les heures réalisées). */
 export function generatePayslipFromHours(teacherId: number, year: number, month: number, teacherName?: string | null): Promise<Payslip> {
   return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip`, { teacherName: teacherName ?? null }, { query: { year, month } });
+}
+/** Génère automatiquement la fiche de paie du mois depuis l'emploi du temps validé (§6), sans saisie manuelle. */
+export function generatePayslipFromTimetable(teacherId: number, year: number, month: number, teacherName?: string | null): Promise<Payslip> {
+  return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip-timetable`, { teacherName: teacherName ?? null }, { query: { year, month } });
 }
 
 // ── Règles de déduction sur salaire (frais scolarité enfants du personnel) ───

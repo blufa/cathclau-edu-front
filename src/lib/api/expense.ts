@@ -72,6 +72,10 @@ export interface Budget {
   categoryId: number;
   academicYear: string;
   allocatedAmount: string;
+  /** Cumul des dépenses payées imputées sur cette catégorie — décrémenté automatiquement côté serveur. */
+  consumedAmount: string;
+  /** allocatedAmount - consumedAmount, calculé côté serveur. */
+  remainingBalance: string;
 }
 export function listBudgets(): Promise<Budget[]> {
   return api.get<Budget[]>("/budgets");
