@@ -191,7 +191,15 @@ function LessonForm({ classId, subjectName, canSetStatus, onCancel, onCreated }:
 
   async function submit() {
     const valid = rows.filter((r) => r.subjectId && r.title.trim());
-    if (valid.length === 0) { notifyError("Ajoutez au moins une séance (matière + thème)."); return; }
+    if (valid.length === 0) { notifyError(null, "Ajoutez au moins une séance (matière + thème)."); return; }
+    const withoutTeacher = valid.find((r) => !teacherFor(r.subjectId));
+    if (withoutTeacher) {
+      notifyError(null,
+        `Aucun enseignant n'est affecté à « ${subjectName.get(Number(withoutTeacher.subjectId)) ?? "cette matière"} » pour cette classe. `
+        + "Affectez un enseignant (Référentiels → Classes → Matières) avant de programmer la séance.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       for (const r of valid) {
@@ -280,7 +288,11 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
   lesson: LessonEntry; subjectName: Map<number, string>; canSetStatus: boolean; onCancel: () => void; onSaved: () => void;
 }) {
   const classSubjectsQuery = useQuery(() => listClassSubjects(lesson.classId), [lesson.classId]);
+  const teachersQuery = useQuery(listTeachers, []);
   const classSubjects = useMemo(() => classSubjectsQuery.data ?? [], [classSubjectsQuery.data]);
+  const teacherName = useMemo(
+    () => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
+    [teachersQuery.data]);
   const subjectOptions: SearchableOption[] = useMemo(
     () => classSubjects.map((cm) => {
       const label = subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`;
@@ -288,6 +300,10 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
     }),
     [classSubjects, subjectName],
   );
+  function teacherFor(sid: string): string | null {
+    const cm = classSubjects.find((c) => String(c.subjectId) === sid);
+    return cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : null;
+  }
 
   const [loading, setLoading] = useState(false);
   const [subjectId, setSubjectId] = useState(String(lesson.subjectId));
@@ -299,7 +315,14 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
   const [status, setStatus] = useState<LessonStatus>(lesson.status);
 
   async function submit() {
-    if (!subjectId || !title.trim()) { notifyError("Matière et thème requis."); return; }
+    if (!subjectId || !title.trim()) { notifyError(null, "Matière et thème requis."); return; }
+    if (!teacherFor(subjectId)) {
+      notifyError(null,
+        `Aucun enseignant n'est affecté à « ${subjectName.get(Number(subjectId)) ?? "cette matière"} » pour cette classe. `
+        + "Affectez un enseignant (Référentiels → Classes → Matières) avant d'enregistrer.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       await updateLesson(lesson.id, {
@@ -325,6 +348,13 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
         </Field>
         <Field><Label>Date</Label><DatePicker value={lessonDate} clearable onChange={setLessonDate} /></Field>
       </div>
+      {subjectId && (
+        <p className="text-xs text-gray-500">
+          Enseignant : <span className={teacherFor(subjectId) ? "text-gray-700" : "text-warning-600"}>
+            {teacherFor(subjectId) ?? "aucun enseignant affecté"}
+          </span>
+        </p>
+      )}
       <Field>
         <Label>Thème de la séance <span className="text-error-500">*</span></Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />

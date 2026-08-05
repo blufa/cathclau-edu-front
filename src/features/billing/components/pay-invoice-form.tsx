@@ -5,7 +5,7 @@ import { initiatePayment } from "@/lib/api/payment";
 import { type PaymentChannel } from "@/lib/types/payment";
 import { type Invoice } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Field } from "@/components/ui/input";
+import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -67,8 +67,8 @@ export function PayInvoiceForm({ invoice, tenantId, onDone }: { invoice: Invoice
         </Select>
       </Field>
       <Field>
-        <Label>Montant (GNF)</Label>
-        <Input type="number" min={0} max={remaining} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
+        <Label>Montant</Label>
+        <MoneyInput value={amount} onValueChange={(n) => setAmount(Math.min(n, remaining))} />
       </Field>
       <p className="text-xs text-slate-400">
         Encaissement au guichet : paiement validé immédiatement et reçu généré. Pour un paiement

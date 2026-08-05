@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
-import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Field, Input, Label, MoneyInput, Textarea } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
@@ -185,7 +185,7 @@ function GrantForm({ initial, onCancel, onDone }: { initial?: Grant | null; onCa
         <Field><Label>Année scolaire</Label><Input placeholder="2025-2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} /></Field>
       </div>
       <Field><Label>Objet</Label><Input placeholder="Cantine, équipement…" value={purpose} onChange={(e) => setPurpose(e.target.value)} /></Field>
-      <Field><Label>Montant total attendu (GNF)</Label><Input type="number" min={0} value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} /></Field>
+      <Field><Label>Montant total attendu</Label><MoneyInput value={totalAmount} onValueChange={(n) => setTotalAmount(String(n))} /></Field>
       <Field><Label>Notes</Label><Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
@@ -216,7 +216,7 @@ function PaymentForm({ grantId, onCancel, onDone }: { grantId: number; onCancel:
     <div className="space-y-3 rounded-xl border border-gray-200 p-3">
       <div className="grid grid-cols-2 gap-3">
         <Field><Label>Date</Label><DatePicker value={paymentDate} clearable onChange={setPaymentDate} /></Field>
-        <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field><Label>Mode</Label><Input placeholder="Virement, chèque…" value={method} onChange={(e) => setMethod(e.target.value)} /></Field>

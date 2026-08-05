@@ -24,7 +24,7 @@ import { PayInvoiceForm } from "@/features/billing/components/pay-invoice-form";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
-import { Input, Label, Field } from "@/components/ui/input";
+import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { ParentReminderButton } from "@/features/students/components/parent-reminder";
@@ -232,8 +232,8 @@ function DiscountForm({ invoice, onDone, onCancel }: { invoice: Invoice; onDone:
     <div className="space-y-4">
       <p className="text-sm text-gray-500">Total : <strong>{formatGNF(invoice.totalAmount)}</strong> · Reste actuel : {formatGNF(invoice.remainingBalance ?? invoice.totalAmount)}</p>
       <Field>
-        <Label>Montant de la remise (GNF)</Label>
-        <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <Label>Montant de la remise</Label>
+        <MoneyInput value={amount} onValueChange={setAmount} />
       </Field>
       <Field>
         <Label>Motif</Label>
@@ -322,8 +322,8 @@ function InvoiceForm({ tenantId, academicYearId, fees, onCancel, onCreated }: {
         <Input value={v.reference} onChange={(e) => setValue("reference", e.target.value)} />
       </Field>
       <Field>
-        <Label>Montant total (GNF)</Label>
-        <Input type="number" min={0} value={v.totalAmount} onChange={(e) => setValue("totalAmount", Number(e.target.value))} />
+        <Label>Montant total</Label>
+        <MoneyInput value={v.totalAmount} onValueChange={(n) => setValue("totalAmount", n)} />
         {errors.totalAmount && <p className="text-xs text-error-600">{errors.totalAmount.message}</p>}
       </Field>
       <div className="flex justify-end gap-2">
