@@ -42,7 +42,7 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/stat-card";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Field, Input, Label } from "@/components/ui/input";
+import { Field, Input, Label, MoneyInput } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -215,7 +215,7 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
         <Input value={label} onChange={(e) => setLabel(e.target.value)} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
         <Field><Label>Date</Label><DatePicker value={expenseDate} clearable onChange={setExpenseDate} /></Field>
       </div>
       <Field>

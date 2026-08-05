@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
-import { Input, Label, Field } from "@/components/ui/input";
+import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -273,8 +273,8 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
         </Field>
       )}
       <Field>
-        <Label>Montant (GNF)</Label>
-        <Input type="number" min={0} value={v.amount} onChange={(e) => setValue("amount", Number(e.target.value))} />
+        <Label>Montant</Label>
+        <MoneyInput value={v.amount} onValueChange={(n) => setValue("amount", n)} />
         {errors.amount && <p className="text-xs text-error-600">{errors.amount.message}</p>}
       </Field>
       <Field>
@@ -455,8 +455,8 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
             {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
           </Field>
           <Field>
-            <Label>Montant (GNF)</Label>
-            <Input type="number" min={0} value={v.amount} onChange={(e) => setValue("amount", Number(e.target.value))} />
+            <Label>Montant</Label>
+            <MoneyInput value={v.amount} onValueChange={(n) => setValue("amount", n)} />
           </Field>
           <Field>
             <Label>Date limite</Label>

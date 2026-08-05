@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const MONEY_FMT = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
+
 export const Input = React.forwardRef<
   HTMLInputElement,
   Omit<React.InputHTMLAttributes<HTMLInputElement>, "size">
@@ -61,6 +63,47 @@ export const PasswordInput = React.forwardRef<
       >
         {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
+    </div>
+  );
+});
+
+/**
+ * Champ de saisie de montant (GNF) : affiche des séparateurs de milliers pendant la frappe, ne
+ * retient que les chiffres. `onValueChange` reçoit toujours un nombre simple (pas de string à parser).
+ */
+export const MoneyInput = React.forwardRef<
+  HTMLInputElement,
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & {
+    value: number | string | null | undefined;
+    onValueChange: (value: number) => void;
+    currency?: string;
+  }
+>(function MoneyInput({ value, onValueChange, currency = "GNF", className, disabled, ...props }, ref) {
+  // Champ contrôlé : l'affichage se dérive directement de `value` à chaque rendu (pas d'état local
+  // à resynchroniser), le parent renvoyant toujours le nombre saisi via `onValueChange`.
+  const n = Number(value);
+  const display = Number.isFinite(n) && n !== 0 ? MONEY_FMT.format(n) : "";
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digitsOnly = e.target.value.replace(/[^\d]/g, "");
+    onValueChange(digitsOnly === "" ? 0 : Number(digitsOnly));
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onChange={handleChange}
+        disabled={disabled}
+        className={cn("pr-14 text-right", className)}
+        {...props}
+      />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+        {currency}
+      </span>
     </div>
   );
 });
