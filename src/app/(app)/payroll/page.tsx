@@ -54,7 +54,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
-import { Input, Label, Field } from "@/components/ui/input";
+import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -863,16 +863,16 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
           </Select>
         </Field>
         <Field>
-          <Label>Tarif horaire — classe normale (GNF)</Label>
-          <Input type="number" min={0} value={hourlyRateNormal} onChange={(e) => setHourlyRateNormal(e.target.value)} />
+          <Label>Tarif horaire — classe normale</Label>
+          <MoneyInput value={hourlyRateNormal} onValueChange={setHourlyRateNormal} />
         </Field>
         <Field>
-          <Label>Tarif horaire — classe d&apos;examen (GNF)</Label>
-          <Input type="number" min={0} value={hourlyRateExam} onChange={(e) => setHourlyRateExam(e.target.value)} />
+          <Label>Tarif horaire — classe d&apos;examen</Label>
+          <MoneyInput value={hourlyRateExam} onValueChange={setHourlyRateExam} />
         </Field>
         <Field>
-          <Label>Salaire fixe (GNF)</Label>
-          <Input type="number" min={0} value={fixedSalary} onChange={(e) => setFixedSalary(e.target.value)} disabled={payMode === "HOURLY"} />
+          <Label>Salaire fixe</Label>
+          <MoneyInput value={fixedSalary} onValueChange={setFixedSalary} disabled={payMode === "HOURLY"} />
         </Field>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">

@@ -36,7 +36,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Select } from "@/components/ui/select";
-import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Field, Input, Label, MoneyInput, Textarea } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { FilePreview } from "@/components/ui/file-preview";
@@ -349,8 +349,8 @@ function BudgetForm({ initial, onCancel, onDone }: { initial?: AnnualBudget | nu
         </Field>
         {financingMode !== "NONE" && (
           <Field>
-            <Label>Montant à {financingMode === "COLLECTE" ? "collecter" : "emprunter"} (GNF)</Label>
-            <Input type="number" min={0} value={financingAmount} onChange={(e) => setFinancingAmount(e.target.value)} />
+            <Label>Montant à {financingMode === "COLLECTE" ? "collecter" : "emprunter"}</Label>
+            <MoneyInput value={financingAmount} onValueChange={(n) => setFinancingAmount(String(n))} />
           </Field>
         )}
       </div>
@@ -408,15 +408,15 @@ function LineForm({ budgetId, type, initial, onCancel, onDone }: {
       {useQuantity ? (
         <div className="grid grid-cols-2 gap-3">
           <Field><Label>Quantité</Label><Input type="number" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
-          <Field><Label>Prix unitaire (GNF)</Label><Input type="number" min={0} value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} /></Field>
+          <Field><Label>Prix unitaire</Label><MoneyInput value={unitPrice} onValueChange={(n) => setUnitPrice(String(n))} /></Field>
         </div>
       ) : (
-        <Field><Label>Montant prévu (GNF)</Label><Input type="number" min={0} value={plannedAmount} onChange={(e) => setPlannedAmount(e.target.value)} /></Field>
+        <Field><Label>Montant prévu</Label><MoneyInput value={plannedAmount} onValueChange={(n) => setPlannedAmount(String(n))} /></Field>
       )}
       {useQuantity && (
         <p className="text-sm text-gray-500">Montant calculé : <strong className="text-gray-900">{formatGNF(computedAmount)}</strong></p>
       )}
-      <Field><Label>Réalisé (GNF)</Label><Input type="number" min={0} value={actualAmount} onChange={(e) => setActualAmount(e.target.value)} /></Field>
+      <Field><Label>Réalisé</Label><MoneyInput value={actualAmount} onValueChange={(n) => setActualAmount(String(n))} /></Field>
       <Field><Label>Notes</Label><Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
