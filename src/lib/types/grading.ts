@@ -131,9 +131,42 @@ export interface ReportCardLine {
   subjectAverage: string | null;
   coefficient: string | null;
   weightedAverage: string | null;
+  /** Moyenne de cours de la matière, si la formule active en fournit une (§StepRole). */
+  coursAverage?: string | null;
+  /** Moyenne de composition de la matière, si la formule active en fournit une (§StepRole). */
+  compoAverage?: string | null;
   subjectRank: number | null;
   comment: string | null;
   teacherName: string | null;
+}
+
+// ── Bulletin annuel (agrégation des 2 semestres, calculé à la volée) ────────
+export interface AnnualReportCardLine {
+  subjectId: number;
+  coefficient: string | null;
+  s1Cours: string | null;
+  s1Compo: string | null;
+  s1Average: string | null;
+  s2Cours: string | null;
+  s2Compo: string | null;
+  s2Average: string | null;
+  annualAverage: string | null;
+}
+
+export interface AnnualReportCard {
+  studentId: number;
+  classId: number;
+  academicYearId: number;
+  s1PeriodId: number | null;
+  s2PeriodId: number | null;
+  lines: AnnualReportCardLine[];
+  s1Average: string | null;
+  s2Average: string | null;
+  overallAverage: string | null;
+  rank: number | null;
+  classSize: number | null;
+  honor: string | null;
+  decision: string | null;
 }
 
 // ── Grading scale (barème mentions/décisions) ────────────────────────────────
@@ -372,6 +405,15 @@ export const WEIGHT_MODE_LABEL: Record<WeightMode, string> = {
   FIXED: "Poids fixe",
 };
 
+/** Étiquette d'une étape pour la moyenne générale (toutes matières confondues) : la composition
+ * pèse le coefficient de la matière, le cours compte à parts égales entre matières. */
+export type StepRole = "NONE" | "COURS" | "COMPOSITION";
+export const STEP_ROLE_LABEL: Record<StepRole, string> = {
+  NONE: "Aucun",
+  COURS: "Cours (moyenne générale simple entre matières)",
+  COMPOSITION: "Composition (moyenne générale pondérée par coefficient)",
+};
+
 export interface GradingFormulaStepInput {
   id?: number;
   refStepOrder: number;
@@ -388,6 +430,7 @@ export interface GradingFormulaStep {
   assessmentTypeId?: number | null;
   inputs: GradingFormulaStepInput[];
   finalStep: boolean;
+  role?: StepRole;
 }
 
 export interface GradingFormula {

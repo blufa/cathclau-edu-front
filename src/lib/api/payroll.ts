@@ -126,8 +126,11 @@ export function getTheoreticalPay(teacherId: number, year: number, month: number
   return api.get<TheoreticalMonthlyPay>(`/payroll/teachers/${teacherId}/theoretical-pay`, { query: { year, month } });
 }
 /** Génère automatiquement la fiche de paie du mois (brut basé sur les heures réalisées). */
-export function generatePayslipFromHours(teacherId: number, year: number, month: number, teacherName?: string | null): Promise<Payslip> {
-  return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip`, { teacherName: teacherName ?? null }, { query: { year, month } });
+export function generatePayslipFromHours(
+  teacherId: number, year: number, month: number, teacherName?: string | null, structureId?: number | null,
+): Promise<Payslip> {
+  return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip`,
+    { teacherName: teacherName ?? null, structureId: structureId ?? null }, { query: { year, month } });
 }
 /** Génère automatiquement la fiche de paie du mois depuis l'emploi du temps validé (§6), sans saisie manuelle. */
 export function generatePayslipFromTimetable(teacherId: number, year: number, month: number, teacherName?: string | null): Promise<Payslip> {

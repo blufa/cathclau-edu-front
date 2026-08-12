@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import { Card, CardBody } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { QuotaProgress } from "@/components/platform/quota-progress";
+import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { StudentForm } from "./student-form";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
@@ -172,6 +173,7 @@ export default function StudentsPage() {
       align: "right",
       render: (s) => (
         <div className="flex justify-end gap-2">
+          <QuickBadgeButton subjectType="STUDENT" subjectId={s.id} subjectName={`${s.firstName} ${s.lastName}`} />
           {canWrite && (
             <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
               Modifier
@@ -282,7 +284,7 @@ export default function StudentsPage() {
         exportFilename="eleves.csv"
       />
 
-      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel élève">
+      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {quotaError && (
           <div className="mb-4 rounded-xl border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
             {quotaError}{" "}
@@ -294,7 +296,7 @@ export default function StudentsPage() {
         <StudentForm submitLabel="Créer" onSubmit={handleCreate} onCancel={() => setCreating(false)} />
       </Modal>
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'élève">
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {editing && (
           <StudentForm
             initial={editing}

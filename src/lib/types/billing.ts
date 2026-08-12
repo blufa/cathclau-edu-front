@@ -41,12 +41,15 @@ export interface Installment {
   amount: string;
   dueDate: string | null;
   status: InstallmentStatus;
+  /** Mois "YYYY-MM" couverts par cette tranche, librement choisis (pas forcément consécutifs). */
+  months: string[] | null;
 }
 
 export interface InstallmentInput {
   label: string;
   amount: number;
   dueDate?: string | null;
+  months?: string[];
 }
 
 export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID";
@@ -172,4 +175,21 @@ export interface FamilyDiscountRuleInput {
 export interface ApplicableDiscount {
   percentage: string | null;
   ruleLabel: string | null;
+}
+
+// ── Early payment discount rules (remise paiement annuel complet) ───────────
+export interface EarlyPaymentDiscountRule {
+  id: number;
+  tenantId: number | null;
+  label: string;
+  percentage: string | null;
+  feeType: FeeType | null;
+  active: boolean;
+}
+
+export interface EarlyPaymentDiscountRuleInput {
+  label: string;
+  percentage?: number | null;
+  feeType?: FeeType | null;
+  active?: boolean | null;
 }

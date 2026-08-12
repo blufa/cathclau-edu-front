@@ -147,6 +147,13 @@ export interface PayrollMassSummary {
   teacherCount: number;
   staffCount: number;
 }
+/** Heures réalisées (cahier de textes) vs heures dues (emploi du temps) ce mois-ci, par enseignant. */
+export interface TeacherHoursProgress {
+  teacherId: number;
+  teacherName: string;
+  dueMinutes: number;
+  realizedMinutes: number;
+}
 export interface SubsidyStats {
   activeExemptionsCount: number;
   totalExemptions: number;
@@ -170,6 +177,7 @@ export interface FounderDashboard {
   academicYearId: number;
   recovery: RecoveryView;
   payroll: PayrollMassSummary;
+  teacherHours: TeacherHoursProgress[];
   subsidy: SubsidyStats;
   alerts: FounderAlert[];
   comparison: FounderYearComparison | null;

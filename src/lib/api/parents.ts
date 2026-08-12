@@ -1,6 +1,6 @@
 import { api } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
-import type { Parent } from "@/lib/types/student";
+import type { Parent, Student } from "@/lib/types/student";
 
 export type Relationship = "FATHER" | "MOTHER" | "GUARDIAN";
 
@@ -40,6 +40,11 @@ export function updateParent(id: number, input: ParentInput): Promise<Parent> {
 
 export function getStudentParents(studentId: number): Promise<Parent[]> {
   return api.get<Parent[]>(`/parents/by-student/${studentId}`);
+}
+
+/** Enfants (élèves) rattachés à un parent — pour l'encaissement groupé fratrie (§payments). */
+export function getParentChildren(parentId: number): Promise<Student[]> {
+  return api.get<Student[]>(`/parents/${parentId}/students`);
 }
 
 export function linkParentToStudent(parentId: number, studentId: number, relationship: Relationship): Promise<void> {

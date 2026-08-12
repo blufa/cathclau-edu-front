@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -152,6 +152,12 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
   const [loading, setLoading] = useState<number | null>(null);
   const defaultTemplate = templates.find((t) => t.isDefault) ?? templates[0];
 
+  // Recherche dynamique : les résultats apparaissent dès la saisie (débounce 300 ms), sans bouton.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   async function issue(s: Student) {
     setLoading(s.id);
     try {
@@ -162,22 +168,19 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
 
   return (
     <div className="space-y-4">
-      <form onSubmit={(e) => { e.preventDefault(); setQuery(search.trim()); }} className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input className="w-full pl-9" placeholder="Rechercher un élève (nom, matricule)…" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <Button type="submit" variant="secondary">Chercher</Button>
-      </form>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <Input className="w-full pl-9" placeholder="Rechercher un élève (nom, prénom, matricule)…" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+      </div>
       {!defaultTemplate && <p className="text-xs text-warning-600">Aucun modèle de carte — créez-en un dans l&apos;onglet Modèles (le défaut sera utilisé).</p>}
       <div className="space-y-1">
         {(studentsQuery.data ?? []).map((s) => (
           <div key={s.id} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2">
             <div>
               <p className="text-sm font-medium text-gray-900">{s.firstName} {s.lastName}</p>
-              <p className="text-xs text-gray-400">{s.studentNumber}{!s.photo && " · ⚠ pas de photo"}</p>
+              <p className="text-xs text-gray-400">{s.studentNumber}{!s.photo && " · sans photo (initiales affichées sur le badge)"}</p>
             </div>
-            <Button size="sm" loading={loading === s.id} disabled={!s.photo} onClick={() => issue(s)}>Émettre</Button>
+            <Button size="sm" loading={loading === s.id} onClick={() => issue(s)}>Émettre</Button>
           </div>
         ))}
         {query && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-gray-400">Aucun élève trouvé.</p>}
