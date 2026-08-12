@@ -13,11 +13,13 @@ import { listAssessmentTypes } from "@/lib/api/grading";
 import {
   FORMULA_PERIOD_TYPE_LABEL,
   STEP_KIND_LABEL,
+  STEP_ROLE_LABEL,
   WEIGHT_MODE_LABEL,
   type FormulaPeriodType,
   type GradingFormula,
   type GradingFormulaInput,
   type StepKind,
+  type StepRole,
   type WeightMode,
 } from "@/lib/types/grading";
 import { Button } from "@/components/ui/button";
@@ -46,13 +48,14 @@ interface StepDraft {
   assessmentTypeId: number | null;
   inputs: StepInputDraft[];
   finalStep: boolean;
+  role: StepRole;
 }
 
 let keySeq = 0;
 const nextKey = () => `s${++keySeq}`;
 
 function emptyStep(): StepDraft {
-  return { key: nextKey(), label: "", stepKind: "GROUP", filterMode: "ALL", monthIndex: 1, assessmentTypeId: null, inputs: [], finalStep: false };
+  return { key: nextKey(), label: "", stepKind: "GROUP", filterMode: "ALL", monthIndex: 1, assessmentTypeId: null, inputs: [], finalStep: false, role: "NONE" };
 }
 
 function monthlyTemplate(compositionTypeId: number | null): StepDraft[] {
@@ -60,17 +63,17 @@ function monthlyTemplate(compositionTypeId: number | null): StepDraft[] {
   const m2 = { ...emptyStep(), label: "Mois 2", filterMode: "MONTH" as const, monthIndex: 2 };
   const m3 = { ...emptyStep(), label: "Mois 3", filterMode: "MONTH" as const, monthIndex: 3 };
   const cours: StepDraft = {
-    ...emptyStep(), label: "Moyenne de cours", stepKind: "COMBINE",
+    ...emptyStep(), label: "Moyenne de cours", stepKind: "COMBINE", role: "COURS",
     inputs: [0, 1, 2].map((i) => ({ key: nextKey(), refIndex: i, weightMode: "EQUAL" as const, fixedWeight: null })),
   };
   const compo: StepDraft = {
-    ...emptyStep(), label: "Composition", filterMode: "TYPE", assessmentTypeId: compositionTypeId,
+    ...emptyStep(), label: "Composition", filterMode: "TYPE", assessmentTypeId: compositionTypeId, role: "COMPOSITION",
   };
   const semestre: StepDraft = {
     ...emptyStep(), label: "Moyenne semestrielle", stepKind: "COMBINE", finalStep: true,
     inputs: [
       { key: nextKey(), refIndex: 3, weightMode: "EQUAL", fixedWeight: null },
-      { key: nextKey(), refIndex: 4, weightMode: "SUBJECT_COEFFICIENT", fixedWeight: null },
+      { key: nextKey(), refIndex: 4, weightMode: "FIXED", fixedWeight: 2 },
     ],
   };
   return [m1, m2, m3, cours, compo, semestre];
@@ -90,6 +93,7 @@ function draftToStep(d: StepDraft, order: number): GradingFormulaInput["steps"][
         }))
       : [],
     finalStep: d.finalStep,
+    role: d.role,
   };
 }
 
@@ -106,6 +110,7 @@ function stepsToDrafts(f: GradingFormula): StepDraft[] {
       key: nextKey(), refIndex: i.refStepOrder - 1, weightMode: i.weightMode, fixedWeight: i.fixedWeight ?? null,
     })),
     finalStep: s.finalStep,
+    role: s.role ?? "NONE",
   }));
 }
 
@@ -171,6 +176,9 @@ export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
     }
     if (steps.some((s) => s.stepKind === "COMBINE" && s.inputs.length === 0)) {
       notifyError(new Error("Une étape de combinaison doit référencer au moins une étape précédente.")); return;
+    }
+    if (steps.filter((s) => s.role === "COURS").length > 1 || steps.filter((s) => s.role === "COMPOSITION").length > 1) {
+      notifyError(new Error("Une seule étape peut être étiquetée « Cours », et une seule « Composition ».")); return;
     }
     const payload: GradingFormulaInput = {
       label, periodType, active,
@@ -336,10 +344,18 @@ export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
                   </div>
                 )}
 
-                <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
-                  <input type="radio" name="finalStep" checked={s.finalStep} onChange={() => setFinal(i)} className="h-4 w-4 accent-brand-600" />
-                  Étape finale (résultat de la formule)
-                </label>
+                <div className="mt-3 grid grid-cols-2 gap-3 items-end">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="radio" name="finalStep" checked={s.finalStep} onChange={() => setFinal(i)} className="h-4 w-4 accent-brand-600" />
+                    Étape finale (résultat de la formule)
+                  </label>
+                  <Field>
+                    <Label>Alimente le bulletin</Label>
+                    <Select value={s.role} onChange={(e) => updateStep(i, { role: e.target.value as StepRole })}>
+                      {Object.entries(STEP_ROLE_LABEL).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                    </Select>
+                  </Field>
+                </div>
               </div>
             ))}
             <Button variant="secondary" onClick={addStep} leftSection={<Plus className="h-4 w-4" />}>Ajouter une étape</Button>

@@ -15,7 +15,6 @@ import {
   addRule,
   addPayslipLine,
   removePayslipLine,
-  generateBatch,
   approvePayslip,
   bankFileUrl,
   createStructure,
@@ -403,91 +402,93 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
   );
 }
 
+/**
+ * Génération en lot : le salaire de base n'est plus saisi à la main — dès qu'un enseignant est coché,
+ * le système connaît déjà ses heures réalisées du mois et son tarif, donc ce qu'il doit être payé
+ * (même calcul que l'onglet Rémunération, un enseignant à la fois — voir generatePayslipFromHours).
+ */
 function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
-  teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null }[];
+  teachers: { id: number; firstName: string; lastName: string }[];
   structures: SalaryStructure[]; onCancel: () => void; onDone: (count: number) => void;
 }) {
-  const [periodLabel, setPeriodLabel] = useState("");
-  const [periodStart, setPeriodStart] = useState<string>("");
-  const [periodEnd, setPeriodEnd] = useState<string>("");
+  const now = new Date();
+  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [y, m] = period.split("-").map(Number);
   const [structureId, setStructureId] = useState<string>("");
+  const [included, setIncluded] = useState<Set<number>>(() => new Set(teachers.map((t) => t.id)));
   const [loading, setLoading] = useState(false);
-  // Par défaut : tous les enseignants inclus, base pré-remplie depuis leur taux de rémunération.
-  const [rows, setRows] = useState(() =>
-    teachers.map((t) => ({
-      teacherId: t.id, name: `${t.firstName} ${t.lastName}`,
-      included: true, baseSalary: (t.remunerationRate != null && !Number.isNaN(Number(t.remunerationRate)) ? Number(t.remunerationRate) : 0) as number | "",
-    })),
-  );
 
-  function setRow(id: number, patch: Partial<{ included: boolean; baseSalary: number | "" }>) {
-    setRows((rs) => rs.map((r) => (r.teacherId === id ? { ...r, ...patch } : r)));
+  const teacherIds = useMemo(() => teachers.map((t) => t.id), [teachers]);
+  const payQuery = useQuery(
+    () => Promise.all(teacherIds.map((id) => getMonthlyPay(id, y, m).then((p) => [id, p] as const))).then((entries) => new Map(entries)),
+    [teacherIds.join(","), period],
+  );
+  const payByTeacher = payQuery.data ?? new Map<number, MonthlyPay>();
+
+  function toggle(id: number) {
+    setIncluded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   async function submit() {
-    if (!periodLabel.trim()) { notifyError(new Error("Le libellé de période est requis (ex. « Mai 2026 »).")); return; }
-    const wages = rows.filter((r) => r.included && r.baseSalary !== "" && Number(r.baseSalary) > 0)
-      .map((r) => ({ teacherId: r.teacherId, baseSalary: Number(r.baseSalary) }));
-    if (wages.length === 0) { notifyError(new Error("Sélectionnez au moins un enseignant avec un salaire de base.")); return; }
+    const ids = teachers.filter((t) => included.has(t.id)).map((t) => t.id);
+    if (ids.length === 0) { notifyError(new Error("Sélectionnez au moins un enseignant.")); return; }
     setLoading(true);
     try {
-      const created = await generateBatch({
-        periodLabel: periodLabel.trim(), periodStart: periodStart || null, periodEnd: periodEnd || null,
-        structureId: structureId ? Number(structureId) : null, wages,
-      });
-      onDone(created.length);
+      const results = await Promise.all(ids.map((id) => {
+        const t = teachers.find((x) => x.id === id);
+        return generatePayslipFromHours(id, y, m, t ? `${t.firstName} ${t.lastName}` : null, structureId ? Number(structureId) : null);
+      }));
+      onDone(results.length);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
-  const selectedCount = rows.filter((r) => r.included).length;
+  const selectedCount = included.size;
+  const fmtH = (min: number) => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}`;
 
   return (
     <div className="space-y-4">
-      <Field>
-        <Label>Période <span className="text-error-500">*</span></Label>
-        <Input placeholder="Ex. Mai 2026" value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)} />
-      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field>
-          <Label>Début (optionnel)</Label>
-          <DatePicker value={periodStart} onChange={setPeriodStart} clearable />
+          <Label>Mois <span className="text-error-500">*</span></Label>
+          <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
         </Field>
         <Field>
-          <Label>Fin (optionnel)</Label>
-          <DatePicker value={periodEnd} onChange={setPeriodEnd} clearable />
+          <Label>Structure salariale (optionnel)</Label>
+          <Select value={structureId} onChange={(e) => setStructureId(e.target.value)}>
+            <option value="">Aucune</option>
+            {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+          </Select>
         </Field>
       </div>
-      <Field>
-        <Label>Structure salariale (optionnel)</Label>
-        <Select value={structureId} onChange={(e) => setStructureId(e.target.value)}>
-          <option value="">Aucune</option>
-          {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-        </Select>
-      </Field>
 
       <div>
         <div className="mb-1 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">Enseignants ({selectedCount} sélectionné(s))</p>
           <div className="flex gap-2 text-xs">
-            <button type="button" className="text-brand-700 hover:underline" onClick={() => setRows((rs) => rs.map((r) => ({ ...r, included: true })))}>Tout cocher</button>
-            <button type="button" className="text-gray-500 hover:underline" onClick={() => setRows((rs) => rs.map((r) => ({ ...r, included: false })))}>Tout décocher</button>
+            <button type="button" className="text-brand-700 hover:underline" onClick={() => setIncluded(new Set(teacherIds))}>Tout cocher</button>
+            <button type="button" className="text-gray-500 hover:underline" onClick={() => setIncluded(new Set())}>Tout décocher</button>
           </div>
         </div>
         <div className="max-h-72 overflow-auto rounded-xl border border-gray-200">
           <Table>
-            <THead><tr><TH /><TH>Enseignant</TH><TH className="text-right">Salaire de base (GNF)</TH></tr></THead>
+            <THead><tr><TH /><TH>Enseignant</TH><TH className="text-right">Heures réalisées</TH><TH className="text-right">À payer</TH></tr></THead>
             <TBody>
-              {rows.length === 0 && <TR><TD colSpan={3} className="py-6 text-center text-gray-400">Aucun enseignant.</TD></TR>}
-              {rows.map((r) => (
-                <TR key={r.teacherId}>
-                  <TD><Checkbox checked={r.included} onChange={(e) => setRow(r.teacherId, { included: e.target.checked })} /></TD>
-                  <TD className="font-medium text-gray-900">{r.name}</TD>
-                  <TD className="text-right">
-                    <Input type="number" className="ml-auto h-9 w-32" min={0} disabled={!r.included}
-                      value={r.baseSalary} onChange={(e) => setRow(r.teacherId, { baseSalary: e.target.value === "" ? "" : Number(e.target.value) })} />
-                  </TD>
-                </TR>
-              ))}
+              {teachers.length === 0 && <TR><TD colSpan={4} className="py-6 text-center text-gray-400">Aucun enseignant.</TD></TR>}
+              {teachers.map((t) => {
+                const p = payByTeacher.get(t.id);
+                return (
+                  <TR key={t.id}>
+                    <TD><Checkbox checked={included.has(t.id)} onChange={() => toggle(t.id)} /></TD>
+                    <TD className="font-medium text-gray-900">{t.firstName} {t.lastName}</TD>
+                    <TD className="text-right text-sm text-gray-600">{p ? fmtH(p.realizedMinutes) : "…"}</TD>
+                    <TD className="text-right font-semibold text-gray-900">{p ? formatGNF(p.grossPay) : "…"}</TD>
+                  </TR>
+                );
+              })}
             </TBody>
           </Table>
         </div>

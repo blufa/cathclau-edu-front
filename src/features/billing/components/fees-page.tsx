@@ -113,7 +113,7 @@ export default function FeesPage() {
         </div>
       )}
 
-      <Modal open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }} title={editing ? "Modifier le frais" : "Nouveau frais"}>
+      <Modal open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }} title={editing ? "Modifier le frais" : "Nouveau frais"} className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <FeeForm
           tenantId={tenantId}
           initial={editing}
@@ -183,15 +183,27 @@ const feeSchema = z.object({
   classId: z.string(),
   classIds: z.array(z.string()),
   type: z.string(),
-  amount: z.number().positive("Montant requis"),
+  amount: z.number(),
   academicYear: z.string(),
   label: z.string(),
 }).superRefine((v, ctx) => {
   if (v.type === "OTHER" && !v.label.trim()) {
     ctx.addIssue({ code: "custom", path: ["label"], message: "Nom du frais requis (ex. Tenue scolaire)" });
   }
+  // Le montant est saisi tranche par tranche pour les frais récurrents créés (voir TrancheBuilder) ;
+  // pour les autres cas (frais ponctuel, ou modification), il reste requis ici.
+  if (v.type !== "MONTHLY" && v.type !== "TRANSPORT" && v.amount <= 0) {
+    ctx.addIssue({ code: "custom", path: ["amount"], message: "Montant requis" });
+  }
 });
 type FeeFormValues = z.infer<typeof feeSchema>;
+
+/** Une tranche en cours de saisie : mois librement choisis (pas forcément consécutifs) + son propre
+ * montant (fixé librement par l'école — pas nécessairement une division égale d'un prix mensuel unique). */
+interface TrancheDraft { monthValues: string[]; amount: number; }
+
+/** Récapitulatif d'une tranche après génération, avec la répartition par mois pour affichage. */
+interface TrancheRecap { label: string; amount: number; monthAmounts: { label: string; amount: number }[]; }
 
 function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }: {
   tenantId: number; initial: SchoolFee | null; classes: { value: string; label: string }[];
@@ -211,10 +223,56 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
+  const isRecurring = v.type === "MONTHLY" || v.type === "TRANSPORT";
+  const showTrancheBuilder = !initial && isRecurring;
+
+  // Génération par tranches (§billing) : l'école propose ses tranches (1ère, 2ème, 3ème…), choisit
+  // librement pour chacune les mois couverts (pas forcément consécutifs, ex. mai+juin+octobre) et
+  // son propre montant — le système ne fait que répartir ce montant sur les mois pour l'affichage.
+  const [genMonth, setGenMonth] = useState("");
+  const [tranches, setTranches] = useState<TrancheDraft[]>([
+    { monthValues: [], amount: 0 }, { monthValues: [], amount: 0 }, { monthValues: [], amount: 0 },
+  ]);
+  const [recap, setRecap] = useState<{ tranches: TrancheRecap[]; total: number } | null>(null);
+
+  // Les 9 mois de l'année scolaire, calculés depuis le mois de départ — sert de liste de cases à
+  // cocher, librement assignables à n'importe quelle tranche (une école peut vouloir répéter un mois
+  // sur plusieurs tranches, aucune exclusivité n'est imposée).
+  const schoolYearMonths = genMonth ? Array.from({ length: SCHOOL_YEAR_MONTHS }, (_, i) => addMonths(genMonth, i)) : [];
 
   function toggleClass(id: string) {
     const next = v.classIds.includes(id) ? v.classIds.filter((c) => c !== id) : [...v.classIds, id];
     setValue("classIds", next);
+  }
+  function setTranche(i: number, patch: Partial<TrancheDraft>) {
+    setTranches((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
+  }
+  function toggleTrancheMonth(i: number, month: string) {
+    setTranches((prev) => prev.map((t, idx) => (idx === i
+      ? { ...t, monthValues: t.monthValues.includes(month) ? t.monthValues.filter((m) => m !== month) : [...t.monthValues, month] }
+      : t)));
+  }
+  function addTranche() { setTranches((prev) => [...prev, { monthValues: [], amount: 0 }]); }
+  function removeTranche(i: number) { setTranches((prev) => prev.filter((_, idx) => idx !== i)); }
+
+  const coveredMonths = new Set(tranches.flatMap((t) => t.monthValues));
+  const totalMonths = coveredMonths.size;
+  const totalAmount = tranches.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+  /** Détail d'une tranche : son libellé (mois couverts, triés) et la répartition de son montant par mois. */
+  function trancheDetail(t: TrancheDraft, index: number): TrancheRecap {
+    const months = [...t.monthValues].sort();
+    const perMonth = months.length > 0 ? t.amount / months.length : 0;
+    const label = months.length === 0
+      ? `Tranche ${index + 1}`
+      : months.length === 1
+        ? monthToInstallment(months[0]).label
+        : `Tranche ${index + 1} (${months.map(monthShortLabel).join(", ")})`;
+    return {
+      label,
+      amount: t.amount,
+      monthAmounts: months.map((m) => ({ label: monthToInstallment(m).label, amount: perMonth })),
+    };
   }
 
   async function submit(values: FeeFormValues) {
@@ -226,14 +284,75 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
     setLoading(true);
     try {
       if (initial) {
+        if (values.amount <= 0) { setError("amount", { message: "Montant requis" }); return; }
         await updateFee(initial.id, { classId: Number(values.classId), type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label });
-      } else {
-        // Un même frais (type + montant) appliqué à plusieurs classes : on crée un frais par classe.
-        await Promise.all(values.classIds.map((cid) =>
-          createFee({ tenantId, classId: Number(cid), type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label })));
+        onSaved();
+        return;
       }
+      if (showTrancheBuilder) {
+        if (!genMonth) { setError("amount", { message: "Choisissez le mois de départ de l'année scolaire." }); return; }
+        if (tranches.some((t) => t.monthValues.length === 0 || !t.amount || t.amount <= 0)) {
+          setError("amount", { message: "Chaque tranche doit couvrir au moins un mois et avoir un montant." });
+          return;
+        }
+        // Prix mensuel de référence = moyenne sur les mois couverts (utilisé ailleurs, ex. simulation
+        // du montant annuel à l'inscription) ; la facturation réelle reste au niveau de la tranche.
+        const avgMonthly = totalMonths > 0 ? totalAmount / totalMonths : 0;
+        const fees = await Promise.all(values.classIds.map((cid) =>
+          createFee({ tenantId, classId: Number(cid), type: values.type as FeeType, amount: avgMonthly, academicYear: values.academicYear, label })));
+
+        const trancheRecaps: TrancheRecap[] = [];
+        for (const [i, t] of tranches.entries()) {
+          const detail = trancheDetail(t, i);
+          const months = [...t.monthValues].sort();
+          const { dueDate } = monthToInstallment(months[months.length - 1]);
+          await Promise.all(fees.map((fee) => createInstallment(fee.id, { label: detail.label, amount: t.amount, dueDate, months })));
+          trancheRecaps.push(detail);
+        }
+        setRecap({ tranches: trancheRecaps, total: totalAmount });
+        return; // La modale reste ouverte : le récapitulatif est affiché avant fermeture.
+      }
+      // Un même frais (type + montant) appliqué à plusieurs classes : on crée un frais par classe.
+      await Promise.all(values.classIds.map((cid) =>
+        createFee({ tenantId, classId: Number(cid), type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label })));
       onSaved();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
+  }
+
+  if (recap) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">
+          Frais créé pour {v.classIds.length} classe{v.classIds.length > 1 ? "s" : ""}. Voici les tranches générées —
+          c&apos;est ce que verront les familles sur l&apos;inscription et le paiement de la scolarité.
+        </p>
+        <div className="space-y-3">
+          {recap.tranches.map((t, i) => (
+            <div key={i} className="rounded-xl border border-gray-200 p-3">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-900">{t.label}</span>
+                <span className="text-sm font-semibold text-brand-700">{formatGNF(t.amount)}</span>
+              </div>
+              <div className="space-y-0.5">
+                {t.monthAmounts.map((m, j) => (
+                  <div key={j} className="flex justify-between text-xs text-gray-500">
+                    <span className="capitalize">{m.label}</span>
+                    <span>{formatGNF(m.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+          <span className="text-sm font-semibold text-gray-700">Total annuel</span>
+          <span className="text-base font-bold text-gray-900">{formatGNF(recap.total)}</span>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={onSaved}>Terminé</Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -272,11 +391,56 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
           {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
         </Field>
       )}
-      <Field>
-        <Label>Montant</Label>
-        <MoneyInput value={v.amount} onValueChange={(n) => setValue("amount", n)} />
-        {errors.amount && <p className="text-xs text-error-600">{errors.amount.message}</p>}
-      </Field>
+
+      {showTrancheBuilder ? (
+        <div className="space-y-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+          <Field>
+            <Label>Mois de départ de l&apos;année scolaire</Label>
+            <p className="mb-1.5 text-xs text-gray-400">Sert à lister les {SCHOOL_YEAR_MONTHS} mois de l&apos;année ci-dessous ; chaque tranche choisit librement les siens.</p>
+            <Input type="month" className="sm:w-48" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+          </Field>
+          <div className="space-y-2">
+            {tranches.map((t, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                <span className="w-16 shrink-0 text-sm font-medium text-gray-700">T{i + 1}</span>
+                <MoneyInput className="w-36" value={t.amount} onValueChange={(n) => setTranche(i, { amount: n })} />
+                <div className="flex flex-1 flex-wrap gap-x-2 gap-y-1">
+                  {schoolYearMonths.map((m) => {
+                    const usedElsewhere = tranches.some((other, idx) => idx !== i && other.monthValues.includes(m));
+                    return (
+                      <Checkbox
+                        key={m}
+                        label={monthShortLabel(m)}
+                        checked={t.monthValues.includes(m)}
+                        disabled={usedElsewhere}
+                        onChange={() => toggleTrancheMonth(i, m)}
+                      />
+                    );
+                  })}
+                </div>
+                <Button type="button" variant="ghost" className="text-error-600" disabled={tranches.length === 1} onClick={() => removeTranche(i)}>✕</Button>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between">
+            <Button type="button" variant="ghost" size="sm" onClick={addTranche}>+ Ajouter une tranche</Button>
+            <div className="text-right text-xs">
+              <p className={totalMonths === SCHOOL_YEAR_MONTHS ? "text-gray-400" : "text-warning-600"}>
+                {totalMonths} / {SCHOOL_YEAR_MONTHS} mois couverts
+              </p>
+              <p className="font-semibold text-gray-700">Total : {formatGNF(totalAmount)}</p>
+            </div>
+          </div>
+          {errors.amount && <p className="text-xs text-error-600">{errors.amount.message}</p>}
+        </div>
+      ) : (
+        <Field>
+          <Label>Montant</Label>
+          <MoneyInput value={v.amount} onValueChange={(n) => setValue("amount", n)} />
+          {errors.amount && <p className="text-xs text-error-600">{errors.amount.message}</p>}
+        </Field>
+      )}
+
       <Field>
         <Label>Année scolaire</Label>
         <Input value={v.academicYear} onChange={(e) => setValue("academicYear", e.target.value)} />
@@ -326,10 +490,10 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
   // Mensualité ET transport sont des frais récurrents sur l'année scolaire (9 mois) : les deux
   // profitent du générateur de tranches, pas seulement MONTHLY.
   const isRecurring = fee.type === "MONTHLY" || fee.type === "TRANSPORT";
-  // Génération par tranches : l'école choisit le nombre de tranches et, pour chacune, le nombre de
-  // mois qu'elle couvre (ex. 3 tranches de 3 mois, ou 9 tranches d'1 mois pour un paiement mensuel).
+  // Génération par tranches : l'école choisit le nombre de tranches et, pour chacune, les mois
+  // qu'elle couvre librement (pas forcément consécutifs, ex. mai + juin + octobre).
   const [genMonth, setGenMonth] = useState("");
-  const [tranches, setTranches] = useState<number[]>([3, 3, 3]);
+  const [tranches, setTranches] = useState<string[][]>([[], [], []]);
   const [generating, setGenerating] = useState(false);
   const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<InstallmentFormValues>({
     resolver: zodResolver(installmentSchema),
@@ -338,36 +502,37 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
 
-  const totalMonths = tranches.reduce((s, n) => s + (Number(n) || 0), 0);
+  const schoolYearMonths = genMonth ? Array.from({ length: SCHOOL_YEAR_MONTHS }, (_, i) => addMonths(genMonth, i)) : [];
+  const totalMonths = new Set(tranches.flat()).size;
 
-  function setTrancheMonths(i: number, months: number) {
-    setTranches((prev) => prev.map((m, idx) => (idx === i ? months : m)));
+  function toggleTrancheMonth(i: number, month: string) {
+    setTranches((prev) => prev.map((months, idx) => (idx === i
+      ? (months.includes(month) ? months.filter((m) => m !== month) : [...months, month])
+      : months)));
   }
-  function addTranche() { setTranches((prev) => [...prev, 1]); }
+  function addTranche() { setTranches((prev) => [...prev, []]); }
   function removeTranche(i: number) { setTranches((prev) => prev.filter((_, idx) => idx !== i)); }
+
+  const [manualMonth, setManualMonth] = useState("");
 
   async function add(values: InstallmentFormValues) {
     try {
-      await createInstallment(fee.id, { label: values.label, amount: values.amount, dueDate: values.dueDate || null });
-      reset(); setAdding(false); notifySuccess("Échéance ajoutée"); q.refetch();
+      await createInstallment(fee.id, { label: values.label, amount: values.amount, dueDate: values.dueDate || null, months: manualMonth ? [manualMonth] : undefined });
+      reset(); setManualMonth(""); setAdding(false); notifySuccess("Échéance ajoutée"); q.refetch();
     } catch (err) { notifyError(err); }
   }
   async function generateTranches() {
     if (!genMonth) { notifyError("Choisissez le mois de départ."); return; }
-    if (tranches.some((m) => !m || m < 1)) { notifyError("Chaque tranche doit couvrir au moins un mois."); return; }
+    if (tranches.some((months) => months.length === 0)) { notifyError("Chaque tranche doit couvrir au moins un mois."); return; }
     setGenerating(true);
     try {
-      let cursor = genMonth;
-      for (let i = 0; i < tranches.length; i++) {
-        const months = tranches[i];
-        const firstMonth = cursor;
-        const lastMonth = addMonths(cursor, months - 1);
-        const { dueDate } = monthToInstallment(lastMonth);
-        const label = months === 1
-          ? monthToInstallment(firstMonth).label
-          : `Tranche ${i + 1} (${monthShortLabel(firstMonth)} – ${monthShortLabel(lastMonth)})`;
-        await createInstallment(fee.id, { label, amount: Number(fee.amount) * months, dueDate });
-        cursor = addMonths(cursor, months);
+      for (const [i, raw] of tranches.entries()) {
+        const months = [...raw].sort();
+        const { dueDate } = monthToInstallment(months[months.length - 1]);
+        const label = months.length === 1
+          ? monthToInstallment(months[0]).label
+          : `Tranche ${i + 1} (${months.map(monthShortLabel).join(", ")})`;
+        await createInstallment(fee.id, { label, amount: Number(fee.amount) * months.length, dueDate, months });
       }
       notifySuccess(`${tranches.length} tranche(s) générée(s)`);
       q.refetch();
@@ -388,18 +553,28 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
       {canWrite && isRecurring && (
         <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
           <Field>
-            <Label>Mois de départ</Label>
+            <Label>Mois de départ de l&apos;année scolaire</Label>
             <Input type="month" className="sm:w-48" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
           </Field>
           <div className="space-y-2">
             {tranches.map((months, i) => (
-              <div key={i} className="flex flex-wrap items-end gap-2">
-                <span className="w-20 text-sm text-gray-600">Tranche {i + 1}</span>
-                <Field>
-                  <Label>Nombre de mois</Label>
-                  <Input type="number" min={1} max={12} className="w-32" value={months} onChange={(e) => setTrancheMonths(i, Number(e.target.value))} />
-                </Field>
-                <span className="text-xs text-gray-400">= {formatGNF(Number(fee.amount) * (months || 0))}</span>
+              <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                <span className="w-16 shrink-0 text-sm text-gray-600">T{i + 1}</span>
+                <span className="w-28 shrink-0 text-xs text-gray-400">= {formatGNF(Number(fee.amount) * (months.length || 0))}</span>
+                <div className="flex flex-1 flex-wrap gap-x-2 gap-y-1">
+                  {schoolYearMonths.map((m) => {
+                    const usedElsewhere = tranches.some((other, idx) => idx !== i && other.includes(m));
+                    return (
+                      <Checkbox
+                        key={m}
+                        label={monthShortLabel(m)}
+                        checked={months.includes(m)}
+                        disabled={usedElsewhere}
+                        onChange={() => toggleTrancheMonth(i, m)}
+                      />
+                    );
+                  })}
+                </div>
                 <Button type="button" variant="ghost" className="text-error-600" disabled={tranches.length === 1} onClick={() => removeTranche(i)}>✕</Button>
               </div>
             ))}
@@ -440,6 +615,7 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
                 type="month"
                 onChange={(e) => {
                   const val = e.target.value;
+                  setManualMonth(val);
                   if (!val) return;
                   const { label, dueDate } = monthToInstallment(val);
                   setValue("label", label);

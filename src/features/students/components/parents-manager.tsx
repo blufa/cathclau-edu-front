@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, UserPlus } from "lucide-react";
+import { Plus, UserPlus, Wallet } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import {
   createParent,
+  getParentChildren,
   getStudentParents,
   linkParentToStudent,
   listParents,
@@ -21,6 +23,7 @@ import { createUserWithRole } from "@/lib/api/iam";
 import { phoneRule } from "@/lib/phone";
 import { PhoneInput } from "@/components/ui/phone-input";
 import type { Parent } from "@/lib/types/student";
+import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
@@ -34,9 +37,16 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 /** Manage a student's parents: list, link an existing parent (sibling reuse) or create + link a new one. */
 export function ParentsManager({ studentId, canWrite }: { studentId: number; canWrite: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => getStudentParents(studentId), [studentId]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Parent | null>(null);
+  const [collectingFor, setCollectingFor] = useState<Parent | null>(null);
+  const childrenQuery = useQuery(
+    () => (collectingFor ? getParentChildren(collectingFor.id) : Promise.resolve([])),
+    [collectingFor?.id],
+  );
 
   function makePrimary(p: Parent) {
     setPrimaryGuardian(p.id, studentId)
@@ -83,6 +93,11 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
                   </p>
                   <p className="text-xs text-slate-500">{p.phone ?? p.email ?? "—"}</p>
                 </div>
+                {canWrite && tenantId != null && (
+                  <Button size="sm" variant="ghost" leftSection={<Wallet className="h-4 w-4" />} onClick={() => setCollectingFor(p)}>
+                    Encaisser (fratrie)
+                  </Button>
+                )}
                 {canWrite && !p.primaryGuardian && <Button size="sm" variant="ghost" onClick={() => makePrimary(p)}>Définir principal</Button>}
                 {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>Modifier</Button>}
                 {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => unlink(p)}>Délier</Button>}
@@ -98,6 +113,16 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
         <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier le parent">
           {editing && <EditParentForm parent={editing} onCancel={() => setEditing(null)} onDone={() => { setEditing(null); notifySuccess("Parent mis à jour"); q.refetch(); }} />}
         </Modal>
+
+        {collectingFor && tenantId != null && !childrenQuery.loading && (
+          <MultiChildCollectModal
+            students={(childrenQuery.data ?? []).map((c) => ({ id: c.id, name: `${c.firstName} ${c.lastName}` }))}
+            tenantId={tenantId}
+            open={!!collectingFor}
+            onClose={() => setCollectingFor(null)}
+            onCollected={() => setCollectingFor(null)}
+          />
+        )}
       </CardBody>
     </Card>
   );

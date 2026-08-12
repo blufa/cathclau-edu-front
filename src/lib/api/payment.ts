@@ -30,13 +30,16 @@ export function initiatePayment(input: InitiatePaymentInput): Promise<InitiatePa
 
 export interface GroupPaymentInput {
   tenantId: number | null;
+  /** Élève principal (premier enfant pour un paiement groupé multi-enfants, §payments — fratrie). */
   studentId: number;
   channel: PaymentChannel;
   payerNumber?: string | null;
   coverageLabel: string;
   monthsCount: number;
   remainingAfter: number;
-  shares: { invoiceId: number; amount: number }[];
+  /** studentId par part optionnel — nécessaire seulement quand les factures appartiennent à des
+   * élèves différents (encaissement multi-enfants) ; sinon retombe sur le studentId principal. */
+  shares: { invoiceId: number; studentId?: number; amount: number }[];
   academicYearId?: number | null;
 }
 

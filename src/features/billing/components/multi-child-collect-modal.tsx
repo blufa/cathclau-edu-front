@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { listInvoicesByStudent } from "@/lib/api/billing";
-import { confirmSchoolPaymentViaDjomy, initiateGroupPayment } from "@/lib/api/payment";
-import { type Invoice } from "@/lib/types/billing";
+import { useState } from "react";
+import { useQuery } from "@/hooks/use-query";
+import { getCurrentAcademicYear } from "@/lib/api/academics";
+import { searchEnrollments } from "@/lib/api/enrollments";
+import { getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent } from "@/lib/api/billing";
+import { initiateGroupPayment } from "@/lib/api/payment";
+import { FEE_TYPE_LABEL, type FeeType, type Invoice } from "@/lib/types/billing";
 import { type PaymentChannel } from "@/lib/types/payment";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "@/components/ui/select";
-import { Label, Field } from "@/components/ui/input";
+import { Label, Field, MoneyInput } from "@/components/ui/input";
+import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { FileText } from "lucide-react";
 
 const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
   { value: "CASH", label: "Espèces (guichet)" },
@@ -21,177 +26,250 @@ const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
   { value: "DJOMY", label: "En ligne (Djomy)" },
 ];
 
-const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
-const labelOf = (inv: Invoice) => inv.periodLabel || inv.reference;
+const GROUP_ORDER: Record<FeeType, number> = {
+  ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1, TRANSPORT: 2, CANTEEN: 2, EXAM: 2, OTHER: 2,
+};
 
-type Child = { id: number; name: string };
-type ChildInvoices = { child: Child; invoices: Invoice[] };
+const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+function monthShortLabel(monthValue: string): string {
+  const [, m] = monthValue.split("-").map(Number);
+  return MONTHS_FR[m - 1] ?? monthValue;
+}
+
+const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
+
+interface ChildRow {
+  studentId: number;
+  studentName: string;
+  invoice: Invoice;
+  label: string;
+  coveredMonths: string[];
+}
+
+/** Factures impayées d'un enfant, triées et étiquetées comme sur son propre écran d'encaissement
+ * (inscription d'abord, puis scolarité chronologique, puis frais annexes). */
+async function fetchChildRows(studentId: number, studentName: string, classId: number | null): Promise<ChildRow[]> {
+  const [invoicesAll, fees] = await Promise.all([
+    listInvoicesByStudent(studentId),
+    classId ? listFeesByClass(classId) : Promise.resolve([]),
+  ]);
+  const unpaid = invoicesAll.filter((inv) => inv.status !== "PAID");
+  const monthlyFee = fees.find((f) => f.type === "MONTHLY");
+  const installments = monthlyFee ? await listInstallments(monthlyFee.id) : [];
+  const installmentMonths = new Map(installments.map((i) => [i.id, [...(i.months ?? [])].sort()]));
+  const installmentSortKey = new Map(installments.map((i) => {
+    const months = [...(i.months ?? [])].sort();
+    return [i.id, months[0] ?? i.dueDate ?? "9999-12"];
+  }));
+  const feeById = new Map(fees.map((f) => [f.id, f]));
+  function groupOf(inv: Invoice): number {
+    const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
+    return fee ? GROUP_ORDER[fee.type] : 2;
+  }
+  function sortKeyOf(inv: Invoice): string {
+    return inv.periodLabel ? (installmentSortKey.get(inv.installmentId ?? -1) ?? "9999-12") : "";
+  }
+  const sorted = [...unpaid].sort((a, b) => {
+    const g = groupOf(a) - groupOf(b);
+    return g !== 0 ? g : sortKeyOf(a).localeCompare(sortKeyOf(b));
+  });
+  return sorted.map((inv) => {
+    const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
+    const label = inv.periodLabel ?? (fee ? (fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type]) : inv.reference);
+    return { studentId, studentName, invoice: inv, label, coveredMonths: installmentMonths.get(inv.installmentId ?? -1) ?? [] };
+  });
+}
 
 /**
- * Family checkout: pay the unpaid invoices of several children in one go. Builds a single grouped
- * payment across the selected invoices (any student), settled per-invoice server-side, producing one
- * receipt. Desk channels are immediate; Djomy opens one online transaction for the whole total.
+ * Encaissement groupé pour plusieurs enfants (fratrie ou sélection libre) : un parent peut régler en
+ * une fois l'inscription, la scolarité (avec ses mois) et les frais annexes de PLUSIEURS enfants — un
+ * seul paiement, un seul reçu détaillant chaque enfant. Option à côté de l'encaissement par élève
+ * (CollectFeeModal).
  */
 export function MultiChildCollectModal({
   students, tenantId, open, onClose, onCollected,
 }: {
-  students: Child[];
-  tenantId: number;
-  open: boolean;
-  onClose: () => void;
-  onCollected: () => void;
+  students: { id: number; name: string }[]; tenantId: number; open: boolean; onClose: () => void; onCollected: () => void;
 }) {
-  const [data, setData] = useState<ChildInvoices[]>([]);
-  const [loading, setLoading] = useState(true);
+  const q = useQuery(async () => {
+    if (!open || students.length === 0) return [] as ChildRow[];
+    const year = await getCurrentAcademicYear();
+    const perChild = await Promise.all(students.map(async (student) => {
+      let classId: number | null = null;
+      if (year) {
+        const enrollments = await searchEnrollments({ studentId: student.id, academicYearId: year.id, status: "VALIDATED" });
+        classId = enrollments[0]?.classId ?? null;
+      }
+      return fetchChildRows(student.id, student.name, classId);
+    }));
+    return perChild.flat();
+  }, [open, students.map((s) => s.id).join(",")]);
+  const rows = q.data ?? [];
+  const studentIds = [...new Set(rows.map((r) => r.studentId))];
+
   const [selected, setSelected] = useState<number[]>([]);
+  const [customAmounts, setCustomAmounts] = useState<Record<number, number>>({});
+  const [monthSelections, setMonthSelections] = useState<Record<number, string[]>>({});
   const [channel, setChannel] = useState<PaymentChannel>("CASH");
-  const [paying, setPaying] = useState(false);
-  const [onlineWaiting, setOnlineWaiting] = useState(false);
-  const pollIdRef = useRef<number | null>(null);
-  const pollTriesRef = useRef(0);
+  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    let active = true;
-    void (async () => {
-      setLoading(true);
-      try {
-        const res = await Promise.all(
-          students.map(async (child) => ({
-            child,
-            invoices: (await listInvoicesByStudent(child.id)).filter((i) => i.status !== "PAID"),
-          })),
-        );
-        if (active) setData(res);
-      } catch (err) {
-        notifyError(err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [open, students]);
+  function amountFor(row: ChildRow): number {
+    const custom = customAmounts[row.invoice.id];
+    return custom != null ? Math.min(Math.max(custom, 0), remainingOf(row.invoice)) : remainingOf(row.invoice);
+  }
+  function setAmount(row: ChildRow, value: number) {
+    setCustomAmounts((prev) => ({ ...prev, [row.invoice.id]: Math.min(Math.max(value, 0), remainingOf(row.invoice)) }));
+  }
+  function toggleMonth(row: ChildRow, month: string) {
+    const current = monthSelections[row.invoice.id] ?? row.coveredMonths;
+    const next = current.includes(month) ? current.filter((x) => x !== month) : [...current, month];
+    setMonthSelections((prev) => ({ ...prev, [row.invoice.id]: next }));
+    const perMonth = Number(row.invoice.totalAmount) / row.coveredMonths.length;
+    setAmount(row, next.length * perMonth);
+  }
+  const toggle = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const allIds = rows.map((r) => r.invoice.id);
+  const toggleAll = () => setSelected((s) => (s.length === allIds.length ? [] : allIds));
 
-  const allInvoices = data.flatMap((d) => d.invoices);
-  const selectedInvoices = allInvoices.filter((i) => selected.includes(i.id));
-  const total = selectedInvoices.reduce((s, i) => s + remainingOf(i), 0);
-  const remainingAfter = allInvoices.filter((i) => !selected.includes(i.id)).reduce((s, i) => s + remainingOf(i), 0);
+  const selectedRows = rows.filter((r) => selected.includes(r.invoice.id));
+  const total = selectedRows.reduce((s, r) => s + amountFor(r), 0);
+  const remainingAfter = rows.reduce((s, r) => {
+    if (!selected.includes(r.invoice.id)) return s + remainingOf(r.invoice);
+    return s + Math.max(0, remainingOf(r.invoice) - amountFor(r));
+  }, 0);
   const online = channel === "DJOMY";
-  const toggle = (id: number) =>
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
-  // Polling Djomy après redirection : confirme/répartit dès que le paiement est réussi.
-  useEffect(() => {
-    if (!onlineWaiting || pollIdRef.current == null) return;
-    const t = setInterval(async () => {
-      pollTriesRef.current += 1;
-      try {
-        const p = await confirmSchoolPaymentViaDjomy(pollIdRef.current as number);
-        if (p.status === "SUCCEEDED") {
-          clearInterval(t);
-          setOnlineWaiting(false);
-          notifySuccess("Paiement en ligne confirmé — reçu généré.");
-          setSelected([]);
-          onCollected();
-          onClose();
-        }
-      } catch { /* on continue */ }
-      if (pollTriesRef.current >= 40) { clearInterval(t); setOnlineWaiting(false); }
-    }, 4000);
-    return () => clearInterval(t);
-  }, [onlineWaiting, onCollected, onClose]);
+  async function showPdf(inv: Invoice) {
+    try { setPreview({ url: await getInvoicePdfObjectUrl(inv.id), title: `Facture ${inv.reference}` }); }
+    catch (err) { notifyError(err); }
+  }
 
-  async function pay() {
-    if (selectedInvoices.length === 0) return;
-    setPaying(true);
+  async function collect() {
+    const shares = selectedRows
+      .map((r) => ({ invoiceId: r.invoice.id, studentId: r.studentId, amount: amountFor(r) }))
+      .filter((s) => s.amount > 0);
+    if (shares.length === 0) return;
+    setLoading(true);
     try {
-      // Libellé de couverture par enfant : « Awa: Octobre, Novembre · Moussa: Inscription ».
-      const coverageLabel = data
-        .map((d) => {
-          const picked = d.invoices.filter((i) => selected.includes(i.id));
-          return picked.length ? `${d.child.name}: ${picked.map(labelOf).join(", ")}` : null;
-        })
-        .filter(Boolean)
-        .join(" · ");
-      const res = await initiateGroupPayment({
-        tenantId,
-        studentId: selectedInvoices[0].studentId, // élève représentatif (répartition réelle par facture)
-        channel,
+      const coverageLabel = `Fratrie (${studentIds.length} enfant${studentIds.length > 1 ? "s" : ""}) — `
+        + selectedRows.map((r) => `${r.studentName} : ${r.label}`).join(", ");
+      await initiateGroupPayment({
+        tenantId, studentId: rows[0]?.studentId, channel,
         payerNumber: online ? "614324299" : undefined,
-        coverageLabel,
-        monthsCount: selectedInvoices.length,
-        remainingAfter,
-        shares: selectedInvoices.map((i) => ({ invoiceId: i.id, amount: remainingOf(i) })),
-        academicYearId: selectedInvoices[0]?.academicYearId ?? null,
+        coverageLabel, monthsCount: selectedRows.length, remainingAfter, shares,
+        academicYearId: selectedRows[0]?.invoice.academicYearId ?? null,
       });
-      if (online) {
-        pollIdRef.current = res.payment.id;
-        pollTriesRef.current = 0;
-        setOnlineWaiting(true);
-        if (res.redirectUrl) {
-          const w = window.open(res.redirectUrl, "_blank", "noopener,noreferrer");
-          if (!w) window.location.assign(res.redirectUrl);
-        }
-      } else {
-        notifySuccess(`${selectedInvoices.length} facture(s) encaissée(s) — reçu généré.`);
-        setSelected([]);
-        onCollected();
-        onClose();
-      }
-    } catch (err) {
-      notifyError(err);
-    } finally {
-      setPaying(false);
-    }
+      notifySuccess(`${selectedRows.length} facture(s) encaissée(s) pour ${studentIds.length} enfant(s) — reçu unique généré.`);
+      setSelected([]); setCustomAmounts({}); setMonthSelections({});
+      onCollected();
+    } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Encaissement famille (plusieurs enfants)">
-      {loading ? (
-        <div className="flex justify-center py-10"><Spinner /></div>
-      ) : allInvoices.length === 0 ? (
-        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
-          Aucune facture impayée pour les enfants sélectionnés.
-        </p>
-      ) : (
-        <div className="space-y-4">
-          {data.map((d) => d.invoices.length > 0 && (
-            <div key={d.child.id} className="rounded-xl border border-slate-200 p-3">
-              <p className="mb-2 text-sm font-semibold text-slate-700">{d.child.name}</p>
-              <div className="space-y-1.5">
-                {d.invoices.map((inv) => (
-                  <label key={inv.id} className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                    <Checkbox
-                      checked={selected.includes(inv.id)}
-                      onChange={() => toggle(inv.id)}
-                      label={<span className="text-sm text-slate-700">{labelOf(inv)}</span>}
-                    />
-                    <span className="text-sm text-slate-600">{formatGNF(remainingOf(inv))}</span>
-                  </label>
-                ))}
+    <>
+      <Modal open={open} onClose={onClose} title={`Encaissement groupé (${students.length} élève${students.length > 1 ? "s" : ""})`} className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        {q.loading ? (
+          <div className="flex justify-center py-10"><Spinner /></div>
+        ) : students.length === 0 ? (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">Aucun élève sélectionné.</p>
+        ) : rows.length === 0 ? (
+          <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Toutes les factures de tous les enfants sont soldées.</p>
+        ) : (
+          <div className="space-y-5">
+            <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{studentIds.length} enfant(s) — factures à régler</p>
+                <button type="button" onClick={toggleAll} className="text-xs text-brand-700 hover:underline">
+                  {selected.length === allIds.length ? "Tout décocher" : "Tout sélectionner"}
+                </button>
               </div>
-            </div>
-          ))}
 
-          <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-end">
-            <Field>
-              <Label>Mode de paiement</Label>
-              <Select className="sm:w-56" value={channel} onChange={(e) => setChannel(e.target.value as PaymentChannel)}>
-                {PAYMENT_CHANNELS.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
-              </Select>
-            </Field>
-            <div className="flex-1" />
-            <Button onClick={pay} loading={paying || onlineWaiting} disabled={selectedInvoices.length === 0}>
-              {online ? "Payer en ligne" : "Encaisser"} {selectedInvoices.length} · {formatGNF(total)}
-            </Button>
+              {studentIds.map((sid) => {
+                const childRows = rows.filter((r) => r.studentId === sid);
+                return (
+                  <div key={sid} className="mb-3 last:mb-0">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{childRows[0].studentName}</p>
+                    <div className="space-y-1.5">
+                      {childRows.map((row) => {
+                        const isChecked = selected.includes(row.invoice.id);
+                        const checkedSubMonths = monthSelections[row.invoice.id] ?? row.coveredMonths;
+                        const partial = isChecked && amountFor(row) < remainingOf(row.invoice);
+                        return (
+                          <div key={row.invoice.id} className="rounded-lg px-2 py-1.5 hover:bg-white">
+                            <label className="flex cursor-pointer items-center justify-between gap-2">
+                              <Checkbox
+                                checked={isChecked}
+                                onChange={() => toggle(row.invoice.id)}
+                                label={(
+                                  <span className="text-sm text-slate-700">
+                                    {row.label}
+                                    {row.invoice.discountAmount != null && Number(row.invoice.discountAmount) > 0 && (
+                                      <span className="ml-1.5 text-xs font-medium text-success-600" title={row.invoice.discountReason ?? undefined}>
+                                        (remise −{formatGNF(row.invoice.discountAmount)})
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              />
+                              <div className="flex items-center gap-2">
+                                <button type="button" onClick={() => showPdf(row.invoice)}
+                                  className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
+                                  <FileText className="h-3.5 w-3.5" />
+                                </button>
+                                {isChecked ? (
+                                  <MoneyInput className="w-36" value={amountFor(row)} onValueChange={(n) => setAmount(row, n)} />
+                                ) : (
+                                  <span className="text-sm text-slate-600">{formatGNF(remainingOf(row.invoice))}</span>
+                                )}
+                              </div>
+                            </label>
+                            {isChecked && row.coveredMonths.length > 1 && (
+                              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 pl-6">
+                                {row.coveredMonths.map((month) => (
+                                  <Checkbox
+                                    key={month}
+                                    checked={checkedSubMonths.includes(month)}
+                                    onChange={() => toggleMonth(row, month)}
+                                    label={<span className="text-xs text-slate-500">{monthShortLabel(month)}</span>}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {partial && (
+                              <p className="pl-6 text-xs text-warning-600">
+                                Paiement partiel — reste {formatGNF(remainingOf(row.invoice) - amountFor(row))} sur cette facture.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="mt-4 flex flex-col gap-3 border-t border-brand-100 pt-3 sm:flex-row sm:items-end">
+                <Field>
+                  <Label>Mode de paiement</Label>
+                  <Select className="sm:w-56" value={channel} onChange={(e) => setChannel(e.target.value as PaymentChannel)}>
+                    {PAYMENT_CHANNELS.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
+                  </Select>
+                </Field>
+                <div className="flex-1" />
+                <Button onClick={collect} loading={loading} disabled={selected.length === 0}>
+                  {online ? "Payer en ligne" : "Encaisser"} {selected.length} facture{selected.length > 1 ? "s" : ""} · {formatGNF(total)}
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                Un seul paiement, un seul reçu listant chaque enfant et ses factures réglées.
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-slate-400">
-            {onlineWaiting
-              ? "Portail Djomy ouvert dans un nouvel onglet — validation automatique dès le paiement confirmé."
-              : "Un seul paiement réparti sur les factures choisies de chaque enfant, avec un reçu unique."}
-          </p>
-        </div>
-      )}
-    </Modal>
+        )}
+      </Modal>
+
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+    </>
   );
 }

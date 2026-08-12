@@ -6,6 +6,7 @@ import type {
   AssessmentSessionSettingsInput,
   AssessmentTypeConfig,
   AssessmentTypeConfigInput,
+  AnnualReportCard,
   DecisionRule,
   DecisionRuleInput,
   EliminatoryRule,
@@ -195,6 +196,29 @@ export function getReportCardsByClassPeriod(classId: number, periodId: number): 
 
 export function getReportCardByStudentPeriod(studentId: number, periodId: number): Promise<ReportCard> {
   return api.get<ReportCard>(`/grading/report-cards/student/${studentId}/period/${periodId}`);
+}
+
+/** Centralisateur de classe (PDF) : une ligne par élève, colonnes Cours/Composition par matière. */
+export function getClassCentralizerPdfObjectUrl(classId: number, periodId: number): Promise<string> {
+  return api.blobUrl(`/grading/report-cards/class/${classId}/period/${periodId}/centralisateur/download`);
+}
+
+/** Fiche de notes vierge (PDF) à imprimer et donner à l'enseignant : liste des élèves de la classe. */
+export function getAssessmentPlanPdfObjectUrl(classId: number, subjectId: number, academicYearId: number): Promise<string> {
+  return api.blobUrl(`/grading/assessments/plan/pdf`, { query: { classId, subjectId, academicYearId } });
+}
+
+// ── Bulletin annuel (agrégation des 2 semestres) ─────────────────────────────
+export function getAnnualReportCards(classId: number, academicYearId: number): Promise<AnnualReportCard[]> {
+  return api.get<AnnualReportCard[]>("/grading/report-cards/annual", { query: { classId, academicYearId } });
+}
+
+export function getAnnualReportCard(studentId: number, classId: number, academicYearId: number): Promise<AnnualReportCard> {
+  return api.get<AnnualReportCard>(`/grading/report-cards/annual/${studentId}`, { query: { classId, academicYearId } });
+}
+
+export function getAnnualReportCardPdfObjectUrl(studentId: number, classId: number, academicYearId: number): Promise<string> {
+  return api.blobUrl(`/grading/report-cards/annual/${studentId}/pdf/download`, { query: { classId, academicYearId } });
 }
 
 // ── Grading scale (barème) ───────────────────────────────────────────────────
