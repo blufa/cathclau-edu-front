@@ -160,7 +160,16 @@ export default function InvoicesPage() {
                 <TD className="text-gray-900">{studentName.get(inv.studentId) ?? `#${inv.studentId}`}</TD>
                 <TD className="text-sm text-gray-700">{inv.periodLabel ?? "Inscription / frais"}</TD>
                 <TD className="font-mono text-xs text-gray-600">{inv.reference}</TD>
-                <TD className="font-medium text-gray-900">{formatGNF(inv.totalAmount)}</TD>
+                <TD className="font-medium text-gray-900">
+                  {formatGNF(inv.totalAmount)}
+                  {inv.discountAmount != null && Number(inv.discountAmount) > 0 && (
+                    <span className="mt-1 block">
+                      <Badge tone="green" title={inv.discountReason ?? undefined}>
+                        Remise −{formatGNF(inv.discountAmount)}
+                      </Badge>
+                    </span>
+                  )}
+                </TD>
                 <TD>{formatGNF(inv.paidAmount ?? 0)}</TD>
                 <TD>{formatGNF(inv.remainingBalance ?? inv.totalAmount)}</TD>
                 <TD>

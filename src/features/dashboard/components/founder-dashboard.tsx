@@ -255,6 +255,39 @@ export default function FounderDashboard() {
         )}
       </section>
 
+      {/* ── Heures enseignants (cahier de textes) ────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Heures réalisées vs heures dues du mois</h2>
+        {founderQuery.loading ? <CardSkeleton lines={4} /> : (
+          <Card>
+            <CardBody className="space-y-3">
+              {(founder?.teacherHours ?? []).length === 0 ? (
+                <p className="py-6 text-center text-sm text-gray-400">Aucun enseignant configuré.</p>
+              ) : (
+                founder!.teacherHours.map((t) => {
+                  const rate = t.dueMinutes > 0 ? Math.min(100, Math.round((t.realizedMinutes / t.dueMinutes) * 100)) : 0;
+                  const hours = (min: number) => `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}`;
+                  return (
+                    <div key={t.teacherId}>
+                      <div className="mb-1 flex items-center justify-between text-sm">
+                        <span className="font-medium text-gray-700">{t.teacherName}</span>
+                        <span className="text-gray-500">{hours(t.realizedMinutes)} / {hours(t.dueMinutes)} ({rate} %)</span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className={`h-full rounded-full ${rate >= 100 ? "bg-emerald-500" : rate >= 60 ? "bg-teal-500" : "bg-warning-500"}`}
+                          style={{ width: `${rate}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardBody>
+          </Card>
+        )}
+      </section>
+
       {/* ── Élèves pris en charge ────────────────────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Élèves pris en charge</h2>

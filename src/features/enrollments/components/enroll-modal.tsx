@@ -4,20 +4,13 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { enroll, reenroll, searchEnrollments, updateEnrollment } from "@/lib/api/enrollments";
-import { grantExemption, listFeesByClass } from "@/lib/api/billing";
 import { ApiError } from "@/lib/api/errors";
 import type { Enrollment, EnrollmentType } from "@/lib/types/student";
-import type { ExemptionType } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Label } from "@/components/ui/input";
+import { Field, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Modal } from "@/components/ui/modal";
-import { formatGNF } from "@/lib/format";
-import { notifyError, notifySuccess } from "@/lib/feedback";
-
-/** Mensualités annuelles standard (voir génération des échéances dans Frais scolaires). */
-const MONTHLY_INSTALLMENTS_PER_YEAR = 9;
+import { notifySuccess } from "@/lib/feedback";
 
 interface EnrollModalProps {
   studentId: number;
@@ -41,16 +34,6 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const [type, setType] = useState<EnrollmentType>(enrollment?.type ?? "NEW");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // Prise en charge (bourse) — s'applique à l'ensemble de la scolarité de l'élève (§4).
-  const [hasCharge, setHasCharge] = useState(false);
-  const [chargeType, setChargeType] = useState<ExemptionType>("TOTAL");
-  const [chargePercentage, setChargePercentage] = useState(50);
-  const [chargeReason, setChargeReason] = useState("");
-
-  // Paiement intégral de l'année avec remise — calcul en direct du montant net.
-  const [fullYearPayment, setFullYearPayment] = useState(false);
-  const [fullYearDiscount, setFullYearDiscount] = useState(0);
 
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const yearId = selectedYearId ?? defaultYearId;
@@ -96,17 +79,6 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const effectiveClassId = classId || (autoTargetId != null ? String(autoTargetId) : "");
   const effectiveType: EnrollmentType = autoTargetId != null && !classId ? "RE_ENROLLMENT" : type;
 
-  // Frais de la classe sélectionnée → montant annuel total (pour la simulation de paiement intégral).
-  const classFeesQuery = useQuery(
-    () => (effectiveClassId ? listFeesByClass(Number(effectiveClassId)) : Promise.resolve([])),
-    [effectiveClassId],
-  );
-  const annualTotal = (classFeesQuery.data ?? []).reduce((sum, f) => {
-    const amount = Number(f.amount) || 0;
-    return sum + (f.type === "MONTHLY" ? amount * MONTHLY_INSTALLMENTS_PER_YEAR : amount);
-  }, 0);
-  const netAfterDiscount = annualTotal * (1 - fullYearDiscount / 100);
-
   // (6) Une seule inscription par élève et par année : si elle existe déjà, on grise « Inscrire ».
   const existingForYear = !editing ? (historyQuery.data ?? []).find((e) => e.academicYearId === yearId) : undefined;
   const existingClassLabel = existingForYear ? classes.find((c) => c.id === existingForYear.classId)?.label : undefined;
@@ -129,36 +101,12 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
       setError("Sélectionnez une année et une classe.");
       return;
     }
-    if (hasCharge && !chargeReason.trim()) {
-      setError("Précisez le motif de la prise en charge.");
-      return;
-    }
     setSubmitting(true);
     const input = { studentId, classId: Number(effectiveClassId), academicYearId: yearId, type: effectiveType };
     try {
       const result = editing
         ? await updateEnrollment(enrollment!.id, input)
         : await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
-
-      // Prise en charge (bourse) — appliquée à tous les frais, sans limite de date (toute la scolarité).
-      if (!editing && hasCharge) {
-        try {
-          await grantExemption({
-            studentId, type: chargeType,
-            percentage: chargeType === "PARTIAL" ? chargePercentage : undefined,
-            feeType: null, reason: chargeReason.trim(),
-          });
-        } catch (err) { notifyError(err, "Inscription enregistrée, mais la prise en charge n'a pas pu être créée."); }
-      }
-      // Paiement intégral de l'année avec remise — exonération partielle sur les mensualités.
-      if (!editing && fullYearPayment && fullYearDiscount > 0) {
-        try {
-          await grantExemption({
-            studentId, type: "PARTIAL", percentage: fullYearDiscount, feeType: "MONTHLY",
-            reason: `Paiement intégral de l'année scolaire (remise ${fullYearDiscount}%)`,
-          });
-        } catch (err) { notifyError(err, "Inscription enregistrée, mais la remise n'a pas pu être appliquée."); }
-      }
 
       setClassId("");
       notifySuccess(
@@ -253,68 +201,6 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
             <option value="RE_ENROLLMENT">Réinscription</option>
           </Select>
         </Field>
-
-        {!editing && (
-          <div className="space-y-3 rounded-xl border border-gray-200 p-3">
-            <Checkbox
-              label="Cet élève bénéficie d'une prise en charge (bourse)"
-              checked={hasCharge}
-              onChange={(e) => setHasCharge(e.target.checked)}
-            />
-            {hasCharge && (
-              <div className="space-y-3 pl-1">
-                <p className="text-xs text-gray-400">S&apos;applique à l&apos;ensemble des frais, sur toute la scolarité.</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field>
-                    <Label>Type</Label>
-                    <Select value={chargeType} onChange={(e) => setChargeType(e.target.value as ExemptionType)}>
-                      <option value="TOTAL">Totale (100%)</option>
-                      <option value="PARTIAL">Partielle</option>
-                    </Select>
-                  </Field>
-                  {chargeType === "PARTIAL" && (
-                    <Field>
-                      <Label>Pourcentage</Label>
-                      <Input type="number" min={1} max={100} value={chargePercentage}
-                        onChange={(e) => setChargePercentage(Number(e.target.value))} />
-                    </Field>
-                  )}
-                </div>
-                <Field>
-                  <Label>Motif <span className="text-error-500">*</span></Label>
-                  <Input value={chargeReason} onChange={(e) => setChargeReason(e.target.value)} placeholder="Ex. Orphelin, mérite scolaire, situation sociale…" />
-                </Field>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!editing && (
-          <div className="space-y-3 rounded-xl border border-gray-200 p-3">
-            <Checkbox
-              label="Paiement intégral de l'année scolaire en une fois"
-              checked={fullYearPayment}
-              onChange={(e) => setFullYearPayment(e.target.checked)}
-            />
-            {fullYearPayment && (
-              <div className="space-y-3 pl-1">
-                <Field>
-                  <Label>Remise (%)</Label>
-                  <Input type="number" min={0} max={100} value={fullYearDiscount}
-                    onChange={(e) => setFullYearDiscount(Number(e.target.value))} />
-                </Field>
-                <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
-                  <div className="flex justify-between text-gray-500">
-                    <span>Montant annuel</span><span>{formatGNF(annualTotal)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-gray-900">
-                    <span>Net à payer</span><span>{formatGNF(netAfterDiscount)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>

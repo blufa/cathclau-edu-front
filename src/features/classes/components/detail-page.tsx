@@ -10,6 +10,7 @@ import { hasRole } from "@/lib/auth/permissions";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { ClassSubjectsSection } from "./class-subjects-section";
 import { useClassQuery } from "../hooks/use-classes";
 
@@ -140,6 +141,7 @@ export default function ClassDetailPage() {
                   <TH>Matricule</TH>
                   <TH>Nom</TH>
                   <TH>Email</TH>
+                  <TH className="text-right">Actions</TH>
                 </tr>
               </THead>
               <TBody>
@@ -152,6 +154,9 @@ export default function ClassDetailPage() {
                       </Link>
                     </TD>
                     <TD>{s.email ?? "—"}</TD>
+                    <TD className="text-right">
+                      <QuickBadgeButton subjectType="STUDENT" subjectId={s.id} subjectName={`${s.firstName} ${s.lastName}`} />
+                    </TD>
                   </TR>
                 ))}
               </TBody>

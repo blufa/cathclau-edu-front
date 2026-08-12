@@ -52,10 +52,6 @@ const schema = z
     password: z.string(),
   })
   .superRefine((v, ctx) => {
-    // L'email est facultatif (l'élève se connecte par son matricule, pas par email).
-    if (v.email && !/^\S+@\S+$/.test(v.email)) {
-      ctx.addIssue({ code: "custom", path: ["email"], message: "Email invalide" });
-    }
     const phoneError = phoneRule(v.phone);
     if (phoneError) ctx.addIssue({ code: "custom", path: ["phone"], message: phoneError });
     if (v.createLogin && v.password.length < 6) {
@@ -65,13 +61,12 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 // Which step each validated field lives on (to jump back to the first error on submit).
-const FIELD_STEP: Record<string, number> = { firstName: 0, lastName: 0, email: 1, phone: 1, password: 4 };
+const FIELD_STEP: Record<string, number> = { firstName: 0, lastName: 0, phone: 1, password: 1 };
+// Formulaire volontairement court (2 étapes) : le personnel administratif (comptables, secrétaires)
+// n'est pas toujours à l'aise avec l'informatique, mieux vaut peu d'étapes que beaucoup de petits pas.
 const STEPS = [
   { label: "Identité" },
-  { label: "Coordonnées" },
-  { label: "Scolarité" },
-  { label: "Santé" },
-  { label: "Compte" },
+  { label: "Coordonnées, scolarité & compte" },
 ];
 
 export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: StudentFormProps) {
@@ -207,7 +202,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
               {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Field>
               <Label>Sexe</Label>
               <Select value={v.gender} onChange={(e) => setValue("gender", e.target.value as FormValues["gender"])}>
@@ -218,6 +213,10 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
             <Field>
               <Label>Matricule</Label>
               <Input placeholder="Auto-généré si vide" value={v.studentNumber} onChange={(e) => setValue("studentNumber", e.target.value)} />
+            </Field>
+            <Field>
+              <Label>Nationalité</Label>
+              <Input value={v.nationality} onChange={(e) => setValue("nationality", e.target.value)} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -230,130 +229,96 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
               <Input value={v.birthPlace} onChange={(e) => setValue("birthPlace", e.target.value)} />
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <Field>
-              <Label>Nationalité</Label>
-              <Input value={v.nationality} onChange={(e) => setValue("nationality", e.target.value)} />
-            </Field>
-            <Field>
-              <Label>N° acte de naissance</Label>
-              <Input value={v.birthCertificateNumber} onChange={(e) => setValue("birthCertificateNumber", e.target.value)} />
-            </Field>
-            <Field>
-              <Label>Groupe sanguin</Label>
-              <Input placeholder="A+, O-…" value={v.bloodGroup} onChange={(e) => setValue("bloodGroup", e.target.value)} />
-            </Field>
-          </div>
           <Field>
-            <Label>Photo de l&apos;élève</Label>
-            <FileUpload variant="image" folder="students/photos" value={v.photo}
+            <Label>Photo de l&apos;élève <span className="font-normal text-slate-400">(optionnel)</span></Label>
+            <FileUpload variant="image" folder="students/photos" value={v.photo} allowCapture
               onChange={(url) => setValue("photo", url ?? "")} />
           </Field>
         </div>
       )}
 
       {active === 1 && (
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-4">
-            <Field>
-              <Label>Quartier / commune</Label>
-              <Input value={v.neighborhood} onChange={(e) => setValue("neighborhood", e.target.value)} />
-            </Field>
-            <Field>
-              <Label>Point de repère</Label>
-              <Input placeholder="Près de…" value={v.landmark} onChange={(e) => setValue("landmark", e.target.value)} />
-            </Field>
-          </div>
-          <Field>
-            <Label>Adresse</Label>
-            <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
-            <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
-            <Field>
-              <Label>Email</Label>
-              <Input type="email" value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />
-              {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
-            </Field>
-          </div>
-        </div>
-      )}
-
-      {active === 2 && (
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-4">
-            <Field>
-              <Label>École précédente</Label>
-              <Combobox
-                placeholder="Rechercher ou saisir…"
-                options={schoolOptions}
-                value={v.originSchool}
-                onChange={(val) => { setValue("originSchool", val); fetchSchools(val); }}
-              />
-            </Field>
-            <Field>
-              <Label>Dernière classe fréquentée</Label>
-              <Input placeholder="Saisir le nombre, ex. 10" value={v.previousClass} onChange={(e) => setValue("previousClass", e.target.value)} />
-              <p className="text-xs text-gray-400">
-                {v.previousClass ? `Affichée : ${formatClassOrdinal(v.previousClass)}` : "Un nombre seul s'affiche « Nᵉᵐᵉ »"}
-              </p>
-            </Field>
-          </div>
-          <Switch checked={v.repeating} onChange={(checked) => setValue("repeating", checked)} ariaLabel="Redoublant" />
-          <span className="-mt-3 block text-sm text-gray-600">Redoublant</span>
-          {/^\d+$/.test((v.previousClass ?? "").trim()) && (
-            <p className="text-xs text-slate-500">
-              Classe d&apos;inscription suggérée cette année : <strong>{nextClassOrdinal(v.previousClass, v.repeating)}</strong>
-              {v.repeating ? " (redoublant)" : " (passage en classe supérieure)"}
-            </p>
-          )}
-          <Field>
-            <Label>Motif de transfert (optionnel)</Label>
-            <Textarea rows={2} value={v.transferReason} onChange={(e) => setValue("transferReason", e.target.value)} />
-          </Field>
-        </div>
-      )}
-
-      {active === 3 && (
-        <div className="space-y-4 pt-2">
-          <Field>
-            <Label>Informations médicales</Label>
-            <Textarea rows={4} placeholder="Allergies, maladies chroniques, traitement, médecin/contact, observations…"
-              value={v.medicalNotes} onChange={(e) => setValue("medicalNotes", e.target.value)} />
-          </Field>
-        </div>
-      )}
-
-      {active === 4 && (
-        <div className="space-y-4 pt-2">
-          <div className="rounded-xl border border-gray-200 p-3">
-            <div className="flex items-center gap-3">
-              <Switch checked={v.createLogin} onChange={(checked) => setValue("createLogin", checked)} ariaLabel="Créer un accès" />
-              <span className="text-sm text-gray-700">Créer un accès (espace élève)</span>
+        <div className="space-y-5 pt-2">
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Coordonnées</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <Field>
+                <Label>Adresse</Label>
+                <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
+              </Field>
+              <Field>
+                <Label>Point de repère</Label>
+                <Input placeholder="Près de…" value={v.landmark} onChange={(e) => setValue("landmark", e.target.value)} />
+              </Field>
+              <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
             </div>
-            {v.createLogin && (
-              <div className="mt-3 space-y-2">
+          </div>
+
+          <div className="space-y-4 border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Scolarité</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <Label>École précédente</Label>
+                <Combobox
+                  placeholder="Rechercher ou saisir…"
+                  options={schoolOptions}
+                  value={v.originSchool}
+                  onChange={(val) => { setValue("originSchool", val); fetchSchools(val); }}
+                />
+              </Field>
+              <Field>
+                <Label>Dernière classe fréquentée</Label>
+                <Input placeholder="Saisir le nombre, ex. 10" value={v.previousClass} onChange={(e) => setValue("previousClass", e.target.value)} />
                 <p className="text-xs text-gray-400">
-                  L&apos;élève se connectera avec son <strong>matricule</strong> (généré automatiquement) et ce mot de passe.
-                  Aucun email n&apos;est nécessaire.
+                  {v.previousClass ? `Affichée : ${formatClassOrdinal(v.previousClass)}` : "Un nombre seul s'affiche « Nᵉᵐᵉ »"}
                 </p>
-                <Field>
-                  <Label>Mot de passe</Label>
-                  <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
-                  {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
-                </Field>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 items-start gap-4">
+              <div>
+                <div className="flex items-center gap-3">
+                  <Switch checked={v.repeating} onChange={(checked) => setValue("repeating", checked)} ariaLabel="Redoublant" />
+                  <span className="text-sm text-gray-600">Redoublant</span>
+                </div>
+                {/^\d+$/.test((v.previousClass ?? "").trim()) && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Classe suggérée cette année : <strong>{nextClassOrdinal(v.previousClass, v.repeating)}</strong>
+                    {v.repeating ? " (redoublant)" : " (classe supérieure)"}
+                  </p>
+                )}
               </div>
-            )}
+              <Field>
+                <Label>Motif de transfert (optionnel)</Label>
+                <Textarea rows={2} value={v.transferReason} onChange={(e) => setValue("transferReason", e.target.value)} />
+              </Field>
+            </div>
           </div>
-          <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
-            <p className="font-medium text-gray-700">Récapitulatif</p>
-            <p>{v.firstName} {v.lastName} · {v.gender === "MALE" ? "Masculin" : "Féminin"}{v.birthDate ? ` · né(e) le ${v.birthDate}` : ""}</p>
-            <p className="text-gray-500">{[v.neighborhood, v.phone].filter(Boolean).join(" · ") || "—"}</p>
-            <p className="text-gray-500">{v.previousClass ? `Venant de ${v.originSchool || "?"} (${v.previousClass})${v.repeating ? " · redoublant" : ""}` : "Nouvelle scolarité"}</p>
+
+          <div className="space-y-4 border-t border-slate-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Compte</h3>
+            <div className="rounded-xl border border-gray-200 p-3">
+              <div className="flex items-center gap-3">
+                <Switch checked={v.createLogin} onChange={(checked) => setValue("createLogin", checked)} ariaLabel="Créer un accès" />
+                <span className="text-sm text-gray-700">Créer un accès (espace élève)</span>
+              </div>
+              {v.createLogin && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-gray-400">
+                    L&apos;élève se connectera avec son <strong>matricule</strong> (généré automatiquement) et ce mot de passe.
+                    Aucun email n&apos;est nécessaire.
+                  </p>
+                  <Field>
+                    <Label>Mot de passe</Label>
+                    <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
+                    {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
+                  </Field>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">
+              Les <strong>parents/tuteurs</strong> et les <strong>documents</strong> s&apos;ajoutent après création depuis la fiche de l&apos;élève. La photo est facultative : sans photo, le badge affiche les initiales de l&apos;élève.
+            </p>
           </div>
-          <p className="text-xs text-gray-400">
-            Les <strong>parents/tuteurs</strong> et les <strong>documents</strong> s&apos;ajoutent après création depuis la fiche de l&apos;élève. La photo est requise pour la carte scolaire.
-          </p>
         </div>
       )}
 

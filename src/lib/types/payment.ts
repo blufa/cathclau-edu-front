@@ -26,6 +26,8 @@ export interface Payment {
   tenantId: number | null;
   invoiceId: number | null;
   studentId: number;
+  /** Tous les élèves couverts (fratrie, §payments) ; un seul élément pour un paiement classique. */
+  studentIds?: number[] | null;
   academicYearId: number | null;
   reference: string;
   amount: string;

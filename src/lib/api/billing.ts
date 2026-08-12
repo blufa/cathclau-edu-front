@@ -1,6 +1,8 @@
 import { api } from "@/lib/api/client";
 import type {
   ApplicableDiscount,
+  EarlyPaymentDiscountRule,
+  EarlyPaymentDiscountRuleInput,
   Exemption,
   ExemptionInput,
   FamilyDiscountRule,
@@ -174,4 +176,27 @@ export function deleteFamilyDiscountRule(id: number): Promise<void> {
 }
 export function getApplicableFamilyDiscount(studentId: number, feeType: FeeType): Promise<ApplicableDiscount> {
   return api.get<ApplicableDiscount>("/billing/family-discount-rules/applicable", { query: { studentId, feeType } });
+}
+
+// ── Early payment discount rules (remise paiement annuel complet) ───────────
+export function listEarlyPaymentDiscountRules(): Promise<EarlyPaymentDiscountRule[]> {
+  return api.get<EarlyPaymentDiscountRule[]>("/billing/early-payment-discount-rules");
+}
+export function createEarlyPaymentDiscountRule(input: EarlyPaymentDiscountRuleInput): Promise<EarlyPaymentDiscountRule> {
+  return api.post<EarlyPaymentDiscountRule>("/billing/early-payment-discount-rules", input);
+}
+export function updateEarlyPaymentDiscountRule(id: number, input: EarlyPaymentDiscountRuleInput): Promise<EarlyPaymentDiscountRule> {
+  return api.put<EarlyPaymentDiscountRule>(`/billing/early-payment-discount-rules/${id}`, input);
+}
+export function deleteEarlyPaymentDiscountRule(id: number): Promise<void> {
+  return api.delete<void>(`/billing/early-payment-discount-rules/${id}`);
+}
+
+/**
+ * Applique la remise pour paiement annuel complet sur les factures restantes d'un frais (§billing) —
+ * à appeler juste avant un paiement groupé couvrant toutes les tranches restantes, pour obtenir les
+ * montants nets à utiliser dans les parts du paiement (le calcul de la remise reste côté serveur).
+ */
+export function applyEarlyPaymentDiscount(studentId: number, feeId: number): Promise<Invoice[]> {
+  return api.post<Invoice[]>("/billing/invoices/early-payment-discount", undefined, { query: { studentId, feeId } });
 }
