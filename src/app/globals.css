@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /*
  * Design tokens — CathClau Edu (palette indigo/violet + accents).
@@ -59,6 +60,10 @@
   /* Police "pro" du kit admin (Outfit, comme le template TailAdmin) — sections marketing/Aceternity
      gardent leur police système, seul le shell admin (layout.tsx) applique la classe Outfit. */
   --font-outfit: var(--font-outfit-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Police du site public (DM Sans, identique au template Vankine home-5 reproduit) — appliquée
+     uniquement par (public)/layout.tsx, jamais au shell applicatif authentifié. */
+  --font-dm-sans: var(--font-dm-sans-var), ui-sans-serif, system-ui, sans-serif;
 
   /* Taille de police globale relevée (meilleure lisibilité pour un public non technicien) — seuls
      les tokens de texte changent, l'échelle d'espacement (h-4, p-3, icônes…) reste intacte. */

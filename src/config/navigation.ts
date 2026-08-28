@@ -15,6 +15,7 @@ import {
   Layers,
   Library,
   MessagesSquare,
+  Newspaper,
   School,
   Settings,
   Gauge,
@@ -180,6 +181,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "Utilisateurs", href: "/platform/users", icon: Users, roles: ["SUPER_ADMIN"] },
       { label: "Abonnements", href: "/platform/subscriptions", icon: CreditCard, roles: ["SUPER_ADMIN"] },
       { label: "Plans", href: "/platform/plans", icon: Layers, roles: ["SUPER_ADMIN"] },
+      { label: "Blog", href: "/platform/blog/posts", icon: Newspaper, roles: ["SUPER_ADMIN", "REDACTEUR"] },
     ],
   },
   {

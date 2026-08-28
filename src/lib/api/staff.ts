@@ -102,6 +102,14 @@ export function setAssignedSubjects(teacherId: number, subjectIds: number[]): Pr
   return api.put<number[]>(`/staff/teachers/${teacherId}/assigned-subjects`, { subjectIds });
 }
 
+// ── Niveaux où l'enseignant est habilité à enseigner (affectation directe, liste sur la fiche) ──
+export function getAssignedLevels(teacherId: number): Promise<number[]> {
+  return api.get<number[]>(`/staff/teachers/${teacherId}/assigned-levels`);
+}
+export function setAssignedLevels(teacherId: number, levelIds: number[]): Promise<number[]> {
+  return api.put<number[]>(`/staff/teachers/${teacherId}/assigned-levels`, { levelIds });
+}
+
 /** Ids des enseignants affectés à une matière (pour proposer les profs au choix de la matière). */
 export function getTeachersBySubject(subjectId: number): Promise<number[]> {
   return api.get<number[]>(`/staff/teachers/by-subject/${subjectId}`);

@@ -31,6 +31,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { ScheduleForm } from "@/components/timetable/schedule-form";
+import { FixedScheduleForm } from "@/components/timetable/fixed-schedule-form";
 import { TimetableGrid } from "@/components/timetable/timetable-grid";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
@@ -79,6 +80,7 @@ export default function TimetablePage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<EmploiDuTemps | null>(null);
   const [genOpen, setGenOpen] = useState(false);
+  const [fixedOpen, setFixedOpen] = useState(false);
 
   const yearsQuery = useQuery(listAcademicYears, []);
   const teachersQuery = useQuery(listTeachers, []);
@@ -235,6 +237,9 @@ export default function TimetablePage() {
             <>
               <Button variant="outline" onClick={() => setGenOpen(true)} disabled={classes.length === 0}>
                 Générer automatiquement
+              </Button>
+              <Button variant="outline" onClick={() => setFixedOpen(true)} disabled={!effectiveClassId}>
+                Horaire fixe
               </Button>
               <Button onClick={() => setCreating(true)} disabled={!effectiveClassId}>
                 Ajouter un créneau
@@ -397,6 +402,22 @@ export default function TimetablePage() {
             )}
           </Modal>
         </>
+      )}
+
+      {effectiveClassId && (
+        <Modal open={fixedOpen} onClose={() => setFixedOpen(false)} title="Créer un horaire fixe">
+          <FixedScheduleForm
+            key={effectiveClassId}
+            classId={effectiveClassId}
+            classRoomId={classes.find((c) => c.id === effectiveClassId)?.roomId ?? null}
+            subjects={subjects}
+            teachers={teachers}
+            rooms={rooms}
+            classSubjects={classSubjects}
+            onCancel={() => setFixedOpen(false)}
+            onDone={() => { setFixedOpen(false); slotsQuery.refetch(); }}
+          />
+        </Modal>
       )}
 
       <Modal open={genOpen} onClose={() => setGenOpen(false)} title="Générer l'emploi du temps automatiquement">

@@ -89,6 +89,7 @@ export const BILLING_PERIOD_LABEL: Record<BillingPeriod, string> = {
 };
 
 export const ESTABLISHMENT_TYPE_LABEL: Record<EstablishmentType, string> = {
+  MATERNELLE: "Maternelle (Petite, Moyenne, Grande Section)",
   PRIMAIRE: "Primaire",
   COLLEGE: "Collège",
   LYCEE: "Lycée",

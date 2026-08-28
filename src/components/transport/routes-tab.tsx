@@ -17,7 +17,6 @@ import { Input, Label, Field, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatGNF } from "@/lib/format";
 
 export function RoutesTab() {
   const q = useQuery(listRoutes, []);
@@ -35,16 +34,15 @@ export function RoutesTab() {
       <div className="flex justify-end"><Button leftSection={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>Nouvelle ligne</Button></div>
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Ligne</TH><TH>Véhicule</TH><TH>Chauffeur</TH><TH>Capacité</TH><TH>Frais/mois</TH><TH>État</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Ligne</TH><TH>Véhicule</TH><TH>Chauffeur</TH><TH>Capacité</TH><TH>État</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucune ligne.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucune ligne.</TD></TR>}
             {(q.data ?? []).map((r) => (
               <TR key={r.id}>
                 <TD className="font-medium text-gray-900">{r.name}</TD>
                 <TD className="font-mono text-xs">{r.vehicleRegistration ?? "—"}</TD>
                 <TD>{r.driverName ?? "—"}{r.driverPhone ? <span className="block text-xs text-gray-400">{r.driverPhone}</span> : null}</TD>
                 <TD>{r.capacity ?? "—"}</TD>
-                <TD>{r.monthlyFee != null ? formatGNF(r.monthlyFee) : "—"}</TD>
                 <TD>{r.active ? <Badge tone="green">Active</Badge> : <Badge tone="gray">Inactive</Badge>}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
@@ -78,7 +76,6 @@ const routeSchema = z.object({
   driverName: z.string(),
   driverPhone: z.string(),
   capacity: z.union([z.number(), z.literal("")]),
-  monthlyFee: z.union([z.number(), z.literal("")]),
   active: z.boolean(),
 });
 type RouteFormValues = z.infer<typeof routeSchema>;
@@ -90,7 +87,7 @@ function RouteForm({ initial, onCancel, onDone }: { initial: TransportRoute | nu
     defaultValues: {
       name: initial?.name ?? "", description: initial?.description ?? "",
       vehicleRegistration: initial?.vehicleRegistration ?? "", driverName: initial?.driverName ?? "", driverPhone: initial?.driverPhone ?? "",
-      capacity: initial?.capacity ?? "", monthlyFee: initial?.monthlyFee ?? "",
+      capacity: initial?.capacity ?? "",
       active: initial?.active ?? true,
     },
   });
@@ -103,7 +100,7 @@ function RouteForm({ initial, onCancel, onDone }: { initial: TransportRoute | nu
       const payload = {
         name: values.name, description: values.description || null, vehicleRegistration: values.vehicleRegistration || null,
         driverName: values.driverName || null, driverPhone: values.driverPhone || null,
-        capacity: values.capacity === "" ? null : Number(values.capacity), monthlyFee: values.monthlyFee === "" ? null : Number(values.monthlyFee),
+        capacity: values.capacity === "" ? null : Number(values.capacity),
         active: values.active,
       };
       if (initial) await updateRoute(initial.id, payload); else await createRoute(payload);
@@ -134,10 +131,11 @@ function RouteForm({ initial, onCancel, onDone }: { initial: TransportRoute | nu
         </Field>
         <PhoneInput label="Téléphone chauffeur" value={v.driverPhone} onChange={(val) => setValue("driverPhone", val)} />
       </div>
-      <Field>
-        <Label>Frais mensuels (GNF)</Label>
-        <Input type="number" min={0} value={v.monthlyFee} onChange={(e) => setValue("monthlyFee", e.target.value === "" ? "" : Number(e.target.value))} />
-      </Field>
+      <p className="rounded-lg bg-brand-50/60 px-3 py-2 text-xs text-brand-800">
+        Le tarif du transport (mensuel, trimestriel ou annuel, avec ses échéances) se configure dans
+        <strong> Frais scolaires</strong> (frais de type Transport) — pas ici. Une ligne ne décrit que la
+        logistique (véhicule, chauffeur, arrêts).
+      </p>
       <Field>
         <Label>Description / itinéraire</Label>
         <Textarea rows={2} value={v.description} onChange={(e) => setValue("description", e.target.value)} />

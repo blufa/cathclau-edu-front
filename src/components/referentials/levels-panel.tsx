@@ -6,9 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Field } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useQuery } from "@/hooks/use-query";
 import { createLevel, deleteLevel, listLevels, updateLevel } from "@/lib/api/academics";
-import type { Niveau } from "@/lib/types/academics";
+import { SCHOOL_CYCLE_LABEL, type Niveau, type SchoolCycle } from "@/lib/types/academics";
 import { ApiError } from "@/lib/api/errors";
 import { Modal } from "@/components/ui/modal";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -18,6 +19,7 @@ import { LevelCatalogPicker } from "@/components/referentials/level-catalog";
 const levelSchema = z.object({
   label: z.string().trim().min(1, "Libellé requis"),
   sortOrder: z.union([z.number(), z.literal("")]),
+  cycle: z.string(),
 });
 type LevelFormValues = z.infer<typeof levelSchema>;
 
@@ -27,13 +29,13 @@ function LevelForm({
   onCancel,
 }: {
   initial?: Niveau;
-  onSubmit: (label: string, sortOrder: number) => Promise<void>;
+  onSubmit: (label: string, sortOrder: number, cycle: string) => Promise<void>;
   onCancel: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const { handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<LevelFormValues>({
     resolver: zodResolver(levelSchema),
-    defaultValues: { label: initial?.label ?? "", sortOrder: initial?.sortOrder ?? 0 },
+    defaultValues: { label: initial?.label ?? "", sortOrder: initial?.sortOrder ?? 0, cycle: initial?.cycle ?? "" },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
@@ -41,7 +43,7 @@ function LevelForm({
   async function submit(values: LevelFormValues) {
     setSubmitting(true);
     try {
-      await onSubmit(values.label, values.sortOrder === "" ? 0 : Number(values.sortOrder));
+      await onSubmit(values.label, values.sortOrder === "" ? 0 : Number(values.sortOrder), values.cycle);
     } catch (err) {
       if (err instanceof ApiError) {
         for (const [field, message] of Object.entries(err.fieldErrors)) setError(field as keyof LevelFormValues, { message });
@@ -62,6 +64,16 @@ function LevelForm({
         <Label>Ordre</Label>
         <Input type="number" min={0} value={v.sortOrder} onChange={(e) => setValue("sortOrder", e.target.value === "" ? "" : Number(e.target.value))} />
       </Field>
+      <Field>
+        <Label>Cycle</Label>
+        <Select value={v.cycle} onChange={(e) => setValue("cycle", e.target.value)}>
+          <option value="">(non renseigné)</option>
+          {(Object.keys(SCHOOL_CYCLE_LABEL) as SchoolCycle[]).map((c) => (
+            <option key={c} value={c}>{SCHOOL_CYCLE_LABEL[c]}</option>
+          ))}
+        </Select>
+        <p className="mt-1 text-xs text-gray-400">Maternelle/Primaire déclenchent le badge de retrait obligatoire à la sortie d&apos;un élève.</p>
+      </Field>
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
         <Button type="submit" loading={submitting}>Enregistrer</Button>
@@ -77,15 +89,15 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
   const [catalogOpen, setCatalogOpen] = useState(false);
   const levels = (q.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
 
-  async function handleCreate(label: string, sortOrder: number) {
-    await createLevel(label, sortOrder);
+  async function handleCreate(label: string, sortOrder: number, cycle: string) {
+    await createLevel(label, sortOrder, cycle);
     setCreating(false);
     notifySuccess("Niveau créé");
     q.refetch();
   }
-  async function handleUpdate(label: string, sortOrder: number) {
+  async function handleUpdate(label: string, sortOrder: number, cycle: string) {
     if (!editing) return;
-    await updateLevel(editing.id, label, sortOrder);
+    await updateLevel(editing.id, label, sortOrder, cycle);
     setEditing(null);
     notifySuccess("Niveau mis à jour");
     q.refetch();
@@ -121,13 +133,14 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
           <tr>
             <TH>Ordre</TH>
             <TH>Libellé</TH>
+            <TH>Cycle</TH>
             <TH className="text-right">Actions</TH>
           </tr>
         </THead>
         <TBody>
           {levels.length === 0 && (
             <TR>
-              <TD colSpan={3} className="py-8 text-center text-gray-400">
+              <TD colSpan={4} className="py-8 text-center text-gray-400">
                 Aucun niveau.
               </TD>
             </TR>
@@ -136,6 +149,7 @@ export function LevelsPanel({ canWrite }: { canWrite: boolean }) {
             <TR key={l.id}>
               <TD>{l.sortOrder}</TD>
               <TD className="font-medium">{l.label}</TD>
+              <TD className="text-gray-500">{l.cycle ? SCHOOL_CYCLE_LABEL[l.cycle] : "—"}</TD>
               <TD className="text-right">
                 {canWrite && (
                   <div className="flex justify-end gap-1">

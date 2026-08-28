@@ -84,6 +84,12 @@ export function setClassHeadTeacher(classId: number, teacherId: number | null): 
     query: teacherId != null ? { teacherId } : {},
   });
 }
+/** Désigne (ou retire avec studentId=null) le chef de classe — un élève inscrit dans cette classe. */
+export function setClassRepresentative(classId: number, studentId: number | null): Promise<Classe> {
+  return api.patch<Classe>(`/academics/classes/${classId}/chef-de-classe`, undefined, {
+    query: studentId != null ? { studentId } : {},
+  });
+}
 export function removeClassSubject(classId: number, id: number): Promise<void> {
   return api.delete<void>(`/academics/classes/${classId}/subjects/${id}`);
 }
@@ -151,11 +157,11 @@ export function closePeriod(periodId: number): Promise<Periode> {
 export function listLevels(): Promise<Niveau[]> {
   return api.get<Niveau[]>("/academics/levels");
 }
-export function createLevel(label: string, sortOrder: number): Promise<Niveau> {
-  return api.post<Niveau>("/academics/levels", undefined, { query: { label, sortOrder } });
+export function createLevel(label: string, sortOrder: number, cycle?: string | null): Promise<Niveau> {
+  return api.post<Niveau>("/academics/levels", undefined, { query: { label, sortOrder, cycle: cycle || undefined } });
 }
-export function updateLevel(id: number, label: string, sortOrder: number): Promise<Niveau> {
-  return api.put<Niveau>(`/academics/levels/${id}`, undefined, { query: { label, sortOrder } });
+export function updateLevel(id: number, label: string, sortOrder: number, cycle?: string | null): Promise<Niveau> {
+  return api.put<Niveau>(`/academics/levels/${id}`, undefined, { query: { label, sortOrder, cycle: cycle || undefined } });
 }
 export function deleteLevel(id: number): Promise<void> {
   return api.delete<void>(`/academics/levels/${id}`);

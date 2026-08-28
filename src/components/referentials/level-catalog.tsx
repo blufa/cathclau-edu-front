@@ -10,9 +10,18 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
 /**
  * Catalogue des niveaux (cycles) du système guinéen. Un « niveau » désigne le cycle d'enseignement ;
  * les classes concrètes (« 6ème A », « 7ème A »…) se créent ensuite et se rattachent à un niveau.
- * L'utilisateur coche les cycles à créer plutôt que de les saisir un par un.
+ * L'utilisateur coche les cycles à créer plutôt que de les saisir un par un. La Maternelle est
+ * composée de ses 3 sections réelles (Petite/Moyenne/Grande Section) plutôt qu'un niveau générique
+ * unique — chacune est créée avec le cycle MATERNELLE, qui déclenche le badge de retrait obligatoire.
  */
-export const LEVEL_CATALOG: string[] = ["Maternelle", "Primaire", "Secondaire", "Supérieur"];
+export const LEVEL_CATALOG: { label: string; cycle: string }[] = [
+  { label: "Petite Section", cycle: "MATERNELLE" },
+  { label: "Moyenne Section", cycle: "MATERNELLE" },
+  { label: "Grande Section", cycle: "MATERNELLE" },
+  { label: "Primaire", cycle: "PRIMAIRE" },
+  { label: "Secondaire", cycle: "COLLEGE" },
+  { label: "Supérieur", cycle: "SUPERIEUR" },
+];
 
 /**
  * Sélecteur de niveaux depuis le catalogue prédéfini. Crée les cycles cochés non encore présents
@@ -42,7 +51,7 @@ export function LevelCatalogPicker({
 
   async function handleAdd() {
     // On ne crée que les cycles non encore présents, dans l'ordre du catalogue (progression cohérente).
-    const toCreate = LEVEL_CATALOG.filter((l) => selected.has(l) && !existingLabels.has(l.trim().toLowerCase()));
+    const toCreate = LEVEL_CATALOG.filter((l) => selected.has(l.label) && !existingLabels.has(l.label.trim().toLowerCase()));
     if (toCreate.length === 0) {
       onCancel();
       return;
@@ -51,8 +60,8 @@ export function LevelCatalogPicker({
     setSaving(true);
     try {
       const created: Niveau[] = [];
-      for (const label of toCreate) {
-        created.push(await createLevel(label, order++));
+      for (const { label, cycle } of toCreate) {
+        created.push(await createLevel(label, order++, cycle));
       }
       notifySuccess(`${created.length} niveau${created.length > 1 ? "x" : ""} créé${created.length > 1 ? "s" : ""}`);
       onDone(created);
@@ -70,7 +79,7 @@ export function LevelCatalogPicker({
         se créent ensuite et se rattachent à un niveau.
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {LEVEL_CATALOG.map((label) => {
+        {LEVEL_CATALOG.map(({ label }) => {
           const already = existingLabels.has(label.trim().toLowerCase());
           return (
             <Checkbox

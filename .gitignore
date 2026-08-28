@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# template de référence (Vankine) — utilisé uniquement pour extraire markup/CSS, jamais exécuté
+/Vankine-nextjs-v2.1.0-unzip-first/

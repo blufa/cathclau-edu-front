@@ -255,6 +255,78 @@ export default function FounderDashboard() {
         )}
       </section>
 
+      {/* ── Salaire par enseignant ────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Salaire par enseignant</h2>
+        <p className="-mt-2 text-sm text-gray-500">
+          Salaire du mois affiché et estimation cumulée jusqu&apos;à la fin de l&apos;année scolaire, pour
+          chaque enseignant individuellement.
+        </p>
+        {founderQuery.loading ? <CardSkeleton lines={5} /> : (
+          <Card>
+            <CardBody className="p-0">
+              <Table>
+                <THead>
+                  <tr><TH>Enseignant</TH><TH>Ce mois</TH><TH>Estimation annuelle</TH></tr>
+                </THead>
+                <TBody>
+                  {(founder?.teacherSalaries ?? []).map((t) => (
+                    <TR key={t.teacherId}>
+                      <TD className="font-medium">{t.teacherName}</TD>
+                      <TD>{formatGNF(t.monthlyPay)}</TD>
+                      <TD className="font-semibold">{formatGNF(t.annualProjection)}</TD>
+                    </TR>
+                  ))}
+                  {!founderQuery.loading && !(founder?.teacherSalaries ?? []).length && (
+                    <TR><TD colSpan={3} className="py-6 text-center text-gray-400">Aucun enseignant configuré.</TD></TR>
+                  )}
+                </TBody>
+              </Table>
+            </CardBody>
+          </Card>
+        )}
+      </section>
+
+      {/* ── Projection de la masse salariale sur l'année scolaire ────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Estimation de la masse salariale sur l&apos;année scolaire</h2>
+        <p className="-mt-2 text-sm text-gray-500">
+          Enseignants (heures théoriques selon l&apos;emploi du temps et le calendrier, jours fériés exclus,
+          ou salaire fixe) + personnel non-enseignant, mois par mois.
+        </p>
+        {founderQuery.loading ? <CardSkeleton lines={5} /> : (
+          <Card>
+            <CardBody>
+              <Table>
+                <THead>
+                  <tr><TH>Mois</TH><TH>Enseignants</TH><TH>Personnel</TH><TH>Total</TH></tr>
+                </THead>
+                <TBody>
+                  {(founder?.payrollProjection.months ?? []).map((mp) => (
+                    <TR key={`${mp.year}-${mp.month}`}>
+                      <TD className="font-medium">{MONTHS[mp.month - 1]} {mp.year}</TD>
+                      <TD>{formatGNF(mp.teacherPayroll)}</TD>
+                      <TD>{formatGNF(mp.staffPayroll)}</TD>
+                      <TD className="font-semibold">{formatGNF(mp.total)}</TD>
+                    </TR>
+                  ))}
+                  {!founderQuery.loading && !(founder?.payrollProjection.months ?? []).length && (
+                    <TR><TD colSpan={4} className="text-gray-400">Aucune donnée.</TD></TR>
+                  )}
+                </TBody>
+              </Table>
+              {founder && (
+                <div className="mt-3 flex flex-wrap justify-end gap-6 border-t border-gray-100 pt-3 text-sm">
+                  <span className="text-gray-500">Total enseignants : <span className="font-semibold text-gray-800">{formatGNF(founder.payrollProjection.totalTeachers)}</span></span>
+                  <span className="text-gray-500">Total personnel : <span className="font-semibold text-gray-800">{formatGNF(founder.payrollProjection.totalStaff)}</span></span>
+                  <span className="text-gray-500">Total général : <span className="font-bold text-gray-900">{formatGNF(founder.payrollProjection.grandTotal)}</span></span>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
+      </section>
+
       {/* ── Heures enseignants (cahier de textes) ────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Heures réalisées vs heures dues du mois</h2>

@@ -1,16 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { enroll, reenroll, searchEnrollments, updateEnrollment } from "@/lib/api/enrollments";
+import { listFeesByClass, subscribeAnnexFee } from "@/lib/api/billing";
+import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
 import { ApiError } from "@/lib/api/errors";
 import type { Enrollment, EnrollmentType } from "@/lib/types/student";
+import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
 import { Button } from "@/components/ui/button";
 import { Field, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Modal } from "@/components/ui/modal";
-import { notifySuccess } from "@/lib/feedback";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 
 interface EnrollModalProps {
   studentId: number;
@@ -24,6 +30,8 @@ interface EnrollModalProps {
 
 export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }: EnrollModalProps) {
   const editing = !!enrollment;
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
 
@@ -35,6 +43,18 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Abonnements optionnels (transport/cantine), proposés uniquement à la création. ──
+  const [wantsTransport, setWantsTransport] = useState(false);
+  const [routeId, setRouteId] = useState("");
+  const [stopId, setStopId] = useState("");
+  const [direction, setDirection] = useState<TransportDirection>("BOTH");
+  const [wantsCanteen, setWantsCanteen] = useState(false);
+  const routesQuery = useQuery(() => (open && !editing ? listRoutes() : Promise.resolve([])), [open, editing]);
+  const stopsQuery = useQuery(
+    () => (routeId ? listStops(Number(routeId)) : Promise.resolve([])),
+    [routeId],
+  );
+
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const yearId = selectedYearId ?? defaultYearId;
 
@@ -43,6 +63,13 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
     [yearId],
   );
   const classes = classesQuery.data ?? [];
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => {
+      const label = c.label + (c.maxCapacity != null ? ` (${c.headcount ?? 0}/${c.maxCapacity})` : "");
+      return { value: String(c.id), trigger: label, label, searchText: label };
+    }),
+    [classes],
+  );
 
   // ── Cascade : récupérer l'inscription précédente de l'élève pour proposer la réinscription. ──
   const historyQuery = useQuery(
@@ -79,6 +106,13 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const effectiveClassId = classId || (autoTargetId != null ? String(autoTargetId) : "");
   const effectiveType: EnrollmentType = autoTargetId != null && !classId ? "RE_ENROLLMENT" : type;
 
+  // Frais cantine déjà configuré pour la classe visée (§billing) — condition pour proposer l'abonnement.
+  const classFeesQuery = useQuery(
+    () => (open && !editing && effectiveClassId ? listFeesByClass(Number(effectiveClassId)) : Promise.resolve([])),
+    [open, editing, effectiveClassId],
+  );
+  const canteenFee = (classFeesQuery.data ?? []).find((f) => f.type === "CANTEEN");
+
   // (6) Une seule inscription par élève et par année : si elle existe déjà, on grise « Inscrire ».
   const existingForYear = !editing ? (historyQuery.data ?? []).find((e) => e.academicYearId === yearId) : undefined;
   const existingClassLabel = existingForYear ? classes.find((c) => c.id === existingForYear.classId)?.label : undefined;
@@ -101,12 +135,31 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
       setError("Sélectionnez une année et une classe.");
       return;
     }
+    if (!editing && wantsTransport && !routeId) {
+      setError("Choisissez la ligne de transport, ou décochez l'abonnement.");
+      return;
+    }
     setSubmitting(true);
     const input = { studentId, classId: Number(effectiveClassId), academicYearId: yearId, type: effectiveType };
     try {
       const result = editing
         ? await updateEnrollment(enrollment!.id, input)
         : await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
+
+      // Abonnements optionnels : l'inscription est déjà actée, un échec ici ne doit pas la remettre en
+      // cause — juste informer l'utilisateur pour qu'il réessaie depuis le module concerné.
+      if (!editing && wantsTransport && routeId) {
+        try {
+          await subscribe({
+            routeId: Number(routeId), stopId: stopId ? Number(stopId) : null, studentId, direction,
+          });
+        } catch (err) { notifyError(err); }
+      }
+      if (!editing && wantsCanteen && canteenFee) {
+        try {
+          await subscribeAnnexFee(tenantId, studentId, canteenFee, yearId);
+        } catch (err) { notifyError(err); }
+      }
 
       setClassId("");
       notifySuccess(
@@ -159,15 +212,14 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
 
         <Field>
           <Label htmlFor="class">Classe</Label>
-          <Select id="class" value={effectiveClassId} onChange={(e) => setClassId(e.target.value)} disabled={!!existingForYear}>
-            <option value="">— Sélectionner —</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-                {c.maxCapacity != null ? ` (${c.headcount ?? 0}/${c.maxCapacity})` : ""}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            value={effectiveClassId}
+            options={classOptions}
+            onChange={setClassId}
+            disabled={!!existingForYear}
+            triggerClassName="w-full justify-between px-3"
+            noResultsLabel="Aucune classe"
+          />
         </Field>
 
         {!editing && previous && prevClass && (
@@ -197,10 +249,64 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
         <Field>
           <Label htmlFor="type">Type</Label>
           <Select id="type" value={effectiveType} onChange={(e) => setType(e.target.value as EnrollmentType)} disabled={!!existingForYear}>
-            <option value="NEW">Inscription</option>
-            <option value="RE_ENROLLMENT">Réinscription</option>
+            <option value="NEW">Inscription (nouvel élève, jamais scolarisé ici)</option>
+            <option value="RE_ENROLLMENT">Réinscription (déjà scolarisé ici auparavant)</option>
           </Select>
+          {!editing && !previous && (
+            <p className="mt-1 text-xs text-gray-400">
+              Un ancien élève de l&apos;établissement qui n&apos;était pas encore dans le logiciel peut
+              être inscrit en « Réinscription » — le tarif de réinscription s&apos;appliquera même si
+              aucun historique n&apos;existe ici.
+            </p>
+          )}
         </Field>
+
+        {!editing && !existingForYear && (
+          <div className="space-y-3 rounded-xl border border-gray-200 p-3">
+            <Label>Abonnements (optionnel)</Label>
+
+            <div className="space-y-2">
+              <Checkbox
+                label="Abonner au transport"
+                checked={wantsTransport}
+                onChange={() => setWantsTransport((v) => !v)}
+                disabled={(routesQuery.data ?? []).length === 0}
+              />
+              {(routesQuery.data ?? []).length === 0 && (
+                <p className="pl-6 text-xs text-gray-400">Aucune ligne de transport configurée.</p>
+              )}
+              {wantsTransport && (
+                <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-3">
+                  <Select value={routeId} onChange={(e) => { setRouteId(e.target.value); setStopId(""); }}>
+                    <option value="">Ligne…</option>
+                    {(routesQuery.data ?? []).map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
+                  </Select>
+                  <Select value={stopId} onChange={(e) => setStopId(e.target.value)} disabled={!routeId}>
+                    <option value="">Arrêt (optionnel)</option>
+                    {(stopsQuery.data ?? []).map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                  </Select>
+                  <Select value={direction} onChange={(e) => setDirection(e.target.value as TransportDirection)}>
+                    {(Object.keys(DIRECTION_LABEL) as TransportDirection[]).map((d) => (
+                      <option key={d} value={d}>{DIRECTION_LABEL[d]}</option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Checkbox
+                label="Abonner à la cantine"
+                checked={wantsCanteen}
+                onChange={() => setWantsCanteen((v) => !v)}
+                disabled={!canteenFee}
+              />
+              {!canteenFee && effectiveClassId && (
+                <p className="pl-6 text-xs text-gray-400">Configurez le frais cantine dans Frais scolaires pour cette classe.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>

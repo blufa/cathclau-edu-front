@@ -34,6 +34,9 @@ const ROUTE_ROLES: RouteRoles[] = NAVIGATION.flatMap((section) => flattenWithRol
 export function isPathAllowedForUser(user: AuthUser | null, pathname: string): boolean {
   if (!user) return false;
   if (hasRole(user, "SUPER_ADMIN")) return true;
+  // REDACTEUR est un compte plateforme sans tenant, strictement limité au blog — aucune page
+  // tenant-scopée (dashboard, écoles, etc.) ne doit lui être accessible.
+  if (hasRole(user, "REDACTEUR")) return pathname.startsWith("/platform/blog") || pathname === "/account";
 
   const candidates = ROUTE_ROLES.filter((r) => pathname === r.href || pathname.startsWith(`${r.href}/`));
   if (candidates.length === 0) return true;
@@ -46,6 +49,7 @@ export function isPathAllowedForUser(user: AuthUser | null, pathname: string): b
 export function roleHome(user: AuthUser | null): string {
   if (!user) return "/login";
   if (hasRole(user, "SUPER_ADMIN")) return "/platform/dashboard";
+  if (hasRole(user, "REDACTEUR")) return "/platform/blog/posts";
   if (hasRole(user, "TEACHER")) return "/dashboard/enseignant";
   if (hasRole(user, "PARENT")) return "/children";
   if (hasRole(user, "STUDENT")) return "/my-results";

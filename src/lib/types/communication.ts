@@ -1,9 +1,27 @@
 /** Communication contracts mirrored from the backend communication module. */
 
 export type CommunicationChannel = "SMS" | "EMAIL" | "WHATSAPP";
-export type CommunicationReason = "LATE" | "ABSENCE" | "PAYMENT_DUE" | "RESULT" | "MEETING" | "GENERAL";
+export type CommunicationReason = "LATE" | "ABSENCE" | "PAYMENT_DUE" | "RESULT" | "MEETING" | "EXAM" | "GENERAL";
 export type RecipientType = "PARENT" | "STUDENT" | "TEACHER" | "GROUP";
 export type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
+
+/** Segmentation des destinataires d'une diffusion de masse (§11.1). */
+export type BroadcastAudience =
+  | "ALL_PARENTS"
+  | "CLASS_PARENTS"
+  | "CLASS_PARENTS_BOYS"
+  | "CLASS_PARENTS_GIRLS"
+  | "ALL_TEACHERS"
+  | "STUDENT_PARENTS";
+
+export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
+  ALL_PARENTS: "Tous les parents",
+  CLASS_PARENTS: "Parents d'une classe",
+  CLASS_PARENTS_BOYS: "Parents des garçons d'une classe",
+  CLASS_PARENTS_GIRLS: "Parents des filles d'une classe",
+  ALL_TEACHERS: "Tous les enseignants",
+  STUDENT_PARENTS: "Parent(s) d'un élève précis",
+};
 
 export const CHANNEL_LABEL: Record<CommunicationChannel, string> = {
   SMS: "SMS",
@@ -16,6 +34,7 @@ export const REASON_LABEL: Record<CommunicationReason, string> = {
   PAYMENT_DUE: "Échéance de paiement",
   RESULT: "Résultat",
   MEETING: "Réunion",
+  EXAM: "Examen",
   GENERAL: "Général",
 };
 export const RECIPIENT_TYPE_LABEL: Record<RecipientType, string> = {
@@ -51,6 +70,19 @@ export interface SendCommunicationInput {
   content: string;
   reason: CommunicationReason;
   recipientUserIds: number[];
+}
+
+/** Diffusion de masse segmentée — le serveur résout lui-même les destinataires réels. */
+export interface DiffusionInput {
+  tenantId?: number | null;
+  senderId?: number | null;
+  channel: CommunicationChannel;
+  audience: BroadcastAudience;
+  classId?: number | null;
+  studentId?: number | null;
+  subject?: string | null;
+  content: string;
+  reason?: CommunicationReason | null;
 }
 
 export interface MessageRecipient {

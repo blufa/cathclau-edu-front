@@ -6,6 +6,7 @@ import type {
   StudentDetail,
   StudentDocument,
   StudentSearchParams,
+  StudentSummary,
   UpdateStudentInput,
 } from "@/lib/types/student";
 
@@ -29,6 +30,13 @@ export function searchStudents(params: StudentSearchParams): Promise<Page<Studen
       size: params.size,
       sort: params.sort,
     },
+  });
+}
+
+/** Liste des élèves avec classe courante + parent principal (guichet d'accueil), triée alphabétiquement. */
+export function searchStudentsSummary(params: { search?: string; page?: number; size?: number }): Promise<Page<StudentSummary>> {
+  return api.get<Page<StudentSummary>>("/students/summary", {
+    query: { search: params.search || undefined, page: params.page, size: params.size, sort: "lastName,asc" },
   });
 }
 

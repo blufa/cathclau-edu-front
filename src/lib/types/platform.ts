@@ -12,7 +12,7 @@ export const TENANT_STATUSES = [
 ] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
 
-export const ESTABLISHMENT_TYPES = ["PRIMAIRE", "COLLEGE", "LYCEE", "SUPERIEUR", "MIXTE"] as const;
+export const ESTABLISHMENT_TYPES = ["MATERNELLE", "PRIMAIRE", "COLLEGE", "LYCEE", "SUPERIEUR", "MIXTE"] as const;
 export type EstablishmentType = (typeof ESTABLISHMENT_TYPES)[number];
 
 export const PLAN_CODES = ["STARTER", "STANDARD", "PREMIUM", "COMPTABILITE"] as const;

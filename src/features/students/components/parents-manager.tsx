@@ -131,7 +131,7 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
 const editSchema = z.object({
   firstName: z.string().trim().min(1, "Requis"),
   lastName: z.string().trim().min(1, "Requis"),
-  phone: z.string(),
+  phone: z.string().trim().min(1, "Requis"),
   email: z.string(),
   occupation: z.string(),
   address: z.string(),
@@ -181,7 +181,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
+        <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
         <Field>
           <Label>Email</Label>
           <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} />
@@ -206,7 +206,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
 const addSchema = z.object({
   firstName: z.string().trim().min(1, "Requis"),
   lastName: z.string().trim().min(1, "Requis"),
-  phone: z.string(),
+  phone: z.string().trim().min(1, "Requis"),
   email: z.string(),
   occupation: z.string(),
   address: z.string(),
@@ -334,7 +334,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
+            <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
             <Field>
               <Label>Email</Label>
               <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />

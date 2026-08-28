@@ -4,17 +4,14 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, MapPin, Phone } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Field, Input, Label, Textarea } from "@/components/ui/input";
-import { Reveal } from "@/components/public/reveal";
-import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
+import { VankinePage } from "@/components/public/vankine/vankine-page";
+import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
 import { notifySuccess } from "@/lib/feedback";
 
 const COORDS = [
-  { icon: Mail, label: "E-mail", value: "contact@cathclau.edu", href: "mailto:contact@cathclau.edu" },
-  { icon: Phone, label: "Téléphone", value: "+224 620 00 00 00", href: "tel:+224620000000" },
-  { icon: MapPin, label: "Adresse", value: "Conakry, Guinée" },
+  { icon: "fi-rr-marker", title: "Adresse", lines: ["Conakry, Guinée"] },
+  { icon: "fi-rr-envelope", title: "E-mail", lines: ["contact@cathclau.edu"], href: "mailto:contact@cathclau.edu" },
+  { icon: "fi-rr-phone-call", title: "Téléphone", lines: ["+224 620 00 00 00"], href: "tel:+224620000000" },
 ];
 
 const schema = z.object({
@@ -25,6 +22,11 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+/**
+ * Page Contact — reproduction fidèle de "contact" du template Vankine (mêmes classes CSS) :
+ * 3 blocs coordonnées, carte, formulaire réel (validation react-hook-form + zod conservée, envoi
+ * acquitté localement faute de point de collecte serveur dédié pour l'instant).
+ */
 export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const {
@@ -39,7 +41,6 @@ export default function ContactPage() {
 
   async function onSubmit() {
     setLoading(true);
-    // No contact backend yet — acknowledge locally.
     await new Promise((r) => setTimeout(r, 500));
     notifySuccess("Message envoyé. Notre équipe vous répondra rapidement.");
     reset();
@@ -47,85 +48,119 @@ export default function ContactPage() {
   }
 
   return (
-    <>
-      <AuroraBackground className="px-4 py-24 text-center">
-        <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" fill="#99f6e4" />
-        <Reveal className="relative z-10 mx-auto max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Contact</p>
-          <h1 className="mt-3 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-            Parlons de votre établissement
-          </h1>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600">
-            Une question, une démo, un devis ? Écrivez-nous, on vous répond vite.
-          </p>
-        </Reveal>
-      </AuroraBackground>
+    <VankinePage>
+      <PageBannerVankine title="Contact" crumbs={[{ label: "Accueil", href: "/" }, { label: "Contact" }]} background="/images/school-1.jpg" />
 
-      <section className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-[1fr_1.4fr]">
-        {/* Coordinates */}
-        <Reveal className="space-y-4">
-          {COORDS.map((c) => {
-            const Icon = c.icon;
-            const inner = (
-              <div className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-                  <Icon className="h-5 w-5" strokeWidth={1.8} />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">{c.label}</p>
-                  <p className="text-sm text-slate-600">{c.value}</p>
+      <section className="contact-section">
+        <div className="pd_top_80" />
+        <div className="container">
+          <div className="row">
+            {COORDS.map((c) => (
+              <div key={c.title} className="col-lg-4 col-md-6 col-sm-12">
+                <div className="contact_box_content">
+                  <div className="icon trans"><i className={c.icon} /></div>
+                  <div className="contact-infor">
+                    <h6 className="title_no_a_24">{c.title}</h6>
+                    {c.lines.map((line) => (
+                      c.href ? (
+                        <a key={line} href={c.href}>{line}</a>
+                      ) : (
+                        <span key={line}>{line}</span>
+                      )
+                    ))}
+                  </div>
                 </div>
+                <div className="pd_bottom_30" />
               </div>
-            );
-            return c.href ? (
-              <a key={c.label} href={c.href} className="block transition hover:opacity-90">
-                {inner}
-              </a>
-            ) : (
-              <div key={c.label}>{inner}</div>
-            );
-          })}
-        </Reveal>
-
-        {/* Form */}
-        <Reveal delay={0.1}>
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field>
-                <Label htmlFor="name">
-                  Nom complet <span className="text-error-500">*</span>
-                </Label>
-                <Input id="name" aria-invalid={!!errors.name} {...register("name")} />
-                {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
-              </Field>
-              <Field>
-                <Label htmlFor="email">
-                  E-mail <span className="text-error-500">*</span>
-                </Label>
-                <Input id="email" aria-invalid={!!errors.email} {...register("email")} />
-                {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
-              </Field>
-            </div>
-            <Field>
-              <Label htmlFor="subject">Sujet</Label>
-              <Input id="subject" {...register("subject")} />
-            </Field>
-            <Field>
-              <Label htmlFor="message">
-                Message <span className="text-error-500">*</span>
-              </Label>
-              <Textarea id="message" rows={5} aria-invalid={!!errors.message} {...register("message")} />
-              {errors.message && <p className="text-xs text-error-600">{errors.message.message}</p>}
-            </Field>
-            <Button type="submit" loading={loading} fullWidth>
-              Envoyer le message
-            </Button>
-          </form>
-        </Reveal>
+            ))}
+          </div>
+        </div>
+        <div className="pd_bottom_40" />
       </section>
-    </>
+
+      <section className="contact-map-section">
+        <div className="container-no">
+          <div className="row">
+            <div className="col-lg-12">
+              <section className="map-section">
+                <div className="map-outer">
+                  <iframe
+                    title="Localisation CathClau Edu — Conakry, Guinée"
+                    src="https://www.google.com/maps?q=Conakry,Guin%C3%A9e&output=embed"
+                    height={420}
+                    style={{ border: 0, width: "100%" }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="form-section bg_light_1 position-relative">
+        <div className="pd_top_90" />
+        <div className="container">
+          <div className="row">
+            <div className="col-lg-4 col-md-12">
+              <div className="section_title type_one">
+                <h4 className="sm_title">Nous contacter</h4>
+                <div className="title_whole"><h2 className="title">Parlons de votre établissement</h2></div>
+                <p>Une question, une démo, un devis ? Écrivez-nous, on vous répond vite.</p>
+              </div>
+              <div className="pd_bottom_40" />
+              <div className="social-icons">
+                <ul>
+                  <li>
+                    <a href="https://www.linkedin.com" target="_blank" rel="noreferrer" className="m_icon" aria-label="LinkedIn">
+                      <i className="fab fa-linkedin" />
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <div className="pd_bottom_20" />
+            </div>
+            <div className="col-lg-8 col-md-12">
+              <section className="contact_form_box_all style_one">
+                <div className="contact_form_shortcode">
+                  <form onSubmit={handleSubmit(onSubmit)}>
+                    <div className="row">
+                      <div className="col-md-6 col-sm-12">
+                        <label>Nom complet <span>*</span></label>
+                        <input type="text" placeholder="Votre nom" aria-invalid={!!errors.name} {...register("name")} />
+                        {errors.name && <div className="help-block with-errors">{errors.name.message}</div>}
+                      </div>
+                      <div className="col-md-6 col-sm-12">
+                        <label>E-mail <span>*</span></label>
+                        <input type="email" placeholder="vous@ecole.gn" aria-invalid={!!errors.email} {...register("email")} />
+                        {errors.email && <div className="help-block with-errors">{errors.email.message}</div>}
+                      </div>
+                      <div className="col-sm-12">
+                        <label>Sujet</label>
+                        <input type="text" placeholder="Sujet (optionnel)" {...register("subject")} />
+                      </div>
+                      <div className="col-sm-12">
+                        <label>Message <span>*</span></label>
+                        <textarea placeholder="Votre message..." rows={5} aria-invalid={!!errors.message} {...register("message")} />
+                        {errors.message && <div className="help-block with-errors">{errors.message.message}</div>}
+                      </div>
+                      <div className="col-sm-12">
+                        <div className="mg_top apbtn">
+                          <button className="theme_btn" type="submit" disabled={loading}>
+                            {loading ? "Envoi…" : "Envoyer le message"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+        <div className="pd_bottom_90" />
+      </section>
+    </VankinePage>
   );
 }

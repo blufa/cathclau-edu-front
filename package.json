@@ -11,13 +11,20 @@
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/typography": "^0.5.20",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-table": "^8.21.3",
+    "@tiptap/extension-image": "^3.30.5",
+    "@tiptap/extension-link": "^3.30.5",
+    "@tiptap/pm": "^3.30.5",
+    "@tiptap/react": "^3.30.5",
+    "@tiptap/starter-kit": "^3.30.5",
     "axios": "^1.18.1",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.21",
     "flatpickr": "^4.6.13",
     "framer-motion": "^12.40.0",
+    "jsqr": "^1.4.0",
     "libphonenumber-js": "^1.13.8",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
@@ -29,6 +36,7 @@
     "react-hook-form": "^7.82.0",
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
+    "swiper": "^14.2.0",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.2"
@@ -41,6 +49,7 @@
     "@types/react-flatpickr": "^3.8.11",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "postcss-prefix-selector": "^2.1.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

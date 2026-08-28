@@ -15,7 +15,10 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
 export interface SchoolFee {
   id: number;
   tenantId: number | null;
-  classId: number;
+  /** Null pour un frais TRANSPORT — voir routeId, une ligne dessert plusieurs classes. */
+  classId: number | null;
+  /** Ligne de transport (module transport) — utilisé à la place de classId pour un frais TRANSPORT. */
+  routeId: number | null;
   type: FeeType;
   amount: string;
   academicYear: string | null;
@@ -25,7 +28,8 @@ export interface SchoolFee {
 
 export interface SchoolFeeInput {
   tenantId?: number | null;
-  classId: number;
+  classId?: number | null;
+  routeId?: number | null;
   type: FeeType;
   amount: number;
   academicYear?: string | null;

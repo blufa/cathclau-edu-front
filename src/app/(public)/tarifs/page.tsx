@@ -1,185 +1,155 @@
-"use client";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { VankinePage } from "@/components/public/vankine/vankine-page";
+import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
+import { FaqAccordionVankine } from "@/components/public/vankine/faq-accordion-vankine";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Check, Minus } from "lucide-react";
-import { useQuery } from "@/hooks/use-query";
-import { listPlans } from "@/lib/api/platform";
-import { PlanCard } from "@/components/platform/plan-card";
-import { Spinner } from "@/components/ui/spinner";
-import { Reveal } from "@/components/public/reveal";
-import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
-import { Table, THead, TH, TBody, TR, TD } from "@/components/ui/table";
-import { Accordion } from "@/components/ui/accordion";
-import { formatGNF } from "@/lib/format";
-import { planPrice } from "@/lib/platform-utils";
-import { cn } from "@/lib/utils";
-import type { BillingPeriod, Plan } from "@/lib/types/platform";
+export const metadata: Metadata = {
+  title: "Tarifs — CathClau Edu",
+  description:
+    "Une seule offre, toutes les fonctionnalités incluses. Le tarif s'adapte à la taille de votre établissement, avec la périodicité de facturation de votre choix.",
+};
 
-const PLAN_ORDER = ["STARTER", "STANDARD", "PREMIUM"];
-
-const COMPARISON: { label: string; values: Record<string, string | boolean> }[] = [
-  { label: "Élèves", values: { STARTER: "≤ 500", STANDARD: "≤ 2000", PREMIUM: "Illimité" } },
-  { label: "Gestion scolarité", values: { STARTER: true, STANDARD: true, PREMIUM: true } },
-  { label: "Communication parents", values: { STARTER: true, STANDARD: true, PREMIUM: true } },
-  { label: "Facturation des frais", values: { STARTER: false, STANDARD: true, PREMIUM: true } },
-  { label: "Paiements en ligne", values: { STARTER: false, STANDARD: true, PREMIUM: true } },
-  { label: "Multi-établissements", values: { STARTER: false, STANDARD: false, PREMIUM: true } },
-  { label: "Support prioritaire", values: { STARTER: false, STANDARD: false, PREMIUM: true } },
+const INCLUDED = [
+  "Tous les modules métier : scolarité, présences, notes & bulletins, emploi du temps",
+  "Communication illimitée aux familles : SMS, e-mail et WhatsApp",
+  "Facturation, échéanciers et paiements mobile money en ligne",
+  "Comptabilité, dépenses et rapprochement bancaire",
+  "Rôles & permissions (RBAC) pour toute votre équipe",
+  "Maintenance, mises à jour et sauvegardes assurées par notre équipe",
 ];
 
-const FAQ = [
-  { q: "L'essai gratuit nécessite-t-il une carte bancaire ?", a: "Non. Vous bénéficiez de 30 jours d'essai gratuit sans aucune carte bancaire." },
-  { q: "Puis-je changer de plan plus tard ?", a: "Oui. Une mise à niveau est immédiate (avec prorata) ; une rétrogradation prend effet au renouvellement." },
-  { q: "Quels moyens de paiement acceptez-vous ?", a: "Orange Money, MTN MoMo, Wave et cartes Visa/MasterCard." },
+const FAQ_LEFT = [
+  {
+    q: "Pourquoi il n'y a pas de formules Starter/Standard/Premium ?",
+    a: "Parce que nous pensons qu'un établissement ne devrait jamais être privé d'une fonctionnalité utile faute d'avoir choisi le \"bon\" palier. Chez CathClau Edu, chaque école accède à l'intégralité de la plateforme dès le premier jour.",
+  },
+  {
+    q: "Comment le tarif est-il déterminé ?",
+    a: "Il est adapté à la taille de votre établissement (nombre d'élèves, nombre de sites). Créez votre compte ou contactez-nous pour obtenir un devis précis, sans engagement.",
+  },
+  {
+    q: "L'essai gratuit nécessite-t-il une carte bancaire ?",
+    a: "Non. Vous bénéficiez de 30 jours d'essai gratuit sans aucune carte bancaire.",
+  },
 ];
 
-const PERIODS: { label: string; value: BillingPeriod }[] = [
-  { label: "Mensuel", value: "MONTHLY" },
-  { label: "Annuel (remisé)", value: "ANNUAL" },
+const FAQ_RIGHT = [
+  {
+    q: "Puis-je changer la périodicité de facturation en cours d'année ?",
+    a: "Oui, vous pouvez passer d'une facturation mensuelle à trimestrielle ou annuelle (et inversement) au renouvellement de votre échéance en cours.",
+  },
+  {
+    q: "Quels moyens de paiement acceptez-vous ?",
+    a: "Orange Money, MTN MoMo, Wave et cartes Visa/MasterCard — adaptés aux usages réels des établissements en Guinée.",
+  },
+  {
+    q: "La maintenance et le support sont-ils inclus ?",
+    a: "Oui, la maintenance, les mises à jour, les sauvegardes et un support disponible 24h/24 et 7j/7 sont inclus, sans surcoût.",
+  },
 ];
 
-function ComparisonCell({ value }: { value: string | boolean }) {
-  if (typeof value === "boolean") {
-    return value ? (
-      <span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-brand-700">
-        <Check className="h-4 w-4" strokeWidth={3} />
-      </span>
-    ) : (
-      <Minus className="mx-auto h-4 w-4 text-slate-300" />
-    );
-  }
-  return <span className="font-medium text-slate-800">{value}</span>;
-}
-
-function PeriodToggle({ value, onChange }: { value: BillingPeriod; onChange: (v: BillingPeriod) => void }) {
+function CheckIcon() {
   return (
-    <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-      {PERIODS.map((p) => (
-        <button
-          key={p.value}
-          type="button"
-          onClick={() => onChange(p.value)}
-          className={cn(
-            "rounded-full px-4 py-1.5 text-sm font-medium transition",
-            value === p.value ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900",
-          )}
-        >
-          {p.label}
-        </button>
-      ))}
-    </div>
+    <svg width={20} height={20} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M10 0C4.48578 0 0 4.48578 0 10C0 15.5142 4.48578 20 10 20C15.5142 20 20 15.5142 20 10C20 4.48578 15.5142 0 10 0Z" fill="#2196F3" />
+      <path d="M15.0692 7.88074L9.6525 13.2973C9.48999 13.4598 9.27667 13.5416 9.06335 13.5416C8.85004 13.5416 8.63672 13.4598 8.47421 13.2973L5.76593 10.589C5.44 10.2632 5.44 9.73651 5.76593 9.41074C6.09171 9.08481 6.61829 9.08481 6.94421 9.41074L9.06335 11.5299L13.8909 6.70245C14.2167 6.37653 14.7433 6.37653 15.0692 6.70245C15.395 7.02823 15.395 7.55481 15.0692 7.88074Z" fill="#FAFAFA" />
+    </svg>
   );
 }
 
+/**
+ * Page "Tarifs" — reproduction fidèle de "pricing" du template Vankine (mêmes classes CSS,
+ * `.price_box.type_one`), mais avec une seule offre (décision actée : pas de faux paliers
+ * Starter/Standard/Premium, tarif réel adapté à la taille de l'établissement) et un accordéon FAQ
+ * 2 colonnes reprenant les vraies questions déjà validées côté produit.
+ */
 export default function TarifsPage() {
-  const router = useRouter();
-  const [period, setPeriod] = useState<BillingPeriod>("MONTHLY");
-  const { data, loading, error } = useQuery(() => listPlans(), []);
-
-  const plans = data ? sortPlans(data.filter((p) => !p.archived)) : [];
-
   return (
-    <>
-      {/* Hero */}
-      <AuroraBackground className="px-4 py-24 text-center">
-        <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" fill="#99f6e4" />
-        <Reveal className="relative z-10 mx-auto max-w-3xl">
-          <span className="inline-block rounded-full border border-brand-200 bg-white/70 px-4 py-1.5 text-xs font-medium text-brand-700 backdrop-blur">
-            Tarifs
-          </span>
-          <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
-            Des tarifs simples et transparents
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-lg text-slate-600">
-            Essai gratuit de 30 jours, sans carte bancaire. Annulez à tout moment.
-          </p>
-          <div className="mt-6 flex justify-center">
-            <PeriodToggle value={period} onChange={setPeriod} />
-          </div>
-        </Reveal>
-      </AuroraBackground>
+    <VankinePage>
+      <PageBannerVankine title="Tarifs" crumbs={[{ label: "Accueil", href: "/" }, { label: "Tarifs" }]} background="/images/school-3.jpg" />
 
-      <div className="mx-auto max-w-6xl px-4 py-16">
-        {/* Plans */}
-        {error ? (
-          <p className="rounded-md bg-red-50 px-4 py-3 text-center text-sm text-red-700">
-            Impossible de charger les plans pour le moment.
-          </p>
-        ) : loading && plans.length === 0 ? (
-          <div className="flex justify-center py-16"><Spinner /></div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-3">
-            {plans.map((plan, i) => (
-              <Reveal key={plan.id} delay={i * 0.1}>
-                <PlanCard
-                  plan={plan}
-                  period={period}
-                  onChoose={(p) => router.push(`/signup?plan=${p.code}`)}
-                />
-              </Reveal>
-            ))}
-          </div>
-        )}
-
-        {/* Comparison table */}
-        <section className="mt-20">
-          <Reveal>
-            <h2 className="text-center text-2xl font-bold tracking-tight text-slate-900">
-              Comparatif détaillé
-            </h2>
-            <div className="mt-8">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Fonctionnalité</TH>
-                    {PLAN_ORDER.map((code) => (
-                      <TH key={code} className="text-center">{code}</TH>
-                    ))}
-                  </TR>
-                </THead>
-                <TBody>
-                  <TR>
-                    <TD>Prix ({period === "ANNUAL" ? "annuel" : "mensuel"})</TD>
-                    {PLAN_ORDER.map((code) => {
-                      const plan = plans.find((p) => p.code === code);
-                      return (
-                        <TD key={code} className="text-center font-semibold">
-                          {plan ? formatGNF(planPrice(plan, period)) : "—"}
-                        </TD>
-                      );
-                    })}
-                  </TR>
-                  {COMPARISON.map((row) => (
-                    <TR key={row.label}>
-                      <TD>{row.label}</TD>
-                      {PLAN_ORDER.map((code) => (
-                        <TD key={code} className="text-center">
-                          <ComparisonCell value={row.values[code]} />
-                        </TD>
-                      ))}
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
+      <section className="pricing-section bg_light_1">
+        <div className="pd_top_90" />
+        <div className="container">
+          <div className="row">
+            <div className="col-lg-12">
+              <div className="section_title text-center type_one">
+                <h4 className="sm_title">Une offre unique</h4>
+                <div className="title_whole">
+                  <h2 className="title">Toutes les fonctionnalités incluses, dès le premier jour</h2>
+                </div>
+                <p>
+                  Aucune fonctionnalité n&apos;est réservée à un palier supérieur : votre établissement
+                  utilise la plateforme dans son intégralité. Le tarif s&apos;adapte à la taille de
+                  votre école — mensuel, trimestriel ou annuel, à votre choix.
+                </p>
+              </div>
             </div>
-          </Reveal>
-        </section>
+          </div>
+          <div className="pd_bottom_40" />
+          <div className="row justify-content-center">
+            <div className="col-lg-6 col-md-8 col-sm-10 col-xs-12">
+              <div className="price_box type_one trans">
+                <div className="top">
+                  <h4 className="title_24">Offre CathClau Edu</h4>
+                  <div className="price">
+                    Sur devis <small>/ selon effectif</small>
+                  </div>
+                </div>
+                <div className="center">
+                  {INCLUDED.map((item) => (
+                    <div key={item} className="d-flex align-items-center">
+                      <CheckIcon />
+                      <small>{item}</small>
+                    </div>
+                  ))}
+                </div>
+                <div className="bottom text-center">
+                  <Link className="theme_btn" href="/signup">
+                    Créer mon école
+                    <svg width={12} height={12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 11L11 1M11 1H3.5M11 1V8.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="pd_top_30 text-center">
+            <p>
+              Vous préférez en discuter directement ?{" "}
+              <Link href="/contact" className="links" style={{ fontWeight: 600 }}>Demandez un devis</Link>
+            </p>
+          </div>
+        </div>
+        <div className="pd_bottom_70" />
+      </section>
 
-        {/* FAQ */}
-        <section className="mx-auto mt-20 max-w-3xl">
-          <Reveal>
-            <h2 className="text-center text-2xl font-bold tracking-tight text-slate-900">
-              Questions fréquentes
-            </h2>
-            <Accordion items={FAQ} className="mt-8" />
-          </Reveal>
-        </section>
-      </div>
-    </>
+      <section className="faq-section">
+        <div className="pd_top_90" />
+        <div className="container">
+          <div className="row">
+            <div className="col-lg-7 m-auto text-center">
+              <div className="section_title type_one">
+                <h4 className="sm_title">FAQ</h4>
+                <div className="title_whole"><h2 className="title">Questions fréquentes</h2></div>
+                <p>Tout ce qu&apos;il faut savoir avant de créer votre école sur CathClau Edu.</p>
+              </div>
+              <div className="pd_bottom_40" />
+            </div>
+          </div>
+          <div className="row">
+            <div className="col-lg-6">
+              <FaqAccordionVankine items={FAQ_LEFT} />
+            </div>
+            <div className="col-lg-6">
+              <FaqAccordionVankine items={FAQ_RIGHT} defaultOpen={-1} />
+            </div>
+          </div>
+        </div>
+        <div className="pd_bottom_80" />
+      </section>
+    </VankinePage>
   );
-}
-
-function sortPlans(plans: Plan[]): Plan[] {
-  return [...plans].sort((a, b) => PLAN_ORDER.indexOf(a.code) - PLAN_ORDER.indexOf(b.code));
 }

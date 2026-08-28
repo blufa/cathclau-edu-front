@@ -8,6 +8,7 @@ import { getAssignedClasses, getAssignedSubjects, setAssignedClasses, setAssigne
 import type { ClasseMatiere } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Field, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { notifyError, notifySuccess } from "@/lib/feedback";
@@ -125,6 +126,7 @@ export function TeacherClassSubjectsAssignment({ teacherId }: { teacherId: numbe
           row={r}
           classes={filteredClasses}
           canRemove={rows.length > 1}
+          teacherId={teacherId}
           onChange={(patch) => update(i, patch)}
           onRemove={() => removeRow(i)}
         />
@@ -143,11 +145,12 @@ export function TeacherClassSubjectsAssignment({ teacherId }: { teacherId: numbe
 /** Une ligne classe+matière : les matières proposées sont celles déjà affectées à la classe choisie
  * (curriculum défini par le Directeur des Études), pas le catalogue complet. */
 function ClassSubjectRow({
-  row, classes, canRemove, onChange, onRemove,
+  row, classes, canRemove, teacherId, onChange, onRemove,
 }: {
   row: Row;
   classes: { id: number; label: string }[];
   canRemove: boolean;
+  teacherId: number;
   onChange: (patch: Partial<Row>) => void;
   onRemove: () => void;
 }) {
@@ -159,6 +162,32 @@ function ClassSubjectRow({
     [subjectsQuery.data],
   );
   const assignedSubjects: ClasseMatiere[] = classSubjectsQuery.data ?? [];
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
+  const [assigningAll, setAssigningAll] = useState(false);
+
+  /** Raccourci « moniteur » : un seul enseignant couvre toutes les matières de la classe (courant en
+   * maternelle/primaire), en une fois plutôt que matière par matière. */
+  async function assignAllSubjects() {
+    if (!classId || assignedSubjects.length === 0) return;
+    setAssigningAll(true);
+    try {
+      for (const cm of assignedSubjects) {
+        await assignClassSubject(classId, cm.subjectId, teacherId);
+      }
+      const [prevClasses, prevSubjects] = await Promise.all([getAssignedClasses(teacherId), getAssignedSubjects(teacherId)]);
+      const classIds = [...new Set([...prevClasses, classId])];
+      const subjectIds = [...new Set([...prevSubjects, ...assignedSubjects.map((cm) => cm.subjectId)])];
+      await Promise.all([setAssignedClasses(teacherId, classIds), setAssignedSubjects(teacherId, subjectIds)]);
+      notifySuccess(`Affecté à ${assignedSubjects.length} matière(s) de cette classe`);
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setAssigningAll(false);
+    }
+  }
 
   // La matière choisie devient invalide si elle n'est plus dans le curriculum de la classe (changement de classe).
   useEffect(() => {
@@ -171,10 +200,13 @@ function ClassSubjectRow({
   return (
     <div className="flex flex-nowrap items-end gap-2">
       <Field>
-        <Select value={row.classId} onChange={(e) => onChange({ classId: e.target.value, subjectId: "" })}>
-          <option value="">— Classe —</option>
-          {classes.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-        </Select>
+        <SearchableSelect
+          value={row.classId}
+          options={classOptions}
+          onChange={(v) => onChange({ classId: v, subjectId: "" })}
+          triggerClassName="justify-between px-3"
+          noResultsLabel="Aucune classe"
+        />
       </Field>
       <Field>
         <Select value={row.subjectId} disabled={!classId} onChange={(e) => onChange({ subjectId: e.target.value })}>
@@ -187,6 +219,11 @@ function ClassSubjectRow({
           <p className="mt-1 text-xs text-gray-400">Aucune matière affectée à cette classe pour l&apos;instant.</p>
         )}
       </Field>
+      {classId && assignedSubjects.length > 0 && (
+        <Button type="button" variant="secondary" size="sm" loading={assigningAll} onClick={assignAllSubjects}>
+          Affecter à toutes les matières
+        </Button>
+      )}
       <Button type="button" variant="ghost" className="text-error-600" disabled={!canRemove}
         onClick={onRemove} aria-label="Retirer la ligne">
         <X className="h-4 w-4" />

@@ -13,11 +13,23 @@ export interface AnneeScolaire {
   createdAt: string | null;
 }
 
+export type SchoolCycle = "MATERNELLE" | "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR";
+
+export const SCHOOL_CYCLE_LABEL: Record<SchoolCycle, string> = {
+  MATERNELLE: "Maternelle",
+  PRIMAIRE: "Primaire",
+  COLLEGE: "Collège",
+  LYCEE: "Lycée",
+  SUPERIEUR: "Supérieur",
+};
+
 export interface Niveau {
   id: number;
   tenantId: number;
   label: string;
   sortOrder: number;
+  /** Cycle scolaire (maternelle/primaire déclenchent le badge de retrait automatique à la sortie). */
+  cycle?: SchoolCycle | null;
 }
 
 export interface Salle {
@@ -48,7 +60,6 @@ export interface MatiereModele {
 }
 
 export type TypePeriode = "TRIMESTRE" | "SEMESTRE";
-export type SchoolCycle = "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR";
 
 export interface Periode {
   id: number;
@@ -98,6 +109,8 @@ export interface Classe {
   maxCapacity: number | null;
   /** Classe normale ou classe d'examen (§6) — détermine le tarif horaire de paie appliqué. */
   classType: ClassType;
+  /** Élève désigné pour scanner les badges de la classe le matin. */
+  classRepresentativeStudentId: number | null;
 }
 
 export type JourSemaine = "LUNDI" | "MARDI" | "MERCREDI" | "JEUDI" | "VENDREDI" | "SAMEDI";

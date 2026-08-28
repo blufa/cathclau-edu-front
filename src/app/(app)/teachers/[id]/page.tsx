@@ -20,6 +20,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
 import { TeacherSubjectsSection } from "@/components/staff/teacher-subjects";
+import { TeacherLevelsSection } from "@/components/staff/teacher-levels";
 
 const DAY_LABEL: Record<string, string> = {
   MONDAY: "Lundi",
@@ -163,6 +164,14 @@ export default function TeacherDetailPage() {
           </CardHeader>
           <CardBody>
             <TeacherSubjectsSection teacherId={id} canWrite={canWrite} />
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Niveaux enseignés</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <TeacherLevelsSection teacherId={id} canWrite={canWrite} />
           </CardBody>
         </Card>
         <Card>

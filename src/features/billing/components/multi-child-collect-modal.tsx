@@ -128,6 +128,15 @@ export function MultiChildCollectModal({
     const perMonth = Number(row.invoice.totalAmount) / row.coveredMonths.length;
     setAmount(row, next.length * perMonth);
   }
+  /** Libellé précis pour le reçu (voir CollectFeeModal.receiptLabelFor) : reflète le(s) mois
+   * réellement réglé(s) plutôt que le libellé complet de la tranche quand le paiement est partiel. */
+  function receiptLabelFor(row: ChildRow): string {
+    if (row.coveredMonths.length <= 1) return row.label;
+    const checked = monthSelections[row.invoice.id] ?? row.coveredMonths;
+    if (checked.length === row.coveredMonths.length) return row.label;
+    const monthsLabel = [...checked].sort().map(monthShortLabel).join(", ");
+    return monthsLabel ? `${row.label} — ${monthsLabel} réglé(s)` : row.label;
+  }
   const toggle = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const allIds = rows.map((r) => r.invoice.id);
   const toggleAll = () => setSelected((s) => (s.length === allIds.length ? [] : allIds));
@@ -153,7 +162,7 @@ export function MultiChildCollectModal({
     setLoading(true);
     try {
       const coverageLabel = `Fratrie (${studentIds.length} enfant${studentIds.length > 1 ? "s" : ""}) — `
-        + selectedRows.map((r) => `${r.studentName} : ${r.label}`).join(", ");
+        + selectedRows.map((r) => `${r.studentName} : ${receiptLabelFor(r)}`).join(", ");
       await initiateGroupPayment({
         tenantId, studentId: rows[0]?.studentId, channel,
         payerNumber: online ? "614324299" : undefined,

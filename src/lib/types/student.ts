@@ -117,6 +117,14 @@ export interface CreateStudentInput {
 /** Body for PUT /students/{id}. */
 export type UpdateStudentInput = Omit<CreateStudentInput, "userId">;
 
+/** Ligne du guichet d'accueil (§billing) : élève + classe courante + parent principal (ou premier lié). */
+export interface StudentSummary {
+  student: Student;
+  classId: number | null;
+  principalParentName: string | null;
+  principalParentPhone: string | null;
+}
+
 export interface StudentSearchParams {
   classId?: number;
   enrollmentStatus?: EnrollmentStatus;
