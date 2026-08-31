@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Stepper } from "@/components/ui/stepper";
 import { TeacherClassSubjectsAssignment } from "@/components/staff/teacher-class-subjects";
+import { TeacherLevelsSection } from "@/components/staff/teacher-levels";
 
 interface TeacherFormProps {
   initial?: Teacher;
@@ -278,12 +279,21 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
       )}
 
       {active === 3 && (
-        <div className="space-y-3 pt-2">
-          <p className="text-sm text-gray-500">
-            Facultatif — dès qu&apos;une classe et une matière sont choisies, l&apos;enseignant est directement
-            affecté et apparaît dans l&apos;emploi du temps de cette classe.
-          </p>
-          {teacherId && <TeacherClassSubjectsAssignment teacherId={teacherId} />}
+        <div className="space-y-5 pt-2">
+          <div>
+            <p className="text-sm text-gray-500">
+              Niveaux où l&apos;enseignant est habilité à enseigner (ex. Primaire, Collège) — facultatif,
+              modifiable à tout moment depuis sa fiche.
+            </p>
+            {teacherId && <TeacherLevelsSection teacherId={teacherId} canWrite />}
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">
+              Facultatif — dès qu&apos;une classe et une matière sont choisies, l&apos;enseignant est directement
+              affecté et apparaît dans l&apos;emploi du temps de cette classe.
+            </p>
+            {teacherId && <TeacherClassSubjectsAssignment teacherId={teacherId} />}
+          </div>
         </div>
       )}
 

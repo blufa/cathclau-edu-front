@@ -154,6 +154,21 @@ export interface TeacherHoursProgress {
   dueMinutes: number;
   realizedMinutes: number;
 }
+/** Estimation du salaire dû pour un mois donné, dans la projection sur l'année scolaire. */
+export interface MonthProjection {
+  year: number;
+  month: number;
+  teacherPayroll: string;
+  staffPayroll: string;
+  total: string;
+}
+/** Projection mois par mois (9 mois par défaut) de la masse salariale, jours ouvrés/fériés pris en compte. */
+export interface SchoolYearProjection {
+  months: MonthProjection[];
+  totalTeachers: string;
+  totalStaff: string;
+  grandTotal: string;
+}
 export interface SubsidyStats {
   activeExemptionsCount: number;
   totalExemptions: number;
@@ -173,11 +188,20 @@ export interface FounderYearComparison {
   collectedDelta: string;
   recoveryRateDelta: string;
 }
+/** Salaire d'un enseignant précis : son mois affiché + son estimation cumulée jusqu'à la fin de l'année. */
+export interface TeacherSalary {
+  teacherId: number;
+  teacherName: string;
+  monthlyPay: string;
+  annualProjection: string;
+}
 export interface FounderDashboard {
   academicYearId: number;
   recovery: RecoveryView;
   payroll: PayrollMassSummary;
   teacherHours: TeacherHoursProgress[];
+  payrollProjection: SchoolYearProjection;
+  teacherSalaries: TeacherSalary[];
   subsidy: SubsidyStats;
   alerts: FounderAlert[];
   comparison: FounderYearComparison | null;
@@ -185,7 +209,9 @@ export interface FounderDashboard {
 
 export function getFounderDashboard(
   academicYearId: number,
-  options?: { year?: number; month?: number; compareAcademicYearId?: number; topDebtors?: number },
+  /** monthsCount : impose la longueur de la projection de masse salariale (§payroll) — sinon dérivée
+   * de la durée réelle restante de l'année scolaire jusqu'à sa date de fin. */
+  options?: { year?: number; month?: number; compareAcademicYearId?: number; topDebtors?: number; monthsCount?: number },
 ): Promise<FounderDashboard> {
   return api.get<FounderDashboard>("/dashboard/founder", {
     query: { academicYearId, ...options },

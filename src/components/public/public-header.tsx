@@ -2,77 +2,102 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Mail, MapPin, Menu, Phone, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getBranding } from "@/lib/branding";
 
 const NAV = [
+  { label: "Accueil", href: "/" },
   { label: "Modules", href: "/#modules" },
-  { label: "Pourquoi nous", href: "/#support" },
+  { label: "À propos", href: "/a-propos" },
+  { label: "Blog", href: "/blog" },
   { label: "Sécurité", href: "/#securite" },
   { label: "Tarifs", href: "/tarifs" },
+  { label: "FAQ", href: "/faqs" },
 ];
 
+/** Reproduit la structure du header "style 5" de Vankine : bandeau clair (coordonnées) au-dessus
+ * d'une barre de navigation bleue pleine largeur avec liens en pilules et CTA blanc en pilule. */
 export function PublicHeader() {
   const branding = getBranding();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm shadow-slate-900/[0.04] backdrop-blur">
-      {/* Utility top bar */}
-      <div className="hidden bg-slate-950 sm:block">
-        <div className="mx-auto flex h-9 max-w-6xl items-center justify-between px-4 text-xs text-slate-400">
-          <a href="tel:+224620000000" className="transition hover:text-white">
-            ☎ +224 620 00 00 00
-          </a>
-          <div className="flex items-center gap-4">
-            <a href="mailto:contact@cathclau.edu" className="transition hover:text-white">
-              contact@cathclau.edu
+    <header className="sticky top-0 z-50">
+      {/* Bandeau coordonnées (clair) */}
+      <div className="hidden bg-brand-50 sm:block">
+        <div className="mx-auto flex h-11 max-w-6xl items-center justify-between px-4 text-xs text-brand-900">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-3.5 w-3.5 text-brand-600" />
+            <span className="text-slate-500">Nos écoles :</span>
+            <span className="font-medium">Guinée, toutes régions</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <a href="mailto:contact@cathclau.edu" className="flex items-center gap-2 transition hover:text-brand-600">
+              <Mail className="h-3.5 w-3.5 text-brand-600" /> contact@cathclau.edu
             </a>
-            <span className="text-slate-600">|</span>
-            <span className="font-medium text-white">FR</span>
+            <a href="tel:+224620000000" className="flex items-center gap-2 transition hover:text-brand-600">
+              <Phone className="h-3.5 w-3.5 text-brand-600" /> +224 620 00 00 00
+            </a>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 font-bold text-white shadow-sm shadow-brand-500/30">
-            {branding.logoLetter}
-          </span>
-          <span className="text-lg font-semibold tracking-tight text-slate-900">{branding.appName}</span>
-        </Link>
-
-        <div className="hidden items-center gap-6 sm:flex">
-          {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className="text-sm font-medium text-gray-600 hover:text-gray-900">
-              {n.label}
-            </Link>
-          ))}
-          <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900">
-            Connexion
+      {/* Barre de navigation bleue */}
+      <div className="bg-brand-600 shadow-md shadow-brand-900/10">
+        <div className="mx-auto flex h-[4.5rem] max-w-6xl items-center justify-between px-4 py-2.5">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white font-bold text-brand-700 shadow-sm">
+              {branding.logoLetter}
+            </span>
+            <span className="text-lg font-bold tracking-tight text-white">{branding.appName}</span>
           </Link>
-          <Button component={Link} href="/signup" size="sm">
-            Essai gratuit
-          </Button>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Menu"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 sm:hidden"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+          <nav className="hidden items-center gap-1 lg:flex">
+            {NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className="rounded-full px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
+              >
+                {n.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="hidden items-center gap-3 lg:flex">
+            <button
+              type="button"
+              aria-label="Rechercher"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <Link href="/login" className="rounded-full px-3 py-2 text-sm font-medium text-white/90 hover:text-white">
+              Connexion
+            </Link>
+            <Button component={Link} href="/signup" size="sm" className="rounded-full bg-white text-brand-700 hover:bg-brand-50">
+              Essai gratuit
+            </Button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Menu"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer */}
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-gray-900/50 sm:hidden" onClick={close} />
-          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white p-6 shadow-xl sm:hidden">
+          <div className="fixed inset-0 z-40 bg-gray-900/50 lg:hidden" onClick={close} />
+          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white p-6 shadow-xl lg:hidden">
             <div className="mb-6 flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-900">Menu</span>
               <button type="button" onClick={close} aria-label="Fermer" className="rounded-lg p-1 text-gray-500 hover:bg-gray-100">
@@ -88,7 +113,7 @@ export function PublicHeader() {
               <Link href="/login" onClick={close} className="text-sm font-medium text-gray-700">
                 Connexion
               </Link>
-              <Button component={Link} href="/signup" onClick={close} fullWidth>
+              <Button component={Link} href="/signup" onClick={close} fullWidth className="rounded-full">
                 Essai gratuit
               </Button>
             </div>

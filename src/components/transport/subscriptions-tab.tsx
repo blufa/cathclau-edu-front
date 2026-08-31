@@ -13,12 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
-import { Input, Label, Field } from "@/components/ui/input";
+import { Label, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
-import { formatGNF } from "@/lib/format";
 
 export function SubscriptionsTab() {
   const routesQuery = useQuery(listRoutes, []);
@@ -40,15 +39,14 @@ export function SubscriptionsTab() {
       </div>
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Élève</TH><TH>Ligne</TH><TH>Sens</TH><TH>Frais/mois</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Élève</TH><TH>Ligne</TH><TH>Sens</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun abonnement.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun abonnement.</TD></TR>}
             {(q.data ?? []).map((s) => (
               <TR key={s.id}>
                 <TD className="font-medium text-gray-900">{studentName.get(s.studentId) ?? `#${s.studentId}`}</TD>
                 <TD>{routeName.get(s.routeId) ?? `#${s.routeId}`}</TD>
                 <TD>{DIRECTION_LABEL[s.direction]}</TD>
-                <TD>{s.monthlyFee != null ? formatGNF(s.monthlyFee) : "—"}</TD>
                 <TD><Badge tone={s.status === "ACTIVE" ? "green" : "gray"}>{SUB_STATUS_LABEL[s.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
@@ -74,7 +72,6 @@ const subscribeSchema = z.object({
   stopId: z.string(),
   studentId: z.string().min(1, "Requis"),
   direction: z.string(),
-  monthlyFee: z.union([z.number(), z.literal("")]),
 });
 type SubscribeFormValues = z.infer<typeof subscribeSchema>;
 
@@ -86,7 +83,7 @@ function SubscribeForm({ routes, students, onCancel, onDone }: {
   const [loading, setLoading] = useState(false);
   const { handleSubmit, watch, setValue, formState: { errors } } = useForm<SubscribeFormValues>({
     resolver: zodResolver(subscribeSchema),
-    defaultValues: { routeId: "", stopId: "", studentId: "", direction: "BOTH", monthlyFee: "" },
+    defaultValues: { routeId: "", stopId: "", studentId: "", direction: "BOTH" },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
@@ -95,8 +92,6 @@ function SubscribeForm({ routes, students, onCancel, onDone }: {
   function onRoute(value: string) {
     setValue("routeId", value);
     setValue("stopId", "");
-    const r = routes.find((x) => String(x.id) === value);
-    if (r?.monthlyFee != null) setValue("monthlyFee", Number(r.monthlyFee));
   }
 
   const studentOptions: SearchableOption[] = useMemo(
@@ -113,7 +108,6 @@ function SubscribeForm({ routes, students, onCancel, onDone }: {
       await subscribe({
         routeId: Number(values.routeId), stopId: values.stopId ? Number(values.stopId) : null,
         studentId: Number(values.studentId), direction: values.direction as TransportDirection,
-        monthlyFee: values.monthlyFee === "" ? null : Number(values.monthlyFee),
       });
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -146,10 +140,10 @@ function SubscribeForm({ routes, students, onCancel, onDone }: {
           {(Object.keys(DIRECTION_LABEL) as TransportDirection[]).map((d) => (<option key={d} value={d}>{DIRECTION_LABEL[d]}</option>))}
         </Select>
       </Field>
-      <Field>
-        <Label>Frais mensuels (GNF)</Label>
-        <Input type="number" min={0} value={v.monthlyFee} onChange={(e) => setValue("monthlyFee", e.target.value === "" ? "" : Number(e.target.value))} />
-      </Field>
+      <p className="rounded-lg bg-brand-50/60 px-3 py-2 text-xs text-brand-800">
+        La facturation transport se génère automatiquement depuis le frais Transport de la classe de
+        l&apos;élève (configuré dans Frais scolaires) — aucun montant à saisir ici.
+      </p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="submit" loading={loading}>Abonner</Button>

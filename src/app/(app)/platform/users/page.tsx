@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CircleDot, Users as UsersIcon } from "lucide-react";
+import { CircleDot, UserPlus, Users as UsersIcon } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { listPlatformUsers, searchTenants } from "@/lib/api/platform";
 import type { PlatformUser } from "@/lib/types/platform";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
+import { NewRedacteurModal } from "@/components/platform/new-redacteur-modal";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { formatDate } from "@/lib/format";
@@ -31,6 +33,7 @@ export default function PlatformUsersPage() {
 
 function PlatformUsersTable() {
   const [tenantFilter, setTenantFilter] = useState("");
+  const [creatingRedacteur, setCreatingRedacteur] = useState(false);
 
   const usersQuery = useQuery(() => listPlatformUsers(), []);
   const tenantsQuery = useQuery(() => searchTenants({ size: TENANTS_PAGE_SIZE }), []);
@@ -111,10 +114,21 @@ function PlatformUsersTable() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Utilisateurs</h1>
-        <p className="text-sm text-slate-500">Tous les comptes, toutes écoles confondues.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Utilisateurs</h1>
+          <p className="text-sm text-slate-500">Tous les comptes, toutes écoles confondues.</p>
+        </div>
+        <Button leftSection={<UserPlus className="h-4 w-4" />} onClick={() => setCreatingRedacteur(true)}>
+          Nouveau rédacteur
+        </Button>
       </div>
+
+      <NewRedacteurModal
+        open={creatingRedacteur}
+        onClose={() => setCreatingRedacteur(false)}
+        onCreated={() => usersQuery.refetch()}
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard title="Comptes au total" value={users.length} icon={UsersIcon} accent="indigo" />

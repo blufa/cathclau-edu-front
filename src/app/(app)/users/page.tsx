@@ -14,15 +14,19 @@ import {
   createUser,
   deactivateUser,
   deleteUser,
+  getUserDirectPermissions,
   getUserRoles,
+  listPermissions,
   listRoles,
   listUsers,
   removeRoleFromUser,
   resetUserAccess,
+  setUserPermissions,
   updateUser,
 } from "@/lib/api/iam";
 import { ApiError } from "@/lib/api/errors";
 import type { CreateUserInput, Role, User } from "@/lib/types/iam";
+import { PermissionMatrix } from "@/components/iam/permission-matrix";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -221,10 +225,21 @@ export default function UsersPage() {
         )}
       </Modal>
 
-      {/* Roles */}
-      <Modal open={!!managingRoles} onClose={() => setManagingRoles(null)} title="Rôles de l'utilisateur">
+      {/* Roles + permissions supplémentaires */}
+      <Modal open={!!managingRoles} onClose={() => setManagingRoles(null)} title="Rôles & permissions de l'utilisateur" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {managingRoles && (
-          <UserRolesEditor user={managingRoles} roles={rolesQuery.data ?? []} />
+          <div className="space-y-6">
+            <UserRolesEditor user={managingRoles} roles={rolesQuery.data ?? []} />
+            <div className="border-t border-gray-100 pt-4">
+              <h4 className="mb-1 text-sm font-semibold text-gray-900">Permissions supplémentaires</h4>
+              <p className="mb-3 text-xs text-gray-500">
+                À cocher en plus des permissions déjà incluses dans les rôles ci-dessus — utile pour donner un
+                droit ponctuel à ce compte précis (ex. autoriser un comptable à créer des élèves) sans créer un
+                rôle personnalisé.
+              </p>
+              <UserExtraPermissionsEditor user={managingRoles} />
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -529,5 +544,33 @@ function UserRolesEditor({ user, roles }: { user: User; roles: Role[] }) {
         );
       })}
     </div>
+  );
+}
+
+// ── Extra (direct) permissions editor ────────────────────────────────────────
+function UserExtraPermissionsEditor({ user }: { user: User }) {
+  const permsQuery = useQuery(() => listPermissions(), []);
+  const directQuery = useQuery(() => getUserDirectPermissions(user.id), [user.id]);
+
+  if (permsQuery.loading || directQuery.loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Spinner />
+      </div>
+    );
+  }
+
+  return (
+    <PermissionMatrix
+      key={user.id}
+      initialSelectedIds={new Set((directQuery.data ?? []).map((p) => p.id))}
+      permissions={permsQuery.data ?? []}
+      loading={false}
+      onSave={(ids) => setUserPermissions(user.id, ids)}
+      onSaved={() => {
+        notifySuccess("Permissions supplémentaires mises à jour. Elles seront rafraîchies à la prochaine connexion.");
+        directQuery.refetch();
+      }}
+    />
   );
 }

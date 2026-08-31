@@ -49,10 +49,16 @@ export function printNode(node: HTMLElement) {
     return;
   }
 
+  // Une seule page pour recto + verso (imprimés côte à côte par le composant badge lui-même via
+  // `print:flex-row`) : le badge est destiné à être imprimé sur papier bristol puis plastifié/découpé à
+  // la main, pas sur une imprimante à cartes PVC dédiée avec pagination automatique. `size: auto` laisse
+  // le format papier réel choisi dans le dialogue d'impression (A4, Letter…), sans forcer une deuxième
+  // page comme le faisait l'ancien `print:break-after-page`.
   doc.open();
   doc.write(
-    `<!DOCTYPE html><html><head><style>${collectStylesheetText()}</style></head>` +
-      `<body style="margin:0;padding:24px;display:flex;justify-content:center;">${node.outerHTML}</body></html>`,
+    `<!DOCTYPE html><html><head><style>${collectStylesheetText()}` +
+      `@page{size:auto;margin:8mm;}</style></head>` +
+      `<body style="margin:0;padding:0;display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:6mm;">${node.outerHTML}</body></html>`,
   );
   doc.close();
 

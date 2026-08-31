@@ -7,6 +7,7 @@ import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getScheduleByClass, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
+import { getTeacherCheckins } from "@/lib/api/attendance";
 import { createLesson, deleteLesson, listLessons, markLessonDone, markLessonPlanned, updateLesson } from "@/lib/api/lessons";
 import { LESSON_STATUS_LABEL, type LessonEntry, type LessonStatus } from "@/lib/types/lesson";
 import type { Classe, EmploiDuTemps, JourSemaine } from "@/lib/types/academics";
@@ -15,11 +16,13 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { formatMinutes } from "@/lib/format";
 
 const STATUS_TONE = { PLANNED: "amber", DONE: "green" } as const;
 
@@ -117,7 +120,7 @@ export default function LessonsPage() {
             {lessons.map((l) => (
               <TR key={l.id}>
                 <TD>{l.lessonDate}</TD>
-                <TD>{subjectName.get(l.subjectId) ?? `#${l.subjectId}`}</TD>
+                <TD>{l.subjectId != null ? (subjectName.get(l.subjectId) ?? `#${l.subjectId}`) : "Journée complète"}</TD>
                 <TD className="max-w-[220px]">
                   <p className="font-medium text-gray-900">{l.title}</p>
                   {l.content && <p className="truncate text-xs text-gray-500" title={l.content}>{l.content}</p>}
@@ -148,7 +151,7 @@ export default function LessonsPage() {
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier la séance">
         {editing && (
-          <EditLessonForm lesson={editing} subjectName={subjectName} canSetStatus={isAdmin} onCancel={() => setEditing(null)}
+          <EditLessonForm lesson={editing} classes={classes} subjectName={subjectName} canSetStatus={isAdmin} onCancel={() => setEditing(null)}
             onSaved={() => { setEditing(null); notifySuccess("Séance mise à jour"); q.refetch(); }} />
         )}
       </Modal>
@@ -163,9 +166,16 @@ export default function LessonsPage() {
   );
 }
 
-type LessonRow = { classId: string; subjectId: string; title: string; content: string; homework: string; durationMinutes: string };
+type LessonRow = {
+  classId: string; subjectId: string; title: string; content: string; homework: string; durationMinutes: string;
+  /** Moniteur maternelle/primaire : un seul enseignant couvre toute la journée, pas de matière à choisir. */
+  noSubject: boolean;
+};
 function emptyRow(defaultClassId: number | null): LessonRow {
-  return { classId: defaultClassId != null ? String(defaultClassId) : "", subjectId: "", title: "", content: "", homework: "", durationMinutes: "" };
+  return {
+    classId: defaultClassId != null ? String(defaultClassId) : "", subjectId: "", title: "", content: "", homework: "", durationMinutes: "",
+    noSubject: false,
+  };
 }
 
 const JS_DAY_TO_JOUR: Record<number, JourSemaine | undefined> = {
@@ -186,6 +196,38 @@ function resolveSlot(schedule: EmploiDuTemps[], subjectId: string, lessonDate: s
   const day = dayOfWeek(lessonDate);
   const onDay = day ? bySubject.filter((s) => s.day === day) : [];
   return onDay[0] ?? bySubject[0] ?? null;
+}
+function todayIso(): string { return new Date().toISOString().slice(0, 10); }
+
+/**
+ * Affiche l'heure à laquelle l'enseignant a pointé (§attendance — cahier de textes) : utile au
+ * directeur pédagogique qui programme la séance pour voir tout de suite si le professeur est déjà
+ * arrivé, et avec quel retard. `slotId` cible un créneau précis (matière choisie) ; `"any"` retient
+ * plutôt le premier pointage de la journée (moniteur maternelle/primaire, une seule séance couvrant
+ * toute la journée, sans créneau de matière à faire correspondre). Rien ne s'affiche pour une date
+ * future (le pointage n'a pas encore pu avoir lieu) ou tant que l'enseignant n'est pas connu.
+ */
+function TeacherCheckinCard({ teacherId, date, slotId }: { teacherId: number | null; date: string; slotId: number | null | "any" }) {
+  const canLookup = teacherId != null && slotId != null && !!date && date <= todayIso();
+  const q = useQuery(
+    () => (canLookup ? getTeacherCheckins(teacherId!, date) : Promise.resolve([])),
+    [canLookup, teacherId, date],
+  );
+  if (!canLookup) return null;
+  if (q.loading) return null;
+  const checkins = q.data ?? [];
+  const checkin = slotId === "any"
+    ? [...checkins].sort((a, b) => a.checkInTime.localeCompare(b.checkInTime))[0]
+    : checkins.find((c) => c.scheduleSlotId === slotId);
+  if (!checkin) {
+    return <p className="text-xs text-gray-400">Pointage : pas encore pointé{slotId !== "any" ? " pour ce créneau" : ""}.</p>;
+  }
+  return (
+    <p className="text-xs">
+      Pointage : <span className="font-medium text-gray-700">{checkin.checkInTime.slice(0, 5)}</span>
+      {checkin.lateMinutes > 0 && <span className="ml-1 text-warning-600">(retard {formatMinutes(checkin.lateMinutes)})</span>}
+    </p>
+  );
 }
 
 /**
@@ -235,13 +277,41 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
     const cm = subjects.find((c) => String(c.subjectId) === sid);
     return cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : null;
   }
+  function teacherIdFor(classIdStr: string, sid: string): number | null {
+    const subjects = classDataQuery.data?.get(Number(classIdStr))?.subjects ?? [];
+    return subjects.find((c) => String(c.subjectId) === sid)?.teacherId ?? null;
+  }
+  function slotFor(classIdStr: string, sid: string): EmploiDuTemps | null {
+    const schedule = classDataQuery.data?.get(Number(classIdStr))?.schedule ?? [];
+    return resolveSlot(schedule, sid, lessonDate);
+  }
+  /** Professeur principal de la classe — résout l'enseignant d'une séance « journée complète » (moniteur
+   * maternelle/primaire, un seul enseignant, pas de matière à choisir). */
+  function headTeacherIdFor(classIdStr: string): number | null {
+    return classes.find((c) => String(c.id) === classIdStr)?.headTeacherId ?? null;
+  }
+  function headTeacherNameFor(classIdStr: string): string | null {
+    const id = headTeacherIdFor(classIdStr);
+    return id != null ? (teacherName.get(id) ?? `#${id}`) : null;
+  }
+  /** Durée totale des créneaux de la classe ce jour-là (tous, toutes matières confondues) — l'enseignant
+   * unique couvre la journée jusqu'à l'heure de sortie, pas un seul créneau de matière. */
+  function totalDayMinutesFor(classIdStr: string): number {
+    const schedule = classDataQuery.data?.get(Number(classIdStr))?.schedule ?? [];
+    const day = dayOfWeek(lessonDate);
+    if (!day) return 0;
+    return schedule.filter((s) => s.day === day)
+      .reduce((sum, s) => sum + Math.max(0, timeToMinutes(s.endTime) - timeToMinutes(s.startTime)), 0);
+  }
 
   function updateRow(idx: number, key: keyof LessonRow, value: string) {
     setRows((prev) => prev.map((r, i) => {
       if (i !== idx) return r;
       const next = { ...r, [key]: value };
       if (key === "classId") next.subjectId = "";
-      if (key === "classId" || key === "subjectId") {
+      if (next.noSubject) {
+        if (key === "classId") next.durationMinutes = String(totalDayMinutesFor(next.classId));
+      } else if (key === "classId" || key === "subjectId") {
         const schedule = classDataQuery.data?.get(Number(next.classId))?.schedule ?? [];
         const slot = resolveSlot(schedule, next.subjectId, lessonDate);
         if (slot) next.durationMinutes = String(Math.max(0, timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime)));
@@ -249,17 +319,28 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
       return next;
     }));
   }
+  function toggleNoSubject(idx: number) {
+    setRows((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const noSubject = !r.noSubject;
+      return {
+        ...r, noSubject, subjectId: "",
+        durationMinutes: noSubject ? String(totalDayMinutesFor(r.classId)) : "",
+      };
+    }));
+  }
   function addRow() { setRows((prev) => [...prev, emptyRow(defaultClassId)]); }
   function removeRow(idx: number) { setRows((prev) => prev.filter((_, i) => i !== idx)); }
 
   async function submit() {
-    const valid = rows.filter((r) => r.classId && r.subjectId && r.title.trim());
+    const valid = rows.filter((r) => r.classId && r.title.trim() && (r.noSubject || r.subjectId));
     if (valid.length === 0) { notifyError(null, "Ajoutez au moins une séance (classe + matière + thème)."); return; }
-    const withoutTeacher = valid.find((r) => !teacherFor(r.classId, r.subjectId));
+    const withoutTeacher = valid.find((r) => r.noSubject ? !headTeacherIdFor(r.classId) : !teacherFor(r.classId, r.subjectId));
     if (withoutTeacher) {
-      notifyError(null,
-        `Aucun enseignant n'est affecté à « ${subjectName.get(Number(withoutTeacher.subjectId)) ?? "cette matière"} » pour cette classe. `
-        + "Affectez un enseignant (Référentiels → Classes → Matières) avant de programmer la séance.",
+      notifyError(null, withoutTeacher.noSubject
+        ? "Aucun professeur principal n'est désigné pour cette classe. Renseignez-le (fiche classe) avant de programmer la séance."
+        : `Aucun enseignant n'est affecté à « ${subjectName.get(Number(withoutTeacher.subjectId)) ?? "cette matière"} » pour cette classe. `
+          + "Affectez un enseignant (Référentiels → Classes → Matières) avant de programmer la séance.",
       );
       return;
     }
@@ -268,7 +349,7 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
       for (const r of valid) {
         await createLesson({
           classId: Number(r.classId),
-          subjectId: Number(r.subjectId),
+          subjectId: r.noSubject ? null : Number(r.subjectId),
           lessonDate: lessonDate || null,
           title: r.title,
           content: r.content || null,
@@ -292,22 +373,51 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
               <Label>Classe <span className="text-error-500">*</span></Label>
               <SearchableSelect value={row.classId} options={classOptions} onChange={(v) => updateRow(idx, "classId", v)} triggerClassName="w-full justify-between px-3" />
             </Field>
-            <Field>
-              <Label>Matière <span className="text-error-500">*</span></Label>
-              <SearchableSelect value={row.subjectId} options={subjectOptionsFor(row.classId)} onChange={(v) => updateRow(idx, "subjectId", v)} triggerClassName="w-full justify-between px-3" />
-            </Field>
+            {!row.noSubject && (
+              <Field>
+                <Label>Matière <span className="text-error-500">*</span></Label>
+                <SearchableSelect value={row.subjectId} options={subjectOptionsFor(row.classId)} onChange={(v) => updateRow(idx, "subjectId", v)} triggerClassName="w-full justify-between px-3" />
+              </Field>
+            )}
             <Field>
               <Label>Durée (min)</Label>
               <Input type="number" min={0} value={row.durationMinutes} onChange={(e) => updateRow(idx, "durationMinutes", e.target.value)} />
             </Field>
             <Button variant="ghost" className="text-error-600" disabled={rows.length === 1} onClick={() => removeRow(idx)}>✕</Button>
           </div>
-          {row.subjectId && (
-            <p className="text-xs text-gray-500">
-              Enseignant : <span className={teacherFor(row.classId, row.subjectId) ? "text-gray-700" : "text-warning-600"}>
-                {teacherFor(row.classId, row.subjectId) ?? "aucun enseignant affecté"}
-              </span>
-            </p>
+          {row.classId && headTeacherIdFor(row.classId) != null && (
+            <Checkbox
+              label="Journée complète (moniteur maternelle/primaire — un seul enseignant, pas de matière à choisir)"
+              checked={row.noSubject}
+              onChange={() => toggleNoSubject(idx)}
+            />
+          )}
+          {row.noSubject ? (
+            <>
+              <p className="text-xs text-gray-500">
+                Enseignant (professeur principal) : <span className={headTeacherNameFor(row.classId) ? "text-gray-700" : "text-warning-600"}>
+                  {headTeacherNameFor(row.classId) ?? "aucun professeur principal désigné"}
+                </span>
+              </p>
+              <TeacherCheckinCard
+                teacherId={headTeacherIdFor(row.classId)}
+                date={lessonDate || todayIso()}
+                slotId="any"
+              />
+            </>
+          ) : row.subjectId && (
+            <>
+              <p className="text-xs text-gray-500">
+                Enseignant : <span className={teacherFor(row.classId, row.subjectId) ? "text-gray-700" : "text-warning-600"}>
+                  {teacherFor(row.classId, row.subjectId) ?? "aucun enseignant affecté"}
+                </span>
+              </p>
+              <TeacherCheckinCard
+                teacherId={teacherIdFor(row.classId, row.subjectId)}
+                date={lessonDate || todayIso()}
+                slotId={slotFor(row.classId, row.subjectId)?.id ?? null}
+              />
+            </>
           )}
           <Field>
             <Label>Thème de la séance <span className="text-error-500">*</span></Label>
@@ -336,8 +446,8 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
 
 /** Édition d'une séance existante — l'enseignant corrige sa saisie (thème, contenu, devoirs) ;
  * seule l'administration (`canSetStatus`) peut aussi y valider la réalisation. */
-function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }: {
-  lesson: LessonEntry; subjectName: Map<number, string>; canSetStatus: boolean; onCancel: () => void; onSaved: () => void;
+function EditLessonForm({ lesson, classes, subjectName, canSetStatus, onCancel, onSaved }: {
+  lesson: LessonEntry; classes: Classe[]; subjectName: Map<number, string>; canSetStatus: boolean; onCancel: () => void; onSaved: () => void;
 }) {
   const classSubjectsQuery = useQuery(() => listClassSubjects(lesson.classId), [lesson.classId]);
   const teachersQuery = useQuery(listTeachers, []);
@@ -356,9 +466,13 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
     const cm = classSubjects.find((c) => String(c.subjectId) === sid);
     return cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : null;
   }
+  // Moniteur maternelle/primaire : professeur principal de la classe, pour une séance sans matière.
+  const headTeacherId = classes.find((c) => c.id === lesson.classId)?.headTeacherId ?? null;
+  const headTeacherName = headTeacherId != null ? (teacherName.get(headTeacherId) ?? `#${headTeacherId}`) : null;
 
   const [loading, setLoading] = useState(false);
-  const [subjectId, setSubjectId] = useState(String(lesson.subjectId));
+  const [noSubject, setNoSubject] = useState(lesson.subjectId == null);
+  const [subjectId, setSubjectId] = useState(lesson.subjectId != null ? String(lesson.subjectId) : "");
   const [lessonDate, setLessonDate] = useState(lesson.lessonDate ?? "");
   const [title, setTitle] = useState(lesson.title);
   const [content, setContent] = useState(lesson.content ?? "");
@@ -367,11 +481,12 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
   const [status, setStatus] = useState<LessonStatus>(lesson.status);
 
   async function submit() {
-    if (!subjectId || !title.trim()) { notifyError(null, "Matière et thème requis."); return; }
-    if (!teacherFor(subjectId)) {
-      notifyError(null,
-        `Aucun enseignant n'est affecté à « ${subjectName.get(Number(subjectId)) ?? "cette matière"} » pour cette classe. `
-        + "Affectez un enseignant (Référentiels → Classes → Matières) avant d'enregistrer.",
+    if (!title.trim() || (!noSubject && !subjectId)) { notifyError(null, "Matière et thème requis."); return; }
+    if (noSubject ? !headTeacherId : !teacherFor(subjectId)) {
+      notifyError(null, noSubject
+        ? "Aucun professeur principal n'est désigné pour cette classe."
+        : `Aucun enseignant n'est affecté à « ${subjectName.get(Number(subjectId)) ?? "cette matière"} » pour cette classe. `
+          + "Affectez un enseignant (Référentiels → Classes → Matières) avant d'enregistrer.",
       );
       return;
     }
@@ -379,7 +494,7 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
     try {
       await updateLesson(lesson.id, {
         classId: lesson.classId,
-        subjectId: Number(subjectId),
+        subjectId: noSubject ? null : Number(subjectId),
         lessonDate: lessonDate || null,
         title,
         content: content || null,
@@ -394,13 +509,28 @@ function EditLessonForm({ lesson, subjectName, canSetStatus, onCancel, onSaved }
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <Field>
-          <Label>Matière <span className="text-error-500">*</span></Label>
-          <SearchableSelect value={subjectId} options={subjectOptions} onChange={setSubjectId} triggerClassName="w-full justify-between px-3" />
-        </Field>
+        {!noSubject && (
+          <Field>
+            <Label>Matière <span className="text-error-500">*</span></Label>
+            <SearchableSelect value={subjectId} options={subjectOptions} onChange={setSubjectId} triggerClassName="w-full justify-between px-3" />
+          </Field>
+        )}
         <Field><Label>Date</Label><DatePicker value={lessonDate} clearable onChange={setLessonDate} /></Field>
       </div>
-      {subjectId && (
+      {headTeacherId != null && (
+        <Checkbox
+          label="Journée complète (moniteur maternelle/primaire — un seul enseignant, pas de matière à choisir)"
+          checked={noSubject}
+          onChange={() => { setNoSubject((v) => !v); setSubjectId(""); }}
+        />
+      )}
+      {noSubject ? (
+        <p className="text-xs text-gray-500">
+          Enseignant (professeur principal) : <span className={headTeacherName ? "text-gray-700" : "text-warning-600"}>
+            {headTeacherName ?? "aucun professeur principal désigné"}
+          </span>
+        </p>
+      ) : subjectId && (
         <p className="text-xs text-gray-500">
           Enseignant : <span className={teacherFor(subjectId) ? "text-gray-700" : "text-warning-600"}>
             {teacherFor(subjectId) ?? "aucun enseignant affecté"}
@@ -447,6 +577,24 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
   const [duration, setDuration] = useState(lesson.durationMinutes != null ? String(lesson.durationMinutes) : "");
   const [loading, setLoading] = useState(false);
 
+  // Option : compter depuis l'heure de pointage jusqu'à la fin prévue du créneau, plutôt que de saisir
+  // la durée à la main — utile quand le professeur est arrivé en retard (ou en avance) et qu'on veut
+  // exactement le temps réellement disponible pour le cours.
+  const scheduleQuery = useQuery(() => getScheduleByClass(lesson.classId), [lesson.classId]);
+  const slot = resolveSlot(scheduleQuery.data ?? [], String(lesson.subjectId), lesson.lessonDate ?? "");
+  const checkinsQuery = useQuery(
+    () => (lesson.teacherId != null && lesson.lessonDate && lesson.lessonDate <= todayIso()
+      ? getTeacherCheckins(lesson.teacherId, lesson.lessonDate) : Promise.resolve([])),
+    [lesson.teacherId, lesson.lessonDate],
+  );
+  const checkin = (checkinsQuery.data ?? []).find((c) => c.scheduleSlotId === slot?.id);
+  // Priorité à l'heure de sortie réellement pointée (plus précise) ; à défaut, on suppose que
+  // l'enseignant est resté jusqu'à la fin prévue du créneau.
+  const endReference = checkin?.checkOutTime ?? slot?.endTime;
+  const computedFromCheckin = checkin && endReference
+    ? Math.max(0, timeToMinutes(endReference.slice(0, 5)) - timeToMinutes(checkin.checkInTime.slice(0, 5)))
+    : null;
+
   async function confirm() {
     setLoading(true);
     try {
@@ -458,9 +606,21 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Durée planifiée : <strong>{lesson.durationMinutes != null ? `${lesson.durationMinutes} min` : "non renseignée"}</strong>.
+        Durée planifiée : <strong>{lesson.durationMinutes != null ? formatMinutes(lesson.durationMinutes) : "non renseignée"}</strong>.
         Corrigez si nécessaire (rattrapage ou retard) — c&apos;est la durée réalisée qui compte pour la paie de l&apos;enseignant.
       </p>
+      {checkin && computedFromCheckin != null && (
+        <div className="flex items-center justify-between rounded-lg bg-brand-50/60 px-3 py-2 text-xs">
+          <span className="text-gray-600">
+            Pointage à <strong>{checkin.checkInTime.slice(0, 5)}</strong>
+            {checkin.lateMinutes > 0 && <span className="text-warning-600"> (retard {formatMinutes(checkin.lateMinutes)})</span>}
+            {" "}→ {checkin.checkOutTime ? "sortie" : "fin prévue"} {endReference?.slice(0, 5)} = <strong>{formatMinutes(computedFromCheckin)}</strong>
+          </span>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setDuration(String(computedFromCheckin))}>
+            Utiliser cette durée
+          </Button>
+        </div>
+      )}
       <Field>
         <Label>Durée réalisée (min)</Label>
         <Input type="number" min={0} value={duration} onChange={(e) => setDuration(e.target.value)} />

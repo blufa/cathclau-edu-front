@@ -2,6 +2,7 @@ import { api } from "@/lib/api/client";
 import type {
   Communication,
   CommunicationChannel,
+  DiffusionInput,
   MessageRecipient,
   MessageTemplate,
   SendCommunicationInput,
@@ -24,6 +25,12 @@ export function getSmsBalance(): Promise<SmsBalance[]> {
 // ── Communications ─────────────────────────────────────────────────────────
 export function sendCommunication(input: SendCommunicationInput): Promise<Communication> {
   return api.post<Communication>("/communications", input);
+}
+
+/** Diffusion de masse segmentée (tous les parents, une classe, garçons/filles, enseignants, élève
+ * précis) — le serveur résout lui-même les numéros/e-mails réels. */
+export function sendDiffusion(input: DiffusionInput): Promise<Communication> {
+  return api.post<Communication>("/communications/diffusion", input);
 }
 
 export function listCommunicationsByTenant(tenantId: number): Promise<Communication[]> {

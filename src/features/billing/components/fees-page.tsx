@@ -8,7 +8,8 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
-import { listAcademicYears, listClasses } from "@/lib/api/academics";
+import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
+import { listRoutes } from "@/lib/api/transport";
 import {
   createFee,
   createInstallment,
@@ -19,12 +20,15 @@ import {
   updateFee,
 } from "@/lib/api/billing";
 import { FEE_TYPE_LABEL, type FeeType, type SchoolFee } from "@/lib/types/billing";
+import type { Classe, Niveau } from "@/lib/types/academics";
+import type { TransportRoute } from "@/lib/types/transport";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -55,6 +59,12 @@ export default function FeesPage() {
   const classLabel = useMemo(
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
     [classesQuery.data],
+  );
+  const levelsQuery = useQuery(listLevels, []);
+  const routesQuery = useQuery(listRoutes, []);
+  const routeLabel = useMemo(
+    () => new Map((routesQuery.data ?? []).map((r) => [r.id, r.name])),
+    [routesQuery.data],
   );
 
   const feesQuery = useQuery(
@@ -103,6 +113,7 @@ export default function FeesPage() {
                 title={cat.label}
                 fees={group}
                 classLabel={classLabel}
+                routeLabel={routeLabel}
                 canWrite={canWrite}
                 onInstallments={setInstallmentsFor}
                 onEdit={setEditing}
@@ -117,7 +128,9 @@ export default function FeesPage() {
         <FeeForm
           tenantId={tenantId}
           initial={editing}
-          classes={(classesQuery.data ?? []).map((c) => ({ value: String(c.id), label: c.label }))}
+          classes={classesQuery.data ?? []}
+          levels={levelsQuery.data ?? []}
+          routes={routesQuery.data ?? []}
           defaultYear={currentYear?.label ?? ""}
           onCancel={() => { setCreating(false); setEditing(null); }}
           onSaved={() => { setCreating(false); setEditing(null); notifySuccess("Frais enregistré"); feesQuery.refetch(); }}
@@ -132,10 +145,11 @@ export default function FeesPage() {
 }
 
 /** Une catégorie de frais : table paginée (10/page) avec les actions par ligne. */
-function FeeGroup({ title, fees, classLabel, canWrite, onInstallments, onEdit, onDelete }: {
+function FeeGroup({ title, fees, classLabel, routeLabel, canWrite, onInstallments, onEdit, onDelete }: {
   title: string;
   fees: SchoolFee[];
   classLabel: Map<number, string>;
+  routeLabel: Map<number, string>;
   canWrite: boolean;
   onInstallments: (f: SchoolFee) => void;
   onEdit: (f: SchoolFee) => void;
@@ -151,12 +165,18 @@ function FeeGroup({ title, fees, classLabel, canWrite, onInstallments, onEdit, o
         {title} <span className="font-normal text-gray-400">({fees.length})</span>
       </h2>
       <Table>
-        <THead><tr><TH>Libellé</TH><TH>Classe</TH><TH>Montant</TH><TH>Année</TH><TH className="text-right">Actions</TH></tr></THead>
+        <THead><tr><TH>Libellé</TH><TH>Classe / Ligne</TH><TH>Montant</TH><TH>Année</TH><TH className="text-right">Actions</TH></tr></THead>
         <TBody>
           {slice.map((f) => (
             <TR key={f.id}>
               <TD className="text-gray-600">{f.label ?? FEE_TYPE_LABEL[f.type]}</TD>
-              <TD>{classLabel.get(f.classId) ?? `#${f.classId}`}</TD>
+              <TD>
+                {f.routeId != null
+                  ? `Ligne : ${routeLabel.get(f.routeId) ?? `#${f.routeId}`}`
+                  : f.classId != null
+                    ? (classLabel.get(f.classId) ?? `#${f.classId}`)
+                    : "—"}
+              </TD>
               <TD className="font-medium text-gray-900">{formatGNF(f.amount)}</TD>
               <TD>{f.academicYear ?? "—"}</TD>
               <TD className="text-right">
@@ -182,6 +202,7 @@ function FeeGroup({ title, fees, classLabel, canWrite, onInstallments, onEdit, o
 const feeSchema = z.object({
   classId: z.string(),
   classIds: z.array(z.string()),
+  routeId: z.string(),
   type: z.string(),
   amount: z.number(),
   academicYear: z.string(),
@@ -192,7 +213,7 @@ const feeSchema = z.object({
   }
   // Le montant est saisi tranche par tranche pour les frais récurrents créés (voir TrancheBuilder) ;
   // pour les autres cas (frais ponctuel, ou modification), il reste requis ici.
-  if (v.type !== "MONTHLY" && v.type !== "TRANSPORT" && v.amount <= 0) {
+  if (v.type !== "MONTHLY" && v.type !== "TRANSPORT" && v.type !== "CANTEEN" && v.amount <= 0) {
     ctx.addIssue({ code: "custom", path: ["amount"], message: "Montant requis" });
   }
 });
@@ -205,16 +226,17 @@ interface TrancheDraft { monthValues: string[]; amount: number; }
 /** Récapitulatif d'une tranche après génération, avec la répartition par mois pour affichage. */
 interface TrancheRecap { label: string; amount: number; monthAmounts: { label: string; amount: number }[]; }
 
-function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }: {
-  tenantId: number; initial: SchoolFee | null; classes: { value: string; label: string }[];
+function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCancel, onSaved }: {
+  tenantId: number; initial: SchoolFee | null; classes: Classe[]; levels: Niveau[]; routes: TransportRoute[];
   defaultYear: string; onCancel: () => void; onSaved: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const { handleSubmit, watch, setValue, formState: { errors }, setError } = useForm<FeeFormValues>({
     resolver: zodResolver(feeSchema),
     defaultValues: {
-      classId: initial ? String(initial.classId) : "",
-      classIds: initial ? [String(initial.classId)] : [],
+      classId: initial?.classId != null ? String(initial.classId) : "",
+      classIds: initial?.classId != null ? [String(initial.classId)] : [],
+      routeId: initial?.routeId != null ? String(initial.routeId) : "",
       type: initial?.type ?? "MONTHLY",
       amount: initial ? Number(initial.amount) : 0,
       academicYear: initial?.academicYear ?? defaultYear,
@@ -223,8 +245,49 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
-  const isRecurring = v.type === "MONTHLY" || v.type === "TRANSPORT";
+  const isTransport = v.type === "TRANSPORT";
+  const isRecurring = v.type === "MONTHLY" || v.type === "TRANSPORT" || v.type === "CANTEEN";
   const showTrancheBuilder = !initial && isRecurring;
+
+  // Un frais se définit par niveau (ex. « 11ème » ou un cycle plus large comme « Secondaire ») : cocher
+  // un niveau présélectionne toutes ses classes, mais chacune reste décochable individuellement — un
+  // niveau large (ex. « Secondaire » regroupant plusieurs classes/grades) peut ainsi être affiné pour
+  // ne cibler que certaines d'entre elles (ex. seulement 7ème et 8ème). Le choix par classes reste
+  // disponible pour partir d'une liste vide plutôt que d'un niveau.
+  const [scopeMode, setScopeMode] = useState<"level" | "class">("level");
+  const [selectedLevelIds, setSelectedLevelIds] = useState<string[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const classesByLevel = useMemo(() => {
+    const m = new Map<string, Classe[]>();
+    for (const c of classes) {
+      if (c.levelId == null) continue;
+      const key = String(c.levelId);
+      m.set(key, [...(m.get(key) ?? []), c]);
+    }
+    return m;
+  }, [classes]);
+  function toggleLevel(id: string) {
+    const sectionIds = (classesByLevel.get(id) ?? []).map((c) => String(c.id));
+    const checked = selectedLevelIds.includes(id);
+    setSelectedLevelIds((prev) => (checked ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelectedClassIds((prev) => (checked
+      ? prev.filter((cid) => !sectionIds.includes(cid))
+      : [...new Set([...prev, ...sectionIds])]));
+  }
+  function toggleLevelClass(id: string) {
+    setSelectedClassIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  // Classes effectivement ciblées : la sélection affinée des niveaux cochés (mode niveau), ou la
+  // sélection manuelle de classes (mode classe) — c'est cette liste qui alimente la création des frais.
+  const effectiveClassIds = scopeMode === "level" ? selectedClassIds : v.classIds;
+
+  // Cible(s) de la création : une ligne de transport pour un frais TRANSPORT (une ligne dessert des
+  // élèves de classes différentes, le tarif dépend de la distance, pas du niveau) — une par classe
+  // sélectionnée sinon.
+  interface FeeTarget { classId: number | null; routeId: number | null; }
+  const feeTargets: FeeTarget[] = isTransport
+    ? (v.routeId ? [{ classId: null, routeId: Number(v.routeId) }] : [])
+    : effectiveClassIds.map((cid) => ({ classId: Number(cid), routeId: null }));
 
   // Génération par tranches (§billing) : l'école propose ses tranches (1ère, 2ème, 3ème…), choisit
   // librement pour chacune les mois couverts (pas forcément consécutifs, ex. mai+juin+octobre) et
@@ -276,8 +339,9 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
   }
 
   async function submit(values: FeeFormValues) {
-    if (!initial && values.classIds.length === 0) {
-      setError("classIds", { message: "Choisissez au moins une classe" });
+    if (!initial && feeTargets.length === 0) {
+      if (isTransport) setError("routeId", { message: "Choisissez la ligne de transport" });
+      else setError("classIds", { message: scopeMode === "level" ? "Choisissez au moins un niveau" : "Choisissez au moins une classe" });
       return;
     }
     const label = values.type === "OTHER" ? values.label.trim() : null;
@@ -285,7 +349,12 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
     try {
       if (initial) {
         if (values.amount <= 0) { setError("amount", { message: "Montant requis" }); return; }
-        await updateFee(initial.id, { classId: Number(values.classId), type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label });
+        if (isTransport && !values.routeId) { setError("routeId", { message: "Choisissez la ligne de transport" }); return; }
+        await updateFee(initial.id, {
+          classId: isTransport ? null : Number(values.classId),
+          routeId: isTransport ? Number(values.routeId) : null,
+          type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label,
+        });
         onSaved();
         return;
       }
@@ -298,8 +367,8 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
         // Prix mensuel de référence = moyenne sur les mois couverts (utilisé ailleurs, ex. simulation
         // du montant annuel à l'inscription) ; la facturation réelle reste au niveau de la tranche.
         const avgMonthly = totalMonths > 0 ? totalAmount / totalMonths : 0;
-        const fees = await Promise.all(values.classIds.map((cid) =>
-          createFee({ tenantId, classId: Number(cid), type: values.type as FeeType, amount: avgMonthly, academicYear: values.academicYear, label })));
+        const fees = await Promise.all(feeTargets.map((t) =>
+          createFee({ tenantId, classId: t.classId, routeId: t.routeId, type: values.type as FeeType, amount: avgMonthly, academicYear: values.academicYear, label })));
 
         const trancheRecaps: TrancheRecap[] = [];
         for (const [i, t] of tranches.entries()) {
@@ -312,9 +381,9 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
         setRecap({ tranches: trancheRecaps, total: totalAmount });
         return; // La modale reste ouverte : le récapitulatif est affiché avant fermeture.
       }
-      // Un même frais (type + montant) appliqué à plusieurs classes : on crée un frais par classe.
-      await Promise.all(values.classIds.map((cid) =>
-        createFee({ tenantId, classId: Number(cid), type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label })));
+      // Un même frais (type + montant) appliqué à plusieurs classes, ou à une ligne de transport.
+      await Promise.all(feeTargets.map((t) =>
+        createFee({ tenantId, classId: t.classId, routeId: t.routeId, type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label })));
       onSaved();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -323,7 +392,9 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
     return (
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
-          Frais créé pour {v.classIds.length} classe{v.classIds.length > 1 ? "s" : ""}. Voici les tranches générées —
+          {isTransport
+            ? "Frais créé pour la ligne de transport choisie."
+            : `Frais créé pour ${feeTargets.length} classe${feeTargets.length > 1 ? "s" : ""}.`} Voici les tranches générées —
           c&apos;est ce que verront les familles sur l&apos;inscription et le paiement de la scolarité.
         </p>
         <div className="space-y-3">
@@ -357,23 +428,91 @@ function FeeForm({ tenantId, initial, classes, defaultYear, onCancel, onSaved }:
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      {initial ? (
+      {isTransport ? (
+        <Field>
+          <Label>Ligne de transport <span className="text-error-500">*</span></Label>
+          <p className="mb-1.5 text-xs text-gray-400">
+            Un frais transport se rattache à une ligne (le tarif dépend de la distance, pas de la classe) —
+            les élèves de classes différentes abonnés à cette ligne paieront ce frais.
+          </p>
+          <SearchableSelect
+            value={v.routeId}
+            options={routes.map((r) => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name }))}
+            onChange={(val) => setValue("routeId", val)}
+            triggerClassName="w-full justify-between px-3"
+            noResultsLabel="Aucune ligne — créez-en une dans le module Transport"
+          />
+          {errors.routeId && <p className="text-xs text-error-600">{errors.routeId.message}</p>}
+        </Field>
+      ) : initial ? (
         <Field>
           <Label>Classe <span className="text-error-500">*</span></Label>
-          <Select value={v.classId} onChange={(e) => setValue("classId", e.target.value)}>
-            <option value="">— Choisir —</option>
-            {classes.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
-          </Select>
+          <SearchableSelect
+            value={v.classId}
+            options={classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label }))}
+            onChange={(val) => setValue("classId", val)}
+            triggerClassName="w-full justify-between px-3"
+            noResultsLabel="Aucune classe"
+          />
         </Field>
       ) : (
         <Field>
-          <Label>Classes <span className="text-error-500">*</span></Label>
-          <p className="mb-1.5 text-xs text-gray-400">Le même frais sera créé pour chaque classe cochée.</p>
-          <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
-            {classes.map((c) => (
-              <Checkbox key={c.value} label={c.label} checked={v.classIds.includes(c.value)} onChange={() => toggleClass(c.value)} />
-            ))}
+          <Label>Portée <span className="text-error-500">*</span></Label>
+          <div className="mb-2 flex gap-2">
+            <button type="button" onClick={() => setScopeMode("level")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${scopeMode === "level" ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+              Par niveau
+            </button>
+            <button type="button" onClick={() => setScopeMode("class")}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${scopeMode === "class" ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+              Par classes précises
+            </button>
           </div>
+          {scopeMode === "level" ? (
+            <>
+              <p className="mb-1.5 text-xs text-gray-400">
+                Cocher un niveau présélectionne toutes ses classes ci-dessous — décochez celles à exclure
+                (ex. « Secondaire » regroupe collège et lycée : gardez seulement 7ème et 8ème si besoin).
+              </p>
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                {levels.map((l) => {
+                  const sections = classesByLevel.get(String(l.id)) ?? [];
+                  const levelChecked = selectedLevelIds.includes(String(l.id));
+                  return (
+                    <div key={l.id}>
+                      <Checkbox
+                        label={`${l.label} (${sections.length} classe${sections.length > 1 ? "s" : ""})`}
+                        checked={levelChecked}
+                        disabled={sections.length === 0}
+                        onChange={() => toggleLevel(String(l.id))}
+                      />
+                      {levelChecked && sections.length > 1 && (
+                        <div className="ml-6 mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                          {sections.map((c) => (
+                            <Checkbox
+                              key={c.id}
+                              label={c.label}
+                              checked={selectedClassIds.includes(String(c.id))}
+                              onChange={() => toggleLevelClass(String(c.id))}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="mb-1.5 text-xs text-gray-400">Le même frais sera créé pour chaque classe cochée.</p>
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                {classes.map((c) => (
+                  <Checkbox key={c.id} label={c.label} checked={v.classIds.includes(String(c.id))} onChange={() => toggleClass(String(c.id))} />
+                ))}
+              </div>
+            </>
+          )}
           {errors.classIds && <p className="text-xs text-error-600">{errors.classIds.message}</p>}
         </Field>
       )}
@@ -487,9 +626,9 @@ const SCHOOL_YEAR_MONTHS = 9;
 function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolean }) {
   const q = useQuery(() => listInstallments(fee.id), [fee.id]);
   const [adding, setAdding] = useState(false);
-  // Mensualité ET transport sont des frais récurrents sur l'année scolaire (9 mois) : les deux
+  // Mensualité, transport ET cantine sont des frais récurrents sur l'année scolaire (9 mois) : tous
   // profitent du générateur de tranches, pas seulement MONTHLY.
-  const isRecurring = fee.type === "MONTHLY" || fee.type === "TRANSPORT";
+  const isRecurring = fee.type === "MONTHLY" || fee.type === "TRANSPORT" || fee.type === "CANTEEN";
   // Génération par tranches : l'école choisit le nombre de tranches et, pour chacune, les mois
   // qu'elle couvre librement (pas forcément consécutifs, ex. mai + juin + octobre).
   const [genMonth, setGenMonth] = useState("");

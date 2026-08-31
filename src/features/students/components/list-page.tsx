@@ -18,6 +18,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { StudentForm } from "./student-form";
+import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -44,6 +45,9 @@ export default function StudentsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
+  // Proposé juste après la création : inscrire immédiatement (utile pour un ancien élève de
+  // l'établissement qui n'était pas encore dans le logiciel — il choisit « Réinscription » ici).
+  const [enrollingNew, setEnrollingNew] = useState<Student | null>(null);
 
   const { data, isLoading: loading, error } = useStudentsQuery({
     search: search || undefined,
@@ -80,11 +84,12 @@ export default function StudentsPage() {
 
   async function handleCreate(input: CreateStudentInput) {
     try {
-      await createMutation.mutateAsync(input);
+      const created = await createMutation.mutateAsync(input);
       setCreating(false);
       setQuotaError(null);
       notifySuccess("Élève créé");
       refreshSubscription();
+      setEnrollingNew(created);
     } catch (err) {
       // Quota guard (§students): 403 with {resource:"ELEVES", limite, consomme}.
       if (err instanceof ApiError && err.status === 403) {
@@ -173,7 +178,7 @@ export default function StudentsPage() {
       align: "right",
       render: (s) => (
         <div className="flex justify-end gap-2">
-          <QuickBadgeButton subjectType="STUDENT" subjectId={s.id} subjectName={`${s.firstName} ${s.lastName}`} />
+          <QuickBadgeButton studentId={s.id} studentName={`${s.firstName} ${s.lastName}`} studentNumber={s.studentNumber} photoUrl={s.photo} />
           {canWrite && (
             <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
               Modifier
@@ -306,6 +311,15 @@ export default function StudentsPage() {
           />
         )}
       </Modal>
+
+      {enrollingNew && (
+        <EnrollModal
+          studentId={enrollingNew.id}
+          open={!!enrollingNew}
+          onClose={() => setEnrollingNew(null)}
+          onEnrolled={() => setEnrollingNew(null)}
+        />
+      )}
     </div>
   );
 }

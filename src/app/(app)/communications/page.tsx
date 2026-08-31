@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listUsers } from "@/lib/api/iam";
+import { listAcademicYears, listClasses } from "@/lib/api/academics";
+import { searchStudents } from "@/lib/api/students";
 import {
   deleteCommunication,
   getCommunicationRecipients,
@@ -15,18 +17,22 @@ import {
   markRecipientFailed,
   markRecipientRead,
   sendCommunication,
+  sendDiffusion,
 } from "@/lib/api/communication";
 import {
+  BROADCAST_AUDIENCE_LABEL,
   CHANNEL_LABEL,
   DELIVERY_STATUS_LABEL,
   REASON_LABEL,
   RECIPIENT_TYPE_LABEL,
+  type BroadcastAudience,
   type Communication,
   type CommunicationChannel,
   type CommunicationReason,
   type DeliveryStatus,
   type RecipientType,
 } from "@/lib/types/communication";
+import { ApiError } from "@/lib/api/errors";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +41,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Field, Input, Label, Textarea } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const DELIVERY_TONE: Record<DeliveryStatus, "amber" | "green" | "red"> = { PENDING: "amber", DELIVERED: "green", FAILED: "red" };
@@ -47,6 +54,7 @@ export default function CommunicationsPage() {
   const [channel, setChannel] = useState<CommunicationChannel | "">("");
   const q = useQuery(() => (tenantId ? listCommunicationsByTenant(tenantId) : Promise.resolve([])), [tenantId]);
   const [composing, setComposing] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
   const [detail, setDetail] = useState<Communication | null>(null);
 
   if (!tenantId) {
@@ -67,7 +75,14 @@ export default function CommunicationsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Communication</h1>
           <p className="text-sm text-gray-500">SMS, e-mail et WhatsApp aux familles et au personnel</p>
         </div>
-        {canSend && <Button onClick={() => setComposing(true)} leftSection={<Send className="h-4 w-4" />}>Nouveau message</Button>}
+        {canSend && (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setBroadcasting(true)} leftSection={<Users className="h-4 w-4" />}>
+              Diffusion segmentée
+            </Button>
+            <Button onClick={() => setComposing(true)} leftSection={<Send className="h-4 w-4" />}>Nouveau message</Button>
+          </div>
+        )}
       </Reveal>
 
       <Select className="max-w-[180px]" value={channel} onChange={(e) => setChannel(e.target.value as CommunicationChannel | "")}>
@@ -102,6 +117,11 @@ export default function CommunicationsPage() {
       <Modal open={composing} onClose={() => setComposing(false)} title="Nouveau message">
         <ComposeForm tenantId={tenantId} senderId={user?.userId ?? null}
           onCancel={() => setComposing(false)} onSent={() => { setComposing(false); notifySuccess("Message envoyé"); q.refetch(); }} />
+      </Modal>
+
+      <Modal open={broadcasting} onClose={() => setBroadcasting(false)} title="Diffusion segmentée">
+        <BroadcastForm tenantId={tenantId} senderId={user?.userId ?? null}
+          onCancel={() => setBroadcasting(false)} onSent={() => { setBroadcasting(false); q.refetch(); }} />
       </Modal>
 
       <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de livraison">
@@ -203,6 +223,118 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="button" onClick={submit} loading={loading}>Envoyer</Button>
+      </div>
+    </div>
+  );
+}
+
+const CLASS_AUDIENCES: BroadcastAudience[] = ["CLASS_PARENTS", "CLASS_PARENTS_BOYS", "CLASS_PARENTS_GIRLS"];
+
+function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
+  tenantId: number; senderId: number | null; onCancel: () => void; onSent: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const yearsQuery = useQuery(listAcademicYears, []);
+  const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
+  const currentYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
+  const classesQuery = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
+  const classOptions: SearchableOption[] = useMemo(
+    () => (classesQuery.data ?? []).map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classesQuery.data],
+  );
+
+  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentOptions: SearchableOption[] = useMemo(
+    () => (studentsQuery.data ?? []).map((s) => {
+      const label = `${s.firstName} ${s.lastName} (${s.studentNumber})`;
+      return { value: String(s.id), trigger: label, label, searchText: label };
+    }),
+    [studentsQuery.data],
+  );
+
+  const [channel, setChannel] = useState<CommunicationChannel>("SMS");
+  const [audience, setAudience] = useState<BroadcastAudience>("ALL_PARENTS");
+  const [reason, setReason] = useState<CommunicationReason>("GENERAL");
+  const [classId, setClassId] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [subject, setSubject] = useState("");
+  const [content, setContent] = useState("");
+
+  const needsClass = CLASS_AUDIENCES.includes(audience);
+  const needsStudent = audience === "STUDENT_PARENTS";
+
+  async function submit() {
+    if (!content.trim()) { notifyError("Message requis"); return; }
+    if (needsClass && !classId) { notifyError("Sélectionnez une classe"); return; }
+    if (needsStudent && !studentId) { notifyError("Sélectionnez un élève"); return; }
+    setLoading(true);
+    try {
+      await sendDiffusion({
+        tenantId, senderId, channel, audience, reason,
+        classId: needsClass ? Number(classId) : null,
+        studentId: needsStudent ? Number(studentId) : null,
+        subject: subject || null, content,
+      });
+      notifySuccess("Diffusion envoyée");
+      onSent();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        notifyError("Aucun destinataire joignable pour cette audience (numéro/e-mail manquant).");
+      } else {
+        notifyError(err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Field>
+          <Label>Canal</Label>
+          <Select value={channel} onChange={(e) => setChannel(e.target.value as CommunicationChannel)}>
+            {(Object.keys(CHANNEL_LABEL) as CommunicationChannel[]).map((c) => (<option key={c} value={c}>{CHANNEL_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Motif</Label>
+          <Select value={reason} onChange={(e) => setReason(e.target.value as CommunicationReason)}>
+            {(Object.keys(REASON_LABEL) as CommunicationReason[]).map((c) => (<option key={c} value={c}>{REASON_LABEL[c]}</option>))}
+          </Select>
+        </Field>
+      </div>
+      <Field>
+        <Label>Audience <span className="text-error-500">*</span></Label>
+        <Select value={audience} onChange={(e) => setAudience(e.target.value as BroadcastAudience)}>
+          {(Object.keys(BROADCAST_AUDIENCE_LABEL) as BroadcastAudience[]).map((a) => (
+            <option key={a} value={a}>{BROADCAST_AUDIENCE_LABEL[a]}</option>
+          ))}
+        </Select>
+      </Field>
+      {needsClass && (
+        <Field>
+          <Label>Classe <span className="text-error-500">*</span></Label>
+          <SearchableSelect value={classId} options={classOptions} onChange={setClassId}
+            triggerClassName="w-full justify-between px-3" noResultsLabel="Aucune classe" />
+        </Field>
+      )}
+      {needsStudent && (
+        <Field>
+          <Label>Élève <span className="text-error-500">*</span></Label>
+          <SearchableSelect value={studentId} options={studentOptions} onChange={setStudentId}
+            triggerClassName="w-full justify-between px-3" noResultsLabel="Aucun élève" />
+        </Field>
+      )}
+      <Field><Label>Sujet</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
+      <Field>
+        <Label>Message <span className="text-error-500">*</span></Label>
+        <Textarea rows={4} value={content} onChange={(e) => setContent(e.target.value)} />
+      </Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        <Button type="button" onClick={submit} loading={loading}>Diffuser</Button>
       </div>
     </div>
   );

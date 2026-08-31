@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Printer, Search, User } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
-import { searchStudents } from "@/lib/api/students";
+import { searchStudentsSummary } from "@/lib/api/students";
 import { listInvoicesByStudent } from "@/lib/api/billing";
+import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { INVOICE_STATUS_LABEL, type Invoice } from "@/lib/types/billing";
 import type { Student } from "@/lib/types/student";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Card, CardBody } from "@/components/ui/card";
+import { Pagination } from "@/components/ui/pagination";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 import { notifyError } from "@/lib/feedback";
@@ -23,21 +26,37 @@ const num = (v: string | number | null | undefined) => Number(v ?? 0);
  * Guichet d'accueil (§4) : recherche rapide d'un élève par nom/matricule, affichage instantané de
  * son solde financier, et impression directe d'un reçu du reste à payer à remettre au parent.
  */
+const PAGE_SIZE = 10;
+
 export default function GuichetPage() {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Student | null>(null);
 
   useEffect(() => {
-    const id = setTimeout(() => setDebounced(query.trim()), 300);
+    const id = setTimeout(() => { setDebounced(query.trim()); setPage(0); }, 300);
     return () => clearTimeout(id);
   }, [query]);
 
-  const searchQuery = useQuery(
-    () => (debounced.length >= 2 ? searchStudents({ search: debounced, size: 8 }) : Promise.resolve(null)),
-    [debounced],
+  // Liste des élèves (nom, classe, parent principal) — toujours affichée, filtrée par la recherche.
+  const listQuery = useQuery(
+    () => searchStudentsSummary({ search: debounced || undefined, page, size: PAGE_SIZE }),
+    [debounced, page],
   );
-  const results = searchQuery.data?.content ?? [];
+  const rows = listQuery.data?.content ?? [];
+
+  const yearsQuery = useQuery(listAcademicYears, []);
+  const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
+  const currentYear = years.find((y) => y.current) ?? years[0];
+  const classesQuery = useQuery(
+    () => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])),
+    [currentYear?.id],
+  );
+  const classLabel = useMemo(
+    () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
+    [classesQuery.data],
+  );
 
   const invoicesQuery = useQuery(
     () => (selected ? listInvoicesByStudent(selected.id) : Promise.resolve([])),
@@ -81,7 +100,7 @@ export default function GuichetPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Guichet d&apos;accueil</h1>
-        <p className="text-sm text-gray-500">Recherchez un élève par nom ou matricule pour voir instantanément sa situation financière.</p>
+        <p className="text-sm text-gray-500">Liste des élèves avec leur classe et leur parent principal — recherchez par nom ou matricule, puis cliquez sur un élève pour voir sa situation financière.</p>
       </Reveal>
 
       <div className="relative max-w-md">
@@ -94,31 +113,56 @@ export default function GuichetPage() {
         />
       </div>
 
-      {!selected && debounced.length >= 2 && (
-        <div className="max-w-md space-y-1">
-          {searchQuery.loading ? (
-            <div className="flex justify-center py-6"><Spinner /></div>
-          ) : results.length === 0 ? (
-            <p className="text-sm text-gray-400">Aucun élève trouvé.</p>
-          ) : (
-            results.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setSelected(s)}
-                className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left hover:border-brand-300 hover:bg-brand-50/40"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-                  <User className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block text-sm font-medium text-gray-900">{s.firstName} {s.lastName}</span>
-                  <span className="block font-mono text-xs text-gray-400">{s.studentNumber}</span>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
+      {!selected && (
+        listQuery.loading ? (
+          <div className="flex justify-center py-12"><Spinner /></div>
+        ) : rows.length === 0 ? (
+          <p className="rounded-xl bg-gray-50 px-4 py-10 text-center text-sm text-gray-400">Aucun élève trouvé.</p>
+        ) : (
+          <div>
+            <Table>
+              <THead><tr><TH>Élève</TH><TH>Classe</TH><TH>Parent principal</TH><TH /></tr></THead>
+              <TBody>
+                {rows.map((row) => (
+                  <TR
+                    key={row.student.id}
+                    className="cursor-pointer hover:bg-brand-50/40"
+                    onClick={() => setSelected(row.student)}
+                  >
+                    <TD>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                          <User className="h-4 w-4" />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-medium text-gray-900">{row.student.firstName} {row.student.lastName}</span>
+                          <span className="block font-mono text-xs text-gray-400">{row.student.studentNumber}</span>
+                        </span>
+                      </div>
+                    </TD>
+                    <TD className="text-gray-600">{row.classId != null ? (classLabel.get(row.classId) ?? `#${row.classId}`) : "—"}</TD>
+                    <TD className="text-gray-600">
+                      {row.principalParentName ? (
+                        <>
+                          <span className="block">{row.principalParentName}</span>
+                          {row.principalParentPhone && <span className="block text-xs text-gray-400">{row.principalParentPhone}</span>}
+                        </>
+                      ) : "—"}
+                    </TD>
+                    <TD className="text-right">
+                      <Button size="sm" variant="ghost" onClick={() => setSelected(row.student)}>Voir</Button>
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+            {listQuery.data && listQuery.data.totalPages > 1 && (
+              <div className="mt-2">
+                <Pagination page={page} totalPages={listQuery.data.totalPages} totalElements={listQuery.data.totalElements} onPageChange={setPage} />
+              </div>
+            )}
+          </div>
+        )
       )}
 
       {selected && (
@@ -129,8 +173,8 @@ export default function GuichetPage() {
                 <p className="text-lg font-bold text-gray-900">{selected.firstName} {selected.lastName}</p>
                 <p className="font-mono text-sm text-gray-500">{selected.studentNumber}</p>
               </div>
-              <Button variant="secondary" size="sm" onClick={() => { setSelected(null); setQuery(""); }}>
-                Nouvelle recherche
+              <Button variant="secondary" size="sm" onClick={() => setSelected(null)}>
+                ← Retour à la liste
               </Button>
             </div>
 

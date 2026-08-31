@@ -67,39 +67,43 @@ export function IdBadge({ kind, fullName, subtitle, photoUrl, fields, qrData, fo
 
   return (
     <div className="space-y-3">
-      <div ref={badgeRef}>
-        <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 print:hidden">Recto</p>
-        <div className="badge-printable mx-auto w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+      {/* À l'impression : recto et verso côte à côte sur une seule page (papier bristol à découper et
+          plastifier), chacun à la taille réelle d'une carte d'identité standard (CR80, 85,6 × 54 mm) —
+          à l'écran, l'affichage empilé habituel est inchangé. */}
+      <div ref={badgeRef} className="print:flex print:flex-row print:items-start print:gap-0">
+        <div className="print:relative">
+          <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 print:hidden">Recto</p>
+          <div className="badge-printable mx-auto flex w-[340px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg print:h-[53.98mm] print:w-[85.6mm] print:rounded-none print:border-0 print:shadow-none">
           {/* En-tête aux couleurs de l'école */}
-          <div className="flex items-center gap-3 bg-gradient-to-r from-brand-600 to-brand-500 p-3.5 text-white">
+          <div className="flex items-center gap-3 bg-gradient-to-r from-brand-600 to-brand-500 p-3.5 text-white print:gap-2 print:p-1.5">
             {branding?.logo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={branding.logo} alt="logo" className="h-10 w-10 rounded-lg bg-white/20 object-cover" />
+              <img src={branding.logo} alt="logo" className="h-10 w-10 rounded-lg bg-white/20 object-cover print:h-6 print:w-6" />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20 text-lg font-bold">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20 text-lg font-bold print:h-6 print:w-6 print:text-xs">
                 {(branding?.schoolName ?? "E")[0]}
               </div>
             )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold leading-tight">{branding?.schoolName ?? "Établissement"}</p>
-              <p className="text-[11px] uppercase tracking-wide text-white/80">{kind}</p>
+              <p className="truncate text-sm font-bold leading-tight print:text-[10px]">{branding?.schoolName ?? "Établissement"}</p>
+              <p className="text-[11px] uppercase tracking-wide text-white/80 print:text-[8px]">{kind}</p>
             </div>
           </div>
 
           {/* Photo + identité */}
-          <div className="flex gap-3 p-4">
+          <div className="flex flex-1 gap-3 p-4 print:gap-2 print:p-2">
             {photoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl} alt="photo" className="h-28 w-24 shrink-0 rounded-lg border border-slate-200 object-cover" />
+              <img src={photoUrl} alt="photo" className="h-28 w-24 shrink-0 rounded-lg border border-slate-200 object-cover print:h-16 print:w-14" />
             ) : (
-              <div className="flex h-28 w-24 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-2xl font-bold text-white">
+              <div className="flex h-28 w-24 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-2xl font-bold text-white print:h-16 print:w-14 print:text-base">
                 {initials}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-lg font-bold leading-tight text-slate-900">{fullName}</p>
-              {subtitle && <p className="truncate text-sm text-brand-700">{subtitle}</p>}
-              <div className="mt-2 space-y-1 text-xs">
+              <p className="truncate text-lg font-bold leading-tight text-slate-900 print:text-xs">{fullName}</p>
+              {subtitle && <p className="truncate text-sm text-brand-700 print:text-[9px]">{subtitle}</p>}
+              <div className="mt-2 space-y-1 text-xs print:mt-1 print:space-y-0 print:text-[8px]">
                 {fields.map((f) => (
                   <div key={f.label} className="flex justify-between gap-2">
                     <span className="text-slate-400">{f.label}</span>
@@ -111,27 +115,37 @@ export function IdBadge({ kind, fullName, subtitle, photoUrl, fields, qrData, fo
           </div>
 
           {/* QR + pied */}
-          <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3">
-            <div className="rounded-lg bg-white p-1.5 ring-1 ring-slate-200">
+          <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3 print:gap-2 print:px-2 print:py-1.5">
+            <div className="rounded-lg bg-white p-1.5 ring-1 ring-slate-200 print:p-1">
               {qrData ? (
-                <QRCodeSVG value={qrData} size={64} level="M" />
+                <QRCodeSVG
+                  value={qrData}
+                  size={64}
+                  level="M"
+                  marginSize={4}
+                  className="print:h-10 print:w-10"
+                />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center text-[10px] text-slate-400">—</div>
+                <div className="flex h-16 w-16 items-center justify-center text-[10px] text-slate-400 print:h-10 print:w-10">—</div>
               )}
             </div>
-            <p className="text-[11px] leading-snug text-slate-500">
+            <p className="text-[11px] leading-snug text-slate-500 print:text-[7px]">
               {footerNote ?? "Présenter ce badge à l'entrée de l'établissement."}
             </p>
           </div>
 
           <TricolorBar />
+          </div>
         </div>
 
-        {/* Saut de page à l'impression : le verso sort sur une deuxième page/carte. */}
-        <div className="print:break-after-page" />
+        {/* Ligne de découpe entre recto et verso, visible uniquement à l'impression (papier bristol à
+            découper puis plastifier) — recto et verso sortent côte à côte sur une seule page. */}
+        <div className="hidden print:block print:h-[53.98mm] print:border-l print:border-dashed print:border-slate-300" aria-hidden />
 
-        <p className="mb-1 mt-4 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 print:hidden">Verso</p>
-        <BadgeBack schoolMotto={branding?.motto} schoolSlogan={branding?.slogan} schoolName={branding?.schoolName} />
+        <div className="print:relative">
+          <p className="mb-1 mt-4 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 print:mt-0 print:hidden">Verso</p>
+          <BadgeBack schoolMotto={branding?.motto} schoolSlogan={branding?.slogan} schoolName={branding?.schoolName} />
+        </div>
       </div>
 
       {printable && (
@@ -159,31 +173,31 @@ function BadgeBack({
   schoolName?: string | null;
 }) {
   return (
-    <div className="badge-printable mx-auto w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+    <div className="badge-printable mx-auto w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg print:flex print:h-[53.98mm] print:w-[85.6mm] print:flex-col print:rounded-none print:border-0 print:shadow-none">
       <TricolorBar />
-      <div className="relative flex min-h-[260px] flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+      <div className="relative flex min-h-[260px] flex-col items-center justify-center gap-2 px-6 py-8 text-center print:min-h-0 print:flex-1 print:justify-center print:gap-1 print:px-4 print:py-2">
         {/* Armoiries en filigrane : derrière le texte, faible opacité. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/images/Coat_of_Arms_of_Guinea.svg"
           alt=""
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 opacity-[0.08]"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 opacity-[0.08] print:h-24 print:w-24"
         />
-        <div className="relative space-y-1">
+        <div className="relative space-y-1 print:space-y-0">
           <p className="text-sm font-extrabold uppercase tracking-wide text-slate-900">République de Guinée</p>
           <p className="text-[11px] italic text-slate-500">Travail — Justice — Solidarité</p>
         </div>
 
-        <div className="relative my-3 h-px w-20 bg-slate-200" />
+        <div className="relative my-3 h-px w-20 bg-slate-200 print:my-1" />
 
-        <div className="relative space-y-1">
+        <div className="relative space-y-1 print:space-y-0">
           <p className="text-sm font-bold text-slate-900">{schoolName ?? "Établissement"}</p>
           {schoolMotto && <p className="text-xs italic text-slate-600">« {schoolMotto} »</p>}
           {schoolSlogan && <p className="text-xs text-brand-700">{schoolSlogan}</p>}
         </div>
       </div>
-      <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-center">
+      <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-center print:px-2 print:py-1">
         <p className="text-[10px] leading-snug text-slate-400">
           Ce document reste la propriété de l&apos;établissement — en cas de perte, le signaler immédiatement.
         </p>

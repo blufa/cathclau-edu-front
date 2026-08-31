@@ -13,6 +13,10 @@ export interface StudentAttendance {
   parentNotified: boolean | null;
   justified?: boolean | null;
   justificationDoc?: string | null;
+  /** Heure du 1er pointage du jour (scan). */
+  checkInTime?: string | null;
+  /** Retard cumulé du jour (somme des retards de chaque séance pointée). */
+  lateMinutes?: number | null;
 }
 
 export interface UnjustifiedAlert {
@@ -51,4 +55,42 @@ export interface TeacherAttendance {
   date: string;
   status: TeacherAttendanceStatus;
   reason: string | null;
+  /** Heure d'arrivée (pointage), pour le 1er cours du jour. */
+  checkInTime: string | null;
+  /** Minutes de retard cumulées sur la journée (toutes séances pointées). */
+  lateMinutes: number | null;
 }
+
+/** Pointage d'une séance précise (§attendance) — heure d'arrivée et retard vs le début du créneau. */
+export interface TeacherCheckin {
+  id: number;
+  teacherId: number;
+  checkinDate: string;
+  scheduleSlotId: number;
+  sessionStart: string;
+  sessionEnd: string | null;
+  checkInTime: string;
+  checkOutTime: string | null;
+  lateMinutes: number;
+}
+
+/** Pointage d'une séance élève (miroir de TeacherCheckin). */
+export interface StudentCheckin {
+  id: number;
+  studentId: number;
+  classId: number;
+  checkinDate: string;
+  scheduleSlotId: number;
+  sessionStart: string;
+  sessionEnd: string | null;
+  checkInTime: string;
+  checkOutTime: string | null;
+  lateMinutes: number;
+}
+
+// ── Scan par caméra : entrée/sortie de séance, statut calculé automatiquement ───
+export type ScanDirection = "ENTRY" | "EXIT";
+export type AttendanceOutcome = "PRESENT" | "LATE";
+
+export const SCAN_DIRECTION_LABEL: Record<ScanDirection, string> = { ENTRY: "Entrée", EXIT: "Sortie" };
+export const ATTENDANCE_OUTCOME_LABEL: Record<AttendanceOutcome, string> = { PRESENT: "Présent", LATE: "Retard" };

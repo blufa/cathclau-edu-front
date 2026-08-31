@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
-import { getClassStudents, getEnrollmentCount, listLevels, listRooms } from "@/lib/api/academics";
+import { getClassStudents, getEnrollmentCount, listLevels, listRooms, setClassRepresentative } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { ClassSubjectsSection } from "./class-subjects-section";
 import { useClassQuery } from "../hooks/use-classes";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function ClassDetailPage() {
   const params = useParams<{ id: string }>();
@@ -47,7 +49,8 @@ export default function ClassDetailPage() {
 
   const classe = classQuery.data;
   const count = countQuery.data;
-  const students = studentsQuery.data ?? [];
+  const students = [...(studentsQuery.data ?? [])].sort((a, b) =>
+    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr"));
   const levelLabel = classe.levelId
     ? (levelsQuery.data?.find((l) => l.id === classe.levelId)?.label ?? "—")
     : "—";
@@ -64,6 +67,14 @@ export default function ClassDetailPage() {
   const current = count?.currentCount ?? classe.headcount ?? 0;
   const capacity = count?.maxCapacity ?? classe.maxCapacity ?? null;
   const ratio = capacity ? Math.min(100, Math.round((current / capacity) * 100)) : 0;
+
+  const studentOptions: SearchableOption[] = [
+    { value: "", trigger: "Aucun", label: "Aucun", searchText: "aucun" },
+    ...students.map((s) => {
+      const label = `${s.firstName} ${s.lastName}`;
+      return { value: String(s.id), trigger: label, label, searchText: `${label} ${s.studentNumber}` };
+    }),
+  ];
 
   return (
     <div className="space-y-6">
@@ -125,6 +136,38 @@ export default function ClassDetailPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Chef de classe</CardTitle>
+        </CardHeader>
+        <CardBody>
+          <p className="mb-3 text-xs text-gray-400">
+            L&apos;élève désigné scanne les badges de ses camarades le matin depuis son compte élève.
+          </p>
+          {canWrite ? (
+            <SearchableSelect
+              value={classe.classRepresentativeStudentId != null ? String(classe.classRepresentativeStudentId) : ""}
+              options={studentOptions}
+              onChange={async (val) => {
+                try {
+                  await setClassRepresentative(id, val ? Number(val) : null);
+                  notifySuccess("Chef de classe mis à jour");
+                  classQuery.refetch();
+                } catch (err) { notifyError(err); }
+              }}
+              triggerClassName="w-full max-w-sm justify-between px-3"
+              noResultsLabel="Aucun élève inscrit"
+            />
+          ) : (
+            <p className="text-sm font-medium text-gray-700">
+              {students.find((s) => s.id === classe.classRepresentativeStudentId)
+                ? `${students.find((s) => s.id === classe.classRepresentativeStudentId)!.firstName} ${students.find((s) => s.id === classe.classRepresentativeStudentId)!.lastName}`
+                : "Non désigné"}
+            </p>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Élèves inscrits</CardTitle>
         </CardHeader>
         <CardBody className="p-0">
@@ -155,7 +198,7 @@ export default function ClassDetailPage() {
                     </TD>
                     <TD>{s.email ?? "—"}</TD>
                     <TD className="text-right">
-                      <QuickBadgeButton subjectType="STUDENT" subjectId={s.id} subjectName={`${s.firstName} ${s.lastName}`} />
+                      <QuickBadgeButton studentId={s.id} studentName={`${s.firstName} ${s.lastName}`} studentNumber={s.studentNumber} classId={id} />
                     </TD>
                   </TR>
                 ))}

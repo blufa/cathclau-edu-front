@@ -8,7 +8,8 @@ export const LESSON_STATUS_LABEL: Record<LessonStatus, string> = {
 export interface LessonEntry {
   id: number;
   classId: number;
-  subjectId: number;
+  /** Null pour un enseignant unique (moniteur maternelle/primaire) qui log sa journée sans matière précise. */
+  subjectId: number | null;
   teacherId: number | null;
   lessonDate: string;
   title: string;
@@ -21,7 +22,7 @@ export interface LessonEntry {
 
 export interface LessonInput {
   classId: number;
-  subjectId: number;
+  subjectId?: number | null;
   teacherId?: number | null;
   lessonDate?: string | null;
   title: string;

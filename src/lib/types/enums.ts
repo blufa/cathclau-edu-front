@@ -10,6 +10,8 @@ export const ROLES = [
   "RESPONSABLE_PEDAGOGIQUE",
   "PARENT",
   "STUDENT",
+  /** Compte plateforme limité au blog d'entreprise (aucun accès écoles/abonnements). */
+  "REDACTEUR",
 ] as const;
 export type RoleCode = (typeof ROLES)[number];
 

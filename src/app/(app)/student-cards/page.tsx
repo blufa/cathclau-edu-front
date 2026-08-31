@@ -36,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { formatDate } from "@/lib/format";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StudentCardPreview } from "@/features/students/components/student-card-preview";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
@@ -116,7 +117,7 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                 <TD className="font-mono text-xs text-gray-600">{c.cardNumber}</TD>
                 <TD>{studentName(c.studentId)}</TD>
                 <TD>{c.studentNumber ?? "—"}</TD>
-                <TD className="text-gray-500">{c.issueDate ?? "—"}</TD>
+                <TD className="text-gray-500">{formatDate(c.issueDate)}</TD>
                 <TD><Badge tone={STATUS_TONE[c.status]}>{CARD_STATUS_LABEL[c.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">

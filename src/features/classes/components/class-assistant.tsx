@@ -81,6 +81,12 @@ export function ClassAssistant({
   const toCreate = planned.filter((c) => !existingLabels.has(c.label.toLowerCase()));
   const skipped = planned.length - toCreate.length;
 
+  // Salles déjà affectées à une classe existante : jamais proposées ici (toutes les classes créées par
+  // cet assistant sont nouvelles, donc aucune exception "modifier sa propre classe" ne s'applique —
+  // celle-ci vit dans ClassForm, pour l'édition d'une classe déjà existante).
+  const takenRoomIds = new Set(existingClasses.filter((c) => c.roomId != null).map((c) => c.roomId as number));
+  const availableRooms = rooms.filter((r) => !takenRoomIds.has(r.id));
+
   // Résout les matières (existantes) du programme d'un grade via son sous-cycle (Collège/Lycée…).
   function programmeSubjectIds(grade: string): number[] {
     const group = gradeGroups.find((gr) => gr.grades.includes(grade));
@@ -93,11 +99,12 @@ export function ClassAssistant({
     ? new Set(chosenGrades.flatMap((g) => programmeSubjectIds(g))).size
     : 0;
 
-  // Attribue les salles disponibles aux classes, dans l'ordre (une salle par classe).
+  // Attribue les salles disponibles (jamais déjà affectées à une autre classe) aux classes, dans
+  // l'ordre (une salle par classe).
   function autoAssignRooms() {
     const map: Record<string, string> = {};
     toCreate.forEach((c, i) => {
-      const room = rooms[i];
+      const room = availableRooms[i];
       if (room) map[c.label] = String(room.id);
     });
     setRoomByLabel(map);
@@ -235,7 +242,7 @@ export function ClassAssistant({
                   Salles ({toCreate.length} classe{toCreate.length > 1 ? "s" : ""}
                   {skipped > 0 && `, ${skipped} déjà existante${skipped > 1 ? "s" : ""} ignorée${skipped > 1 ? "s" : ""}`})
                 </p>
-                {rooms.length > 0 && (
+                {availableRooms.length > 0 && (
                   <Button type="button" variant="ghost" size="sm" onClick={autoAssignRooms} disabled={saving}>
                     Attribuer automatiquement
                   </Button>
@@ -248,6 +255,12 @@ export function ClassAssistant({
                 </p>
               ) : (
                 <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+                  {availableRooms.length === 0 && (
+                    <p className="text-xs text-gray-400">
+                      Toutes les salles enregistrées sont déjà affectées à une classe existante — créez
+                      d&apos;autres salles pour en attribuer ici, ou laissez ces classes sans salle.
+                    </p>
+                  )}
                   {toCreate.map((c) => (
                     <div key={c.label} className="flex flex-nowrap items-center gap-2">
                       <span className="min-w-[110px] shrink-0 text-sm text-gray-700">{c.label}</span>
@@ -258,7 +271,7 @@ export function ClassAssistant({
                         className="flex-1"
                       >
                         <option value="">— Aucune —</option>
-                        {rooms.map((r) => (
+                        {availableRooms.map((r) => (
                           <option key={r.id} value={String(r.id)}>{r.capacity != null ? `${r.label} (${r.capacity} pl.)` : r.label}</option>
                         ))}
                       </Select>

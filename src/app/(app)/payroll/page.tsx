@@ -735,7 +735,7 @@ function CompensationTab() {
     setGenTimetableLoading(true);
     try {
       await generatePayslipFromTimetable(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null);
-      notifySuccess("Fiche de paie générée depuis l'emploi du temps (onglet Fiches de paie)");
+      notifySuccess("Estimation générée (onglet Fiches de paie) — à ne pas confondre avec le bulletin réel");
     } catch (e) { notifyError(e); } finally { setGenTimetableLoading(false); }
   }
 
@@ -789,10 +789,16 @@ function CompensationTab() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h3 className="mb-3 text-sm font-semibold text-gray-700">
-              Paie automatique depuis l&apos;emploi du temps (§6) — par typologie de classe, sans saisie manuelle
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/30 p-4">
+            <h3 className="mb-1 text-sm font-semibold text-gray-700">
+              Estimation prévisionnelle (emploi du temps) — par typologie de classe, sans saisie manuelle
             </h3>
+            <p className="mb-3 text-xs text-amber-700">
+              Cette estimation compte les heures prévues à l&apos;emploi du temps même si la séance n&apos;a pas
+              encore eu lieu. Pour un enseignant payé à l&apos;heure, générez le bulletin réel depuis
+              « Paie du mois » ci-dessus une fois les séances marquées réalisées — ne l&apos;utilisez pas comme
+              bulletin définitif.
+            </p>
             {theoreticalQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : tp ? (
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {[
@@ -811,9 +817,14 @@ function CompensationTab() {
               </div>
             ) : null}
             {tp && (
-              <div className="mt-3 flex justify-end">
-                <Button onClick={genPayslipFromTimetable} loading={genTimetableLoading}>
-                  Générer la fiche depuis l&apos;emploi du temps
+              <div className="mt-3 flex items-center justify-between gap-3">
+                {tp.payMode === "HOURLY" && (
+                  <span className="text-xs font-medium text-amber-700">
+                    Enseignant payé à l&apos;heure : préférez « Paie du mois » pour le bulletin réel.
+                  </span>
+                )}
+                <Button variant="secondary" className="ml-auto" onClick={genPayslipFromTimetable} loading={genTimetableLoading}>
+                  Générer une estimation
                 </Button>
               </div>
             )}
@@ -838,6 +849,7 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
   const [hourlyRateNormal, setHourlyRateNormal] = useState<number | string>(initial ? Number(initial.hourlyRateNormal) : (fbHourly ? fbRate : 0));
   const [hourlyRateExam, setHourlyRateExam] = useState<number | string>(initial ? Number(initial.hourlyRateExam) : 0);
   const [fixedSalary, setFixedSalary] = useState<number | string>(initial ? Number(initial.fixedSalary) : (fbHourly ? 0 : fbRate));
+  const [paidDuringVacation, setPaidDuringVacation] = useState(initial?.paidDuringVacation ?? false);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -846,6 +858,7 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
       await setCompensation(teacherId, {
         payMode, hourlyRateNormal: Number(hourlyRateNormal) || 0,
         hourlyRateExam: Number(hourlyRateExam) || 0, fixedSalary: Number(fixedSalary) || 0,
+        paidDuringVacation,
       });
       notifySuccess("Rémunération enregistrée");
       onSaved();
@@ -875,6 +888,17 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
           <Label>Salaire fixe</Label>
           <MoneyInput value={fixedSalary} onValueChange={setFixedSalary} disabled={payMode === "HOURLY"} />
         </Field>
+      </div>
+      <div className="mt-3">
+        <Checkbox
+          label="Payé même pendant les vacances (avantage accordé par la direction)"
+          checked={paidDuringVacation}
+          onChange={() => setPaidDuringVacation((v) => !v)}
+        />
+        <p className="mt-1 pl-6 text-xs text-gray-400">
+          Par défaut, les jours fériés et vacances scolaires ne comptent pas dans les heures dues du
+          mois. Cochez pour cet enseignant s&apos;il doit être payé même pendant ces périodes.
+        </p>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         {prefilled
