@@ -10,11 +10,13 @@ import type {
   CreatePeriodInput,
   CreateRoomInput,
   CreateScheduleInput,
+  EffectiveScheduleSlot,
   EmploiDuTemps,
   EnrollmentCountInfo,
   JourSemaine,
   Matiere,
   MatiereModele,
+  MoveScheduleForWeekInput,
   Niveau,
   Periode,
   Salle,
@@ -117,6 +119,28 @@ export function updateSchedule(id: number, input: CreateScheduleInput): Promise<
 }
 export function deleteSchedule(id: number): Promise<void> {
   return api.delete<void>(`/academics/schedules/${id}`);
+}
+
+// ── Timetable — déplacement/annulation ponctuelle pour une semaine précise ──
+/** Emploi du temps EFFECTIF d'une classe pour une semaine (récurrent + déplacements/annulations
+ * ponctuels de cette semaine-là — weekStartDate doit être un lundi, ex. "2026-09-07"). */
+export function getEffectiveScheduleByClass(classId: number, weekStartDate: string): Promise<EffectiveScheduleSlot[]> {
+  return api.get<EffectiveScheduleSlot[]>(`/academics/schedules/by-class/${classId}/effective`, { query: { weekStartDate } });
+}
+export function getEffectiveScheduleByTeacher(teacherId: number, weekStartDate: string): Promise<EffectiveScheduleSlot[]> {
+  return api.get<EffectiveScheduleSlot[]>(`/academics/schedules/by-teacher/${teacherId}/effective`, { query: { weekStartDate } });
+}
+/** Déplace un créneau récurrent pour une semaine précise uniquement (409 si conflit cette semaine-là). */
+export function moveScheduleForWeek(scheduleId: number, input: MoveScheduleForWeekInput): Promise<void> {
+  return api.post<void>(`/academics/schedules/${scheduleId}/move-for-week`, input);
+}
+/** Annule un créneau récurrent pour une semaine précise (le cours n'a pas lieu, sans déplacement). */
+export function cancelScheduleForWeek(scheduleId: number, weekStartDate: string, reason?: string | null): Promise<void> {
+  return api.post<void>(`/academics/schedules/${scheduleId}/cancel-for-week`, { weekStartDate, reason });
+}
+/** Supprime l'exception d'une semaine : le créneau redevient récurrent (position d'origine). */
+export function cancelScheduleWeekException(scheduleId: number, weekStartDate: string): Promise<void> {
+  return api.delete<void>(`/academics/schedules/${scheduleId}/week-exception`, { query: { weekStartDate } });
 }
 
 // ── Academic years (admin) ────────────────────────────────────────────────--

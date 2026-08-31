@@ -1,50 +1,41 @@
-"use client";
-
-import { Suspense, useMemo } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useQuery } from "@/hooks/use-query";
 import { listPublicCategories, listPublicPosts } from "@/lib/api/blog";
 import { VankinePage } from "@/components/public/vankine/vankine-page";
 import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
 import { BlogSidebarVankine } from "@/components/public/vankine/blog-sidebar-vankine";
-import { Spinner } from "@/components/ui/spinner";
 import { formatDate } from "@/lib/format";
 
-export default function BlogListPage() {
-  return (
-    <VankinePage>
-      <Suspense fallback={<div className="d-flex justify-content-center" style={{ padding: "120px 0" }}><Spinner /></div>}>
-        <BlogList />
-      </Suspense>
-    </VankinePage>
-  );
-}
+export const metadata: Metadata = {
+  title: "Blog",
+  description: "Actualités, conseils et ressources pour la gestion des établissements scolaires en Guinée.",
+  alternates: { canonical: "/blog" },
+};
 
 /**
  * Liste des articles — reproduction fidèle de "blog" du template Vankine (mêmes classes CSS que
  * blog.js/BlogCard1.js) : cartes pleine largeur avec image, catégorie, auteur (identité éditoriale
- * d'équipe), titre, lien "Lire la suite". Filtres catégorie/tag/recherche déjà existants conservés.
+ * d'équipe), titre, lien "Lire la suite". Server Component : le contenu est présent dans le HTML
+ * initial (référencement), les filtres restent de simples liens (?categorie=/?tag=/?search=).
  */
-function BlogList() {
-  const searchParams = useSearchParams();
-  const categoryId = searchParams.get("categorie") ? Number(searchParams.get("categorie")) : undefined;
-  const tag = searchParams.get("tag") ?? undefined;
-  const search = searchParams.get("search") ?? undefined;
+export default async function BlogListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ categorie?: string; tag?: string; search?: string }>;
+}) {
+  const params = await searchParams;
+  const categoryId = params.categorie ? Number(params.categorie) : undefined;
+  const tag = params.tag;
+  const search = params.search;
 
-  const postsQuery = useQuery(() => listPublicPosts({ categoryId, tag, search }), [categoryId, tag, search]);
-  const categoriesQuery = useQuery(() => listPublicCategories(), []);
-
-  const categoryLabel = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const c of categoriesQuery.data ?? []) map.set(c.id, c.label);
-    return map;
-  }, [categoriesQuery.data]);
-
-  const posts = postsQuery.data ?? [];
+  const [posts, categories] = await Promise.all([
+    listPublicPosts({ categoryId, tag, search }),
+    listPublicCategories(),
+  ]);
+  const categoryLabel = new Map(categories.map((c) => [c.id, c.label]));
 
   return (
-    <>
+    <VankinePage>
       <PageBannerVankine title="Blog" crumbs={[{ label: "Accueil", href: "/" }, { label: "Blog" }]} background="/images/school-4.jpg" />
 
       <div className="blog-section">
@@ -61,10 +52,7 @@ function BlogList() {
               )}
 
               <div className="row loop-grid">
-                {postsQuery.loading && posts.length === 0 && (
-                  <div className="col-xl-12"><Spinner /></div>
-                )}
-                {!postsQuery.loading && posts.length === 0 && (
+                {posts.length === 0 && (
                   <div className="col-xl-12"><p>Aucun article pour l&apos;instant.</p></div>
                 )}
                 {posts.map((post) => (
@@ -125,6 +113,6 @@ function BlogList() {
         </div>
         <div className="pd_bottom_60" />
       </div>
-    </>
+    </VankinePage>
   );
 }

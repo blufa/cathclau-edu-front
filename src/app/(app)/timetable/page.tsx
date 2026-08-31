@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Pencil, X } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
+  cancelScheduleWeekException,
   createSchedule,
-  deleteSchedule,
+  getEffectiveScheduleByClass,
+  getEffectiveScheduleByTeacher,
   getScheduleByClass,
   getScheduleByTeacher,
   listAcademicYears,
@@ -16,14 +18,14 @@ import {
   listClassSubjects,
   listRooms,
   listSubjects,
+  moveScheduleForWeek,
   proposeTimetable,
-  updateSchedule,
   type TimetableProposal,
 } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { listEvents } from "@/lib/api/calendar";
 import { EVENT_TYPE_LABEL, type AcademicEvent } from "@/lib/types/calendar";
-import type { CreateScheduleInput, EmploiDuTemps, JourSemaine } from "@/lib/types/academics";
+import type { CreateScheduleInput, EffectiveScheduleSlot, EmploiDuTemps, JourSemaine, MoveScheduleForWeekInput } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -32,8 +34,9 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { ScheduleForm } from "@/components/timetable/schedule-form";
 import { FixedScheduleForm } from "@/components/timetable/fixed-schedule-form";
+import { MoveScheduleForWeekForm } from "@/components/timetable/move-schedule-for-week-form";
 import { TimetableGrid } from "@/components/timetable/timetable-grid";
-import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 const DAYS: { key: JourSemaine; label: string }[] = [
@@ -78,7 +81,7 @@ export default function TimetablePage() {
   const [classId, setClassId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<EmploiDuTemps | null>(null);
+  const [movingSlot, setMovingSlot] = useState<EffectiveScheduleSlot | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [fixedOpen, setFixedOpen] = useState(false);
 
@@ -106,25 +109,8 @@ export default function TimetablePage() {
   );
   const classSubjects = useMemo(() => classSubjectsQuery.data ?? [], [classSubjectsQuery.data]);
 
-  const slotsQuery = useQuery(() => {
-    if (mode === "class") return effectiveClassId ? getScheduleByClass(effectiveClassId) : Promise.resolve([]);
-    return effectiveTeacherId ? getScheduleByTeacher(effectiveTeacherId) : Promise.resolve([]);
-  }, [mode, effectiveClassId, effectiveTeacherId]);
-
-  const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
-  const roomLabel = useMemo(() => new Map(rooms.map((r) => [r.id, r.label])), [rooms]);
-  const teacherName = useMemo(
-    () => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
-    [teachers],
-  );
-  const classLabel = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
-
-  const classOptions: SearchableOption[] = useMemo(
-    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
-    [classes],
-  );
-
-  // Semaine affichée → dates de chaque jour, pour annoter les jours fériés / vacances du calendrier.
+  // Semaine affichée → dates de chaque jour ; weekDates[0] (le lundi) identifie la semaine pour la
+  // vue effective (récurrent + déplacements/annulations ponctuels de cette semaine-là).
   const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [weekDate, setWeekDate] = useState<string>(() => isoLocal(new Date()));
   const eventsQuery = useQuery(() => (yearId ? listEvents(yearId) : Promise.resolve([])), [yearId]);
@@ -146,6 +132,45 @@ export default function TimetablePage() {
   const holidayFor = (iso: string): AcademicEvent | undefined =>
     holidays.find((e) => iso >= e.startDate && iso <= (e.endDate ?? e.startDate));
   const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+  const weekMonday = weekDates[0];
+
+  // Récurrent (toutes les semaines) — utilisé par la vue Grille et par Modifier/Supprimer (qui
+  // agissent toujours sur le créneau récurrent, jamais sur une exception).
+  const slotsQuery = useQuery(() => {
+    if (mode === "class") return effectiveClassId ? getScheduleByClass(effectiveClassId) : Promise.resolve([]);
+    return effectiveTeacherId ? getScheduleByTeacher(effectiveTeacherId) : Promise.resolve([]);
+  }, [mode, effectiveClassId, effectiveTeacherId]);
+
+  // Vue grille = édition directe du récurrent (mode classe uniquement). Partout ailleurs (liste, ou
+  // mode enseignant qui n'a pas de grille), on affiche la vue effective de la semaine sélectionnée.
+  const isGridView = mode === "class" && view === "grille";
+
+  // Effectif pour la semaine sélectionnée (récurrent + déplacements/annulations ponctuels de cette
+  // semaine-là) — utilisé par la vue Liste (classe ou enseignant).
+  const effectiveQuery = useQuery(() => {
+    if (isGridView || !weekMonday) return Promise.resolve([]);
+    if (mode === "class") return effectiveClassId ? getEffectiveScheduleByClass(effectiveClassId, weekMonday) : Promise.resolve([]);
+    return effectiveTeacherId ? getEffectiveScheduleByTeacher(effectiveTeacherId, weekMonday) : Promise.resolve([]);
+  }, [isGridView, mode, effectiveClassId, effectiveTeacherId, weekMonday]);
+
+  const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
+  const roomLabel = useMemo(() => new Map(rooms.map((r) => [r.id, r.label])), [rooms]);
+  const teacherName = useMemo(
+    () => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
+    [teachers],
+  );
+  const classLabel = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
+
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
+  const dayLabel = useMemo(() => new Map(DAYS.map((d) => [d.key, d.label])), []);
+
+  function refetchSchedules() {
+    slotsQuery.refetch();
+    effectiveQuery.refetch();
+  }
 
   const slotsByDay = useMemo(() => {
     const map = new Map<JourSemaine, EmploiDuTemps[]>();
@@ -155,6 +180,14 @@ export default function TimetablePage() {
     return map;
   }, [slotsQuery.data]);
 
+  const effectiveByDay = useMemo(() => {
+    const map = new Map<JourSemaine, EffectiveScheduleSlot[]>();
+    for (const d of DAYS) map.set(d.key, []);
+    for (const s of effectiveQuery.data ?? []) map.get(s.day)?.push(s);
+    for (const list of map.values()) list.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return map;
+  }, [effectiveQuery.data]);
+
   function printTimetable() {
     const subjectLabel = new Map(subjects.map((s) => [s.id, s.label]));
     const roomLabel = new Map(rooms.map((r) => [r.id, r.label]));
@@ -162,8 +195,9 @@ export default function TimetablePage() {
       ? (effectiveClassId ? (classLabel.get(effectiveClassId) ?? `Classe #${effectiveClassId}`) : "")
       : (effectiveTeacherId ? (teacherName.get(effectiveTeacherId) ?? `#${effectiveTeacherId}`) : "");
     const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
+    const printByDay = isGridView ? slotsByDay : effectiveByDay;
     const cols = DAYS.map((d) => {
-      const list = (slotsByDay.get(d.key) ?? []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const list = (printByDay.get(d.key) ?? []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime));
       const cells = list.map((s) => {
         const who = mode === "class"
           ? (s.teacherId != null ? (teacherName.get(s.teacherId) ?? "") : "")
@@ -195,31 +229,22 @@ export default function TimetablePage() {
     await createSchedule(input);
     setCreating(false);
     notifySuccess("Créneau ajouté");
-    slotsQuery.refetch();
+    refetchSchedules();
   }
-  async function handleUpdate(input: CreateScheduleInput) {
-    if (!editing) return;
-    await updateSchedule(editing.id, input);
-    setEditing(null);
-    notifySuccess("Créneau modifié");
-    slotsQuery.refetch();
+  async function handleMoveForWeek(input: MoveScheduleForWeekInput) {
+    if (!movingSlot) return;
+    await moveScheduleForWeek(movingSlot.scheduleId, input);
+    setMovingSlot(null);
+    notifySuccess("Créneau déplacé pour cette semaine");
+    refetchSchedules();
   }
-  function handleDelete(slot: EmploiDuTemps) {
-    confirmAction({
-      title: "Supprimer le créneau",
-      message: "Supprimer ce créneau de l'emploi du temps ?",
-      confirmLabel: "Supprimer",
-      danger: true,
-      onConfirm: async () => {
-        try {
-          await deleteSchedule(slot.id);
-          notifySuccess("Créneau supprimé");
-          slotsQuery.refetch();
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
+
+  async function handleCancelWeekException(slot: EffectiveScheduleSlot) {
+    if (!weekMonday) return;
+    await cancelScheduleWeekException(slot.scheduleId, weekMonday);
+    setMovingSlot(null);
+    notifySuccess("Créneau revenu à sa position habituelle pour cette semaine");
+    refetchSchedules();
   }
 
   return (
@@ -230,7 +255,11 @@ export default function TimetablePage() {
           <p className="text-sm text-gray-500">Planning hebdomadaire (détection de conflits)</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={printTimetable} disabled={(slotsQuery.data ?? []).length === 0}>
+          <Button
+            variant="secondary"
+            onClick={printTimetable}
+            disabled={(isGridView ? slotsQuery.data ?? [] : effectiveQuery.data ?? []).length === 0}
+          >
             Imprimer / Télécharger
           </Button>
           {canWrite && mode === "class" && (
@@ -293,7 +322,7 @@ export default function TimetablePage() {
             <Segmented value={view} onChange={setView} options={[{ value: "liste", label: "Liste" }, { value: "grille", label: "Grille" }]} />
           </div>
         )}
-        {view === "liste" && (
+        {!isGridView && (
           <div className="w-44">
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Semaine</label>
             <DatePicker value={weekDate} onChange={(v) => setWeekDate(v || isoLocal(new Date()))} />
@@ -301,11 +330,11 @@ export default function TimetablePage() {
         )}
       </div>
 
-      {slotsQuery.loading ? (
+      {(isGridView ? slotsQuery.loading : effectiveQuery.loading) ? (
         <div className="flex justify-center py-16">
           <Spinner className="h-8 w-8" />
         </div>
-      ) : mode === "class" && view === "grille" && effectiveClassId ? (
+      ) : isGridView && effectiveClassId ? (
         <TimetableGrid
           classId={effectiveClassId}
           slots={slotsQuery.data ?? []}
@@ -317,7 +346,7 @@ export default function TimetablePage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {DAYS.map((d, i) => {
-            const slots = slotsByDay.get(d.key) ?? [];
+            const slots = effectiveByDay.get(d.key) ?? [];
             const date = weekDates[i];
             const hol = holidayFor(date);
             return (
@@ -333,23 +362,29 @@ export default function TimetablePage() {
                 )}
                 {slots.length === 0 && !hol && <p className="text-xs text-gray-300">—</p>}
                 {slots.map((s) => (
-                  <div key={s.id} className="rounded-lg border border-gray-200 bg-brand-50/40 p-2">
+                  <div
+                    key={s.scheduleId}
+                    className={cn(
+                      "rounded-lg border border-gray-200 p-2",
+                      s.cancelled ? "bg-gray-50 opacity-60" : "bg-brand-50/40",
+                    )}
+                  >
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-semibold text-brand-700">
+                      <span className={cn("text-xs font-semibold", s.cancelled ? "text-gray-400 line-through" : "text-brand-700")}>
                         {hhmm(s.startTime)} – {hhmm(s.endTime)}
                       </span>
-                      {canWrite && mode === "class" && (
-                        <div className="flex items-center gap-1">
-                          <button type="button" onClick={() => setEditing(s)} aria-label="Modifier" className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-brand-700">
-                            <Pencil className="h-3 w-3" />
-                          </button>
-                          <button type="button" onClick={() => handleDelete(s)} aria-label="Supprimer" className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-error-600">
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
+                      {canWrite && mode === "class" && !s.cancelled && (
+                        <button
+                          type="button"
+                          onClick={() => setMovingSlot(s)}
+                          aria-label="Déplacer pour cette semaine"
+                          className="rounded p-0.5 text-gray-400 hover:bg-white hover:text-brand-700"
+                        >
+                          <CalendarClock className="h-3 w-3" />
+                        </button>
                       )}
                     </div>
-                    <p className="text-sm font-medium text-gray-800">
+                    <p className={cn("text-sm font-medium", s.cancelled ? "text-gray-400 line-through" : "text-gray-800")}>
                       {subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`}
                     </p>
                     <p className="text-xs text-gray-500">
@@ -362,6 +397,15 @@ export default function TimetablePage() {
                         )}
                       {s.roomId ? ` · ${roomLabel.get(s.roomId) ?? `#${s.roomId}`}` : ""}
                     </p>
+                    {s.moved && s.originalDay && (
+                      <p className="mt-1 text-[11px] font-medium text-warning-700">
+                        Déplacé depuis {dayLabel.get(s.originalDay) ?? s.originalDay}{" "}
+                        {s.originalStartTime ? hhmm(s.originalStartTime) : ""}
+                      </p>
+                    )}
+                    {s.cancelled && (
+                      <p className="mt-1 text-[11px] font-medium text-error-600">Annulé cette semaine</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -371,38 +415,35 @@ export default function TimetablePage() {
       )}
 
       {effectiveClassId && (
-        <>
-          <Modal open={creating} onClose={() => setCreating(false)} title="Ajouter un créneau">
-            {creating && (
-              <ScheduleForm
-                classId={effectiveClassId}
-                subjects={subjects}
-                teachers={teachers}
-                rooms={rooms}
-                classSubjects={classSubjects}
-                classLabelById={classLabel}
-                onSubmit={handleCreate}
-                onCancel={() => setCreating(false)}
-              />
-            )}
-          </Modal>
-          <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier le créneau">
-            {editing && (
-              <ScheduleForm
-                classId={editing.schoolClassId}
-                initial={editing}
-                subjects={subjects}
-                teachers={teachers}
-                rooms={rooms}
-                classSubjects={classSubjects}
-                classLabelById={classLabel}
-                onSubmit={handleUpdate}
-                onCancel={() => setEditing(null)}
-              />
-            )}
-          </Modal>
-        </>
+        <Modal open={creating} onClose={() => setCreating(false)} title="Ajouter un créneau">
+          {creating && (
+            <ScheduleForm
+              classId={effectiveClassId}
+              subjects={subjects}
+              teachers={teachers}
+              rooms={rooms}
+              classSubjects={classSubjects}
+              classLabelById={classLabel}
+              onSubmit={handleCreate}
+              onCancel={() => setCreating(false)}
+            />
+          )}
+        </Modal>
       )}
+
+      <Modal open={!!movingSlot} onClose={() => setMovingSlot(null)} title="Déplacer le créneau pour cette semaine">
+        {movingSlot && weekMonday && (
+          <MoveScheduleForWeekForm
+            slot={movingSlot}
+            weekStartDate={weekMonday}
+            rooms={rooms}
+            teachers={teachers}
+            onSubmit={handleMoveForWeek}
+            onCancelException={() => handleCancelWeekException(movingSlot)}
+            onCancel={() => setMovingSlot(null)}
+          />
+        )}
+      </Modal>
 
       {effectiveClassId && (
         <Modal open={fixedOpen} onClose={() => setFixedOpen(false)} title="Créer un horaire fixe">
@@ -415,7 +456,7 @@ export default function TimetablePage() {
             rooms={rooms}
             classSubjects={classSubjects}
             onCancel={() => setFixedOpen(false)}
-            onDone={() => { setFixedOpen(false); slotsQuery.refetch(); }}
+            onDone={() => { setFixedOpen(false); refetchSchedules(); }}
           />
         </Modal>
       )}
@@ -425,7 +466,7 @@ export default function TimetablePage() {
           classes={classes.map((c) => ({ id: c.id, label: c.label }))}
           defaultClassId={effectiveClassId}
           onClose={() => setGenOpen(false)}
-          onApplied={() => { setGenOpen(false); slotsQuery.refetch(); }}
+          onApplied={() => { setGenOpen(false); refetchSchedules(); }}
         />
       </Modal>
     </div>

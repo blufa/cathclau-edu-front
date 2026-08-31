@@ -18,6 +18,20 @@ export const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
   ACADEMIC_RECORD: "Bulletin / dossier scolaire",
 };
 
+/** La fiche élève de l'utilisateur connecté (portail élève). */
+export function getMyStudent(): Promise<Student> {
+  return api.get<Student>("/students/me");
+}
+
+/** L'élève connecté met à jour ses propres coordonnées (jamais matricule/état civil). */
+export function updateMyStudentProfile(input: { phone?: string | null; email?: string | null; address?: string | null }): Promise<Student> {
+  return api.put<Student>("/students/me", input);
+}
+
+export function updateMyStudentPhoto(photoUrl: string): Promise<Student> {
+  return api.patch<Student>("/students/me/photo", undefined, { query: { photoUrl } });
+}
+
 export function searchStudents(params: StudentSearchParams): Promise<Page<Student>> {
   return api.get<Page<Student>>("/students", {
     query: {

@@ -19,6 +19,16 @@ export function getCurrentUser(): Promise<User> {
   return api.get<User>("/users/me");
 }
 
+/** Self-service générique (rôles sans fiche métier dédiée : comptable, secrétaire, directeur,
+ * admin d'école, super admin, rédacteur — jamais l'e-mail). */
+export function updateMyUserProfile(input: { firstName?: string | null; lastName?: string | null; phone?: string | null }): Promise<User> {
+  return api.put<User>("/users/me", input);
+}
+
+export function updateMyUserPhoto(photoUrl: string): Promise<User> {
+  return api.patch<User>("/users/me/photo", undefined, { query: { photoUrl } });
+}
+
 /** Réinitialise l'accès d'un utilisateur (nouveau mot de passe temporaire). */
 /**
  * Réinitialise l'accès d'un utilisateur. Si {@code password} est fourni, il devient le nouveau mot de

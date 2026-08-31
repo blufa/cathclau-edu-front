@@ -6,6 +6,7 @@ import type {
   Plan,
   PlanChange,
   PlanInput,
+  PlatformFeeSettlement,
   PlatformUser,
   SchoolBranding,
   SignupInput,
@@ -368,4 +369,29 @@ export function listAllSubscriptionInvoices(status?: string): Promise<Subscripti
 
 export function resendInvoice(id: number): Promise<SubscriptionInvoice> {
   return api.post<SubscriptionInvoice>(`/platform/subscription-invoices/${id}/resend`);
+}
+
+// ── Frais d'usage plateforme (SUPER_ADMIN : montant ; école : solde dû + règlement Djomy) ──────
+export function getPlatformFeeAmount(): Promise<{ amount: string }> {
+  return api.get<{ amount: string }>("/platform/frais-plateforme");
+}
+
+export function setPlatformFeeAmount(amount: string): Promise<{ amount: string }> {
+  return api.put<{ amount: string }>("/platform/frais-plateforme", { amount });
+}
+
+export function getPlatformFeeBalance(): Promise<{ balance: string }> {
+  return api.get<{ balance: string }>("/platform-fee/balance");
+}
+
+export function initiatePlatformFeeSettlement(payerNumber: string): Promise<PlatformFeeSettlement> {
+  return api.post<PlatformFeeSettlement>("/platform-fee/settlements", { payerNumber });
+}
+
+export function confirmPlatformFeeSettlementViaDjomy(id: number): Promise<PlatformFeeSettlement> {
+  return api.post<PlatformFeeSettlement>(`/platform-fee/settlements/${id}/confirm-djomy`);
+}
+
+export function listPlatformFeeSettlements(): Promise<PlatformFeeSettlement[]> {
+  return api.get<PlatformFeeSettlement[]>("/platform-fee/settlements");
 }

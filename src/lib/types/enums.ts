@@ -12,6 +12,9 @@ export const ROLES = [
   "STUDENT",
   /** Compte plateforme limité au blog d'entreprise (aucun accès écoles/abonnements). */
   "REDACTEUR",
+  /** Direction Préfectorale/Communale de l'Éducation : supervision en lecture seule, cross-école,
+   * scopée à son périmètre géographique (préfecture ou commune). */
+  "DPE_ADMIN",
 ] as const;
 export type RoleCode = (typeof ROLES)[number];
 

@@ -3,6 +3,8 @@ import { PageHero } from "@/components/public/page-hero";
 
 export const metadata: Metadata = {
   title: "Mentions légales — CathClau Edu",
+  description: "Mentions légales de CathClau Edu : éditeur, hébergement et informations juridiques de la plateforme.",
+  alternates: { canonical: "/mentions-legales" },
 };
 
 const SECTIONS = [

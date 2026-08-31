@@ -15,10 +15,16 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
  * unique — chacune est créée avec le cycle MATERNELLE, qui déclenche le badge de retrait obligatoire.
  */
 export const LEVEL_CATALOG: { label: string; cycle: string }[] = [
+  { label: "Garderie", cycle: "MATERNELLE" },
   { label: "Petite Section", cycle: "MATERNELLE" },
   { label: "Moyenne Section", cycle: "MATERNELLE" },
   { label: "Grande Section", cycle: "MATERNELLE" },
-  { label: "Primaire", cycle: "PRIMAIRE" },
+  { label: "Cours d'Initiation (CI)", cycle: "PRIMAIRE" },
+  { label: "Cours Préparatoire (CP)", cycle: "PRIMAIRE" },
+  { label: "Cours Élémentaire 1 (CE1)", cycle: "PRIMAIRE" },
+  { label: "Cours Élémentaire 2 (CE2)", cycle: "PRIMAIRE" },
+  { label: "Cours Moyen 1 (CM1)", cycle: "PRIMAIRE" },
+  { label: "Cours Moyen 2 (CM2)", cycle: "PRIMAIRE" },
   { label: "Secondaire", cycle: "COLLEGE" },
   { label: "Supérieur", cycle: "SUPERIEUR" },
 ];

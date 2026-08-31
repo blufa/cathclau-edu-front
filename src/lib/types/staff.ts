@@ -9,6 +9,7 @@ export interface Teacher {
   lastName: string;
   phone: string | null;
   email: string | null;
+  photo: string | null;
   specialization: string | null;
   hireDate: string | null;
   active: boolean;
