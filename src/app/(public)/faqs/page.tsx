@@ -61,9 +61,20 @@ const SECONDARY_FAQ = [
  * réelles de l'établissement (remplace les photos de démonstration), témoignages (Testimonial4),
  * CTA finale.
  */
+const FAQ_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [...MAIN_FAQ, ...SECONDARY_FAQ].map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer", text: item.a },
+  })),
+};
+
 export default function FaqsPage() {
   return (
     <VankinePage>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_JSON_LD) }} />
       <PageBannerVankine title="FAQ" crumbs={[{ label: "Accueil", href: "/" }, { label: "FAQ" }]} background="/images/school-6.jpg" />
 
       <section className="faq-section">

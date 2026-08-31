@@ -16,6 +16,40 @@ import {
   setImpersonatedTenantId as storeImpersonatedTenantId,
 } from "@/lib/auth/impersonation";
 import type { AuthUser } from "@/lib/types/auth";
+import { getMyParent } from "@/lib/api/parents";
+import { getMyStudent } from "@/lib/api/students";
+import { getMyTeacher } from "@/lib/api/staff";
+
+function roleNames(roles: string[]): string[] {
+  return roles.map((r) => r.replace(/^ROLE_/, ""));
+}
+
+/**
+ * Les rôles avec fiche métier dédiée (Parent/Student/Teacher) stockent leur téléphone/photo sur CETTE
+ * fiche, pas sur `User` (iam) — c'est elle que lisent les autres modules (facturation, diffusion SMS).
+ * On la récupère ici pour que l'avatar/téléphone affichés partout dans l'app (header compris)
+ * reflètent la vraie donnée, quel que soit le rôle, sans dupliquer cette logique sur chaque page.
+ */
+async function enrichWithBusinessProfile(me: AuthUser): Promise<AuthUser> {
+  const roles = roleNames(me.roles);
+  try {
+    if (roles.includes("PARENT")) {
+      const p = await getMyParent();
+      return { ...me, phone: p.phone ?? me.phone, photo: p.photo ?? me.photo };
+    }
+    if (roles.includes("STUDENT")) {
+      const s = await getMyStudent();
+      return { ...me, phone: s.phone ?? me.phone, photo: s.photo ?? me.photo };
+    }
+    if (roles.includes("TEACHER")) {
+      const t = await getMyTeacher();
+      return { ...me, phone: t.phone ?? me.phone, photo: t.photo ?? me.photo };
+    }
+  } catch {
+    // Pas de fiche liée (ou erreur réseau) : on garde le profil générique tel quel.
+  }
+  return me;
+}
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -44,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadUser = useCallback(async () => {
-    const me = await authService.fetchMe();
+    const me = await enrichWithBusinessProfile(await authService.fetchMe());
     setUser(me);
     setStatus("authenticated");
     return me;

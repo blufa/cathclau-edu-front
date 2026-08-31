@@ -21,6 +21,15 @@ export function getMyTeacher(): Promise<Teacher> {
   return api.get<Teacher>("/staff/teachers/me");
 }
 
+/** L'enseignant connecté met à jour ses propres coordonnées (jamais matricule/spécialité). */
+export function updateMyTeacherProfile(input: { phone?: string | null; email?: string | null }): Promise<Teacher> {
+  return api.put<Teacher>("/staff/teachers/me", input);
+}
+
+export function updateMyTeacherPhoto(photoUrl: string): Promise<Teacher> {
+  return api.patch<Teacher>("/staff/teachers/me/photo", undefined, { query: { photoUrl } });
+}
+
 export function createTeacher(input: CreateTeacherInput): Promise<Teacher> {
   return api.post<Teacher>("/staff/teachers", input);
 }

@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Check, ShieldCheck, X } from "lucide-react";
+import { Check, Pencil, ShieldCheck, X } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
+import { useQuery } from "@/hooks/use-query";
 import { changePassword } from "@/lib/auth/auth-service";
+import { getMyParent, updateMyParentProfile, updateMyParentPhoto } from "@/lib/api/parents";
+import { getMyStudent, updateMyStudentProfile, updateMyStudentPhoto } from "@/lib/api/students";
+import { updateMyTeacherProfile, updateMyTeacherPhoto } from "@/lib/api/staff";
+import { updateMyUserProfile, updateMyUserPhoto } from "@/lib/api/iam";
 import { ApiError } from "@/lib/api/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Label } from "@/components/ui/input";
+import { FileUpload } from "@/components/ui/file-upload";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -24,8 +30,10 @@ const ROLE_LABEL: Record<string, string> = {
   TEACHER: "Enseignant",
   PARENT: "Parent",
   STUDENT: "Élève",
+  REDACTEUR: "Rédacteur",
 };
 const roleLabel = (r: string) => ROLE_LABEL[r.replace(/^ROLE_/, "")] ?? r;
+const bareRoles = (roles: string[]) => roles.map((r) => r.replace(/^ROLE_/, ""));
 
 const RULES: { label: string; test: (v: string) => boolean }[] = [
   { label: "Au moins 8 caractères", test: (v) => v.length >= 8 },
@@ -43,7 +51,7 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-const schema = z
+const passwordSchema = z
   .object({ currentPassword: z.string().min(1, "Mot de passe actuel requis"), newPassword: z.string(), confirm: z.string() })
   .superRefine((v, ctx) => {
     if (!RULES.every((r) => r.test(v.newPassword))) {
@@ -53,25 +61,59 @@ const schema = z
       ctx.addIssue({ code: "custom", path: ["confirm"], message: "Les mots de passe ne correspondent pas" });
     }
   });
-type FormValues = z.infer<typeof schema>;
+type PasswordFormValues = z.infer<typeof passwordSchema>;
+
+const profileSchema = z.object({
+  phone: z.string(),
+  address: z.string(),
+  occupation: z.string(),
+});
+type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function AccountPage() {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { user, refreshUser } = useAuth();
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
-  const { handleSubmit, watch, setValue, setError, reset, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+  const roles = useMemo(() => bareRoles(user?.roles ?? []), [user?.roles]);
+  const isParent = roles.includes("PARENT");
+  const isStudent = roles.includes("STUDENT");
+  const isTeacher = roles.includes("TEACHER");
+  // Champs éditables selon le rôle : téléphone partout, adresse pour parent/élève, profession pour parent uniquement.
+  const showAddress = isParent || isStudent;
+  const showOccupation = isParent;
+
+  // La fiche métier (Parent/Élève) porte l'adresse/profession réelles — `AuthUser` ne les expose pas.
+  const parentQuery = useQuery(() => (isParent ? getMyParent() : Promise.resolve(null)), [isParent]);
+  const studentQuery = useQuery(() => (isStudent ? getMyStudent() : Promise.resolve(null)), [isStudent]);
+  const businessAddress = parentQuery.data?.address ?? studentQuery.data?.address ?? "";
+  const businessOccupation = parentQuery.data?.occupation ?? "";
+
+  const {
+    handleSubmit: handleSubmitPassword, watch: watchPassword, setValue: setPasswordValue,
+    setError, reset: resetPassword, formState: { errors: passwordErrors },
+  } = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
     defaultValues: { currentPassword: "", newPassword: "", confirm: "" },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
-  const v = watch();
+  const pv = watchPassword();
 
-  async function submit(values: FormValues) {
-    setLoading(true);
+  const {
+    handleSubmit: handleSubmitProfile, watch: watchProfile, setValue: setProfileValue,
+  } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    values: { phone: user?.phone ?? "", address: businessAddress, occupation: businessOccupation },
+  });
+  const fv = watchProfile();
+
+  async function submitPassword(values: PasswordFormValues) {
+    setPasswordLoading(true);
     try {
       await changePassword(values.currentPassword, values.newPassword);
       notifySuccess("Mot de passe mis à jour");
-      reset();
+      resetPassword();
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
         setError("currentPassword", { message: "Mot de passe actuel incorrect" });
@@ -79,7 +121,45 @@ export default function AccountPage() {
         notifyError(err);
       }
     } finally {
-      setLoading(false);
+      setPasswordLoading(false);
+    }
+  }
+
+  async function submitProfile(values: ProfileFormValues) {
+    setProfileLoading(true);
+    try {
+      if (isParent) {
+        await updateMyParentProfile({ phone: values.phone || null, address: values.address || null, occupation: values.occupation || null });
+      } else if (isStudent) {
+        await updateMyStudentProfile({ phone: values.phone || null, address: values.address || null });
+      } else if (isTeacher) {
+        await updateMyTeacherProfile({ phone: values.phone || null });
+      } else {
+        await updateMyUserProfile({ phone: values.phone || null });
+      }
+      notifySuccess("Informations mises à jour");
+      await refreshUser();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  async function handlePhotoChange(url: string | null) {
+    if (!url) return;
+    setPhotoLoading(true);
+    try {
+      if (isParent) await updateMyParentPhoto(url);
+      else if (isStudent) await updateMyStudentPhoto(url);
+      else if (isTeacher) await updateMyTeacherPhoto(url);
+      else await updateMyUserPhoto(url);
+      notifySuccess("Photo mise à jour");
+      await refreshUser();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPhotoLoading(false);
     }
   }
 
@@ -101,9 +181,14 @@ export default function AccountPage() {
             </CardHeader>
             <CardBody className="space-y-5">
               <div className="flex items-center gap-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white">
-                  {(user.firstName?.[0] ?? "") + (user.lastName?.[0] ?? "")}
-                </span>
+                {user.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.photo} alt="" className="h-14 w-14 rounded-2xl object-cover" />
+                ) : (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-lg font-bold text-white">
+                    {(user.firstName?.[0] ?? "") + (user.lastName?.[0] ?? "")}
+                  </span>
+                )}
                 <div>
                   <p className="text-lg font-semibold text-gray-900">
                     {user.firstName} {user.lastName}
@@ -111,10 +196,15 @@ export default function AccountPage() {
                   <p className="text-sm text-gray-500">{user.email}</p>
                 </div>
               </div>
-              <dl className="grid grid-cols-2 gap-4">
-                <Info label="Téléphone" value={user.phone} />
-                <Info label="École (tenant)" value={user.tenantId ?? "Plateforme"} />
-              </dl>
+
+              <FileUpload
+                label="Photo de profil"
+                value={photoLoading ? undefined : user.photo}
+                onChange={handlePhotoChange}
+                folder="profile-photos"
+                allowCapture
+              />
+
               <div>
                 <p className="mb-1.5 text-xs text-gray-500">Rôles</p>
                 <div className="flex flex-wrap gap-2">
@@ -146,55 +236,97 @@ export default function AccountPage() {
           </Card>
         </Reveal>
 
-        {/* Change password */}
-        <Reveal y={12} delay={0.1}>
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                <span className="inline-flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-brand-600" /> Changer le mot de passe
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardBody>
-              <form onSubmit={handleSubmit(submit)} className="space-y-4">
-                <Field>
-                  <Label>Mot de passe actuel <span className="text-error-500">*</span></Label>
-                  <Input type="password" autoComplete="current-password" value={v.currentPassword} onChange={(e) => setValue("currentPassword", e.target.value)} aria-invalid={!!errors.currentPassword} />
-                  {errors.currentPassword && <p className="text-xs text-error-600">{errors.currentPassword.message}</p>}
-                </Field>
-                <Field>
-                  <Label>Nouveau mot de passe <span className="text-error-500">*</span></Label>
-                  <Input type="password" autoComplete="new-password" value={v.newPassword} onChange={(e) => setValue("newPassword", e.target.value)} aria-invalid={!!errors.newPassword} />
-                </Field>
-                {/* Live complexity rules */}
-                <ul className="space-y-1">
-                  {RULES.map((r) => {
-                    const ok = r.test(v.newPassword);
-                    return (
-                      <li key={r.label} className="flex items-center gap-2 text-xs">
-                        {ok ? (
-                          <Check className="h-3.5 w-3.5 text-success-600" strokeWidth={3} />
-                        ) : (
-                          <X className="h-3.5 w-3.5 text-gray-300" strokeWidth={3} />
-                        )}
-                        <span className={ok ? "text-success-700" : "text-gray-400"}>{r.label}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <Field>
-                  <Label>Confirmer le nouveau mot de passe <span className="text-error-500">*</span></Label>
-                  <Input type="password" autoComplete="new-password" value={v.confirm} onChange={(e) => setValue("confirm", e.target.value)} aria-invalid={!!errors.confirm} />
-                  {errors.confirm && <p className="text-xs text-error-600">{errors.confirm.message}</p>}
-                </Field>
-                <Button type="submit" loading={loading} fullWidth>
-                  Mettre à jour
-                </Button>
-              </form>
-            </CardBody>
-          </Card>
-        </Reveal>
+        <div className="space-y-6">
+          {/* Edit own info */}
+          <Reveal y={12}>
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <span className="inline-flex items-center gap-2">
+                    <Pencil className="h-4 w-4 text-brand-600" /> Modifier mes informations
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                <form onSubmit={handleSubmitProfile(submitProfile)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <Info label="Nom complet" value={`${user.firstName} ${user.lastName}`} />
+                    <Info label="E-mail" value={user.email} />
+                  </div>
+                  <Field>
+                    <Label>Téléphone</Label>
+                    <Input value={fv.phone} onChange={(e) => setProfileValue("phone", e.target.value)} />
+                  </Field>
+                  {showAddress && (
+                    <Field>
+                      <Label>Adresse</Label>
+                      <Input value={fv.address} onChange={(e) => setProfileValue("address", e.target.value)} />
+                    </Field>
+                  )}
+                  {showOccupation && (
+                    <Field>
+                      <Label>Profession</Label>
+                      <Input value={fv.occupation} onChange={(e) => setProfileValue("occupation", e.target.value)} />
+                    </Field>
+                  )}
+                  <Button type="submit" loading={profileLoading} fullWidth>
+                    Enregistrer
+                  </Button>
+                </form>
+              </CardBody>
+            </Card>
+          </Reveal>
+
+          {/* Change password */}
+          <Reveal y={12} delay={0.1}>
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <span className="inline-flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-brand-600" /> Changer le mot de passe
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                <form onSubmit={handleSubmitPassword(submitPassword)} className="space-y-4">
+                  <Field>
+                    <Label>Mot de passe actuel <span className="text-error-500">*</span></Label>
+                    <Input type="password" autoComplete="current-password" value={pv.currentPassword} onChange={(e) => setPasswordValue("currentPassword", e.target.value)} aria-invalid={!!passwordErrors.currentPassword} />
+                    {passwordErrors.currentPassword && <p className="text-xs text-error-600">{passwordErrors.currentPassword.message}</p>}
+                  </Field>
+                  <Field>
+                    <Label>Nouveau mot de passe <span className="text-error-500">*</span></Label>
+                    <Input type="password" autoComplete="new-password" value={pv.newPassword} onChange={(e) => setPasswordValue("newPassword", e.target.value)} aria-invalid={!!passwordErrors.newPassword} />
+                  </Field>
+                  {/* Live complexity rules */}
+                  <ul className="space-y-1">
+                    {RULES.map((r) => {
+                      const ok = r.test(pv.newPassword);
+                      return (
+                        <li key={r.label} className="flex items-center gap-2 text-xs">
+                          {ok ? (
+                            <Check className="h-3.5 w-3.5 text-success-600" strokeWidth={3} />
+                          ) : (
+                            <X className="h-3.5 w-3.5 text-gray-300" strokeWidth={3} />
+                          )}
+                          <span className={ok ? "text-success-700" : "text-gray-400"}>{r.label}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <Field>
+                    <Label>Confirmer le nouveau mot de passe <span className="text-error-500">*</span></Label>
+                    <Input type="password" autoComplete="new-password" value={pv.confirm} onChange={(e) => setPasswordValue("confirm", e.target.value)} aria-invalid={!!passwordErrors.confirm} />
+                    {passwordErrors.confirm && <p className="text-xs text-error-600">{passwordErrors.confirm.message}</p>}
+                  </Field>
+                  <Button type="submit" loading={passwordLoading} fullWidth>
+                    Mettre à jour
+                  </Button>
+                </form>
+              </CardBody>
+            </Card>
+          </Reveal>
+        </div>
       </div>
     </div>
   );

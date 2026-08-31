@@ -1,18 +1,16 @@
-"use client";
-
-import { useState } from "react";
-import { useParams } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
-import { useQuery } from "@/hooks/use-query";
-import { getAdjacentPosts, getPublicPost, listPublicCategories, listPublicComments, submitComment } from "@/lib/api/blog";
+import { notFound } from "next/navigation";
+import { getAdjacentPosts, getPublicPost, listPublicCategories, listPublicComments } from "@/lib/api/blog";
 import { VankinePage } from "@/components/public/vankine/vankine-page";
 import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
 import { BlogSidebarVankine } from "@/components/public/vankine/blog-sidebar-vankine";
-import { Spinner } from "@/components/ui/spinner";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { CommentForm } from "@/components/public/vankine/comment-form";
+import { SITE_URL } from "@/lib/site";
 import { formatDate } from "@/lib/format";
 
-/** Construit les URLs de partage au moment du clic (jamais pendant le rendu, pour rester sûr côté SSR). */
+/** URLs de partage — construites côté serveur depuis l'URL canonique de l'article (déterministe,
+ * plus besoin de dépendre de window.location comme avant le passage en Server Component). */
 function shareUrl(network: "facebook" | "twitter" | "whatsapp", url: string, title: string) {
   const targets = {
     facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
@@ -22,75 +20,76 @@ function shareUrl(network: "facebook" | "twitter" | "whatsapp", url: string, tit
   return targets[network];
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const post = await getPublicPost(slug);
+    const description = post.excerpt ?? undefined;
+    return {
+      title: `${post.title} — CathClau Edu`,
+      description,
+      alternates: { canonical: `/blog/${slug}` },
+      openGraph: {
+        title: post.title,
+        description,
+        type: "article",
+        publishedTime: post.publishedAt ?? undefined,
+        images: post.coverImageUrl ? [post.coverImageUrl] : undefined,
+      },
+    };
+  } catch {
+    return { title: "Article introuvable — CathClau Edu" };
+  }
+}
+
 /**
  * Page détail d'un article — reproduction fidèle de "blog-details-right-sidebar" du template
  * Vankine (mêmes classes CSS) : miniature, contenu réel de l'article, encart auteur (identité
  * éditoriale d'équipe, pas de faux nom individuel), partage social fonctionnel, navigation
- * précédent/suivant, commentaires, colonne latérale (recherche/récents/catégories/tags/contact).
+ * précédent/suivant, commentaires (lecture côté serveur + envoi via CommentForm), colonne latérale.
+ * Server Component : le contenu de l'article est présent dans le HTML initial (référencement),
+ * seul l'envoi d'un commentaire reste interactif côté client.
  */
-export default function BlogPostDetailPage() {
-  const params = useParams<{ slug: string }>();
-  const slug = params.slug;
+export default async function BlogPostDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
 
-  const postQuery = useQuery(() => getPublicPost(slug), [slug]);
-  const adjacentQuery = useQuery(() => getAdjacentPosts(slug), [slug]);
-  const categoriesQuery = useQuery(() => listPublicCategories(), []);
-  const commentsQuery = useQuery(() => (postQuery.data ? listPublicComments(postQuery.data.id) : Promise.resolve([])), [postQuery.data?.id]);
+  let post;
+  try {
+    post = await getPublicPost(slug);
+  } catch {
+    notFound();
+  }
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [website, setWebsite] = useState("");
-  const [content, setContent] = useState("");
-  const [sending, setSending] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [adjacent, categories, comments] = await Promise.all([
+    getAdjacentPosts(slug).catch(() => undefined),
+    listPublicCategories().catch(() => []),
+    listPublicComments(post.id).catch(() => []),
+  ]);
 
-  const post = postQuery.data;
-  const comments = commentsQuery.data ?? [];
-  const adjacent = adjacentQuery.data;
-  const categoryLabel = post?.categoryId != null
-    ? categoriesQuery.data?.find((c) => c.id === post.categoryId)?.label
+  const categoryLabel = post.categoryId != null
+    ? categories.find((c) => c.id === post.categoryId)?.label
     : undefined;
+  const canonicalUrl = `${SITE_URL}/blog/${post.slug}`;
 
-  async function handleSubmitComment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!post) return;
-    setSending(true);
-    try {
-      await submitComment(post.id, { authorName: name, authorEmail: email, website: website || undefined, content });
-      notifySuccess("Commentaire envoyé — il sera visible après validation.");
-      setName(""); setEmail(""); setWebsite(""); setContent("");
-      setSubmitted(true);
-    } catch (err) {
-      notifyError(err);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  if (postQuery.loading && !post) {
-    return (
-      <VankinePage>
-        <div className="d-flex justify-content-center" style={{ padding: "120px 0" }}><Spinner /></div>
-      </VankinePage>
-    );
-  }
-
-  if (postQuery.error || !post) {
-    return (
-      <VankinePage>
-        <div className="text-center" style={{ padding: "120px 0" }}>
-          <h1 className="title_no_a_26">Article introuvable</h1>
-          <p>Cet article n&apos;existe pas ou n&apos;est plus disponible.</p>
-          <Link href="/blog" className="theme_btn" style={{ marginTop: 20, display: "inline-flex" }}>Retour au blog</Link>
-        </div>
-      </VankinePage>
-    );
-  }
-
-  const shareTargetUrl = typeof window !== "undefined" ? window.location.href : "";
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.excerpt ?? undefined,
+    image: post.coverImageUrl ?? undefined,
+    datePublished: post.publishedAt ?? post.createdAt,
+    dateModified: post.updatedAt ?? post.publishedAt ?? post.createdAt,
+    author: { "@type": "Organization", name: "CathClau Edu" },
+    publisher: { "@type": "Organization", name: "CathClau Edu", logo: { "@type": "ImageObject", url: `${SITE_URL}/images/logo.png` } },
+    mainEntityOfPage: canonicalUrl,
+  };
 
   return (
     <VankinePage>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <PageBannerVankine
         title="Blog"
         crumbs={[{ label: "Accueil", href: "/" }, { label: "Blog", href: "/blog" }, { label: post.title }]}
@@ -142,22 +141,22 @@ export default function BlogPostDetailPage() {
                       <h6>Partager :</h6>
                       <ul className="text-grey-5 d-inline-block">
                         <li className="social-mds">
-                          <a className="m_icon" href={shareUrl("facebook", shareTargetUrl, post.title)} target="_blank" rel="noreferrer" aria-label="Partager sur Facebook">
+                          <a className="m_icon" href={shareUrl("facebook", canonicalUrl, post.title)} target="_blank" rel="noreferrer" aria-label="Partager sur Facebook">
                             <i className="fab fa-facebook" />
                           </a>
                         </li>
                         <li className="social-mds">
-                          <a className="m_icon" href={shareUrl("twitter", shareTargetUrl, post.title)} target="_blank" rel="noreferrer" aria-label="Partager sur X">
+                          <a className="m_icon" href={shareUrl("twitter", canonicalUrl, post.title)} target="_blank" rel="noreferrer" aria-label="Partager sur X">
                             <i className="fab fa-twitter" />
                           </a>
                         </li>
                         <li className="social-mds">
-                          <a className="m_icon" href={shareUrl("whatsapp", shareTargetUrl, post.title)} target="_blank" rel="noreferrer" aria-label="Partager sur WhatsApp">
+                          <a className="m_icon" href={shareUrl("whatsapp", canonicalUrl, post.title)} target="_blank" rel="noreferrer" aria-label="Partager sur WhatsApp">
                             <i className="fab fa-whatsapp" />
                           </a>
                         </li>
                         <li className="social-mds">
-                          <a className="m_icon" href={`mailto:?subject=${encodeURIComponent(post.title)}&body=${encodeURIComponent(shareTargetUrl)}`} aria-label="Partager par e-mail">
+                          <a className="m_icon" href={`mailto:?subject=${encodeURIComponent(post.title)}&body=${encodeURIComponent(canonicalUrl)}`} aria-label="Partager par e-mail">
                             <i className="fas fa-envelope" />
                           </a>
                         </li>
@@ -221,36 +220,7 @@ export default function BlogPostDetailPage() {
                                 {comments.length === 0 && <li>Soyez le premier à commenter cet article.</li>}
                               </ul>
 
-                              {submitted ? (
-                                <p className="title_para">Merci, votre commentaire a bien été envoyé et sera publié après modération.</p>
-                              ) : (
-                                <form onSubmit={handleSubmitComment} id="commentform" className="comment-form">
-                                  <p className="title_para">Votre adresse e-mail ne sera pas publiée.</p>
-                                  <p className="comment-form-comment">
-                                    <label>Laisser un commentaire</label>
-                                    <textarea
-                                      placeholder="Écrivez votre commentaire ici…" rows={12} required
-                                      value={content} onChange={(e) => setContent(e.target.value)}
-                                    />
-                                  </p>
-                                  <p className="comment-form-author">
-                                    <label>Nom complet</label>
-                                    <input placeholder="ex. Aïssatou Diallo" type="text" required value={name} onChange={(e) => setName(e.target.value)} />
-                                  </p>
-                                  <p className="comment-form-email">
-                                    <label>Adresse e-mail</label>
-                                    <input placeholder="ex. contact@ecole.gn" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-                                  </p>
-                                  <p className="comment-form-url">
-                                    <label>Site web (optionnel)</label>
-                                    <input placeholder="ex. www.exemple.com" type="text" value={website} onChange={(e) => setWebsite(e.target.value)} />
-                                  </p>
-                                  <div className="clearfix" />
-                                  <p className="form-submit">
-                                    <input type="submit" className="submit" value={sending ? "Envoi…" : "Publier le commentaire"} disabled={sending} />
-                                  </p>
-                                </form>
-                              )}
+                              <CommentForm postId={post.id} />
                             </div>
                           </div>
                         </div>

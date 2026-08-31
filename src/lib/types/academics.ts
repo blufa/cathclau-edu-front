@@ -139,6 +139,34 @@ export interface CreateScheduleInput {
   endTime: string;
 }
 
+/** Créneau effectif d'une semaine précise (récurrent + déplacement/annulation ponctuel appliqué). */
+export interface EffectiveScheduleSlot {
+  scheduleId: number;
+  schoolClassId: number;
+  subjectId: number;
+  teacherId: number | null;
+  roomId: number | null;
+  day: JourSemaine;
+  startTime: string;
+  endTime: string;
+  moved: boolean;
+  cancelled: boolean;
+  originalDay: JourSemaine | null;
+  originalStartTime: string | null;
+  originalEndTime: string | null;
+}
+
+/** Body pour déplacer un créneau récurrent pour une semaine précise (weekStartDate = un lundi). */
+export interface MoveScheduleForWeekInput {
+  weekStartDate: string;
+  newDay: JourSemaine;
+  newStartTime: string;
+  newEndTime: string;
+  newRoomId: number | null;
+  newTeacherId: number | null;
+  reason?: string | null;
+}
+
 /** Subject assignment to a class (ClasseMatiere). */
 export interface ClasseMatiere {
   id: number;

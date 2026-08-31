@@ -79,9 +79,14 @@ export function Header() {
               onClick={toggle}
               className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition hover:bg-gray-100"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
-                {initials}
-              </span>
+              {user?.photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.photo} alt="" className="h-9 w-9 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
+                  {initials}
+                </span>
+              )}
               <div className="hidden text-left sm:block">
                 <p className="text-sm font-semibold leading-tight text-gray-900">
                   {user ? `${user.firstName} ${user.lastName}` : ""}

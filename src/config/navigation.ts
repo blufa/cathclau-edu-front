@@ -181,7 +181,16 @@ export const NAVIGATION: NavSection[] = [
       { label: "Utilisateurs", href: "/platform/users", icon: Users, roles: ["SUPER_ADMIN"] },
       { label: "Abonnements", href: "/platform/subscriptions", icon: CreditCard, roles: ["SUPER_ADMIN"] },
       { label: "Plans", href: "/platform/plans", icon: Layers, roles: ["SUPER_ADMIN"] },
+      { label: "Frais plateforme", href: "/platform/frais", icon: Banknote, roles: ["SUPER_ADMIN"] },
       { label: "Blog", href: "/platform/blog/posts", icon: Newspaper, roles: ["SUPER_ADMIN", "REDACTEUR"] },
+    ],
+  },
+  {
+    title: "DPE / DCE",
+    items: [
+      { label: "Tableau de bord", href: "/dpe/dashboard", icon: Gauge, roles: ["DPE_ADMIN"] },
+      { label: "Écoles du périmètre", href: "/dpe/schools", icon: Building2, roles: ["DPE_ADMIN"] },
+      { label: "Alertes", href: "/dpe/alerts", icon: ShieldAlert, roles: ["DPE_ADMIN"] },
     ],
   },
   {

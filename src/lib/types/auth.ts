@@ -16,11 +16,13 @@ export interface MeResponse {
   lastName: string;
   email: string;
   phone: string | null;
+  photo: string | null;
   roles: string[];
   permissions: string[];
 }
 
-/** The authenticated user as held in the app context. */
+/** The authenticated user as held in the app context. `phone`/`photo` sont éventuellement fusionnés
+ * depuis la fiche métier du rôle (Parent/Student/Teacher) — voir `auth-provider.tsx`. */
 export interface AuthUser {
   userId: number;
   tenantId: number | null;
@@ -28,6 +30,7 @@ export interface AuthUser {
   lastName: string;
   email: string;
   phone: string | null;
+  photo: string | null;
   roles: string[];
   permissions: string[];
 }
