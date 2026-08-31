@@ -3,6 +3,8 @@ import { PageHero } from "@/components/public/page-hero";
 
 export const metadata: Metadata = {
   title: "Confidentialité — CathClau Edu",
+  description: "Politique de confidentialité de CathClau Edu : données collectées, usage, conservation et droits des utilisateurs.",
+  alternates: { canonical: "/confidentialite" },
 };
 
 const SECTIONS = [

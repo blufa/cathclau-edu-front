@@ -4,8 +4,25 @@ import { usePathname } from "next/navigation";
 import { DM_Sans } from "next/font/google";
 import { PublicHeader } from "@/components/public/public-header";
 import { PublicFooter } from "@/components/public/public-footer";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans-var", display: "swap" });
+
+/** Données réelles de l'établissement (mêmes coordonnées que la page /contact — jamais inventées). */
+const ORGANIZATION_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "EducationalOrganization",
+  name: SITE_NAME,
+  url: SITE_URL,
+  logo: `${SITE_URL}/images/logo.png`,
+  email: "contact@cathclau.edu",
+  telephone: "+224620000000",
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Conakry",
+    addressCountry: "GN",
+  },
+};
 
 /** Public marketing & onboarding shell (no authentication). Police DM Sans dédiée (identique au
  * template Vankine home-5 reproduit) — n'affecte jamais le shell applicatif authentifié (Outfit).
@@ -26,6 +43,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   const isVankineNative = isVankineNativeRoute(pathname);
   return (
     <div className={`flex min-h-screen flex-col bg-white font-dm-sans ${dmSans.variable}`}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+      />
       {!isVankineNative && <PublicHeader />}
       <main className="flex-1">{children}</main>
       {!isVankineNative && <PublicFooter />}

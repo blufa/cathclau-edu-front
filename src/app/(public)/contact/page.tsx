@@ -1,12 +1,13 @@
-"use client";
-
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import type { Metadata } from "next";
 import { VankinePage } from "@/components/public/vankine/vankine-page";
 import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
-import { notifySuccess } from "@/lib/feedback";
+import { ContactForm } from "@/components/public/vankine/contact-form";
+
+export const metadata: Metadata = {
+  title: "Contact — CathClau Edu",
+  description: "Une question, une démo, un devis pour votre établissement ? Contactez l'équipe CathClau Edu.",
+  alternates: { canonical: "/contact" },
+};
 
 const COORDS = [
   { icon: "fi-rr-marker", title: "Adresse", lines: ["Conakry, Guinée"] },
@@ -14,39 +15,12 @@ const COORDS = [
   { icon: "fi-rr-phone-call", title: "Téléphone", lines: ["+224 620 00 00 00"], href: "tel:+224620000000" },
 ];
 
-const schema = z.object({
-  name: z.string().trim().min(1, "Requis"),
-  email: z.string().regex(/^\S+@\S+\.\S+$/, "Email invalide"),
-  subject: z.string(),
-  message: z.string().min(10, "Message trop court"),
-});
-type FormValues = z.infer<typeof schema>;
-
 /**
  * Page Contact — reproduction fidèle de "contact" du template Vankine (mêmes classes CSS) :
- * 3 blocs coordonnées, carte, formulaire réel (validation react-hook-form + zod conservée, envoi
- * acquitté localement faute de point de collecte serveur dédié pour l'instant).
+ * 3 blocs coordonnées, carte, formulaire réel (ContactForm, client component isolé pour que cette
+ * page reste un Server Component indexable avec ses propres metadata).
  */
 export default function ContactPage() {
-  const [loading, setLoading] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: "", email: "", subject: "", message: "" },
-  });
-
-  async function onSubmit() {
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    notifySuccess("Message envoyé. Notre équipe vous répondra rapidement.");
-    reset();
-    setLoading(false);
-  }
-
   return (
     <VankinePage>
       <PageBannerVankine title="Contact" crumbs={[{ label: "Accueil", href: "/" }, { label: "Contact" }]} background="/images/school-1.jpg" />
@@ -124,36 +98,7 @@ export default function ContactPage() {
             <div className="col-lg-8 col-md-12">
               <section className="contact_form_box_all style_one">
                 <div className="contact_form_shortcode">
-                  <form onSubmit={handleSubmit(onSubmit)}>
-                    <div className="row">
-                      <div className="col-md-6 col-sm-12">
-                        <label>Nom complet <span>*</span></label>
-                        <input type="text" placeholder="Votre nom" aria-invalid={!!errors.name} {...register("name")} />
-                        {errors.name && <div className="help-block with-errors">{errors.name.message}</div>}
-                      </div>
-                      <div className="col-md-6 col-sm-12">
-                        <label>E-mail <span>*</span></label>
-                        <input type="email" placeholder="vous@ecole.gn" aria-invalid={!!errors.email} {...register("email")} />
-                        {errors.email && <div className="help-block with-errors">{errors.email.message}</div>}
-                      </div>
-                      <div className="col-sm-12">
-                        <label>Sujet</label>
-                        <input type="text" placeholder="Sujet (optionnel)" {...register("subject")} />
-                      </div>
-                      <div className="col-sm-12">
-                        <label>Message <span>*</span></label>
-                        <textarea placeholder="Votre message..." rows={5} aria-invalid={!!errors.message} {...register("message")} />
-                        {errors.message && <div className="help-block with-errors">{errors.message.message}</div>}
-                      </div>
-                      <div className="col-sm-12">
-                        <div className="mg_top apbtn">
-                          <button className="theme_btn" type="submit" disabled={loading}>
-                            {loading ? "Envoi…" : "Envoyer le message"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </form>
+                  <ContactForm />
                 </div>
               </section>
             </div>

@@ -19,6 +19,11 @@ export interface ParentInput {
   address?: string | null;
 }
 
+/** La fiche parent de l'utilisateur connecté (portail parent). */
+export function getMyParent(): Promise<Parent> {
+  return api.get<Parent>("/parents/me");
+}
+
 /** List parents of the current tenant (to reuse a parent across siblings). */
 export function listParents(search?: string, size = 20): Promise<Parent[]> {
   return api.get<Page<Parent>>("/parents", { query: { size } }).then((p) => {
@@ -63,6 +68,16 @@ export function unlinkParentFromStudent(studentId: number, parentId: number): Pr
 /** Supprime un lien de parenté par son identifiant (ELEVE_PARENT). */
 export function deleteParentLink(linkId: number): Promise<void> {
   return api.delete<void>(`/parents/links/${linkId}`);
+}
+
+/** Le parent connecté met à jour ses propres coordonnées (jamais son nom). */
+export function updateMyParentProfile(input: {
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  occupation?: string | null;
+}): Promise<Parent> {
+  return api.put<Parent>("/parents/me", input);
 }
 
 /** Le parent connecté met à jour sa propre photo. */

@@ -17,6 +17,7 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
+import { PlatformFeeSettlementCard } from "@/components/platform/platform-fee-settlement-card";
 import { formatGNF } from "@/lib/format";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
@@ -155,6 +156,7 @@ export default function ReportsPage() {
             <StatCard title="Taux de recouvrement" value={pct(finance.data?.recoveryRate)} icon={Award} accent="teal" />
           </div>
         )}
+        <PlatformFeeSettlementCard />
         <Card>
           <CardHeader className="flex items-center justify-between gap-4">
             <CardTitle>Prévisionnel de trésorerie (6 mois)</CardTitle>

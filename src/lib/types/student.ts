@@ -68,6 +68,7 @@ export interface Parent {
   email: string | null;
   occupation: string | null;
   address: string | null;
+  photo: string | null;
   primaryGuardian?: boolean;
 }
 

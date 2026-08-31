@@ -250,3 +250,15 @@ export interface TenantModule {
   activationDate: string | null;
   expirationDate: string | null;
 }
+
+/** Frais d'usage plateforme (montant SUPER_ADMIN, ajouté aux factures de mensualité des écoles). */
+export interface PlatformFeeSettlement {
+  id: number;
+  reference: string;
+  amount: string;
+  channel: PaymentChannel;
+  status: PaymentStatus;
+  redirectUrl: string | null;
+  createdAt: string;
+  confirmedAt: string | null;
+}
