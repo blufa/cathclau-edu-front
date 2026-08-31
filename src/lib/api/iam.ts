@@ -101,3 +101,13 @@ export function listPermissions(): Promise<Permission[]> {
 export function setRolePermissions(roleId: number, permissionIds: number[]): Promise<void> {
   return api.post<void>(`/roles/${roleId}/permissions`, { permissionIds });
 }
+
+/** Permissions octroyées directement à l'utilisateur, en plus de celles héritées de son rôle. */
+export function getUserDirectPermissions(userId: number): Promise<Permission[]> {
+  return api.get<Permission[]>(`/users/${userId}/permissions`);
+}
+
+/** Remplace les permissions octroyées directement à l'utilisateur (n'affecte pas celles du rôle). */
+export function setUserPermissions(userId: number, permissionIds: number[]): Promise<void> {
+  return api.post<void>(`/users/${userId}/permissions`, { permissionIds });
+}

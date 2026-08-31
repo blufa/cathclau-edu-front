@@ -12,15 +12,49 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import type { ClasseMatiere, CreateScheduleInput, EmploiDuTemps, JourSemaine, Matiere } from "@/lib/types/academics";
 
-/** Plages horaires fixes de la grille (§2) : le Directeur des Études affecte un professeur (par
- * son code, ex. "CH1") à chacune. Ce sont des bornes par défaut — certaines matières ne durent
- * qu'1h : l'heure réelle de la séance reste modifiable dans chaque cellule. */
-const FIXED_SLOTS: { start: string; end: string; label: string }[] = [
-  { start: "08:00", end: "10:00", label: "08h–10h" },
-  { start: "10:00", end: "12:00", label: "10h–12h" },
-  { start: "12:00", end: "14:00", label: "12h–14h" },
-  { start: "14:00", end: "16:00", label: "14h–16h" },
-];
+/** Bandes horaires par défaut de la grille — un point de repère visuel, pas une contrainte : l'heure
+ * réelle de chaque séance reste entièrement libre dans sa cellule (une matière d'1h n'occupe pas tout
+ * le créneau de 2h). Ces bornes 08h-16h conviennent au secondaire, mais une école de garderie/primaire
+ * peut avoir des horaires très différents (ex. dès 07h, ou au-delà de 16h) — {@link buildSlots} étend
+ * automatiquement les bandes pour couvrir tout créneau réellement enregistré en dehors de cette plage
+ * par défaut, pour ne jamais masquer une séance dans la grille. */
+const DEFAULT_SLOT_START = "08:00";
+const DEFAULT_SLOT_END = "16:00";
+const SLOT_BAND_MINUTES = 120;
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+function minutesToTime(min: number): string {
+  const clamped = Math.max(0, Math.min(23 * 60 + 59, min));
+  return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
+}
+function slotLabel(start: string, end: string): string {
+  return `${start.replace(":", "h")}–${end.replace(":", "h")}`;
+}
+
+/** Construit les bandes de la grille : la plage par défaut (08h-16h par bandes de 2h), étendue avant
+ * et/ou après si des créneaux réellement enregistrés (`slots`) débordent de cette plage. */
+function buildSlots(slots: EmploiDuTemps[]): { start: string; end: string; label: string }[] {
+  let rangeStart = timeToMinutes(DEFAULT_SLOT_START);
+  let rangeEnd = timeToMinutes(DEFAULT_SLOT_END);
+  for (const s of slots) {
+    rangeStart = Math.min(rangeStart, timeToMinutes(s.startTime.slice(0, 5)));
+    rangeEnd = Math.max(rangeEnd, timeToMinutes(s.endTime.slice(0, 5)));
+  }
+  // Aligne sur des bandes rondes de 2h pour rester lisible (ex. début à 6h50 → bande à partir de 6h).
+  rangeStart = Math.floor(rangeStart / SLOT_BAND_MINUTES) * SLOT_BAND_MINUTES;
+  rangeEnd = Math.ceil(rangeEnd / SLOT_BAND_MINUTES) * SLOT_BAND_MINUTES;
+
+  const bands: { start: string; end: string; label: string }[] = [];
+  for (let t = rangeStart; t < rangeEnd; t += SLOT_BAND_MINUTES) {
+    const start = minutesToTime(t);
+    const end = minutesToTime(t + SLOT_BAND_MINUTES);
+    bands.push({ start, end, label: slotLabel(start, end) });
+  }
+  return bands;
+}
 
 const DAYS: { key: JourSemaine; label: string }[] = [
   { key: "LUNDI", label: "Lundi" },
@@ -53,6 +87,7 @@ export function TimetableGrid({
   onChanged: () => void;
 }) {
   const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
+  const fixedSlots = useMemo(() => buildSlots(slots), [slots]);
 
   // Codes enseignants connus pour chaque matière de la classe (ex. CH1, CH2) — permet de réaffecter
   // rapidement un autre professeur codé sur la même matière, pas seulement celui par défaut.
@@ -112,7 +147,7 @@ export function TimetableGrid({
           </tr>
         </thead>
         <tbody>
-          {FIXED_SLOTS.map((slot) => (
+          {fixedSlots.map((slot) => (
             <tr key={slot.start} className="border-t border-gray-100">
               <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-semibold text-gray-600">{slot.label}</td>
               {DAYS.map((d) => {

@@ -22,6 +22,7 @@ import {
 } from "@/lib/types/grading";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -51,6 +52,10 @@ export default function ValidationPage() {
     [effectiveYearId],
   );
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  const classOptions: SearchableOption[] = useMemo(
+    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    [classes],
+  );
   const periodsQuery = useQuery(
     () => (effectiveYearId ? listPeriods(effectiveYearId) : Promise.resolve([])),
     [effectiveYearId],
@@ -92,10 +97,13 @@ export default function ValidationPage() {
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Classe</label>
-          <Select className="max-w-[220px]" value={classId ?? ""} onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">— Choisir —</option>
-            {classes.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-          </Select>
+          <SearchableSelect
+            value={classId != null ? String(classId) : ""}
+            options={classOptions}
+            onChange={(v) => setClassId(v ? Number(v) : null)}
+            triggerClassName="max-w-[220px] justify-between px-3"
+            noResultsLabel="Aucune classe"
+          />
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Période</label>

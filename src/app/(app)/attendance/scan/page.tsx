@@ -1,28 +1,40 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ScanLine, Video, VideoOff, XCircle } from "lucide-react";
+import jsQR from "jsqr";
+import { CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
 import { listTeachers } from "@/lib/api/staff";
-import { scanAttendance, type ScanSubjectType } from "@/lib/api/attendance";
-import { ATTENDANCE_STATUS_LABEL, type AttendanceStatus } from "@/lib/types/attendance";
+import { getStudentParents } from "@/lib/api/parents";
+import { scanAttendance, markStudentAbsent, markTeacherAbsent, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
+import { ATTENDANCE_OUTCOME_LABEL, SCAN_DIRECTION_LABEL, type AttendanceOutcome, type ScanDirection } from "@/lib/types/attendance";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Modal } from "@/components/ui/modal";
+import { Field, Input, Label } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { IdBadge } from "@/components/cards/id-badge";
 import { Reveal } from "@/components/public/reveal";
 import { matriculeFromQr } from "@/lib/identity-qr";
 import { notifyError } from "@/lib/feedback";
+import { formatMinutes } from "@/lib/format";
 
-// Minimal typing for the native BarcodeDetector API (no dependency).
-interface DetectedBarcode { rawValue: string }
-interface BarcodeDetectorLike { detect(source: CanvasImageSource): Promise<DetectedBarcode[]> }
-type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike;
-
-interface ScanFeedItem { id: string; name: string; status: AttendanceStatus; ok: boolean; at: string }
+interface ScanFeedItem {
+  id: string;
+  name: string;
+  kind: "ENTRY" | "EXIT" | "ABSENT";
+  outcome?: AttendanceOutcome | null;
+  lateMinutes?: number | null;
+  checkOutTime?: string | null;
+  realizedMinutes?: number | null;
+  scheduledMinutes?: number | null;
+  ok: boolean;
+  at: string;
+}
 
 type ParseResult =
   | { subjectType: ScanSubjectType; subjectId: number }
@@ -51,25 +63,26 @@ function parseScan(raw: string): ParseResult | null {
   return matricule ? { matricule } : null;
 }
 
-const STATUS_TONE: Record<AttendanceStatus, "green" | "red" | "amber"> = { PRESENT: "green", ABSENT: "red", LATE: "amber" };
-
 export default function AttendanceScanPage() {
   const { user } = useAuth();
-  const canScan = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER");
+  // L'enseignant ne doit jamais pouvoir scanner (ni lui-même ni les élèves) — retiré volontairement.
+  // TODO : ajouter le rôle SURVEILLANT une fois créé (rôle prévu pour la surveillance/scan).
+  const canScan = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "STUDENT");
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
-  const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const lastRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
   // Sujets dont un pointage est en cours : évite deux envois simultanés pour la même personne.
   const inFlightRef = useRef<Set<string>>(new Set());
 
   const [streaming, setStreaming] = useState(false);
-  const [supported, setSupported] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<AttendanceStatus>("PRESENT");
+  const [direction, setDirection] = useState<ScanDirection>("ENTRY");
   const [feed, setFeed] = useState<ScanFeedItem[]>([]);
+  // Badge de retrait (maternelle/primaire) : ouvert automatiquement après une sortie qui le requiert.
+  const [pickupPrompt, setPickupPrompt] = useState<{ studentId: number; name: string } | null>(null);
 
   // Manual / teacher fallback
   const [subjectType, setSubjectType] = useState<ScanSubjectType>("STUDENT");
@@ -84,46 +97,71 @@ export default function AttendanceScanPage() {
     });
   }, [subjectType, studentsQuery.data, teachersQuery.data]);
 
-  const submit = useCallback(async (type: ScanSubjectType, subjectId: number, st: AttendanceStatus) => {
-    const key = `${type}:${subjectId}`;
+  const pushFeed = useCallback((item: ScanFeedItem) => {
+    setFeed((f) => [item, ...f].slice(0, 25));
+  }, []);
+
+  const submit = useCallback(async (type: ScanSubjectType, subjectId: number, dir: ScanDirection) => {
+    const key = `${type}:${subjectId}:${dir}`;
     if (inFlightRef.current.has(key)) return; // un pointage est déjà en cours pour ce sujet
     inFlightRef.current.add(key);
     try {
-      const res = await scanAttendance({ subjectType: type, subjectId, status: st });
-      setFeed((f) => [{ id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, status: res.status, ok: true, at: new Date().toLocaleTimeString() }, ...f].slice(0, 25));
+      const res = await scanAttendance({ subjectType: type, subjectId, direction: dir });
+      pushFeed({
+        id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, kind: res.direction,
+        outcome: res.outcome, lateMinutes: res.lateMinutes, checkOutTime: res.checkOutTime,
+        realizedMinutes: res.realizedMinutes, scheduledMinutes: res.scheduledMinutes,
+        ok: true, at: new Date().toLocaleTimeString(),
+      });
+      if (res.requiresPickupInfo) {
+        setPickupPrompt({ studentId: subjectId, name: res.name ?? `#${subjectId}` });
+      }
     } catch (err) {
-      setFeed((f) => [{ id: `${Date.now()}`, name: `#${subjectId}`, status: st, ok: false, at: new Date().toLocaleTimeString() }, ...f].slice(0, 25));
+      pushFeed({ id: `${Date.now()}`, name: `#${subjectId}`, kind: dir, ok: false, at: new Date().toLocaleTimeString() });
       notifyError(err);
     } finally {
       inFlightRef.current.delete(key);
     }
-  }, []);
+  }, [pushFeed]);
+
+  const markAbsent = useCallback(async (type: ScanSubjectType, subjectId: number, name: string) => {
+    try {
+      if (type === "STUDENT") await markStudentAbsent(subjectId);
+      else await markTeacherAbsent(subjectId);
+      pushFeed({ id: `${Date.now()}`, name, kind: "ABSENT", ok: true, at: new Date().toLocaleTimeString() });
+    } catch (err) {
+      notifyError(err);
+    }
+  }, [pushFeed]);
 
   const handleRaw = useCallback((raw: string) => {
     const now = Date.now();
-    if (raw === lastRef.current.key && now - lastRef.current.at < 3000) return; // debounce same code
+    // Débounce par carte + sens choisi : re-sélectionner l'autre sens et rescanner la même carte
+    // doit repartir immédiatement, pas rester bloqué par le dernier scan.
+    const debounceKey = `${raw}:${direction}`;
+    if (debounceKey === lastRef.current.key && now - lastRef.current.at < 3000) return;
     const parsed = parseScan(raw);
     if (!parsed) return;
-    lastRef.current = { key: raw, at: now };
+    lastRef.current = { key: debounceKey, at: now };
     if ("matricule" in parsed) {
       // QR d'identité lisible : on retrouve la personne par son matricule (listes déjà chargées) —
       // élève d'abord, sinon enseignant.
       const mat = parsed.matricule.toLowerCase();
       const student = (studentsQuery.data ?? []).find((s) => (s.studentNumber ?? "").trim().toLowerCase() === mat);
       if (student) {
-        submit("STUDENT", student.id, status);
+        submit("STUDENT", student.id, direction);
         return;
       }
       const teacher = (teachersQuery.data ?? []).find((t) => (t.staffNumber ?? "").trim().toLowerCase() === mat);
       if (teacher) {
-        submit("TEACHER", teacher.id, status);
+        submit("TEACHER", teacher.id, direction);
         return;
       }
       notifyError(`Matricule introuvable : ${parsed.matricule}`);
       return;
     }
-    submit(parsed.subjectType, parsed.subjectId, status);
-  }, [status, submit, studentsQuery.data, teachersQuery.data]);
+    submit(parsed.subjectType, parsed.subjectId, direction);
+  }, [direction, submit, studentsQuery.data, teachersQuery.data]);
 
   const stopCamera = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -134,21 +172,30 @@ export default function AttendanceScanPage() {
 
   const startCamera = useCallback(async () => {
     setError(null);
-    const Ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-    if (!Ctor) { setSupported(false); }
     if (!navigator.mediaDevices?.getUserMedia) { setError("Caméra non disponible sur ce navigateur."); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(() => {}); }
-      if (Ctor) detectorRef.current = new Ctor({ formats: ["qr_code"] });
       setStreaming(true);
-      const tick = async () => {
-        if (videoRef.current && detectorRef.current) {
-          try {
-            const codes = await detectorRef.current.detect(videoRef.current);
-            if (codes.length) handleRaw(codes[0].rawValue);
-          } catch { /* frame not ready */ }
+      // Décodage QR en JS pur (jsQR) via un canvas caché : fonctionne sur tous les navigateurs,
+      // contrairement à l'API native BarcodeDetector (absente de Firefox et de la plupart des
+      // versions de Safari iOS), qui laissait le scan tourner sans jamais rien détecter.
+      const MAX_DIM = 480; // suffisant pour décoder un QR, évite de traiter le flux en pleine résolution
+      const tick = () => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+          const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth, video.videoHeight));
+          canvas.width = Math.round(video.videoWidth * scale);
+          canvas.height = Math.round(video.videoHeight * scale);
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(frame.data, frame.width, frame.height);
+            if (code?.data) handleRaw(code.data);
+          }
         }
         rafRef.current = requestAnimationFrame(tick);
       };
@@ -168,18 +215,23 @@ export default function AttendanceScanPage() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <ScanLine className="h-6 w-6 text-brand-600" /> Pointage par scan de carte
         </h1>
-        <p className="text-sm text-gray-500">Présentez la carte scolaire devant la caméra (téléphone ou ordinateur). Élèves et enseignants.</p>
+        <p className="text-sm text-gray-500">
+          Scannez à l&apos;entrée et à la sortie de chaque cours (téléphone ou ordinateur). Le statut
+          (présent/retard) et la durée réalisée sont calculés automatiquement à partir de l&apos;emploi
+          du temps — vous choisissez seulement le sens du scan.
+        </p>
       </Reveal>
 
-      {/* Status selector — applies to every scan */}
+      {/* Direction selector — applies to every scan */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-gray-600">Statut à appliquer :</span>
-        {(["PRESENT", "ABSENT", "LATE"] as AttendanceStatus[]).map((s) => (
-          <button key={s} type="button" onClick={() => setStatus(s)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${status === s
-              ? s === "PRESENT" ? "bg-success-600 text-white" : s === "ABSENT" ? "bg-error-600 text-white" : "bg-warning-500 text-white"
+        <span className="text-sm font-medium text-gray-600">Sens du scan :</span>
+        {(["ENTRY", "EXIT"] as ScanDirection[]).map((d) => (
+          <button key={d} type="button" onClick={() => setDirection(d)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${direction === d
+              ? d === "ENTRY" ? "bg-success-600 text-white" : "bg-brand-600 text-white"
               : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-            {ATTENDANCE_STATUS_LABEL[s]}
+            {d === "ENTRY" ? <LogIn className="h-3.5 w-3.5" /> : <LogOut className="h-3.5 w-3.5" />}
+            {SCAN_DIRECTION_LABEL[d]}
           </button>
         ))}
       </div>
@@ -189,6 +241,7 @@ export default function AttendanceScanPage() {
           <CardBody className="space-y-3">
             <div className="relative aspect-video overflow-hidden rounded-xl bg-gray-900">
               <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
+              <canvas ref={canvasRef} className="hidden" />
               {streaming && <div className="pointer-events-none absolute inset-x-10 inset-y-8 rounded-xl border-2 border-brand-400/70" />}
               {!streaming && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-400">
@@ -196,7 +249,6 @@ export default function AttendanceScanPage() {
                 </div>
               )}
             </div>
-            {!supported && <p className="rounded-lg bg-warning-50 px-3 py-2 text-sm text-warning-800">Ce navigateur ne décode pas les QR nativement — utilisez la sélection manuelle ci-contre (ou Chrome/Android, Safari iOS 17+).</p>}
             {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700">{error}</p>}
             <div className="flex gap-2">
               {!streaming ? (
@@ -205,7 +257,7 @@ export default function AttendanceScanPage() {
                 <Button variant="ghost" className="text-error-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Arrêter</Button>
               )}
             </div>
-            <p className="text-xs text-gray-400">Le statut sélectionné ci-dessus est appliqué à chaque carte scannée. Un re-scan corrige le statut du jour.</p>
+            <p className="text-xs text-gray-400">Le sens sélectionné ci-dessus est appliqué à chaque carte scannée. Un re-scan corrige le pointage de la séance.</p>
           </CardBody>
         </Card>
 
@@ -225,11 +277,23 @@ export default function AttendanceScanPage() {
                 noResultsLabel={subjectType === "STUDENT" ? "Aucun élève" : "Aucun enseignant"}
                 options={manualOptions} value={manualId} onChange={setManualId}
                 triggerClassName="w-full justify-between px-3" />
-              <Button className="mt-2" disabled={!manualId}
-                onClick={() => { if (manualId) submit(subjectType, Number(manualId), status); setManualId(""); }}>
-                Pointer ({ATTENDANCE_STATUS_LABEL[status]})
-              </Button>
-              {subjectType === "TEACHER" && <p className="mt-1 text-xs text-gray-400">Enseignant / direction : présent / absent (le retard est compté présent côté RH). Le personnel de direction doit être enregistré comme membre du staff.</p>}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button disabled={!manualId}
+                  onClick={() => { if (manualId) submit(subjectType, Number(manualId), direction); }}
+                  leftSection={direction === "ENTRY" ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}>
+                  Pointer ({SCAN_DIRECTION_LABEL[direction]})
+                </Button>
+                <Button variant="ghost" className="text-error-600" disabled={!manualId}
+                  leftSection={<UserX className="h-4 w-4" />}
+                  onClick={() => {
+                    if (!manualId) return;
+                    const opt = manualOptions.find((o) => o.value === manualId);
+                    markAbsent(subjectType, Number(manualId), opt?.searchText ?? `#${manualId}`);
+                  }}>
+                  Marquer absent
+                </Button>
+              </div>
+              {subjectType === "TEACHER" && <p className="mt-1 text-xs text-gray-400">Le personnel de direction doit être enregistré comme membre du staff pour pouvoir pointer.</p>}
             </div>
 
             <div>
@@ -244,10 +308,7 @@ export default function AttendanceScanPage() {
                         {f.ok ? <CheckCircle2 className="h-4 w-4 text-success-600" /> : <XCircle className="h-4 w-4 text-error-600" />}
                         <span className="font-medium text-gray-800">{f.name}</span>
                       </span>
-                      <span className="flex items-center gap-2">
-                        <Badge tone={STATUS_TONE[f.status]}>{ATTENDANCE_STATUS_LABEL[f.status]}</Badge>
-                        <span className="text-xs text-gray-400">{f.at}</span>
-                      </span>
+                      <FeedOutcome item={f} />
                     </li>
                   ))}
                 </ul>
@@ -256,6 +317,145 @@ export default function AttendanceScanPage() {
           </CardBody>
         </Card>
       </div>
+
+      {pickupPrompt && (
+        <PickupModal studentId={pickupPrompt.studentId} studentName={pickupPrompt.name}
+          onClose={() => setPickupPrompt(null)} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Badge de retrait (maternelle/primaire) : ouvert obligatoirement après une sortie d'un élève dont la
+ * classe est de ce cycle. On choisit un parent/tuteur déjà lié à l'élève, ou « Autre personne » en
+ * saisie libre, puis on imprime la preuve (même composant `IdBadge` que le badge élève — recto/verso
+ * sur une seule page, format carte réel).
+ */
+function PickupModal({ studentId, studentName, onClose }: { studentId: number; studentName: string; onClose: () => void }) {
+  const parentsQuery = useQuery(() => getStudentParents(studentId), [studentId]);
+  const [parentId, setParentId] = useState("");
+  const [other, setOther] = useState(false);
+  const [otherName, setOtherName] = useState("");
+  const [relation, setRelation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [pickup, setPickup] = useState<ChildPickup | null>(null);
+
+  const parentOptions: SearchableOption[] = useMemo(
+    () => (parentsQuery.data ?? []).map((p) => {
+      const label = `${p.firstName} ${p.lastName}`;
+      return { value: String(p.id), trigger: label, label, searchText: label };
+    }),
+    [parentsQuery.data],
+  );
+
+  async function confirm() {
+    setSaving(true);
+    try {
+      const result = await recordChildPickup(studentId, other
+        ? { pickerName: otherName.trim(), pickerRelation: relation.trim() || undefined }
+        : { pickerParentId: Number(parentId), pickerRelation: relation.trim() || undefined });
+      setPickup(result);
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const canConfirm = other ? otherName.trim().length > 0 : !!parentId;
+
+  return (
+    <Modal open onClose={onClose} title="Badge de retrait">
+      {pickup ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">Retrait enregistré — imprimez le badge ci-dessous.</p>
+          <IdBadge kind="Badge de retrait" fullName={studentName}
+            fields={[
+              { label: "Récupéré par", value: pickup.pickerName },
+              { label: "Lien", value: pickup.pickerRelation || "—" },
+              { label: "Date", value: pickup.pickupDate },
+              { label: "Heure", value: pickup.pickupTime.slice(0, 5) },
+            ]}
+            footerNote="Preuve de retrait — à conserver par l'établissement." />
+          <div className="flex justify-end"><Button onClick={onClose}>Terminé</Button></div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Élève de maternelle/primaire : qui vient récupérer <strong>{studentName}</strong> ?
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setOther(false)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${!other ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+              Parent / tuteur déjà lié
+            </button>
+            <button type="button" onClick={() => setOther(true)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${other ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
+              Autre personne
+            </button>
+          </div>
+          {other ? (
+            <Field>
+              <Label>Nom de la personne</Label>
+              <Input value={otherName} onChange={(e) => setOtherName(e.target.value)} autoFocus />
+            </Field>
+          ) : (
+            <Field>
+              <Label>Parent / tuteur</Label>
+              <SearchableSelect noResultsLabel="Aucun parent lié à cet élève"
+                options={parentOptions} value={parentId} onChange={setParentId}
+                triggerClassName="w-full justify-between px-3" />
+            </Field>
+          )}
+          <Field>
+            <Label>Lien avec l&apos;enfant (optionnel)</Label>
+            <Input value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Père, Mère, Tuteur, Oncle…" />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>Annuler</Button>
+            <Button disabled={!canConfirm} loading={saving} onClick={confirm}>Confirmer le retrait</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function FeedOutcome({ item }: { item: ScanFeedItem }) {
+  if (!item.ok) {
+    return <span className="text-xs text-gray-400">{item.at}</span>;
+  }
+  if (item.kind === "ABSENT") {
+    return (
+      <span className="flex items-center gap-2">
+        <Badge tone="red">Absent</Badge>
+        <span className="text-xs text-gray-400">{item.at}</span>
+      </span>
+    );
+  }
+  if (item.kind === "ENTRY") {
+    const outcome = item.outcome ?? "PRESENT";
+    return (
+      <span className="flex items-center gap-2">
+        <Badge tone={outcome === "LATE" ? "amber" : "green"}>
+          {ATTENDANCE_OUTCOME_LABEL[outcome]}{outcome === "LATE" && item.lateMinutes ? ` (${formatMinutes(item.lateMinutes)})` : ""}
+        </Badge>
+        <span className="text-xs text-gray-400">{item.at}</span>
+      </span>
+    );
+  }
+  // EXIT : compare la durée réalisée à la durée prévue par l'emploi du temps.
+  const hasBoth = item.realizedMinutes != null && item.scheduledMinutes != null;
+  const diff = hasBoth ? item.realizedMinutes! - item.scheduledMinutes! : null;
+  const label = hasBoth
+    ? `${formatMinutes(item.realizedMinutes)} réalisées / ${formatMinutes(item.scheduledMinutes)} prévues (${diff! >= 0 ? "+" : ""}${formatMinutes(diff)})`
+    : item.checkOutTime ? `Sortie ${item.checkOutTime}` : "Sortie enregistrée";
+  const tone = diff == null ? "gray" : diff < 0 ? "amber" : "green";
+  return (
+    <span className="flex items-center gap-2">
+      <Badge tone={tone}>{label}</Badge>
+      <span className="text-xs text-gray-400">{item.at}</span>
+    </span>
   );
 }

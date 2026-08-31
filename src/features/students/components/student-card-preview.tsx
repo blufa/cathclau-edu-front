@@ -5,6 +5,7 @@ import { CARD_STATUS_LABEL, type StudentCard } from "@/lib/types/student-card";
 import { IdBadge, type IdBadgeField } from "@/components/cards/id-badge";
 import { useBranding } from "@/providers/branding-provider";
 import { buildIdentityQr } from "@/lib/identity-qr";
+import { formatDate } from "@/lib/format";
 
 /** In-app visual preview of a student card (badge élève), using the school branding + real QR code. */
 export function StudentCardPreview({
@@ -20,8 +21,8 @@ export function StudentCardPreview({
     ? [
         { label: "Matricule", value: card.studentNumber ?? "—", mono: true },
         { label: "N° carte", value: card.cardNumber ?? "—", mono: true },
-        { label: "Émission", value: card.issueDate ?? "—" },
-        { label: "Expiration", value: card.expirationDate ?? "—" },
+        { label: "Émission", value: formatDate(card.issueDate) },
+        { label: "Expiration", value: formatDate(card.expirationDate) },
         { label: "Statut", value: CARD_STATUS_LABEL[card.status] },
       ]
     : [];

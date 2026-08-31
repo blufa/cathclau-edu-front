@@ -109,6 +109,23 @@ export function createInvoice(input: {
   return api.post<Invoice>("/billing/invoices", input);
 }
 
+/** Facture un frais annexe (cantine, examen, autre…) déjà configuré pour la classe mais pas encore
+ * facturé à l'élève — même mécanisme que « Ajouter un frais annexe » à l'encaissement, réutilisable
+ * ailleurs (ex. à l'inscription pour abonner un élève à la cantine). */
+export function subscribeAnnexFee(
+  tenantId: number | null,
+  studentId: number,
+  fee: SchoolFee,
+  academicYearId: number | null,
+): Promise<Invoice> {
+  return createInvoice({
+    tenantId, studentId, feeId: fee.id,
+    reference: `EC-${fee.type}-${Date.now().toString(36).toUpperCase()}`,
+    totalAmount: Number(fee.amount),
+    academicYearId,
+  });
+}
+
 export function generateInvoicesBulk(tenantId: number | null, classId: number, feeId: number, academicYearId?: number | null): Promise<Invoice[]> {
   return api.post<Invoice[]>("/billing/invoices/generate-bulk", { tenantId, classId, feeId, academicYearId });
 }
@@ -199,4 +216,13 @@ export function deleteEarlyPaymentDiscountRule(id: number): Promise<void> {
  */
 export function applyEarlyPaymentDiscount(studentId: number, feeId: number): Promise<Invoice[]> {
   return api.post<Invoice[]>("/billing/invoices/early-payment-discount", undefined, { query: { studentId, feeId } });
+}
+
+/**
+ * Annule la remise pour paiement annuel complet précédemment appliquée — à appeler dès que la
+ * sélection ne couvre plus toutes les tranches restantes (ex. le parent décoche un mois), sinon la
+ * remise resterait acquise indéfiniment même après un changement de sélection.
+ */
+export function removeEarlyPaymentDiscount(studentId: number, feeId: number): Promise<Invoice[]> {
+  return api.delete<Invoice[]>("/billing/invoices/early-payment-discount", { query: { studentId, feeId } });
 }

@@ -1,0 +1,1515 @@
+@font-face {
+    font-family: "uicons-regular-rounded";
+    src: url("../fonts/uicons/uicons-regular-rounded.eot#iefix") format("embedded-opentype"), 
+    url("../fonts/uicons/uicons-regular-rounded.woff2") format("woff2"), 
+    url("../fonts/uicons/uicons-regular-rounded.woff") format("woff");
+}
+
+ 
+.vankine-scope i[class^="fi-rr-"]:before,
+.vankine-scope i[class*=" fi-rr-"]:before,
+.vankine-scope span[class^="fi-rr-"]:before,
+.vankine-scope span[class*="fi-rr-"]:before {
+    font-family: uicons-regular-rounded !important;
+    font-style: normal;
+    font-weight: normal !important;
+    font-variant: normal;
+    text-transform: none; 
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.vankine-scope .fi-rr-add:before {
+    content: "\f101";
+}
+.vankine-scope .fi-rr-address-book:before {
+    content: "\f102";
+}
+.vankine-scope .fi-rr-alarm-clock:before {
+    content: "\f103";
+}
+.vankine-scope .fi-rr-align-center:before {
+    content: "\f104";
+}
+.vankine-scope .fi-rr-align-justify:before {
+    content: "\f105";
+}
+.vankine-scope .fi-rr-align-left:before {
+    content: "\f106";
+}
+.vankine-scope .fi-rr-align-right:before {
+    content: "\f107";
+}
+.vankine-scope .fi-rr-ambulance:before {
+    content: "\f108";
+}
+.vankine-scope .fi-rr-angle-double-left:before {
+    content: "\f109";
+}
+.vankine-scope .fi-rr-angle-double-right:before {
+    content: "\f10a";
+}
+.vankine-scope .fi-rr-angle-double-small-left:before {
+    content: "\f10b";
+}
+.vankine-scope .fi-rr-angle-double-small-right:before {
+    content: "\f10c";
+}
+.vankine-scope .fi-rr-angle-down:before {
+    content: "\f10d";
+}
+.vankine-scope .fi-rr-angle-left:before {
+    content: "\f10e";
+}
+.vankine-scope .fi-rr-angle-right:before {
+    content: "\f10f";
+}
+.vankine-scope .fi-rr-angle-small-down:before {
+    content: "\f110";
+}
+.vankine-scope .fi-rr-angle-small-left:before {
+    content: "\f111";
+}
+.vankine-scope .fi-rr-angle-small-right:before {
+    content: "\f112";
+}
+.vankine-scope .fi-rr-angle-small-up:before {
+    content: "\f113";
+}
+.vankine-scope .fi-rr-angle-up:before {
+    content: "\f114";
+}
+.vankine-scope .fi-rr-apple:before {
+    content: "\f115";
+}
+.vankine-scope .fi-rr-apps-add:before {
+    content: "\f116";
+}
+.vankine-scope .fi-rr-apps-delete:before {
+    content: "\f117";
+}
+.vankine-scope .fi-rr-apps-sort:before {
+    content: "\f118";
+}
+.vankine-scope .fi-rr-apps:before {
+    content: "\f119";
+}
+.vankine-scope .fi-rr-archive:before {
+    content: "\f11a";
+}
+.vankine-scope .fi-rr-arrow-down:before {
+    content: "\f11b";
+}
+.vankine-scope .fi-rr-arrow-from-bottom:before {
+    content: "\f11c";
+}
+.vankine-scope .fi-rr-arrow-left:before {
+    content: "\f11d";
+}
+.vankine-scope .fi-rr-arrow-right:before {
+    content: "\f11e";
+}
+.vankine-scope .fi-rr-arrow-small-down:before {
+    content: "\f11f";
+}
+.vankine-scope .fi-rr-arrow-small-left:before {
+    content: "\f120";
+}
+.vankine-scope .fi-rr-arrow-small-right:before {
+    content: "\f121";
+}
+.vankine-scope .fi-rr-arrow-small-up:before {
+    content: "\f122";
+}
+.vankine-scope .fi-rr-arrow-up:before {
+    content: "\f123";
+}
+.vankine-scope .fi-rr-asterik:before {
+    content: "\f124";
+}
+.vankine-scope .fi-rr-at:before {
+    content: "\f125";
+}
+.vankine-scope .fi-rr-backpack:before {
+    content: "\f126";
+}
+.vankine-scope .fi-rr-badge:before {
+    content: "\f127";
+}
+.vankine-scope .fi-rr-balloons:before {
+    content: "\f128";
+}
+.vankine-scope .fi-rr-ban:before {
+    content: "\f129";
+}
+.vankine-scope .fi-rr-band-aid:before {
+    content: "\f12a";
+}
+.vankine-scope .fi-rr-bank:before {
+    content: "\f12b";
+}
+.vankine-scope .fi-rr-barber-shop:before {
+    content: "\f12c";
+}
+.vankine-scope .fi-rr-baseball:before {
+    content: "\f12d";
+}
+.vankine-scope .fi-rr-basketball:before {
+    content: "\f12e";
+}
+.vankine-scope .fi-rr-bed:before {
+    content: "\f12f";
+}
+.vankine-scope .fi-rr-beer:before {
+    content: "\f130";
+}
+.vankine-scope .fi-rr-bell-ring:before {
+    content: "\f131";
+}
+.vankine-scope .fi-rr-bell-school:before {
+    content: "\f132";
+}
+.vankine-scope .fi-rr-bell:before {
+    content: "\f133";
+}
+.vankine-scope .fi-rr-bike:before {
+    content: "\f134";
+}
+.vankine-scope .fi-rr-billiard:before {
+    content: "\f135";
+}
+.vankine-scope .fi-rr-bold:before {
+    content: "\f136";
+}
+.vankine-scope .fi-rr-book-alt:before {
+    content: "\f137";
+}
+.vankine-scope .fi-rr-book:before {
+    content: "\f138";
+}
+.vankine-scope .fi-rr-bookmark:before {
+    content: "\f139";
+}
+.vankine-scope .fi-rr-bowling:before {
+    content: "\f13a";
+}
+.vankine-scope .fi-rr-box-alt:before {
+    content: "\f13b";
+}
+.vankine-scope .fi-rr-box:before {
+    content: "\f13c";
+}
+.vankine-scope .fi-rr-bread-slice:before {
+    content: "\f13d";
+}
+.vankine-scope .fi-rr-briefcase:before {
+    content: "\f13e";
+}
+.vankine-scope .fi-rr-broom:before {
+    content: "\f13f";
+}
+.vankine-scope .fi-rr-browser:before {
+    content: "\f140";
+}
+.vankine-scope .fi-rr-brush:before {
+    content: "\f141";
+}
+.vankine-scope .fi-rr-bug:before {
+    content: "\f142";
+}
+.vankine-scope .fi-rr-building:before {
+    content: "\f143";
+}
+.vankine-scope .fi-rr-bulb:before {
+    content: "\f144";
+}
+.vankine-scope .fi-rr-butterfly:before {
+    content: "\f145";
+}
+.vankine-scope .fi-rr-cake-birthday:before {
+    content: "\f146";
+}
+.vankine-scope .fi-rr-cake-wedding:before {
+    content: "\f147";
+}
+.vankine-scope .fi-rr-calculator:before {
+    content: "\f148";
+}
+.vankine-scope .fi-rr-calendar:before {
+    content: "\f149";
+}
+.vankine-scope .fi-rr-call-history:before {
+    content: "\f14a";
+}
+.vankine-scope .fi-rr-call-incoming:before {
+    content: "\f14b";
+}
+.vankine-scope .fi-rr-call-missed:before {
+    content: "\f14c";
+}
+.vankine-scope .fi-rr-call-outgoing:before {
+    content: "\f14d";
+}
+.vankine-scope .fi-rr-camera:before {
+    content: "\f14e";
+}
+.vankine-scope .fi-rr-camping:before {
+    content: "\f14f";
+}
+.vankine-scope .fi-rr-car:before {
+    content: "\f150";
+}
+.vankine-scope .fi-rr-caret-down:before {
+    content: "\f151";
+}
+.vankine-scope .fi-rr-caret-left:before {
+    content: "\f152";
+}
+.vankine-scope .fi-rr-caret-right:before {
+    content: "\f153";
+}
+.vankine-scope .fi-rr-caret-up:before {
+    content: "\f154";
+}
+.vankine-scope .fi-rr-carrot:before {
+    content: "\f155";
+}
+.vankine-scope .fi-rr-chart-connected:before {
+    content: "\f156";
+}
+.vankine-scope .fi-rr-chart-histogram:before {
+    content: "\f157";
+}
+.vankine-scope .fi-rr-chart-network:before {
+    content: "\f158";
+}
+.vankine-scope .fi-rr-chart-pie-alt:before {
+    content: "\f159";
+}
+.vankine-scope .fi-rr-chart-pie:before {
+    content: "\f15a";
+}
+.vankine-scope .fi-rr-chart-pyramid:before {
+    content: "\f15b";
+}
+.vankine-scope .fi-rr-chart-set-theory:before {
+    content: "\f15c";
+}
+.vankine-scope .fi-rr-chart-tree:before {
+    content: "\f15d";
+}
+.vankine-scope .fi-rr-chat-arrow-down:before {
+    content: "\f15e";
+}
+.vankine-scope .fi-rr-chat-arrow-grow:before {
+    content: "\f15f";
+}
+.vankine-scope .fi-rr-check:before {
+    content: "\f160";
+}
+.vankine-scope .fi-rr-checkbox:before {
+    content: "\f161";
+}
+.vankine-scope .fi-rr-cheese:before {
+    content: "\f162";
+}
+.vankine-scope .fi-rr-chess-piece:before {
+    content: "\f163";
+}
+.vankine-scope .fi-rr-child-head:before {
+    content: "\f164";
+}
+.vankine-scope .fi-rr-circle-small:before {
+    content: "\f165";
+}
+.vankine-scope .fi-rr-circle:before {
+    content: "\f166";
+}
+.vankine-scope .fi-rr-clip:before {
+    content: "\f167";
+}
+.vankine-scope .fi-rr-clock:before {
+    content: "\f168";
+}
+.vankine-scope .fi-rr-cloud-check:before {
+    content: "\f169";
+}
+.vankine-scope .fi-rr-cloud-disabled:before {
+    content: "\f16a";
+}
+.vankine-scope .fi-rr-cloud-download:before {
+    content: "\f16b";
+}
+.vankine-scope .fi-rr-cloud-share:before {
+    content: "\f16c";
+}
+.vankine-scope .fi-rr-cloud-upload:before {
+    content: "\f16d";
+}
+.vankine-scope .fi-rr-cloud:before {
+    content: "\f16e";
+}
+.vankine-scope .fi-rr-clouds:before {
+    content: "\f16f";
+}
+.vankine-scope .fi-rr-cocktail:before {
+    content: "\f170";
+}
+.vankine-scope .fi-rr-coffee:before {
+    content: "\f171";
+}
+.vankine-scope .fi-rr-comment-alt:before {
+    content: "\f172";
+}
+.vankine-scope .fi-rr-comment-check:before {
+    content: "\f173";
+}
+.vankine-scope .fi-rr-comment-heart:before {
+    content: "\f174";
+}
+.vankine-scope .fi-rr-comment-info:before {
+    content: "\f175";
+}
+.vankine-scope .fi-rr-comment-user:before {
+    content: "\f176";
+}
+.vankine-scope .fi-rr-comment:before {
+    content: "\f177";
+}
+.vankine-scope .fi-rr-comments:before {
+    content: "\f178";
+}
+.vankine-scope .fi-rr-compress-alt:before {
+    content: "\f179";
+}
+.vankine-scope .fi-rr-compress:before {
+    content: "\f17a";
+}
+.vankine-scope .fi-rr-computer:before {
+    content: "\f17b";
+}
+.vankine-scope .fi-rr-confetti:before {
+    content: "\f17c";
+}
+.vankine-scope .fi-rr-cookie:before {
+    content: "\f17d";
+}
+.vankine-scope .fi-rr-copy-alt:before {
+    content: "\f17e";
+}
+.vankine-scope .fi-rr-copy:before {
+    content: "\f17f";
+}
+.vankine-scope .fi-rr-copyright:before {
+    content: "\f180";
+}
+.vankine-scope .fi-rr-cow:before {
+    content: "\f181";
+}
+.vankine-scope .fi-rr-cream:before {
+    content: "\f182";
+}
+.vankine-scope .fi-rr-credit-card:before {
+    content: "\f183";
+}
+.vankine-scope .fi-rr-croissant:before {
+    content: "\f184";
+}
+.vankine-scope .fi-rr-cross-circle:before {
+    content: "\f185";
+}
+.vankine-scope .fi-rr-cross-small:before {
+    content: "\f186";
+}
+.vankine-scope .fi-rr-cross:before {
+    content: "\f187";
+}
+.vankine-scope .fi-rr-crown:before {
+    content: "\f188";
+}
+.vankine-scope .fi-rr-cube:before {
+    content: "\f189";
+}
+.vankine-scope .fi-rr-cupcake:before {
+    content: "\f18a";
+}
+.vankine-scope .fi-rr-cursor-finger:before {
+    content: "\f18b";
+}
+.vankine-scope .fi-rr-cursor-plus:before {
+    content: "\f18c";
+}
+.vankine-scope .fi-rr-cursor-text-alt:before {
+    content: "\f18d";
+}
+.vankine-scope .fi-rr-cursor-text:before {
+    content: "\f18e";
+}
+.vankine-scope .fi-rr-cursor:before {
+    content: "\f18f";
+}
+.vankine-scope .fi-rr-dart:before {
+    content: "\f190";
+}
+.vankine-scope .fi-rr-dashboard:before {
+    content: "\f191";
+}
+.vankine-scope .fi-rr-data-transfer:before {
+    content: "\f192";
+}
+.vankine-scope .fi-rr-database:before {
+    content: "\f193";
+}
+.vankine-scope .fi-rr-delete:before {
+    content: "\f194";
+}
+.vankine-scope .fi-rr-diamond:before {
+    content: "\f195";
+}
+.vankine-scope .fi-rr-dice:before {
+    content: "\f196";
+}
+.vankine-scope .fi-rr-diploma:before {
+    content: "\f197";
+}
+.vankine-scope .fi-rr-disco-ball:before {
+    content: "\f198";
+}
+.vankine-scope .fi-rr-disk:before {
+    content: "\f199";
+}
+.vankine-scope .fi-rr-doctor:before {
+    content: "\f19a";
+}
+.vankine-scope .fi-rr-document-signed:before {
+    content: "\f19b";
+}
+.vankine-scope .fi-rr-document:before {
+    content: "\f19c";
+}
+.vankine-scope .fi-rr-dollar:before {
+    content: "\f19d";
+}
+.vankine-scope .fi-rr-download:before {
+    content: "\f19e";
+}
+.vankine-scope .fi-rr-drink-alt:before {
+    content: "\f19f";
+}
+.vankine-scope .fi-rr-drumstick:before {
+    content: "\f1a0";
+}
+.vankine-scope .fi-rr-duplicate:before {
+    content: "\f1a1";
+}
+.vankine-scope .fi-rr-e-learning:before {
+    content: "\f1a2";
+}
+.vankine-scope .fi-rr-earnings:before {
+    content: "\f1a3";
+}
+.vankine-scope .fi-rr-edit-alt:before {
+    content: "\f1a4";
+}
+.vankine-scope .fi-rr-edit:before {
+    content: "\f1a5";
+}
+.vankine-scope .fi-rr-envelope-ban:before {
+    content: "\f1a6";
+}
+.vankine-scope .fi-rr-envelope-download:before {
+    content: "\f1a7";
+}
+.vankine-scope .fi-rr-envelope-marker:before {
+    content: "\f1a8";
+}
+.vankine-scope .fi-rr-envelope-open:before {
+    content: "\f1a9";
+}
+.vankine-scope .fi-rr-envelope-plus:before {
+    content: "\f1aa";
+}
+.vankine-scope .fi-rr-envelope:before {
+    content: "\f1ab";
+}
+.vankine-scope .fi-rr-euro:before {
+    content: "\f1ac";
+}
+.vankine-scope .fi-rr-exclamation:before {
+    content: "\f1ad";
+}
+.vankine-scope .fi-rr-expand:before {
+    content: "\f1ae";
+}
+.vankine-scope .fi-rr-eye-crossed:before {
+    content: "\f1af";
+}
+.vankine-scope .fi-rr-eye-dropper:before {
+    content: "\f1b0";
+}
+.vankine-scope .fi-rr-eye:before {
+    content: "\f1b1";
+}
+.vankine-scope .fi-rr-feather:before {
+    content: "\f1b2";
+}
+.vankine-scope .fi-rr-ferris-wheel:before {
+    content: "\f1b3";
+}
+.vankine-scope .fi-rr-file-add:before {
+    content: "\f1b4";
+}
+.vankine-scope .fi-rr-file-ai:before {
+    content: "\f1b5";
+}
+.vankine-scope .fi-rr-file-check:before {
+    content: "\f1b6";
+}
+.vankine-scope .fi-rr-file-delete:before {
+    content: "\f1b7";
+}
+.vankine-scope .fi-rr-file-eps:before {
+    content: "\f1b8";
+}
+.vankine-scope .fi-rr-file-gif:before {
+    content: "\f1b9";
+}
+.vankine-scope .fi-rr-file-music:before {
+    content: "\f1ba";
+}
+.vankine-scope .fi-rr-file-psd:before {
+    content: "\f1bb";
+}
+.vankine-scope .fi-rr-file:before {
+    content: "\f1bc";
+}
+.vankine-scope .fi-rr-fill:before {
+    content: "\f1bd";
+}
+.vankine-scope .fi-rr-film:before {
+    content: "\f1be";
+}
+.vankine-scope .fi-rr-filter:before {
+    content: "\f1bf";
+}
+.vankine-scope .fi-rr-fingerprint:before {
+    content: "\f1c0";
+}
+.vankine-scope .fi-rr-fish:before {
+    content: "\f1c1";
+}
+.vankine-scope .fi-rr-flag:before {
+    content: "\f1c2";
+}
+.vankine-scope .fi-rr-flame:before {
+    content: "\f1c3";
+}
+.vankine-scope .fi-rr-flip-horizontal:before {
+    content: "\f1c4";
+}
+.vankine-scope .fi-rr-flower-bouquet:before {
+    content: "\f1c5";
+}
+.vankine-scope .fi-rr-flower-tulip:before {
+    content: "\f1c6";
+}
+.vankine-scope .fi-rr-flower:before {
+    content: "\f1c7";
+}
+.vankine-scope .fi-rr-folder-add:before {
+    content: "\f1c8";
+}
+.vankine-scope .fi-rr-folder:before {
+    content: "\f1c9";
+}
+.vankine-scope .fi-rr-following:before {
+    content: "\f1ca";
+}
+.vankine-scope .fi-rr-football:before {
+    content: "\f1cb";
+}
+.vankine-scope .fi-rr-form:before {
+    content: "\f1cc";
+}
+.vankine-scope .fi-rr-forward:before {
+    content: "\f1cd";
+}
+.vankine-scope .fi-rr-fox:before {
+    content: "\f1ce";
+}
+.vankine-scope .fi-rr-frown:before {
+    content: "\f1cf";
+}
+.vankine-scope .fi-rr-ftp:before {
+    content: "\f1d0";
+}
+.vankine-scope .fi-rr-gallery:before {
+    content: "\f1d1";
+}
+.vankine-scope .fi-rr-gamepad:before {
+    content: "\f1d2";
+}
+.vankine-scope .fi-rr-gas-pump:before {
+    content: "\f1d3";
+}
+.vankine-scope .fi-rr-gem:before {
+    content: "\f1d4";
+}
+.vankine-scope .fi-rr-gift:before {
+    content: "\f1d5";
+}
+.vankine-scope .fi-rr-glass-cheers:before {
+    content: "\f1d6";
+}
+.vankine-scope .fi-rr-glasses:before {
+    content: "\f1d7";
+}
+.vankine-scope .fi-rr-globe-alt:before {
+    content: "\f1d8";
+}
+.vankine-scope .fi-rr-globe:before {
+    content: "\f1d9";
+}
+.vankine-scope .fi-rr-golf:before {
+    content: "\f1da";
+}
+.vankine-scope .fi-rr-graduation-cap:before {
+    content: "\f1db";
+}
+.vankine-scope .fi-rr-graphic-tablet:before {
+    content: "\f1dc";
+}
+.vankine-scope .fi-rr-grid-alt:before {
+    content: "\f1dd";
+}
+.vankine-scope .fi-rr-grid:before {
+    content: "\f1de";
+}
+.vankine-scope .fi-rr-guitar:before {
+    content: "\f1df";
+}
+.vankine-scope .fi-rr-gym:before {
+    content: "\f1e0";
+}
+.vankine-scope .fi-rr-hamburger:before {
+    content: "\f1e1";
+}
+.vankine-scope .fi-rr-hand-holding-heart:before {
+    content: "\f1e2";
+}
+.vankine-scope .fi-rr-hastag:before {
+    content: "\f1e3";
+}
+.vankine-scope .fi-rr-hat-birthday:before {
+    content: "\f1e4";
+}
+.vankine-scope .fi-rr-head-side-thinking:before {
+    content: "\f1e5";
+}
+.vankine-scope .fi-rr-headphones:before {
+    content: "\f1e6";
+}
+.vankine-scope .fi-rr-headset:before {
+    content: "\f1e7";
+}
+.vankine-scope .fi-rr-heart-arrow:before {
+    content: "\f1e8";
+}
+.vankine-scope .fi-rr-heart:before {
+    content: "\f1e9";
+}
+.vankine-scope .fi-rr-home-location-alt:before {
+    content: "\f1ea";
+}
+.vankine-scope .fi-rr-home-location:before {
+    content: "\f1eb";
+}
+.vankine-scope .fi-rr-home:before {
+    content: "\f1ec";
+}
+.vankine-scope .fi-rr-hourglass-end:before {
+    content: "\f1ed";
+}
+.vankine-scope .fi-rr-hourglass:before {
+    content: "\f1ee";
+}
+.vankine-scope .fi-rr-ice-cream:before {
+    content: "\f1ef";
+}
+.vankine-scope .fi-rr-ice-skate:before {
+    content: "\f1f0";
+}
+.vankine-scope .fi-rr-id-badge:before {
+    content: "\f1f1";
+}
+.vankine-scope .fi-rr-inbox:before {
+    content: "\f1f2";
+}
+.vankine-scope .fi-rr-incognito:before {
+    content: "\f1f3";
+}
+.vankine-scope .fi-rr-indent:before {
+    content: "\f1f4";
+}
+.vankine-scope .fi-rr-infinity:before {
+    content: "\f1f5";
+}
+.vankine-scope .fi-rr-info:before {
+    content: "\f1f6";
+}
+.vankine-scope .fi-rr-interactive:before {
+    content: "\f1f7";
+}
+.vankine-scope .fi-rr-interlining:before {
+    content: "\f1f8";
+}
+.vankine-scope .fi-rr-interrogation:before {
+    content: "\f1f9";
+}
+.vankine-scope .fi-rr-italic:before {
+    content: "\f1fa";
+}
+.vankine-scope .fi-rr-jpg:before {
+    content: "\f1fb";
+}
+.vankine-scope .fi-rr-key:before {
+    content: "\f1fc";
+}
+.vankine-scope .fi-rr-keyboard:before {
+    content: "\f1fd";
+}
+.vankine-scope .fi-rr-kite:before {
+    content: "\f1fe";
+}
+.vankine-scope .fi-rr-label:before {
+    content: "\f1ff";
+}
+.vankine-scope .fi-rr-laptop:before {
+    content: "\f200";
+}
+.vankine-scope .fi-rr-lasso:before {
+    content: "\f201";
+}
+.vankine-scope .fi-rr-laugh:before {
+    content: "\f202";
+}
+.vankine-scope .fi-rr-layers:before {
+    content: "\f203";
+}
+.vankine-scope .fi-rr-layout-fluid:before {
+    content: "\f204";
+}
+.vankine-scope .fi-rr-leaf:before {
+    content: "\f205";
+}
+.vankine-scope .fi-rr-letter-case:before {
+    content: "\f206";
+}
+.vankine-scope .fi-rr-life-ring:before {
+    content: "\f207";
+}
+.vankine-scope .fi-rr-line-width:before {
+    content: "\f208";
+}
+.vankine-scope .fi-rr-link:before {
+    content: "\f209";
+}
+.vankine-scope .fi-rr-lipstick:before {
+    content: "\f20a";
+}
+.vankine-scope .fi-rr-list-check:before {
+    content: "\f20b";
+}
+.vankine-scope .fi-rr-list:before {
+    content: "\f20c";
+}
+.vankine-scope .fi-rr-location-alt:before {
+    content: "\f20d";
+}
+.vankine-scope .fi-rr-lock-alt:before {
+    content: "\f20e";
+}
+.vankine-scope .fi-rr-lock:before {
+    content: "\f20f";
+}
+.vankine-scope .fi-rr-luggage-rolling:before {
+    content: "\f210";
+}
+.vankine-scope .fi-rr-magic-wand:before {
+    content: "\f211";
+}
+.vankine-scope .fi-rr-makeup-brush:before {
+    content: "\f212";
+}
+.vankine-scope .fi-rr-man-head:before {
+    content: "\f213";
+}
+.vankine-scope .fi-rr-map-marker-cross:before {
+    content: "\f214";
+}
+.vankine-scope .fi-rr-map-marker-home:before {
+    content: "\f215";
+}
+.vankine-scope .fi-rr-map-marker-minus:before {
+    content: "\f216";
+}
+.vankine-scope .fi-rr-map-marker-plus:before {
+    content: "\f217";
+}
+.vankine-scope .fi-rr-map-marker:before {
+    content: "\f218";
+}
+.vankine-scope .fi-rr-map:before {
+    content: "\f219";
+}
+.vankine-scope .fi-rr-marker-time:before {
+    content: "\f21a";
+}
+.vankine-scope .fi-rr-marker:before {
+    content: "\f21b";
+}
+.vankine-scope .fi-rr-mars-double:before {
+    content: "\f21c";
+}
+.vankine-scope .fi-rr-mars:before {
+    content: "\f21d";
+}
+.vankine-scope .fi-rr-mask-carnival:before {
+    content: "\f21e";
+}
+.vankine-scope .fi-rr-medicine:before {
+    content: "\f21f";
+}
+.vankine-scope .fi-rr-megaphone:before {
+    content: "\f220";
+}
+.vankine-scope .fi-rr-meh:before {
+    content: "\f221";
+}
+.vankine-scope .fi-rr-menu-burger:before {
+    content: "\f222";
+}
+.vankine-scope .fi-rr-menu-dots-vertical:before {
+    content: "\f223";
+}
+.vankine-scope .fi-rr-menu-dots:before {
+    content: "\f224";
+}
+.vankine-scope .fi-rr-microphone-alt:before {
+    content: "\f225";
+}
+.vankine-scope .fi-rr-microphone:before {
+    content: "\f226";
+}
+.vankine-scope .fi-rr-minus-small:before {
+    content: "\f227";
+}
+.vankine-scope .fi-rr-minus:before {
+    content: "\f228";
+}
+.vankine-scope .fi-rr-mobile:before {
+    content: "\f229";
+}
+.vankine-scope .fi-rr-mode-landscape:before {
+    content: "\f22a";
+}
+.vankine-scope .fi-rr-mode-portrait:before {
+    content: "\f22b";
+}
+.vankine-scope .fi-rr-money:before {
+    content: "\f22c";
+}
+.vankine-scope .fi-rr-moon:before {
+    content: "\f22d";
+}
+.vankine-scope .fi-rr-mountains:before {
+    content: "\f22e";
+}
+.vankine-scope .fi-rr-mouse:before {
+    content: "\f22f";
+}
+.vankine-scope .fi-rr-mug-alt:before {
+    content: "\f230";
+}
+.vankine-scope .fi-rr-music-alt:before {
+    content: "\f231";
+}
+.vankine-scope .fi-rr-music:before {
+    content: "\f232";
+}
+.vankine-scope .fi-rr-navigation:before {
+    content: "\f233";
+}
+.vankine-scope .fi-rr-network-cloud:before {
+    content: "\f234";
+}
+.vankine-scope .fi-rr-network:before {
+    content: "\f235";
+}
+.vankine-scope .fi-rr-notebook:before {
+    content: "\f236";
+}
+.vankine-scope .fi-rr-opacity:before {
+    content: "\f237";
+}
+.vankine-scope .fi-rr-package:before {
+    content: "\f238";
+}
+.vankine-scope .fi-rr-paint-brush:before {
+    content: "\f239";
+}
+.vankine-scope .fi-rr-palette:before {
+    content: "\f23a";
+}
+.vankine-scope .fi-rr-paper-plane:before {
+    content: "\f23b";
+}
+.vankine-scope .fi-rr-password:before {
+    content: "\f23c";
+}
+.vankine-scope .fi-rr-pause:before {
+    content: "\f23d";
+}
+.vankine-scope .fi-rr-paw:before {
+    content: "\f23e";
+}
+.vankine-scope .fi-rr-pencil:before {
+    content: "\f23f";
+}
+.vankine-scope .fi-rr-pharmacy:before {
+    content: "\f240";
+}
+.vankine-scope .fi-rr-phone-call:before {
+    content: "\f241";
+}
+.vankine-scope .fi-rr-phone-cross:before {
+    content: "\f242";
+}
+.vankine-scope .fi-rr-phone-pause:before {
+    content: "\f243";
+}
+.vankine-scope .fi-rr-phone-slash:before {
+    content: "\f244";
+}
+.vankine-scope .fi-rr-physics:before {
+    content: "\f245";
+}
+.vankine-scope .fi-rr-picture:before {
+    content: "\f246";
+}
+.vankine-scope .fi-rr-ping-pong:before {
+    content: "\f247";
+}
+.vankine-scope .fi-rr-pizza-slice:before {
+    content: "\f248";
+}
+.vankine-scope .fi-rr-plane:before {
+    content: "\f249";
+}
+.vankine-scope .fi-rr-play-alt:before {
+    content: "\f24a";
+}
+.vankine-scope .fi-rr-play:before {
+    content: "\f24b";
+}
+.vankine-scope .fi-rr-playing-cards:before {
+    content: "\f24c";
+}
+.vankine-scope .fi-rr-plus-small:before {
+    content: "\f24d";
+}
+.vankine-scope .fi-rr-plus:before {
+    content: "\f24e";
+}
+.vankine-scope .fi-rr-poker-chip:before {
+    content: "\f24f";
+}
+.vankine-scope .fi-rr-portrait:before {
+    content: "\f250";
+}
+.vankine-scope .fi-rr-pound:before {
+    content: "\f251";
+}
+.vankine-scope .fi-rr-power:before {
+    content: "\f252";
+}
+.vankine-scope .fi-rr-presentation:before {
+    content: "\f253";
+}
+.vankine-scope .fi-rr-print:before {
+    content: "\f254";
+}
+.vankine-scope .fi-rr-protractor:before {
+    content: "\f255";
+}
+.vankine-scope .fi-rr-pulse:before {
+    content: "\f256";
+}
+.vankine-scope .fi-rr-pyramid:before {
+    content: "\f257";
+}
+.vankine-scope .fi-rr-quote-right:before {
+    content: "\f258";
+}
+.vankine-scope .fi-rr-rainbow:before {
+    content: "\f259";
+}
+.vankine-scope .fi-rr-raindrops:before {
+    content: "\f25a";
+}
+.vankine-scope .fi-rr-rec:before {
+    content: "\f25b";
+}
+.vankine-scope .fi-rr-receipt:before {
+    content: "\f25c";
+}
+.vankine-scope .fi-rr-record-vinyl:before {
+    content: "\f25d";
+}
+.vankine-scope .fi-rr-rectabgle-vertical:before {
+    content: "\f25e";
+}
+.vankine-scope .fi-rr-rectangle-horizontal:before {
+    content: "\f25f";
+}
+.vankine-scope .fi-rr-rectangle-panoramic:before {
+    content: "\f260";
+}
+.vankine-scope .fi-rr-recycle:before {
+    content: "\f261";
+}
+.vankine-scope .fi-rr-redo-alt:before {
+    content: "\f262";
+}
+.vankine-scope .fi-rr-redo:before {
+    content: "\f263";
+}
+.vankine-scope .fi-rr-reflect:before {
+    content: "\f264";
+}
+.vankine-scope .fi-rr-refresh:before {
+    content: "\f265";
+}
+.vankine-scope .fi-rr-resize:before {
+    content: "\f266";
+}
+.vankine-scope .fi-rr-resources:before {
+    content: "\f267";
+}
+.vankine-scope .fi-rr-rewind:before {
+    content: "\f268";
+}
+.vankine-scope .fi-rr-rhombus:before {
+    content: "\f269";
+}
+.vankine-scope .fi-rr-rings-wedding:before {
+    content: "\f26a";
+}
+.vankine-scope .fi-rr-road:before {
+    content: "\f26b";
+}
+.vankine-scope .fi-rr-rocket:before {
+    content: "\f26c";
+}
+.vankine-scope .fi-rr-room-service:before {
+    content: "\f26d";
+}
+.vankine-scope .fi-rr-rotate-right:before {
+    content: "\f26e";
+}
+.vankine-scope .fi-rr-rugby:before {
+    content: "\f26f";
+}
+.vankine-scope .fi-rr-sad:before {
+    content: "\f270";
+}
+.vankine-scope .fi-rr-salad:before {
+    content: "\f271";
+}
+.vankine-scope .fi-rr-scale:before {
+    content: "\f272";
+}
+.vankine-scope .fi-rr-school-bus:before {
+    content: "\f273";
+}
+.vankine-scope .fi-rr-school:before {
+    content: "\f274";
+}
+.vankine-scope .fi-rr-scissors:before {
+    content: "\f275";
+}
+.vankine-scope .fi-rr-screen:before {
+    content: "\f276";
+}
+.vankine-scope .fi-rr-search-alt:before {
+    content: "\f277";
+}
+.vankine-scope .fi-rr-search-heart:before {
+    content: "\f278";
+}
+.vankine-scope .fi-rr-search:before {
+    content: "\f279";
+}
+.vankine-scope .fi-rr-settings-sliders:before {
+    content: "\f27a";
+}
+.vankine-scope .fi-rr-settings:before {
+    content: "\f27b";
+}
+.vankine-scope .fi-rr-share:before {
+    content: "\f27c";
+}
+.vankine-scope .fi-rr-shield-check:before {
+    content: "\f27d";
+}
+.vankine-scope .fi-rr-shield-exclamation:before {
+    content: "\f27e";
+}
+.vankine-scope .fi-rr-shield-interrogation:before {
+    content: "\f27f";
+}
+.vankine-scope .fi-rr-shield-plus:before {
+    content: "\f280";
+}
+.vankine-scope .fi-rr-shield:before {
+    content: "\f281";
+}
+.vankine-scope .fi-rr-ship-side:before {
+    content: "\f282";
+}
+.vankine-scope .fi-rr-ship:before {
+    content: "\f283";
+}
+.vankine-scope .fi-rr-shop:before {
+    content: "\f284";
+}
+.vankine-scope .fi-rr-shopping-bag-add:before {
+    content: "\f285";
+}
+.vankine-scope .fi-rr-shopping-bag:before {
+    content: "\f286";
+}
+.vankine-scope .fi-rr-shopping-cart-add:before {
+    content: "\f287";
+}
+.vankine-scope .fi-rr-shopping-cart-check:before {
+    content: "\f288";
+}
+.vankine-scope .fi-rr-shopping-cart:before {
+    content: "\f289";
+}
+.vankine-scope .fi-rr-shuffle:before {
+    content: "\f28a";
+}
+.vankine-scope .fi-rr-sign-in-alt:before {
+    content: "\f28b";
+}
+.vankine-scope .fi-rr-sign-in:before {
+    content: "\f28c";
+}
+.vankine-scope .fi-rr-sign-out-alt:before {
+    content: "\f28d";
+}
+.vankine-scope .fi-rr-sign-out:before {
+    content: "\f28e";
+}
+.vankine-scope .fi-rr-signal-alt-1:before {
+    content: "\f28f";
+}
+.vankine-scope .fi-rr-signal-alt-2:before {
+    content: "\f290";
+}
+.vankine-scope .fi-rr-signal-alt:before {
+    content: "\f291";
+}
+.vankine-scope .fi-rr-skateboard:before {
+    content: "\f292";
+}
+.vankine-scope .fi-rr-smartphone:before {
+    content: "\f293";
+}
+.vankine-scope .fi-rr-smile-wink:before {
+    content: "\f294";
+}
+.vankine-scope .fi-rr-smile:before {
+    content: "\f295";
+}
+.vankine-scope .fi-rr-snowflake:before {
+    content: "\f296";
+}
+.vankine-scope .fi-rr-soap:before {
+    content: "\f297";
+}
+.vankine-scope .fi-rr-soup:before {
+    content: "\f298";
+}
+.vankine-scope .fi-rr-spa:before {
+    content: "\f299";
+}
+.vankine-scope .fi-rr-speaker:before {
+    content: "\f29a";
+}
+.vankine-scope .fi-rr-sphere:before {
+    content: "\f29b";
+}
+.vankine-scope .fi-rr-spinner-alt:before {
+    content: "\f29c";
+}
+.vankine-scope .fi-rr-spinner:before {
+    content: "\f29d";
+}
+.vankine-scope .fi-rr-square-root:before {
+    content: "\f29e";
+}
+.vankine-scope .fi-rr-square:before {
+    content: "\f29f";
+}
+.vankine-scope .fi-rr-star-octogram:before {
+    content: "\f2a0";
+}
+.vankine-scope .fi-rr-star:before {
+    content: "\f2a1";
+}
+.vankine-scope .fi-rr-stats:before {
+    content: "\f2a2";
+}
+.vankine-scope .fi-rr-stethoscope:before {
+    content: "\f2a3";
+}
+.vankine-scope .fi-rr-sticker:before {
+    content: "\f2a4";
+}
+.vankine-scope .fi-rr-stop:before {
+    content: "\f2a5";
+}
+.vankine-scope .fi-rr-stopwatch:before {
+    content: "\f2a6";
+}
+.vankine-scope .fi-rr-subtitles:before {
+    content: "\f2a7";
+}
+.vankine-scope .fi-rr-sun:before {
+    content: "\f2a8";
+}
+.vankine-scope .fi-rr-sunrise:before {
+    content: "\f2a9";
+}
+.vankine-scope .fi-rr-surfing:before {
+    content: "\f2aa";
+}
+.vankine-scope .fi-rr-sword:before {
+    content: "\f2ab";
+}
+.vankine-scope .fi-rr-syringe:before {
+    content: "\f2ac";
+}
+.vankine-scope .fi-rr-tablet:before {
+    content: "\f2ad";
+}
+.vankine-scope .fi-rr-target:before {
+    content: "\f2ae";
+}
+.vankine-scope .fi-rr-taxi:before {
+    content: "\f2af";
+}
+.vankine-scope .fi-rr-tennis:before {
+    content: "\f2b0";
+}
+.vankine-scope .fi-rr-terrace:before {
+    content: "\f2b1";
+}
+.vankine-scope .fi-rr-test-tube:before {
+    content: "\f2b2";
+}
+.vankine-scope .fi-rr-test:before {
+    content: "\f2b3";
+}
+.vankine-scope .fi-rr-text-check:before {
+    content: "\f2b4";
+}
+.vankine-scope .fi-rr-text:before {
+    content: "\f2b5";
+}
+.vankine-scope .fi-rr-thermometer-half:before {
+    content: "\f2b6";
+}
+.vankine-scope .fi-rr-thumbs-down:before {
+    content: "\f2b7";
+}
+.vankine-scope .fi-rr-thumbs-up:before {
+    content: "\f2b8";
+}
+.vankine-scope .fi-rr-thumbtack:before {
+    content: "\f2b9";
+}
+.vankine-scope .fi-rr-ticket:before {
+    content: "\f2ba";
+}
+.vankine-scope .fi-rr-time-add:before {
+    content: "\f2bb";
+}
+.vankine-scope .fi-rr-time-check:before {
+    content: "\f2bc";
+}
+.vankine-scope .fi-rr-time-delete:before {
+    content: "\f2bd";
+}
+.vankine-scope .fi-rr-time-fast:before {
+    content: "\f2be";
+}
+.vankine-scope .fi-rr-time-forward-sixty:before {
+    content: "\f2bf";
+}
+.vankine-scope .fi-rr-time-forward-ten:before {
+    content: "\f2c0";
+}
+.vankine-scope .fi-rr-time-forward:before {
+    content: "\f2c1";
+}
+.vankine-scope .fi-rr-time-half-past:before {
+    content: "\f2c2";
+}
+.vankine-scope .fi-rr-time-oclock:before {
+    content: "\f2c3";
+}
+.vankine-scope .fi-rr-time-past:before {
+    content: "\f2c4";
+}
+.vankine-scope .fi-rr-time-quarter-past:before {
+    content: "\f2c5";
+}
+.vankine-scope .fi-rr-time-quarter-to:before {
+    content: "\f2c6";
+}
+.vankine-scope .fi-rr-time-twenty-four:before {
+    content: "\f2c7";
+}
+.vankine-scope .fi-rr-tool-crop:before {
+    content: "\f2c8";
+}
+.vankine-scope .fi-rr-tool-marquee:before {
+    content: "\f2c9";
+}
+.vankine-scope .fi-rr-tooth:before {
+    content: "\f2ca";
+}
+.vankine-scope .fi-rr-tornado:before {
+    content: "\f2cb";
+}
+.vankine-scope .fi-rr-train-side:before {
+    content: "\f2cc";
+}
+.vankine-scope .fi-rr-train:before {
+    content: "\f2cd";
+}
+.vankine-scope .fi-rr-transform:before {
+    content: "\f2ce";
+}
+.vankine-scope .fi-rr-trash:before {
+    content: "\f2cf";
+}
+.vankine-scope .fi-rr-treatment:before {
+    content: "\f2d0";
+}
+.vankine-scope .fi-rr-tree-christmas:before {
+    content: "\f2d1";
+}
+.vankine-scope .fi-rr-tree:before {
+    content: "\f2d2";
+}
+.vankine-scope .fi-rr-triangle:before {
+    content: "\f2d3";
+}
+.vankine-scope .fi-rr-trophy:before {
+    content: "\f2d4";
+}
+.vankine-scope .fi-rr-truck-side:before {
+    content: "\f2d5";
+}
+.vankine-scope .fi-rr-umbrella:before {
+    content: "\f2d6";
+}
+.vankine-scope .fi-rr-underline:before {
+    content: "\f2d7";
+}
+.vankine-scope .fi-rr-undo-alt:before {
+    content: "\f2d8";
+}
+.vankine-scope .fi-rr-undo:before {
+    content: "\f2d9";
+}
+.vankine-scope .fi-rr-unlock:before {
+    content: "\f2da";
+}
+.vankine-scope .fi-rr-upload:before {
+    content: "\f2db";
+}
+.vankine-scope .fi-rr-usb-pendrive:before {
+    content: "\f2dc";
+}
+.vankine-scope .fi-rr-user-add:before {
+    content: "\f2dd";
+}
+.vankine-scope .fi-rr-user-delete:before {
+    content: "\f2de";
+}
+.vankine-scope .fi-rr-user-remove:before {
+    content: "\f2df";
+}
+.vankine-scope .fi-rr-user-time:before {
+    content: "\f2e0";
+}
+.vankine-scope .fi-rr-user:before {
+    content: "\f2e1";
+}
+.vankine-scope .fi-rr-utensils:before {
+    content: "\f2e2";
+}
+.vankine-scope .fi-rr-vector-alt:before {
+    content: "\f2e3";
+}
+.vankine-scope .fi-rr-vector:before {
+    content: "\f2e4";
+}
+.vankine-scope .fi-rr-venus-double:before {
+    content: "\f2e5";
+}
+.vankine-scope .fi-rr-venus-mars:before {
+    content: "\f2e6";
+}
+.vankine-scope .fi-rr-venus:before {
+    content: "\f2e7";
+}
+.vankine-scope .fi-rr-video-camera:before {
+    content: "\f2e8";
+}
+.vankine-scope .fi-rr-volleyball:before {
+    content: "\f2e9";
+}
+.vankine-scope .fi-rr-volume:before {
+    content: "\f2ea";
+}
+.vankine-scope .fi-rr-wheelchair:before {
+    content: "\f2eb";
+}
+.vankine-scope .fi-rr-wifi-alt:before {
+    content: "\f2ec";
+}
+.vankine-scope .fi-rr-wind:before {
+    content: "\f2ed";
+}
+.vankine-scope .fi-rr-woman-head:before {
+    content: "\f2ee";
+}
+.vankine-scope .fi-rr-world:before {
+    content: "\f2ef";
+}
+.vankine-scope .fi-rr-yen:before {
+    content: "\f2f0";
+}
+.vankine-scope .fi-rr-zoom-in:before {
+    content: "\f2f1";
+}
+.vankine-scope .fi-rr-zoom-out:before {
+    content: "\f2f2";
+}

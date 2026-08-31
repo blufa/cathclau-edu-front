@@ -17,12 +17,14 @@ const COLUMNS = [
       { label: "Sécurité", href: "/#securite" },
       { label: "Tarifs", href: "/tarifs" },
       { label: "Fonctionnalités", href: "/fonctionnalites" },
+      { label: "À propos", href: "/a-propos" },
+      { label: "Blog", href: "/blog" },
     ],
   },
   {
     title: "Ressources",
     links: [
-      { label: "FAQ", href: "/#faq" },
+      { label: "FAQ", href: "/faqs" },
       { label: "Centre d'aide", href: "/aide" },
       { label: "Contact", href: "/contact" },
       { label: "Demander une démo", href: "/signup" },
@@ -37,23 +39,23 @@ const COLUMNS = [
   },
 ];
 
+/** Reproduit le footer "style 5" de Vankine : fond bleu marine (identique à la barre de nav),
+ * logo + newsletter + réseaux sociaux, colonnes de liens, barre inférieure encore plus sombre. */
 export function PublicFooter() {
   const branding = getBranding();
   return (
-    <footer className="relative overflow-hidden bg-slate-950 text-slate-300">
-      {/* top accent line */}
-      <div className="h-1 w-full bg-gradient-to-r from-brand-500 via-cyan-400 to-brand-600" />
-      <div className="mx-auto max-w-6xl px-4 py-16">
+    <footer className="bg-brand-800 text-white/80">
+      <div className="mx-auto max-w-6xl px-4 pb-10 pt-16">
         <div className="grid gap-10 lg:grid-cols-5">
           {/* Brand + newsletter */}
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 font-bold text-white shadow-lg shadow-brand-500/30">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white font-bold text-brand-700 shadow-sm">
                 {branding.logoLetter}
               </span>
-              <span className="text-lg font-semibold tracking-tight text-white">{branding.appName}</span>
+              <span className="text-lg font-bold tracking-tight text-white">{branding.appName}</span>
             </div>
-            <p className="mt-4 max-w-sm text-sm text-slate-400">
+            <p className="mt-4 max-w-sm text-sm text-white/60">
               La suite tout-en-un pour gérer votre établissement scolaire et garder du temps pour
               l&apos;essentiel : vos élèves.
             </p>
@@ -63,25 +65,36 @@ export function PublicFooter() {
                 required
                 placeholder="Votre e-mail"
                 aria-label="Votre e-mail"
-                className="h-10 flex-1 rounded-full border border-white/15 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/30"
+                className="h-11 flex-1 rounded-full border border-white/15 bg-white/5 px-4 text-sm text-white placeholder:text-white/40 outline-none focus:border-brand-300 focus:ring-2 focus:ring-white/20"
               />
               <button
                 type="submit"
-                className="h-10 shrink-0 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 px-5 text-sm font-semibold text-white transition hover:opacity-90"
+                className="h-11 shrink-0 rounded-full bg-brand-500 px-5 text-sm font-semibold text-white transition hover:bg-brand-400"
               >
                 S&apos;abonner
               </button>
             </form>
+            <div className="mt-5 flex items-center gap-3">
+              <a
+                href="https://www.linkedin.com"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="LinkedIn"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-brand-500 hover:text-white"
+              >
+                <LinkedinIcon className="h-4 w-4" />
+              </a>
+            </div>
           </div>
 
           {/* Link columns */}
           {COLUMNS.map((col) => (
             <div key={col.title}>
-              <h3 className="text-sm font-semibold text-white">{col.title}</h3>
-              <ul className="mt-4 space-y-2.5">
+              <h3 className="text-base font-bold text-white">{col.title}</h3>
+              <ul className="mt-5 space-y-3">
                 {col.links.map((l) => (
                   <li key={l.label}>
-                    <Link href={l.href} className="text-sm text-slate-400 transition hover:text-white">
+                    <Link href={l.href} className="text-sm text-white/60 transition hover:text-white">
                       {l.label}
                     </Link>
                   </li>
@@ -90,22 +103,15 @@ export function PublicFooter() {
             </div>
           ))}
         </div>
+      </div>
 
-        <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+      <div className="bg-brand-900">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 text-sm text-white/60 sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} {branding.appName}. Tous droits réservés.</span>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             <Link href="/mentions-legales" className="hover:text-white">Mentions légales</Link>
             <Link href="/confidentialite" className="hover:text-white">Confidentialité</Link>
             <Link href="/contact" className="hover:text-white">Contact</Link>
-            <a
-              href="https://www.linkedin.com"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="LinkedIn"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-slate-400 transition hover:border-brand-400 hover:text-white"
-            >
-              <LinkedinIcon className="h-4 w-4" />
-            </a>
           </div>
         </div>
       </div>

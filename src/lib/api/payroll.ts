@@ -97,6 +97,8 @@ export interface TeacherCompensation {
   /** Tarif horaire pour les classes normales / classes d'examen (§6). */
   hourlyRateNormal: string; hourlyRateExam: string;
   fixedSalary: string;
+  /** Avantage accordé par la direction : payé même pendant les jours fériés/vacances. */
+  paidDuringVacation: boolean;
 }
 export interface MonthlyPay {
   teacherId: number; year: number; month: number; payMode: string;
@@ -115,7 +117,7 @@ export function getCompensation(teacherId: number): Promise<TeacherCompensation 
 }
 export function setCompensation(
   teacherId: number,
-  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number },
+  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number; paidDuringVacation: boolean },
 ): Promise<TeacherCompensation> {
   return api.put<TeacherCompensation>(`/payroll/compensation/${teacherId}`, input);
 }

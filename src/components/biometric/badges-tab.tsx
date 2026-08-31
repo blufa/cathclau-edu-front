@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import { generateBadge, type BadgeResult } from "@/lib/api/biometric";
+import { getCurrentAcademicYear } from "@/lib/api/academics";
 import type { BiometricSubjectType } from "@/lib/types/biometric";
 import { useDirectory } from "@/components/biometric/use-directory";
+import { useQuery } from "@/hooks/use-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -20,6 +22,8 @@ function qrUrl(data: string, size = 220) {
  */
 export function BadgesTab() {
   const { teachers, students } = useDirectory();
+  const yearQuery = useQuery(getCurrentAcademicYear, []);
+  const yearLabel = yearQuery.data?.label ?? "";
   const [subjectType, setSubjectType] = useState<BiometricSubjectType>("STUDENT");
   const [subjectId, setSubjectId] = useState("");
   const [badge, setBadge] = useState<BadgeResult | null>(null);
@@ -58,10 +62,13 @@ export function BadgesTab() {
       + `<style>body{font-family:system-ui,Arial,sans-serif;display:flex;justify-content:center;padding:24px}`
       + `.b{width:320px;border:1px solid #cbd5e1;border-radius:16px;padding:18px;text-align:center}`
       + `.t{font-weight:800;letter-spacing:2px;color:#1d4ed8}.n{margin:8px 0;font-size:16px;font-weight:600}`
-      + `.id{font-size:11px;color:#64748b;margin-top:8px}@media print{body{padding:0}}</style></head><body>`
+      + `.id{font-size:11px;color:#64748b;margin-top:8px}.v{font-size:11px;color:#94a3b8;margin-top:2px}`
+      + `@media print{body{padding:0}}</style></head><body>`
       + `<div class="b"><div class="t">BADGE</div><div class="n">${selectedName}</div>`
       + `<img src="${qrUrl(badge.qrPayload, 200)}" width="190" height="190" alt="QR"/>`
-      + `<div class="id">${badge.externalUserId}</div></div>`
+      + `<div class="id">${badge.externalUserId}</div>`
+      + (yearLabel ? `<div class="v">Valide : ${yearLabel}</div>` : "")
+      + `</div>`
       + `<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`
     );
     w.document.close();
@@ -99,6 +106,7 @@ export function BadgesTab() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={qrUrl(badge.qrPayload)} alt="QR badge" width={180} height={180} className="mx-auto my-2" />
                 <div className="text-xs text-gray-400">{badge.externalUserId}</div>
+                {yearLabel && <div className="text-xs text-gray-400">Valide : {yearLabel}</div>}
               </div>
               <div className="flex justify-center">
                 <Button variant="secondary" leftSection={<Printer className="h-4 w-4" />} onClick={printBadge}>Imprimer le badge</Button>

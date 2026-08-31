@@ -37,6 +37,17 @@ export function formatTime(time: string | null | undefined): string {
   return time ? time.slice(0, 5) : "—";
 }
 
+/** Formate une durée en minutes en heures + minutes (ex. 399 → « 6 h 39 », 45 → « 45 min »). */
+export function formatMinutes(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "—";
+  const abs = Math.abs(minutes);
+  const sign = minutes < 0 ? "-" : "";
+  if (abs < 60) return `${sign}${abs} min`;
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return m === 0 ? `${sign}${h} h` : `${sign}${h} h ${String(m).padStart(2, "0")}`;
+}
+
 /**
  * Affiche une classe saisie au format guinéen : un nombre seul devient « Nᵉᵐᵉ » (ème en exposant),
  * « 1 » devient « 1ʳᵉ ». Toute autre saisie (CM2, Terminale…) est laissée telle quelle.

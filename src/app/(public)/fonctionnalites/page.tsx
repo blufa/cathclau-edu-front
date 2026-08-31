@@ -1,66 +1,15 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { BarChart3, Check, GraduationCap, MessagesSquare, Wallet } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { LinkButton } from "@/components/ui/link-button";
 import { Reveal } from "@/components/public/reveal";
 import { AuroraBackground, Spotlight } from "@/components/ui/aceternity";
-import { IMAGES } from "@/lib/images";
+import { MODULE_DETAILS as MODULES } from "@/lib/content/modules";
 
 export const metadata: Metadata = {
   title: "Fonctionnalités — CathClau Edu",
   description: "Découvrez tous les modules : scolarité, communication, facturation et plus.",
 };
-
-const MODULES = [
-  {
-    icon: GraduationCap,
-    title: "Scolarité",
-    lead: "Le cœur de votre établissement, du dossier élève au bulletin.",
-    points: [
-      "Élèves, inscriptions & réinscriptions",
-      "Classes, niveaux et salles",
-      "Emploi du temps avec détection de conflits",
-      "Notes, examens et bulletins automatisés",
-    ],
-    image: IMAGES.classroom,
-  },
-  {
-    icon: MessagesSquare,
-    title: "Communication",
-    lead: "Gardez le lien avec les familles, au bon moment, sur le bon canal.",
-    points: [
-      "SMS, e-mail et WhatsApp",
-      "Notifications automatiques (absences, résultats, échéances)",
-      "Diffusion de masse par classe ou niveau",
-      "Modèles de messages personnalisables",
-    ],
-    image: IMAGES.support,
-  },
-  {
-    icon: Wallet,
-    title: "Facturation & paiements",
-    lead: "Encaissez plus vite, avec moins d'efforts.",
-    points: [
-      "Frais scolaires et échéanciers",
-      "Factures par élève et par classe",
-      "Paiements mobile money (Orange, MTN, Wave)",
-      "Reçus générés automatiquement",
-    ],
-    image: IMAGES.pricing,
-  },
-  {
-    icon: BarChart3,
-    title: "Pilotage",
-    lead: "Décidez à partir de chiffres fiables, en temps réel.",
-    points: [
-      "Tableaux de bord par rôle",
-      "Taux d'assiduité et de recouvrement",
-      "Exports CSV / Excel",
-      "Audit et traçabilité complète",
-    ],
-    image: IMAGES.features,
-  },
-];
 
 export default function FeaturesPage() {
   return (
@@ -108,6 +57,9 @@ export default function FeaturesPage() {
                     </li>
                   ))}
                 </ul>
+                <LinkButton href={`/fonctionnalites/${m.slug}`} size="sm" variant="secondary" className="mt-6" rightSection={<ArrowRight className="h-4 w-4" />}>
+                  En savoir plus
+                </LinkButton>
               </Reveal>
               <Reveal
                 delay={0.1}
