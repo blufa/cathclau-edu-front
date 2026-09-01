@@ -181,7 +181,7 @@ export function SignupForm() {
   }
 
   return (
-    <div className="mx-auto max-w-[600px] rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="mx-auto max-w-[600px] rounded-2xl border border-gray-200 bg-white p-5 sm:p-8 shadow-sm">
       <h3 className="text-lg font-semibold text-gray-900">Créer mon école</h3>
       <p className="mt-1 text-sm text-gray-500">
         Essai gratuit de 30 jours{plan ? ` · plan ${plan}` : ""}. Aucune carte bancaire requise.
@@ -216,7 +216,7 @@ export function SignupForm() {
               {errors.slug && <p className="text-xs text-error-600">{errors.slug.message}</p>}
               {slugHint}
             </Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
                 <Label htmlFor="ville">Ville</Label>
                 <Input id="ville" value={v.ville} onChange={(e) => setValue("ville", e.target.value)} />
@@ -256,7 +256,7 @@ export function SignupForm() {
         {/* Étape 2 — Compte administrateur */}
         {active === 1 && (
           <div className="space-y-4 pt-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
                 <Label htmlFor="prenomAdmin">
                   Prénom <span className="text-error-500">*</span>
@@ -282,7 +282,7 @@ export function SignupForm() {
               <Input id="username" value={v.username} onChange={(e) => setValue("username", e.target.value)} aria-invalid={!!errors.username} />
               {errors.username && <p className="text-xs text-error-600">{errors.username.message}</p>}
             </Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
                 <Label>Téléphone</Label>
                 <PhoneInput value={v.telephoneAdmin} onChange={(val) => setValue("telephoneAdmin", val)} error={errors.telephoneAdmin?.message} />
@@ -293,7 +293,7 @@ export function SignupForm() {
                 {errors.emailDirecteur && <p className="text-xs text-error-600">{errors.emailDirecteur.message}</p>}
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
                 <Label htmlFor="password">
                   Mot de passe <span className="text-error-500">*</span>
@@ -341,7 +341,7 @@ export function SignupForm() {
 /** École active immédiatement (sans vérification email) → invite à se connecter. */
 function SignupSuccess({ username }: { username: string }) {
   return (
-    <div className="mx-auto max-w-[520px] rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+    <div className="mx-auto max-w-[520px] rounded-2xl border border-gray-200 bg-white p-5 sm:p-8 text-center shadow-sm">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl">✅</div>
       <h3 className="text-lg font-semibold text-gray-900">Votre école est créée</h3>
       <p className="mt-2 text-gray-500">
@@ -383,7 +383,7 @@ function VerificationSent({ email }: { email: string }) {
   }
 
   return (
-    <div className="mx-auto max-w-[520px] rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+    <div className="mx-auto max-w-[520px] rounded-2xl border border-gray-200 bg-white p-5 sm:p-8 text-center shadow-sm">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-2xl">📧</div>
       <h3 className="text-lg font-semibold text-gray-900">Vérifiez votre email</h3>
       <p className="mt-2 text-gray-500">

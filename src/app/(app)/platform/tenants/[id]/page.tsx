@@ -7,7 +7,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@/hooks/use-query";
-import { changeTenantStatus, deleteTenant, getTenantDetail, updateTenant } from "@/lib/api/platform";
+import {
+  changeTenantStatus, deleteTenant, getTenantDetail, initiateSubscription, listPlans, updateTenant,
+} from "@/lib/api/platform";
+import { setImpersonatedTenantId } from "@/lib/auth/impersonation";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
 import { TenantStatusBadge } from "@/components/platform/status-badge";
 import { QuotaProgress } from "@/components/platform/quota-progress";
@@ -16,12 +19,13 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Field, Input, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { ESTABLISHMENT_TYPE_LABEL, SUBSCRIPTION_STATUS_LABEL } from "@/lib/platform-labels";
-import type { Tenant, UpdateTenantInput } from "@/lib/types/platform";
+import type { BillingPeriod, Tenant, UpdateTenantInput } from "@/lib/types/platform";
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -99,6 +103,11 @@ function TenantDetail() {
           <div className="mt-1"><TenantStatusBadge status={t.status} /></div>
         </div>
         <div className="flex gap-2">
+          <Button
+            onClick={() => { setImpersonatedTenantId(t.id); router.push("/subscription/invoices"); }}
+          >
+            Basculer sur cette école (abonnement)
+          </Button>
           <Button variant="secondary" onClick={() => setEditing(true)}>Modifier</Button>
           {t.status === "SUSPENDED" && <Button variant="ghost" onClick={() => doStatus("ACTIVATE", t.schoolName)}>Activer</Button>}
           {(t.status === "ACTIVE" || t.status === "TRIAL") && <Button variant="ghost" onClick={() => doStatus("SUSPEND", t.schoolName)}>Suspendre</Button>}
@@ -110,7 +119,7 @@ function TenantDetail() {
         <Card>
           <CardHeader><CardTitle>Informations</CardTitle></CardHeader>
           <CardBody>
-            <dl className="grid grid-cols-2 gap-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Info label="Slug" value={t.slug} />
               <Info label="Type" value={t.establishmentTypes?.length ? t.establishmentTypes.map((x) => ESTABLISHMENT_TYPE_LABEL[x]).join(", ") : "—"} />
               <Info label="Email" value={t.email} />
@@ -128,7 +137,7 @@ function TenantDetail() {
         <Card>
           <CardHeader><CardTitle>Abonnement & quota</CardTitle></CardHeader>
           <CardBody className="space-y-4">
-            <dl className="grid grid-cols-2 gap-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Info label="Plan" value={data.planName} />
               <Info label="Statut abonnement" value={data.subscriptionStatus ? SUBSCRIPTION_STATUS_LABEL[data.subscriptionStatus] : "—"} />
             </dl>
@@ -136,6 +145,16 @@ function TenantDetail() {
               <p className="mb-1 text-xs text-gray-500">Quota élèves</p>
               <QuotaProgress consumed={data.consumedStudents} limit={data.studentLimit} />
             </div>
+            {!data.subscriptionStatus && (
+              <CreateSubscriptionSection
+                tenantId={t.id}
+                onCreated={() => {
+                  refetch();
+                  setImpersonatedTenantId(t.id);
+                  router.push("/subscription/invoices");
+                }}
+              />
+            )}
           </CardBody>
         </Card>
       </div>
@@ -149,6 +168,56 @@ function TenantDetail() {
           onSaved={() => { setEditing(false); refetch(); }}
         />
       </Modal>
+    </div>
+  );
+}
+
+/**
+ * Les écoles ne souscrivent pas elles-mêmes pour l'instant (§platform) : c'est l'administrateur de la
+ * plateforme qui crée l'école, donc c'est ici, sur sa fiche, qu'il doit pouvoir créer son abonnement —
+ * jusque-là `initiateSubscription` existait côté API sans jamais être appelé par aucun écran.
+ */
+function CreateSubscriptionSection({ tenantId, onCreated }: { tenantId: number; onCreated: () => void }) {
+  const plansQuery = useQuery(() => listPlans(), []);
+  const [planId, setPlanId] = useState("");
+  const [period, setPeriod] = useState<BillingPeriod>("MONTHLY");
+  const [submitting, setSubmitting] = useState(false);
+  const plans = (plansQuery.data ?? []).filter((p) => !p.archived);
+
+  async function create() {
+    if (!planId) return;
+    setSubmitting(true);
+    try {
+      await initiateSubscription({ tenantId, planId: Number(planId), billingPeriod: period, autoRenewal: true });
+      notifySuccess("Abonnement créé — facture générée, à payer sur la fiche de l'école.");
+      onCreated();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+      <p className="mb-2 text-sm font-medium text-slate-700">Aucun abonnement — en créer un</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field>
+          <Label>Plan</Label>
+          <Select className="min-w-[180px]" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+            <option value="">Choisir…</option>
+            {plans.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+          </Select>
+        </Field>
+        <Field>
+          <Label>Périodicité</Label>
+          <Select className="min-w-[140px]" value={period} onChange={(e) => setPeriod(e.target.value as BillingPeriod)}>
+            <option value="MONTHLY">Mensuel</option>
+            <option value="ANNUAL">Annuel</option>
+          </Select>
+        </Field>
+        <Button onClick={create} loading={submitting} disabled={!planId}>Créer l&apos;abonnement</Button>
+      </div>
     </div>
   );
 }

@@ -707,7 +707,7 @@ function ReportCardDetail({ card }: { card: ReportCard }) {
   if (linesQuery.loading) return <div className="flex justify-center py-8"><Spinner /></div>;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { l: "Moyenne", v: card.overallAverage ?? "—" },
           { l: "Rang", v: card.rank != null ? `${card.rank}/${card.classSize ?? "?"}` : "—" },
@@ -920,7 +920,7 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
         <Label>Date</Label>
         <DatePicker value={v.date} onChange={(val) => setValue("date", val)} clearable />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Note sur</Label>
           <Input type="number" min={1} value={v.maxScore} onChange={(e) => setValue("maxScore", Number(e.target.value))} />

@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useNetworkStore } from "@/lib/offline/network-store";
 import {
   getTeacher,
   getTeacherClasses,
@@ -61,17 +63,25 @@ export default function TeacherDetailPage() {
   const teacherQuery = useQuery(() => getTeacher(id), [id]);
   const classesQuery = useQuery(() => getTeacherClasses(id), [id]);
   const subjectsQuery = useQuery(() => getTeacherSubjects(id), [id]);
-  const scheduleQuery = useQuery(() => getTeacherSchedule(id), [id]);
-  const allSubjectsQuery = useQuery(listSubjects, []);
-  const roomsQuery = useQuery(listRooms, []);
+  // Consultation hors-ligne (§Phase 2) : affiche le dernier emploi du temps connu de cet enseignant
+  // pendant qu'un rafraîchissement réseau tourne en tâche de fond.
+  const online = useNetworkStore((s) => s.online);
+  const scheduleQuery = useCachedQuery(
+    `teacher-schedule-detail:${id}`,
+    async () => {
+      const [slots, subjects, rooms] = await Promise.all([getTeacherSchedule(id), listSubjects(), listRooms()]);
+      return { slots, subjects, rooms };
+    },
+    [id],
+  );
 
   const subjectLabel = useMemo(
-    () => new Map((allSubjectsQuery.data ?? []).map((s) => [s.id, s.label])),
-    [allSubjectsQuery.data],
+    () => new Map((scheduleQuery.data?.subjects ?? []).map((s) => [s.id, s.label])),
+    [scheduleQuery.data],
   );
   const roomLabel = useMemo(
-    () => new Map((roomsQuery.data ?? []).map((r) => [r.id, r.label])),
-    [roomsQuery.data],
+    () => new Map((scheduleQuery.data?.rooms ?? []).map((r) => [r.id, r.label])),
+    [scheduleQuery.data],
   );
 
   if (teacherQuery.loading) {
@@ -95,7 +105,7 @@ export default function TeacherDetailPage() {
   const t = teacherQuery.data;
   const classes = classesQuery.data ?? [];
   const subjects = subjectsQuery.data ?? [];
-  const schedule = (scheduleQuery.data ?? []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const schedule = (scheduleQuery.data?.slots ?? []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   return (
     <div className="space-y-6">
@@ -229,8 +239,13 @@ export default function TeacherDetailPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex items-center gap-2">
           <CardTitle>Emploi du temps</CardTitle>
+          {scheduleQuery.fromCache && !online && (
+            <span className="rounded-full bg-warning-50 px-2 py-0.5 text-xs font-medium text-warning-700">
+              Données en cache — hors-ligne
+            </span>
+          )}
         </CardHeader>
         <CardBody className="p-0">
           {schedule.length === 0 ? (

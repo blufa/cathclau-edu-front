@@ -114,7 +114,7 @@ function EnrollForm({ devices, teachers, students, onCancel, onDone }: {
         </Select>
         {errors.deviceId && <p className="text-xs text-error-600">{errors.deviceId.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Type</Label>
           <Select value={v.subjectType} onChange={(e) => { setValue("subjectType", e.target.value); setValue("subjectId", ""); }}>

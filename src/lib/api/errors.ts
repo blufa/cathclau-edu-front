@@ -26,3 +26,10 @@ export class ApiError extends Error {
     return out;
   }
 }
+
+/** True when no HTTP response was ever received (offline, DNS/timeout, CORS) — as opposed to a real
+ *  server-side refusal (validation, permission…), which always carries a status. Used to decide
+ *  whether a failed write can safely fall back to the offline sync queue (see lib/offline/). */
+export function isNetworkError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 0;
+}

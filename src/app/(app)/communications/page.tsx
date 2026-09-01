@@ -182,7 +182,7 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
           </Select>
         </Field>
       )}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field>
           <Label>Canal</Label>
           <Select value={channel} onChange={(e) => setChannel(e.target.value as CommunicationChannel)}>
@@ -291,7 +291,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Canal</Label>
           <Select value={channel} onChange={(e) => setChannel(e.target.value as CommunicationChannel)}>

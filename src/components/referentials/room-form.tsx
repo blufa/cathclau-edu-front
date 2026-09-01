@@ -87,7 +87,7 @@ export function RoomForm({
         <Combobox value={v.label} onChange={(val) => setValue("label", val)} options={ROOM_LABEL_SUGGESTIONS} placeholder="ex. Salle 001" />
         {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Capacité</Label>
           <Input type="number" min={0} value={v.capacity} onChange={(e) => setValue("capacity", e.target.value === "" ? "" : Number(e.target.value))} />

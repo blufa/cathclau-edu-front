@@ -168,7 +168,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
 
       {active === 0 && (
         <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Prénom <span className="text-error-500">*</span></Label>
               <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
@@ -180,7 +180,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
               {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
             <Field>
               <Label>Email</Label>
@@ -193,7 +193,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
 
       {active === 1 && (
         <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Matricule</Label>
               <Input placeholder="Auto-généré si vide" value={v.staffNumber} onChange={(e) => setValue("staffNumber", e.target.value)} />
@@ -206,7 +206,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
               </Select>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Spécialité</Label>
               <p className="text-xs text-gray-400">Domaine du diplôme — pas forcément la matière enseignée</p>
@@ -221,7 +221,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
               </Select>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Type de rémunération</Label>
               <Select value={v.remunerationType} onChange={(e) => setValue("remunerationType", e.target.value)}>

@@ -18,13 +18,19 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Card, CardBody } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { TeacherForm } from "@/components/staff/teacher-form";
+import { OfflineTeacherFields } from "@/components/staff/offline-teacher-fields";
 import { IdBadge } from "@/components/cards/id-badge";
 import { generateBadge } from "@/lib/api/biometric";
 import { useBranding } from "@/providers/branding-provider";
 import { buildIdentityQr } from "@/lib/identity-qr";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { useNetworkStore } from "@/lib/offline/network-store";
+import { useTeacherQueueStore } from "@/lib/offline/teacher-queue-store";
+import { submitTeacherOfflineAware } from "@/lib/offline/submit-teacher-creation";
+import { retryFailedTeacherEntry, discardFailedTeacherEntry } from "@/lib/offline/sync-engine";
 
 type ActiveFilter = "all" | "active" | "inactive";
 
@@ -40,6 +46,8 @@ export default function TeachersPage() {
   const [editing, setEditing] = useState<Teacher | null>(null);
   const [badgeFor, setBadgeFor] = useState<Teacher | null>(null);
   const [badgeQr, setBadgeQr] = useState<string | null>(null);
+  const online = useNetworkStore((s) => s.online);
+  const teacherQueueItems = useTeacherQueueStore((s) => s.items);
 
   // Générer le badge = enrôler l'enseignant pour le pointage (un seul QR scannable « BADGE|… »).
   function openBadge(t: Teacher) {
@@ -69,6 +77,16 @@ export default function TeachersPage() {
     notifySuccess("Enseignant créé");
     q.refetch();
     return teacher;
+  }
+  async function handleCreateOffline(input: CreateTeacherInput) {
+    const attempt = await submitTeacherOfflineAware(input);
+    setCreating(false);
+    if (attempt.outcome === "queued") {
+      notifySuccess("Enseignant enregistré hors-ligne — sera synchronisé automatiquement.");
+      return;
+    }
+    notifySuccess("Enseignant créé");
+    q.refetch();
   }
   async function handleUpdate(input: CreateTeacherInput): Promise<Teacher> {
     if (!editing) throw new Error("no teacher being edited");
@@ -181,11 +199,40 @@ export default function TeachersPage() {
         exportFilename="enseignants.csv"
       />
 
+      {teacherQueueItems.length > 0 && (
+        <Card>
+          <CardBody>
+            <h2 className="mb-3 text-sm font-semibold text-warning-700">
+              Enseignants en attente de synchronisation (hors-ligne)
+            </h2>
+            <ul className="divide-y divide-slate-100">
+              {teacherQueueItems.map((entry) => (
+                <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                  <span className="text-slate-700">
+                    {entry.input.firstName} {entry.input.lastName}
+                    <span className="ml-2 font-mono text-xs text-slate-400">Matricule : en attente</span>
+                  </span>
+                  {entry.status === "failed" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-error-600">{entry.lastError ?? "Échec"}</span>
+                      <Button size="sm" variant="secondary" onClick={() => discardFailedTeacherEntry(entry.id)}>Ignorer</Button>
+                      <Button size="sm" onClick={() => retryFailedTeacherEntry(entry.id)}>Réessayer</Button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
+
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel enseignant" className="max-w-2xl">
-        {creating && (
+        {creating && (online ? (
           <TeacherForm submitLabel="Créer" onSubmit={handleCreate} onCancel={() => setCreating(false)}
             onFinish={() => { setCreating(false); q.refetch(); }} />
-        )}
+        ) : (
+          <OfflineTeacherFields onSubmit={handleCreateOffline} onCancel={() => setCreating(false)} />
+        ))}
       </Modal>
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'enseignant" className="max-w-2xl">
         {editing && (

@@ -7,6 +7,7 @@ import { useSidebarStore } from "@/lib/store/sidebar-store";
 import { SubscriptionProvider } from "@/providers/subscription-provider";
 import { BrandingProvider } from "@/providers/branding-provider";
 import { SubscriptionBanner } from "@/components/platform/subscription-banner";
+import { OfflineBanner } from "@/components/offline/offline-banner";
 import { cn } from "@/lib/utils";
 
 const HEADER_HEIGHT = 64;
@@ -47,6 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <div className="mx-auto max-w-[1600px]">
               <SubscriptionBanner />
+              <OfflineBanner />
               {children}
             </div>
           </main>

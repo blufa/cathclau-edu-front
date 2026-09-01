@@ -182,7 +182,7 @@ export default function GuichetPage() {
               <div className="flex justify-center py-6"><Spinner /></div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-3 rounded-xl bg-gray-50 p-3 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl bg-gray-50 p-3 text-center">
                   <div>
                     <p className="text-xs text-gray-400">Facturé</p>
                     <p className="text-sm font-semibold text-gray-900">{formatGNF(totalBilled)}</p>

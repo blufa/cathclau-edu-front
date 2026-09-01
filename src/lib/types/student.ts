@@ -113,6 +113,9 @@ export interface CreateStudentInput {
   /** Créer un accès au portail élève : la connexion se fait par le matricule + ce mot de passe. */
   createLogin?: boolean;
   loginPassword?: string;
+  /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
+   * réseau renvoie l'élève déjà créé côté serveur au lieu d'en créer un second. */
+  idempotencyKey?: string;
 }
 
 /** Body for PUT /students/{id}. */

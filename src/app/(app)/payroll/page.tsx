@@ -266,7 +266,7 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
         <Input placeholder="Ex. Juin 2026" value={v.periodLabel} onChange={(e) => setValue("periodLabel", e.target.value)} aria-invalid={!!errors.periodLabel} />
         {errors.periodLabel && <p className="text-xs text-error-600">{errors.periodLabel.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Du</Label>
           <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable />
@@ -290,7 +290,7 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
 
       <div className="rounded-xl border border-gray-200 p-3">
         <p className="mb-2 text-sm font-semibold text-gray-700">Pointage & heures supplémentaires</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Field>
             <Label>Jours d&apos;absence</Label>
             <Input type="number" min={0} value={v.absentDays} onChange={(e) => setValue("absentDays", e.target.value === "" ? "" : Number(e.target.value))} />
@@ -301,7 +301,7 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
           </Field>
         </div>
         <p className="mt-1 text-xs text-gray-400">Jours d&apos;absence <strong>récupérés automatiquement</strong> du pointage sur la période (modifiable). Retenue = (base ÷ jours ouvrés) × jours d&apos;absence.</p>
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <Field>
             <Label>Heures sup.</Label>
             <Input type="number" min={0} value={v.overtimeHours} onChange={(e) => setValue("overtimeHours", e.target.value === "" ? "" : Number(e.target.value))} />
@@ -359,7 +359,7 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2 text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
         <div className="rounded-lg bg-gray-50 p-2"><p className="text-xs text-gray-500">Base</p><p className="font-semibold">{formatGNF(current.baseSalary)}</p></div>
         <div className="rounded-lg bg-gray-50 p-2"><p className="text-xs text-gray-500">Brut</p><p className="font-semibold">{formatGNF(current.grossSalary)}</p></div>
         <div className="rounded-lg bg-success-50 p-2"><p className="text-xs text-gray-500">Net</p><p className="font-semibold text-success-700">{formatGNF(current.netSalary)}</p></div>
@@ -451,7 +451,7 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Mois <span className="text-error-500">*</span></Label>
           <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
@@ -642,7 +642,7 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
       <form onSubmit={handleSubmit(add)} className="rounded-xl border border-gray-200 p-3">
         <p className="mb-2 text-sm font-semibold text-gray-700">Ajouter une règle</p>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Field>
               <Label>Libellé <span className="text-error-500">*</span></Label>
               <Input placeholder="Ex. Prime de logement" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
@@ -653,7 +653,7 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
               <Input placeholder="HRA" value={v.code} onChange={(e) => setValue("code", e.target.value)} />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Field>
               <Label>Type</Label>
               <Select value={v.lineType} onChange={(e) => setValue("lineType", e.target.value)}>
@@ -666,7 +666,7 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
               <Input placeholder="Allowance / Deduction" value={v.category} onChange={(e) => setValue("category", e.target.value)} />
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Field>
               <Label>Calcul</Label>
               <Select value={v.computation} onChange={(e) => setValue("computation", e.target.value)}>

@@ -202,7 +202,7 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
         <SearchableSelect value={v.subjectId} options={subjectOptions} onChange={onSubjectChange} triggerClassName="w-full justify-between px-3" />
         {errors.subjectId && <p className="text-xs text-error-600">{errors.subjectId.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Enseignant</Label>
           <SearchableSelect value={v.teacherId} options={teacherOptions} onChange={(val) => setValue("teacherId", val)} triggerClassName="w-full justify-between px-3" />
@@ -229,7 +229,7 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
             : "Aucune disponibilité déclarée par l'enseignant ce jour (renseignez-les sur sa fiche)."}
         </p>
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Début <span className="text-error-500">*</span></Label>
           <Input type="time" value={v.startTime} onChange={(e) => setValue("startTime", e.target.value)} aria-invalid={!!errors.startTime} />

@@ -90,7 +90,7 @@ function YearForm({ onSubmit, onCancel }: { onSubmit: (input: CreateAcademicYear
         <Input placeholder="2026 - 2027" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
         {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Début</Label>
           <DatePicker value={v.startDate} clearable onChange={(val) => {
@@ -168,7 +168,7 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
           <option value="SUPERIEUR">Supérieur</option>
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Type</Label>
           <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
@@ -181,7 +181,7 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
           <Input type="number" min={1} value={v.sortOrder} onChange={(e) => setValue("sortOrder", e.target.value)} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Début</Label>
           <DatePicker value={v.startDate} clearable onChange={(val) => setValue("startDate", val)} />
@@ -288,7 +288,7 @@ function EventForm({ yearId, onCancel, onDone }: { yearId: number; onCancel: () 
           {(Object.keys(EVENT_TYPE_LABEL) as AcademicEventType[]).map((t) => (<option key={t} value={t}>{EVENT_TYPE_LABEL[t]}</option>))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Début <span className="text-error-500">*</span></Label>
           <DatePicker value={v.startDate} onChange={(val) => setValue("startDate", val)} />

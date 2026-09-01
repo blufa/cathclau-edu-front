@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
-import { confirmSchoolPaymentViaDjomy, getReceiptPdfObjectUrl, initiateGroupPayment, listPaymentsByStudent } from "@/lib/api/payment";
+import { confirmSchoolPaymentViaDjomy, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
+import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
 import { type PaymentChannel } from "@/lib/types/payment";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
+import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
+import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -68,6 +71,9 @@ export function CollectFeeModal({
   const unpaid = all.filter((inv) => inv.status !== "PAID");
   const receipts = (payments.data ?? []).filter((p) => p.status === "SUCCEEDED");
   const monthlyFee = (fees.data ?? []).find((f) => f.type === "MONTHLY");
+  // Encaissements guichet enregistrés hors-ligne pour cet élève, pas encore synchronisés (§payments —
+  // mode hors-ligne) : pas de vrai reçu serveur tant qu'ils n'ont pas atteint le backend.
+  const queuedPayments = useSyncQueueStore((s) => s.items).filter((i) => i.studentIds.includes(studentId));
 
   // Frais réglables en tranches (§billing) : la scolarité (MONTHLY) et, comme elle, la cantine
   // (CANTEEN) — le transport (TRANSPORT) reste géré séparément via son propre abonnement par ligne.
@@ -209,11 +215,38 @@ export function CollectFeeModal({
     }
   }
 
+  /** Reçu provisoire imprimable (pas de PDF serveur tant que le paiement n'est pas synchronisé) — un
+   * bloc minimal ouvert dans une fenêtre dédiée, remis au parent séance tenante. */
+  function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
+    const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
+    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
+      <body>
+        <h1>Reçu PROVISOIRE</h1>
+        <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
+        <p>Référence locale : OFFLINE-${entry.id.slice(0, 8).toUpperCase()}</p>
+        <p>Date : ${new Date(entry.createdAt).toLocaleString("fr-FR")}</p>
+        <p>Détail : ${entry.input.coverageLabel}</p>
+        <p>Montant : ${formatGNF(total)}</p>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   return (
     <>
       <Modal open={open} onClose={onClose} title="Facture & encaissement">
         {q.loading ? (
           <div className="flex justify-center py-10"><Spinner /></div>
+        ) : all.length === 0 && isNetworkError(q.error) ? (
+          <p className="rounded-md bg-warning-50 px-3 py-2 text-sm text-warning-800">
+            Impossible de charger les factures (hors-ligne) — rouvrez cette fiche pendant que vous étiez
+            connecté, ou reconnectez-vous pour continuer.
+          </p>
         ) : all.length === 0 ? (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Aucune facture pour cet élève. Vérifiez qu&apos;un frais d&apos;inscription est configuré pour la classe.
@@ -336,6 +369,27 @@ export function CollectFeeModal({
                       onClick={() => showPdf(`Reçu ${p.reference}`, () => getReceiptPdfObjectUrl(p.id))}
                       className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
                       <ReceiptIcon className="h-4 w-4" /> Reçu PDF
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {queuedPayments.length > 0 && (
+              <div className="space-y-2 border-t border-slate-100 pt-4">
+                <p className="text-xs font-medium text-warning-700">
+                  Reçus provisoires (hors-ligne — en attente de synchronisation)
+                </p>
+                {queuedPayments.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-600">
+                      <span className="font-mono text-xs">OFFLINE-{entry.id.slice(0, 8).toUpperCase()}</span> ·{" "}
+                      {formatGNF(entry.input.shares.reduce((s, x) => s + x.amount, 0))}
+                    </span>
+                    <button type="button"
+                      onClick={() => printProvisionalReceipt(entry)}
+                      className="inline-flex items-center gap-1 text-xs text-warning-700 hover:underline">
+                      <ReceiptIcon className="h-4 w-4" /> Reçu provisoire
                     </button>
                   </div>
                 ))}
@@ -496,7 +550,7 @@ function InvoiceCollect({
       const coverageLabel = wholeYear && selectedInvoices.length === monthlyIds.length
         ? "Scolarité complète"
         : selectedInvoices.map(receiptLabelFor).filter(Boolean).join(", ");
-      const res = await initiateGroupPayment({
+      const attempt = await submitGroupPaymentOfflineAware({
         tenantId, studentId, channel,
         payerNumber: online ? "614324299" : undefined,
         coverageLabel,
@@ -505,6 +559,16 @@ function InvoiceCollect({
         shares,
         academicYearId: selectedInvoices[0]?.academicYearId ?? null,
       });
+      if (attempt.outcome === "queued") {
+        // Réseau indisponible : encaissement guichet enregistré localement, sera rejoué automatiquement
+        // au retour de la connexion (voir le bandeau hors-ligne et la section « reçus provisoires »).
+        notifySuccess("Encaissement enregistré hors-ligne — sera synchronisé automatiquement.");
+        setSelected([]);
+        setCustomAmounts({});
+        setMonthSelections({});
+        return;
+      }
+      const res = attempt.response;
       if (online) {
         // Une seule transaction Djomy pour le total : on ouvre le portail puis on attend la confirmation.
         pollIdRef.current = res.payment.id;

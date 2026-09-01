@@ -339,7 +339,7 @@ function BudgetForm({ initial, onCancel, onDone }: { initial?: AnnualBudget | nu
         <Input placeholder="2025-2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} />
       </Field>
       <Field><Label>Notes</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Financement</Label>
           <p className="text-xs text-gray-400">Si un événement (kermesse, sortie…) dépasse la trésorerie courante</p>
@@ -406,7 +406,7 @@ function LineForm({ budgetId, type, initial, onCancel, onDone }: {
         <label htmlFor="use-quantity" className="cursor-pointer text-sm text-gray-700">Cet article se chiffre par quantité × prix unitaire</label>
       </div>
       {useQuantity ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field><Label>Quantité</Label><Input type="number" min={0} value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
           <Field><Label>Prix unitaire</Label><MoneyInput value={unitPrice} onValueChange={(n) => setUnitPrice(String(n))} /></Field>
         </div>
