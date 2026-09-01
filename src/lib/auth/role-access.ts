@@ -53,5 +53,11 @@ export function roleHome(user: AuthUser | null): string {
   if (hasRole(user, "TEACHER")) return "/dashboard/enseignant";
   if (hasRole(user, "PARENT")) return "/children";
   if (hasRole(user, "STUDENT")) return "/my-results";
-  return "/dashboard";
+  // Tout autre rôle (comptable, secrétaire, directeur, responsable pédagogique, DPE_ADMIN, un rôle
+  // personnalisé futur…) : première page de la navigation à laquelle ce rôle a effectivement accès,
+  // plutôt qu'un chemin fixe (« /dashboard ») qui casse silencieusement (boucle de redirection, écran
+  // bloqué sur le spinner) pour tout rôle qui n'y a pas accès — c'est ce qui laissait DPE_ADMIN sans
+  // aucun menu visible après connexion.
+  const firstAllowed = ROUTE_ROLES.find((r) => !r.roles || hasRole(user, ...r.roles));
+  return firstAllowed?.href ?? "/account";
 }

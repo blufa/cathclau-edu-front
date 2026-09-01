@@ -262,3 +262,28 @@ export interface PlatformFeeSettlement {
   createdAt: string;
   confirmedAt: string | null;
 }
+
+/** Périmètre géographique de supervision DPE (préfecture) ou DCE (commune, ex. Conakry). */
+export type PrefectureType = "DPE" | "DCE";
+export type PrefectureStatus = "ACTIVE" | "ARCHIVEE";
+
+export interface Prefecture {
+  id: number;
+  nom: string;
+  type: PrefectureType;
+  region: string | null;
+  pays: string;
+  latitude: string | null;
+  longitude: string | null;
+  statut: PrefectureStatus;
+  createdAt: string;
+}
+
+export interface PrefectureInput {
+  nom: string;
+  type: PrefectureType;
+  region: string | null;
+  pays: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}

@@ -15,15 +15,18 @@ jobs:
     outputs:
       env: ${{ steps.e.outputs.env }}
       api: ${{ steps.e.outputs.api }}
+      site: ${{ steps.e.outputs.site }}
     steps:
       - id: e
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "env=prod" >> "$GITHUB_OUTPUT"
             echo "api=https://api.cathclau-edu.com/api/v1" >> "$GITHUB_OUTPUT"
+            echo "site=https://cathclau-edu.com" >> "$GITHUB_OUTPUT"
           else
             echo "env=dev" >> "$GITHUB_OUTPUT"
             echo "api=https://api-dev.cathclau-edu.com/api/v1" >> "$GITHUB_OUTPUT"
+            echo "site=https://dev.cathclau-edu.com" >> "$GITHUB_OUTPUT"
           fi
 
   test:
@@ -60,6 +63,7 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=${{ needs.setup.outputs.api }}
+            NEXT_PUBLIC_SITE_URL=${{ needs.setup.outputs.site }}
           tags: |
             ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:${{ needs.setup.outputs.env }}
             ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:${{ github.sha }}
