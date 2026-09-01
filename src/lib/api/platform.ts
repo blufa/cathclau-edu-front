@@ -8,6 +8,8 @@ import type {
   PlanInput,
   PlatformFeeSettlement,
   PlatformUser,
+  Prefecture,
+  PrefectureInput,
   SchoolBranding,
   SignupInput,
   SignupResult,
@@ -394,4 +396,53 @@ export function confirmPlatformFeeSettlementViaDjomy(id: number): Promise<Platfo
 
 export function listPlatformFeeSettlements(): Promise<PlatformFeeSettlement[]> {
   return api.get<PlatformFeeSettlement[]>("/platform-fee/settlements");
+}
+
+// ── Préfectures/communes DPE/DCE (SUPER_ADMIN) ──────────────────────────────────
+export function listPrefectures(): Promise<Prefecture[]> {
+  return api.get<Prefecture[]>("/platform/prefectures");
+}
+
+export function getPrefecture(id: number): Promise<Prefecture> {
+  return api.get<Prefecture>(`/platform/prefectures/${id}`);
+}
+
+export function createPrefecture(input: PrefectureInput): Promise<Prefecture> {
+  return api.post<Prefecture>("/platform/prefectures", input);
+}
+
+export function updatePrefecture(id: number, input: PrefectureInput): Promise<Prefecture> {
+  return api.put<Prefecture>(`/platform/prefectures/${id}`, input);
+}
+
+export function archivePrefecture(id: number): Promise<Prefecture> {
+  return api.patch<Prefecture>(`/platform/prefectures/${id}/archiver`);
+}
+
+export function reactivatePrefecture(id: number): Promise<Prefecture> {
+  return api.patch<Prefecture>(`/platform/prefectures/${id}/reactiver`);
+}
+
+export function listPrefectureSchools(id: number): Promise<Tenant[]> {
+  return api.get<Tenant[]>(`/platform/prefectures/${id}/ecoles`);
+}
+
+export function assignSchoolToPrefecture(id: number, tenantId: number): Promise<Tenant> {
+  return api.put<Tenant>(`/platform/prefectures/${id}/ecoles/${tenantId}`);
+}
+
+export function unassignSchoolFromPrefecture(tenantId: number): Promise<void> {
+  return api.delete<void>(`/platform/prefectures/ecoles/${tenantId}`);
+}
+
+export function listPrefectureUserIds(id: number): Promise<number[]> {
+  return api.get<number[]>(`/platform/prefectures/${id}/utilisateurs`);
+}
+
+export function assignUserToPrefecture(id: number, userId: number): Promise<void> {
+  return api.post<void>(`/platform/prefectures/${id}/utilisateurs`, { userId });
+}
+
+export function unassignUserFromPrefecture(id: number, userId: number): Promise<void> {
+  return api.delete<void>(`/platform/prefectures/${id}/utilisateurs/${userId}`);
 }

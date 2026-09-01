@@ -11,9 +11,14 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# L'URL de l'API est figée au build (variable NEXT_PUBLIC_*). Passée en build-arg par la CI.
+# L'URL de l'API et l'URL publique du site sont figées au build (variables NEXT_PUBLIC_*),
+# passées en build-arg par la CI (voir .github/workflows/deploy.yml) — sans NEXT_PUBLIC_SITE_URL,
+# le sitemap/robots.txt générés au build retombent sur leur valeur par défaut http://localhost:3000,
+# inutilisable par Google Search Console.
 ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
