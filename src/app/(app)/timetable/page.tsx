@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CalendarClock } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   cancelScheduleWeekException,
@@ -73,7 +73,7 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
 
 export default function TimetablePage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["emploi:manage"]);
 
   const [mode, setMode] = useState<"class" | "teacher">("class");
   const [view, setView] = useState<"liste" | "grille">("liste");

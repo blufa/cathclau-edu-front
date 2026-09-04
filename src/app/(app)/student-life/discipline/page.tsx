@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { searchStudents } from "@/lib/api/students";
 import {
@@ -55,7 +55,7 @@ const SEV_TONE: Record<DisciplineSeverity, "gray" | "amber" | "red"> = { MINOR: 
 
 export default function DisciplinePage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["discipline:manage"]);
   // Résoudre/classer un signalement relève des rôles administratifs — un enseignant peut modifier
   // sa saisie mais pas trancher lui-même l'issue de l'incident qu'il a signalé.
   const canResolve = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");

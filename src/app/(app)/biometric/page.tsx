@@ -2,7 +2,7 @@
 
 import { Camera, Fingerprint, HardDrive, IdCard, ListChecks, UserPlus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Reveal } from "@/components/public/reveal";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { DevicesTab } from "@/components/biometric/devices-tab";
@@ -13,7 +13,7 @@ import { BadgesTab } from "@/components/biometric/badges-tab";
 
 export default function BiometricPage() {
   const { user } = useAuth();
-  if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR")) {
+  if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") && !hasAnyPermission(user, ["biometrique:manage"])) {
     return <p className="rounded-xl bg-error-50 px-4 py-6 text-sm text-error-700">Accès réservé à l&apos;administration.</p>;
   }
   return (

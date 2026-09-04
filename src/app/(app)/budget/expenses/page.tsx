@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Building2, LineChart, Plus, Receipt, Tags, Wallet } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   approveExpense,
@@ -94,8 +94,8 @@ export default function ExpensesPage() {
 
 // ── Expenses tab ─────────────────────────────────────────────────────────────
 function ExpensesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "ACCOUNTANT");
-  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "ACCOUNTANT") || hasAnyPermission(user, ["depense:create"]);
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["depense:approve"]);
 
   const [status, setStatus] = useState<ExpenseStatus | "">("");
   const q = useQuery(() => listExpenses(status || undefined), [status]);

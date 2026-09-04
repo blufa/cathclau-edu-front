@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { CornerDownLeft, Search } from "lucide-react";
 import { NAVIGATION, flattenNav } from "@/config/navigation";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { isNavItemAllowed } from "@/lib/auth/permissions";
 
 interface Entry {
   label: string;
@@ -28,7 +28,7 @@ export function GlobalSearch() {
   const entries = useMemo<Entry[]>(() => {
     const out: Entry[] = [];
     for (const section of NAVIGATION) {
-      const visible = section.items.filter((item) => !item.roles || hasRole(user, ...item.roles));
+      const visible = section.items.filter((item) => isNavItemAllowed(user, item));
       for (const leaf of flattenNav(visible)) {
         out.push({ label: leaf.label, href: leaf.href, section: section.title });
       }

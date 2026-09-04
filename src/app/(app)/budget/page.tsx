@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { FileText, Plus, Wallet } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import {
   addBudgetLine,
   updateBudgetLine,
@@ -50,8 +50,8 @@ const STATUS_TONE: Record<string, "gray" | "green" | "amber" | "red" | "indigo">
 
 export default function BudgetPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
-  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["budget:manage"]);
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["budget:approve"]);
 
   const budgetsQuery = useQuery(listBudgets, []);
   const budgets = useMemo(() => budgetsQuery.data ?? [], [budgetsQuery.data]);

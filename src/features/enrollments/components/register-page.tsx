@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -38,9 +38,9 @@ const STATUS_LABEL: Record<EnrollmentStatus, string> = {
 export default function EnrollmentsPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
-  const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["inscription:validate"]);
+  const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["paiement:create"]);
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:create"]);
 
   // Open the enrollment fee invoice for collection; full payment validates the enrollment server-side.
   const [collectFor, setCollectFor] = useState<{ studentId: number; classId: number } | null>(null);

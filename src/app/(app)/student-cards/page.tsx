@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { IdCard, Plus, Search, Tags } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { searchStudents } from "@/lib/api/students";
 import { getClass } from "@/lib/api/academics";
@@ -72,7 +72,7 @@ export default function StudentCardsPage() {
 }
 
 function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["carte:manage"]);
   const q = useQuery(() => listCards(), []);
   const templatesQuery = useQuery(() => listCardTemplates(), []);
   const studentsQuery = useQuery(() => searchStudents({ size: 1000 }), []);
@@ -192,7 +192,7 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
 }
 
 function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["carte:manage"]);
   const q = useQuery(() => listCardTemplates(), []);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CardTemplate | null>(null);

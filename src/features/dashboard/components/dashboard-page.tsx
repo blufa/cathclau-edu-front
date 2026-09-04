@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AlertTriangle, GraduationCap, Receipt, Wallet, TrendingUp } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { useSubscription } from "@/providers/subscription-provider";
 import { setAutoRenewal } from "@/lib/api/platform";
 import { Switch } from "@/components/ui/switch";
@@ -66,6 +67,11 @@ export default function DashboardPage() {
 
   const studentsQuery = useStudentsCountQuery(tenantScoped);
   const invoicesQuery = useRecentInvoicesQuery(tenantId, tenantScoped);
+  // Guide « Premiers pas » : contenu 100% configuration (classes, enseignants, logo, modèles...) et
+  // appels à des endpoints réservés à l'admin (profil école, modèles de message) — ne doit se
+  // déclencher que pour les rôles qui font réellement cette configuration, pas pour tout le monde
+  // atterrissant sur /dashboard (ex. Comptable, Secrétaire), sous peine d'« Access denied » en boucle.
+  const canSetup = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
   if (!user) return null;
 
@@ -111,8 +117,8 @@ export default function DashboardPage() {
       {tenantScoped && <PendingSubscriptionBanner />}
 
       {/* Bannière cliquable vers le guide « Premiers pas » (page dédiée /onboarding) — se masque une
-          fois configuré ou fermée manuellement. */}
-      {tenantScoped && <GettingStarted compact />}
+          fois configuré ou fermée manuellement. Réservée aux rôles qui font la configuration. */}
+      {tenantScoped && canSetup && <GettingStarted compact />}
 
       {!tenantScoped ? (
         <Card>

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { CalendarCheck, ClipboardList, ScanLine, Settings, UserCheck } from "lucide-react";
 import { AttendanceSettingsPanel } from "@/components/attendance/attendance-settings-panel";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -63,7 +63,7 @@ function nowHm() {
 
 export default function AttendancePage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY") || hasAnyPermission(user, ["presence:create"]);
   const canManageStaff = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
   const canManageSettings = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 

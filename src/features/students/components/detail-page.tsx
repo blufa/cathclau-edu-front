@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
@@ -54,9 +54,9 @@ export default function StudentDetailPage() {
   const id = Number(params.id);
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR");
-  const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
-  const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
+  const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["inscription:create"]);
+  const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["inscription:validate"]);
+  const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["paiement:create"]);
 
   const { data, isLoading: loading, error, refetch } = useStudentQuery(id);
   const [enrolling, setEnrolling] = useState(false);

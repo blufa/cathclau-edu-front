@@ -72,9 +72,9 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Pilotage",
     items: [
-      { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"] },
-      { label: "Vision Fondateur", href: "/founder", icon: TrendingUp, roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
-      { label: "Rapports & analytique", href: "/reports", icon: Gauge, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
+      { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["eleve:read", "facture:read"], excludeRoles: ["PARENT"] },
+      { label: "Vision Fondateur", href: "/founder", icon: TrendingUp, roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["dashboard:direction"] },
+      { label: "Rapports & analytique", href: "/reports", icon: Gauge, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["dashboard:admin"] },
     ],
   },
   {

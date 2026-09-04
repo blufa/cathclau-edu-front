@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { History, Plus, Webhook } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   activateEndpoint,
@@ -43,7 +43,7 @@ const STATUS_TONE: Record<WebhookDeliveryStatus, "amber" | "green" | "red"> = { 
 export default function WebhooksPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const allowed = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const allowed = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["webhook:manage"]);
 
   if (!tenantId || !allowed) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé aux administrateurs de l&apos;établissement.</div>;

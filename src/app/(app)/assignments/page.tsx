@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getClassStudents, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import {
@@ -41,7 +41,7 @@ const SUB_TONE = { SUBMITTED: "indigo", LATE: "amber", GRADED: "green" } as cons
 
 export default function AssignmentsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["devoir:manage"]);
 
   const yearsQuery = useQuery(listAcademicYears, []);
   const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
