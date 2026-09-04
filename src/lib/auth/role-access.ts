@@ -1,21 +1,22 @@
 import { NAVIGATION, type NavItem } from "@/config/navigation";
 import type { AuthUser } from "@/lib/types/auth";
-import type { RoleCode } from "@/lib/types/enums";
-import { hasRole } from "./permissions";
+import { hasRole, isNavItemAllowed, type RoleGate } from "./permissions";
 
-interface RouteRoles {
+interface RouteRoles extends RoleGate {
   href: string;
-  roles?: RoleCode[];
 }
 
-/** Aplatit la navigation en { href, roles } ; un enfant sans `roles` hérite de son parent (ex.
- * les sous-pages "Mon abonnement" qui ne portent le filtre que sur l'entrée de groupe). */
-function flattenWithRoles(items: NavItem[], inherited?: RoleCode[]): RouteRoles[] {
+/** Aplatit la navigation en { href, roles, permissions, excludeRoles } ; un enfant sans filtre
+ * propre hérite de celui de son parent (ex. les sous-pages "Mon abonnement" qui ne portent le
+ * filtre que sur l'entrée de groupe). */
+function flattenWithRoles(items: NavItem[], inherited?: RoleGate): RouteRoles[] {
   const out: RouteRoles[] = [];
   for (const item of items) {
-    const roles = item.roles ?? inherited;
-    if (item.href) out.push({ href: item.href, roles });
-    if (item.children) out.push(...flattenWithRoles(item.children, roles));
+    const gate: RoleGate | undefined = item.roles || item.permissions
+      ? { roles: item.roles, permissions: item.permissions, excludeRoles: item.excludeRoles }
+      : inherited;
+    if (item.href) out.push({ href: item.href, ...gate });
+    if (item.children) out.push(...flattenWithRoles(item.children, gate));
   }
   return out;
 }
@@ -42,7 +43,7 @@ export function isPathAllowedForUser(user: AuthUser | null, pathname: string): b
   if (candidates.length === 0) return true;
 
   const match = candidates.reduce((best, r) => (r.href.length > best.href.length ? r : best));
-  return !match.roles || hasRole(user, ...match.roles);
+  return isNavItemAllowed(user, match);
 }
 
 /** Route d'accueil de l'utilisateur — après connexion, et repli quand une page ne lui est pas destinée. */
@@ -58,6 +59,6 @@ export function roleHome(user: AuthUser | null): string {
   // plutôt qu'un chemin fixe (« /dashboard ») qui casse silencieusement (boucle de redirection, écran
   // bloqué sur le spinner) pour tout rôle qui n'y a pas accès — c'est ce qui laissait DPE_ADMIN sans
   // aucun menu visible après connexion.
-  const firstAllowed = ROUTE_ROLES.find((r) => !r.roles || hasRole(user, ...r.roles));
+  const firstAllowed = ROUTE_ROLES.find((r) => isNavItemAllowed(user, r));
   return firstAllowed?.href ?? "/account";
 }

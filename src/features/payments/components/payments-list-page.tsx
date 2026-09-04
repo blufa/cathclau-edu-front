@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
 import { listAcademicYears } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -38,7 +38,7 @@ const STATUS_TONE: Record<PaymentStatus, "gray" | "amber" | "green" | "red" | "i
 export default function PaymentsListPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canRefund = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canRefund = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paiement:refund"]);
 
   const yearsQuery = useLegacyQuery(listAcademicYears, []);
   const years = useMemo(

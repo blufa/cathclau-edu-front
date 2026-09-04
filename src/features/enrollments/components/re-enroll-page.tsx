@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { GraduationCap, Rocket } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getClassStudents, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { reenroll } from "@/lib/api/enrollments";
@@ -30,7 +30,7 @@ type RowResult = "ok" | "error";
 export default function ReEnrollmentPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canDo = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canDo = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:create"]);
 
   const yearsQuery = useQuery(() => listAcademicYears(), []);
   const levelsQuery = useQuery(() => listLevels(), []);

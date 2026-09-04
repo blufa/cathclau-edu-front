@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
 import { listAcademicYears, listLevels, listRooms, listSubjects } from "@/lib/api/academics";
 import type { Classe, CreateClassInput } from "@/lib/types/academics";
@@ -24,7 +24,7 @@ import {
 
 export default function ClassesListPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["classe:manage"]);
 
   const yearsQuery = useLegacyQuery(listAcademicYears, []);
   const levelsQuery = useLegacyQuery(listLevels, []);

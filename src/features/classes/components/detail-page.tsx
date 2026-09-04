@@ -6,7 +6,7 @@ import { useQuery as useLegacyQuery } from "@/hooks/use-query";
 import { getClassStudents, getEnrollmentCount, listLevels, listRooms, setClassRepresentative } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -20,7 +20,7 @@ export default function ClassDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["classe:manage"]);
 
   const classQuery = useClassQuery(id);
   const countQuery = useLegacyQuery(() => getEnrollmentCount(id), [id]);

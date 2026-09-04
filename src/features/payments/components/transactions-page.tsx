@@ -5,7 +5,7 @@ import { Landmark, Receipt as ReceiptIcon, Search, FileText } from "lucide-react
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
 import { getReceiptPdfObjectUrlById } from "@/lib/api/payment";
 import { searchStudents } from "@/lib/api/students";
@@ -34,7 +34,7 @@ const PROVIDER_LABEL: Record<PaymentProvider, string> = {
 
 export default function PaymentTransactionsPage() {
   const { user } = useAuth();
-  const canView = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canView = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["transaction:read"]);
 
   if (!canView) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à la comptabilité et à la direction.</div>;

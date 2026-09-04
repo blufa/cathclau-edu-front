@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/staff";
 import { listRooms, listSubjects } from "@/lib/api/academics";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -59,7 +59,7 @@ export default function TeacherDetailPage() {
   const id = Number(params.id);
 
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
   const teacherQuery = useQuery(() => getTeacher(id), [id]);
   const classesQuery = useQuery(() => getTeacherClasses(id), [id]);
   const subjectsQuery = useQuery(() => getTeacherSubjects(id), [id]);

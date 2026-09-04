@@ -174,14 +174,21 @@ export default function AttendanceScanPage() {
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia) { setError("Caméra non disponible sur ce navigateur."); return; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+      // Résolution demandée à la caméra la plus haute possible (surtout sur téléphone, où la
+      // résolution par défaut de la caméra arrière peut être basse) : plus de détail = un QR code
+      // plus petit, plus loin ou incliné dans l'image reste décodable.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(() => {}); }
       setStreaming(true);
       // Décodage QR en JS pur (jsQR) via un canvas caché : fonctionne sur tous les navigateurs,
       // contrairement à l'API native BarcodeDetector (absente de Firefox et de la plupart des
       // versions de Safari iOS), qui laissait le scan tourner sans jamais rien détecter.
-      const MAX_DIM = 480; // suffisant pour décoder un QR, évite de traiter le flux en pleine résolution
+      const MAX_DIM = 900; // détail suffisant pour décoder un QR petit/incliné dans l'image, sans
+      // traiter le flux en pleine résolution à chaque frame (coût CPU).
       const tick = () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -193,7 +200,9 @@ export default function AttendanceScanPage() {
           if (ctx) {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(frame.data, frame.width, frame.height);
+            // "attemptBoth" : essaie aussi les couleurs inversées (code clair sur fond sombre,
+            // reflets d'écran de téléphone…) — améliore la détection quelle que soit la position.
+            const code = jsQR(frame.data, frame.width, frame.height, { inversionAttempts: "attemptBoth" });
             if (code?.data) handleRaw(code.data);
           }
         }

@@ -6,7 +6,7 @@ import { Search, Upload, UserPlus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions";
 import { ApiError } from "@/lib/api/errors";
 import { qk } from "@/lib/query";
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student } from "@/lib/types/student";
@@ -39,8 +39,8 @@ function initials(s: Student) {
 export default function StudentsPage() {
   const { user } = useAuth();
   const { plan, tenantScoped, refresh: refreshSubscription } = useSubscription();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR");
-  const canDelete = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["eleve:create", "eleve:update"]);
+  const canDelete = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasPermission(user, "eleve:delete");
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");

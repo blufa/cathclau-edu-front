@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { FileText, History, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import {
   createTemplate,
   deleteTemplate,
@@ -75,7 +75,7 @@ function downloadWord(html: string, name: string) {
 
 export default function DocumentsPage() {
   const { user } = useAuth();
-  const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["document:manage"]);
 
   const q = useQuery(listTemplates, []);
   const [editing, setEditing] = useState<DocumentTemplate | null>(null);

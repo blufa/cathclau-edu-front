@@ -8,7 +8,7 @@ import { z } from "zod";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { BookOpen, FileText, GraduationCap, Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   getClassStudents,
@@ -74,7 +74,7 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function GradingPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["evaluation:create"]);
   const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
   // Only admins/directors may modify an already-entered grade; teachers can only enter new ones.
   const canEditExisting = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");

@@ -3,14 +3,14 @@
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Bus, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Reveal } from "@/components/public/reveal";
 import { RoutesTab } from "@/components/transport/routes-tab";
 import { SubscriptionsTab } from "@/components/transport/subscriptions-tab";
 
 export default function TransportPage() {
   const { user } = useAuth();
-  if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY")) {
+  if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") && !hasAnyPermission(user, ["transport:manage"])) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration.</div>;
   }
   return (

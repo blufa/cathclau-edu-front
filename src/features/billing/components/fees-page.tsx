@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { listRoutes } from "@/lib/api/transport";
@@ -47,7 +47,7 @@ import { formatGNF } from "@/lib/format";
 export default function FeesPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["frais:manage"]);
 
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);

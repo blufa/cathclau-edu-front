@@ -3,14 +3,14 @@
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Layers, DoorOpen, BookOpen } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { LevelsPanel } from "@/components/referentials/levels-panel";
 import { RoomsPanel } from "@/components/referentials/rooms-panel";
 import { SubjectsPanel } from "@/components/referentials/subjects-panel";
 
 export default function ReferentialsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["niveau:manage", "salle:manage", "matiere:manage"]);
 
   return (
     <div className="space-y-5">
