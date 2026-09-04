@@ -27,7 +27,7 @@ export function Card({
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("border-b border-slate-100 px-5 py-4", className)} {...props} />;
+  return <div className={cn("border-b border-slate-100 px-3 py-4 sm:px-5", className)} {...props} />;
 }
 
 export function CardTitle({ className, children }: React.HTMLAttributes<HTMLHeadingElement>) {
@@ -39,5 +39,5 @@ export function CardTitle({ className, children }: React.HTMLAttributes<HTMLHead
 }
 
 export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-5 py-4", className)} {...props} />;
+  return <div className={cn("px-3 py-4 sm:px-5", className)} {...props} />;
 }

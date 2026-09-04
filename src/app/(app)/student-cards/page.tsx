@@ -290,7 +290,7 @@ function TemplateForm({ initial, onCancel, onCreated }: { initial?: CardTemplate
           <option value="PORTRAIT">Portrait</option>
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Couleur primaire</Label><Input type="color" value={v.primaryColor} onChange={(e) => setValue("primaryColor", e.target.value)} /></Field>
         <Field><Label>Couleur secondaire</Label><Input type="color" value={v.secondaryColor} onChange={(e) => setValue("secondaryColor", e.target.value)} /></Field>
       </div>

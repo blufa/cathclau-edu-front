@@ -221,13 +221,13 @@ function TxForm({ fundId, type, suggested, onCancel, onDone }: {
   }
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Date</Label><DatePicker value={txDate} clearable onChange={setTxDate} /></Field>
         <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
       </div>
       {type === "DISBURSEMENT" && (
         <>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field><Label>N° de bon</Label><Input value={voucherNumber} onChange={(e) => setVoucherNumber(e.target.value)} /></Field>
             <Field><Label>Catégorie</Label><Input placeholder="Fournitures, transport…" value={category} onChange={(e) => setCategory(e.target.value)} /></Field>
           </div>

@@ -123,7 +123,7 @@ function DeviceForm({ initial, onCancel, onDone }: { initial: BiometricDevice | 
         <Input placeholder="Ex. Entrée principale" value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
         {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Type</Label>
           <Select value={v.deviceType} onChange={(e) => setValue("deviceType", e.target.value)}>
@@ -137,7 +137,7 @@ function DeviceForm({ initial, onCancel, onDone }: { initial: BiometricDevice | 
           </Select>
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Adresse IP</Label>
           <Input placeholder="192.168.1.50" value={v.ipAddress} onChange={(e) => setValue("ipAddress", e.target.value)} />
@@ -155,7 +155,7 @@ function DeviceForm({ initial, onCancel, onDone }: { initial: BiometricDevice | 
         <Switch checked={v.realtimeSync} onChange={(checked) => setValue("realtimeSync", checked)} ariaLabel="Synchronisation temps réel" />
         <span className="text-sm text-gray-700">Synchronisation temps réel</span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Intervalle sync (min)</Label>
           <Input type="number" min={1} value={v.syncIntervalMinutes} onChange={(e) => setValue("syncIntervalMinutes", e.target.value)} />

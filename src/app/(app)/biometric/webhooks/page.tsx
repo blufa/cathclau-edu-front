@@ -252,7 +252,7 @@ function EventsTab({ tenantId }: { tenantId: number }) {
       <Modal open={!!detail} onClose={() => setDetail(null)} title="Détail de l'événement">
         {detail && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-500">Type</span><div className="font-medium text-gray-900">{WEBHOOK_EVENT_TYPE_LABEL[detail.eventType] ?? detail.eventType}</div></div>
               <div><span className="text-gray-500">Statut</span><div><Badge tone={STATUS_TONE[detail.status]}>{WEBHOOK_STATUS_LABEL[detail.status]}</Badge></div></div>
               <div><span className="text-gray-500">Tentatives</span><div className="font-medium text-gray-900">{detail.attemptCount ?? 0}</div></div>

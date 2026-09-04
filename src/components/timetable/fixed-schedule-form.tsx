@@ -188,7 +188,7 @@ export function FixedScheduleForm({
         </Field>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Enseignant{mode === "sequence" ? " (monitrice)" : ""}</Label>
           <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
@@ -217,7 +217,7 @@ export function FixedScheduleForm({
         </div>
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Début <span className="text-error-500">*</span></Label>
           <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
@@ -231,7 +231,7 @@ export function FixedScheduleForm({
       </div>
 
       {mode === "repeated" && (
-        <div className="grid grid-cols-2 gap-3 rounded-xl border border-gray-200 p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-gray-200 p-3">
           <Field>
             <Label>Durée d&apos;un bloc (min)</Label>
             <Input type="number" min={5} value={blockMinutes} onChange={(e) => setBlockMinutes(Number(e.target.value) || 0)} />

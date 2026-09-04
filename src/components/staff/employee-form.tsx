@@ -63,7 +63,7 @@ export function EmployeeForm({
   return (
     <div className="space-y-4">
       {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-600">{error}</p>}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Prénom <span className="text-error-500">*</span></Label>
           <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
@@ -73,7 +73,7 @@ export function EmployeeForm({
           <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Catégorie</Label>
           <Select value={category} onChange={(e) => setCategory(e.target.value as EmployeeCategory)}>
@@ -85,14 +85,14 @@ export function EmployeeForm({
           <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Ex. Comptable, Surveillant…" />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <PhoneInput label="Téléphone" value={phone} onChange={setPhone} />
         <Field>
           <Label>Email</Label>
           <Input value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Matricule</Label>
           <Input value={employeeNumber} onChange={(e) => setEmployeeNumber(e.target.value)} placeholder="Généré si vide" />
@@ -102,7 +102,7 @@ export function EmployeeForm({
           <DatePicker value={hireDate} onChange={setHireDate} clearable />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Salaire de base (GNF)</Label>
           <Input type="number" min={0} value={baseSalary} onChange={(e) => setBaseSalary(e.target.value)} />

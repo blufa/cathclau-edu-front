@@ -59,7 +59,7 @@ export function PublicFooter() {
               La suite tout-en-un pour gérer votre établissement scolaire et garder du temps pour
               l&apos;essentiel : vos élèves.
             </p>
-            <form className="mt-5 flex max-w-sm gap-2">
+            <form className="mt-5 flex max-w-sm flex-col gap-2 sm:flex-row">
               <input
                 type="email"
                 required

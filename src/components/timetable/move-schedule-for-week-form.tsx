@@ -117,7 +117,7 @@ export function MoveScheduleForWeekForm({ slot, weekStartDate, rooms, teachers, 
           {DAYS.map((d) => (<option key={d.value} value={d.value}>{d.label}</option>))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Début <span className="text-error-500">*</span></Label>
           <Input type="time" value={v.startTime} onChange={(e) => setValue("startTime", e.target.value)} aria-invalid={!!errors.startTime} />
@@ -129,7 +129,7 @@ export function MoveScheduleForWeekForm({ slot, weekStartDate, rooms, teachers, 
           {errors.endTime && <p className="text-xs text-error-600">{errors.endTime.message}</p>}
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Salle</Label>
           <Select value={v.roomId} onChange={(e) => setValue("roomId", e.target.value)}>

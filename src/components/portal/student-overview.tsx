@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { BookOpen, CalendarCheck, CalendarDays, Download, FileText, FolderOpen, Wallet } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useNetworkStore } from "@/lib/offline/network-store";
 import { getReportCardPdfObjectUrl, getStudentReportCards } from "@/lib/api/grading";
 import { getChildDocuments, getParentReceiptPdfObjectUrl } from "@/lib/api/portal";
 import { getStudentAttendanceStats } from "@/lib/api/attendance";
@@ -31,9 +33,19 @@ export function StudentOverview({ student }: { student: Student }) {
   const statsQuery = useQuery(() => getStudentAttendanceStats(student.id), [student.id]);
   const invoicesQuery = useQuery(() => listInvoicesByStudent(student.id), [student.id]);
   const lessonsQuery = useQuery(() => listStudentLessons(student.id), [student.id]);
-  const scheduleQuery = useQuery(() => getStudentSchedule(student.id), [student.id]);
-  const subjectsQuery = useQuery(listSubjects, []);
-  const roomsQuery = useQuery(listRooms, []);
+  // Consultation hors-ligne (§Phase 2) : affiche le dernier emploi du temps connu de l'enfant pendant
+  // qu'un rafraîchissement réseau tourne en tâche de fond.
+  const online = useNetworkStore((s) => s.online);
+  const scheduleQuery = useCachedQuery(
+    `student-schedule:${student.id}`,
+    async () => {
+      const [slots, subjects, rooms] = await Promise.all([
+        getStudentSchedule(student.id), listSubjects(), listRooms(),
+      ]);
+      return { slots, subjects, rooms };
+    },
+    [student.id],
+  );
   const documentsQuery = useQuery(() => getChildDocuments(student.id), [student.id]);
   const [openingDoc, setOpeningDoc] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
@@ -51,9 +63,9 @@ export function StudentOverview({ student }: { student: Student }) {
     [lessonsQuery.data],
   );
   const doneCount = lessons.filter((l) => l.status === "DONE").length;
-  const subjectName = (id: number) => (subjectsQuery.data ?? []).find((s) => s.id === id)?.label ?? `Matière #${id}`;
-  const roomName = (id: number | null) => (id == null ? undefined : (roomsQuery.data ?? []).find((r) => r.id === id)?.label);
-  const scheduleSlots: EmploiDuTemps[] = (scheduleQuery.data ?? []).map((s) => ({
+  const subjectName = (id: number) => (scheduleQuery.data?.subjects ?? []).find((s) => s.id === id)?.label ?? `Matière #${id}`;
+  const roomName = (id: number | null) => (id == null ? undefined : (scheduleQuery.data?.rooms ?? []).find((r) => r.id === id)?.label);
+  const scheduleSlots: EmploiDuTemps[] = (scheduleQuery.data?.slots ?? []).map((s) => ({
     id: s.id, tenantId: 0, schoolClassId: s.classId, subjectId: s.subjectId,
     teacherId: s.teacherId, roomId: s.roomId, day: s.day as JourSemaine, startTime: s.startTime, endTime: s.endTime,
   }));
@@ -84,7 +96,14 @@ export function StudentOverview({ student }: { student: Student }) {
       </div>
 
       <section>
-        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700"><CalendarDays className="h-4 w-4 text-brand-600" /> Emploi du temps</h3>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <CalendarDays className="h-4 w-4 text-brand-600" /> Emploi du temps
+          {scheduleQuery.fromCache && !online && (
+            <span className="rounded-full bg-warning-50 px-2 py-0.5 text-xs font-normal text-warning-700">
+              Données en cache — hors-ligne
+            </span>
+          )}
+        </h3>
         {scheduleQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <WeeklyTimetable slots={scheduleSlots} subjectName={subjectName} roomName={roomName}
             emptyText="Emploi du temps non encore défini pour la classe." />

@@ -190,7 +190,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
 
       {active === 0 && (
         <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Prénom <span className="text-error-500">*</span></Label>
               <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
@@ -202,7 +202,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
               {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
             </Field>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field>
               <Label>Sexe</Label>
               <Select value={v.gender} onChange={(e) => setValue("gender", e.target.value as FormValues["gender"])}>
@@ -219,7 +219,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
               <Input value={v.nationality} onChange={(e) => setValue("nationality", e.target.value)} />
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Date de naissance</Label>
               <DatePicker value={v.birthDate} onChange={(val) => setValue("birthDate", val)} clearable maxDate={new Date()} />
@@ -241,7 +241,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
         <div className="space-y-5 pt-2">
           <div className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Coordonnées</h3>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field>
                 <Label>Adresse</Label>
                 <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
@@ -256,7 +256,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
 
           <div className="space-y-4 border-t border-slate-100 pt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Scolarité</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
                 <Label>École précédente</Label>
                 <Combobox
@@ -274,7 +274,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
                 </p>
               </Field>
             </div>
-            <div className="grid grid-cols-2 items-start gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-4">
               <div>
                 <div className="flex items-center gap-3">
                   <Switch checked={v.repeating} onChange={(checked) => setValue("repeating", checked)} ariaLabel="Redoublant" />

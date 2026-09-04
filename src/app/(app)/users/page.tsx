@@ -335,7 +335,7 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Prénom <span className="text-error-500">*</span></Label>
           <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
@@ -407,7 +407,7 @@ function UserEditForm({ user, onCancel, onSaved }: { user: User; onCancel: () =>
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Prénom <span className="text-error-500">*</span></Label>
           <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />

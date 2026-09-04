@@ -209,7 +209,7 @@ function AssignmentForm({ classId, initial, subjectName, onCancel, onCreated }: 
         <Label>Consignes</Label>
         <Textarea rows={3} value={v.instructions} onChange={(e) => setValue("instructions", e.target.value)} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Échéance</Label>
           <DatePicker value={v.dueDate} clearable onChange={(val) => setValue("dueDate", val)} />

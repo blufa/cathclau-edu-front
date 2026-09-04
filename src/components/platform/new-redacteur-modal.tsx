@@ -50,7 +50,7 @@ export function NewRedacteurModal({ open, onClose, onCreated }: NewRedacteurModa
           Ce compte pourra uniquement gérer le blog d&apos;entreprise (articles, catégories, commentaires) —
           aucun accès aux écoles, abonnements ou données clients.
         </p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field>
             <Label>Prénom</Label>
             <Input required value={firstName} onChange={(e) => setFirstName(e.target.value)} />

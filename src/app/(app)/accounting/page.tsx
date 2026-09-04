@@ -224,7 +224,7 @@ function AccountForm({ onCancel, onCreated }: { onCancel: () => void; onCreated:
         </Select>
       </Field>
       {type === "BANK" && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field><Label>Banque</Label><Input value={bank} onChange={(e) => setBank(e.target.value)} /></Field>
           <Field><Label>N° compte</Label><Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} /></Field>
         </div>
@@ -266,7 +266,7 @@ function MovementForm({ accounts, onCancel, onCreated }: { accounts: TreasuryAcc
           {accounts.map((a) => (<option key={a.id} value={a.id}>{a.label}</option>))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Sens</Label>
           <Select value={direction} onChange={(e) => setDirection(e.target.value as CashFlowDirection)}>
@@ -275,7 +275,7 @@ function MovementForm({ accounts, onCancel, onCreated }: { accounts: TreasuryAcc
         </Field>
         <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Catégorie</Label>
           <Select value={category} onChange={(e) => setCategory(e.target.value as CashFlowCategory)}>
@@ -320,7 +320,7 @@ function FiscalTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
             <Label>Libellé <span className="text-error-500">*</span></Label>
             <Input placeholder="Exercice 2025-2026" value={label} onChange={(e) => setLabel(e.target.value)} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field><Label>Début</Label><DatePicker value={startDate} clearable onChange={setStartDate} /></Field>
             <Field><Label>Fin</Label><DatePicker value={endDate} clearable onChange={setEndDate} /></Field>
           </div>
@@ -383,7 +383,7 @@ function SettingsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
           <option value="DOUBLE_ENTRY">Partie double (SYSCOHADA)</option>
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Devise</Label><Input value={currency} onChange={(e) => setCurrency(e.target.value)} /></Field>
         <Field><Label>Mois de début d&apos;exercice</Label><Input type="number" min={1} max={12} value={fiscalYearStartMonth} onChange={(e) => setFiscalYearStartMonth(e.target.value)} /></Field>
       </div>
@@ -430,7 +430,7 @@ function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
           <h3 className="text-sm font-semibold text-gray-700">Nouveau compte</h3>
           <Field><Label>N° compte <span className="text-error-500">*</span></Label><Input placeholder="411, 521, 701…" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} /></Field>
           <Field><Label>Libellé <span className="text-error-500">*</span></Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field><Label>Classe</Label><Input type="number" min={1} max={8} value={accountClass} onChange={(e) => setAccountClass(e.target.value)} /></Field>
             <Field>
               <Label>Type</Label>
@@ -599,7 +599,7 @@ function EntryForm({ journals, accounts, years, onCancel, onCreated }: {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Journal</Label>
           <Select value={journalId} onChange={(e) => setJournalId(e.target.value)}>
@@ -614,7 +614,7 @@ function EntryForm({ journals, accounts, years, onCancel, onCreated }: {
           </Select>
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Date</Label><DatePicker value={date} onChange={setDate} /></Field>
         <Field><Label>Libellé</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
       </div>

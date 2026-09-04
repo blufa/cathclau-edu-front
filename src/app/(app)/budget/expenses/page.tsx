@@ -214,7 +214,7 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
         <Label>Libellé <span className="text-error-500">*</span></Label>
         <Input value={label} onChange={(e) => setLabel(e.target.value)} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
         <Field><Label>Date</Label><DatePicker value={expenseDate} clearable onChange={setExpenseDate} /></Field>
       </div>
@@ -232,7 +232,7 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
           {suppliers.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Budget annuel (optionnel)</Label>
           <Select value={budgetId} onChange={(e) => { setBudgetId(e.target.value); setBudgetLineId(""); }}>
@@ -323,7 +323,7 @@ function SuppliersTab() {
         <div className="space-y-4">
           <Field><Label>Nom <span className="text-error-500">*</span></Label><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
           <Field><Label>Type</Label><Input value={type} onChange={(e) => setType(e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <PhoneInput label="Téléphone" value={phone} onChange={setPhone} />
             <Field><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
           </div>

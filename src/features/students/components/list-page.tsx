@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, Upload, UserPlus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { ApiError } from "@/lib/api/errors";
+import { qk } from "@/lib/query";
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,10 +21,14 @@ import { QuotaProgress } from "@/components/platform/quota-progress";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { StudentForm } from "./student-form";
 import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
+import { OfflineEnrollFields } from "@/features/enrollments/components/offline-enroll-fields";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { useCreateStudentMutation, useDeleteStudentMutation, useStudentsQuery, useUpdateStudentMutation } from "../hooks/use-students";
+import { submitStudentOfflineAware } from "@/lib/offline/submit-student-enrollment";
+import { useEnrollmentQueueStore } from "@/lib/offline/enrollment-queue-store";
+import { discardFailedEnrollmentEntry, retryFailedEnrollmentEntry } from "@/lib/offline/sync-engine";
+import { useDeleteStudentMutation, useStudentsQuery, useUpdateStudentMutation } from "../hooks/use-students";
 
 const PAGE_SIZE = 20;
 
@@ -48,6 +54,10 @@ export default function StudentsPage() {
   // Proposé juste après la création : inscrire immédiatement (utile pour un ancien élève de
   // l'établissement qui n'était pas encore dans le logiciel — il choisit « Réinscription » ici).
   const [enrollingNew, setEnrollingNew] = useState<Student | null>(null);
+  // Élève créé hors-ligne (réseau indisponible, §students) : propose de choisir sa classe tout de
+  // suite via le formulaire simplifié, sur l'entrée en file plutôt que sur un élève réel.
+  const [offlineEnrollingEntryId, setOfflineEnrollingEntryId] = useState<string | null>(null);
+  const enrollmentQueueItems = useEnrollmentQueueStore((s) => s.items);
 
   const { data, isLoading: loading, error } = useStudentsQuery({
     search: search || undefined,
@@ -58,9 +68,9 @@ export default function StudentsPage() {
     size: PAGE_SIZE,
     sort: "lastName,asc",
   });
-  const createMutation = useCreateStudentMutation();
   const updateMutation = useUpdateStudentMutation();
   const deleteMutation = useDeleteStudentMutation();
+  const queryClient = useQueryClient();
 
   // Quota: limit from the current plan, consumed approximated by the total student count.
   const studentLimit = plan?.studentLimit ?? null;
@@ -84,12 +94,18 @@ export default function StudentsPage() {
 
   async function handleCreate(input: CreateStudentInput) {
     try {
-      const created = await createMutation.mutateAsync(input);
+      const attempt = await submitStudentOfflineAware(input);
       setCreating(false);
       setQuotaError(null);
+      if (attempt.outcome === "queued") {
+        notifySuccess("Élève enregistré hors-ligne — sera synchronisé automatiquement.");
+        setOfflineEnrollingEntryId(attempt.entry.id);
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: qk.students.all });
       notifySuccess("Élève créé");
       refreshSubscription();
-      setEnrollingNew(created);
+      setEnrollingNew(attempt.student);
     } catch (err) {
       // Quota guard (§students): 403 with {resource:"ELEVES", limite, consomme}.
       if (err instanceof ApiError && err.status === 403) {
@@ -289,6 +305,41 @@ export default function StudentsPage() {
         exportFilename="eleves.csv"
       />
 
+      {enrollmentQueueItems.length > 0 && (
+        <Card>
+          <CardBody>
+            <h2 className="mb-3 text-sm font-semibold text-warning-700">
+              Élèves en attente de synchronisation (hors-ligne)
+            </h2>
+            <ul className="divide-y divide-slate-100">
+              {enrollmentQueueItems.map((entry) => (
+                <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                  <span className="text-slate-700">
+                    {entry.studentInput.firstName} {entry.studentInput.lastName}
+                    <span className="ml-2 font-mono text-xs text-slate-400">Matricule : en attente</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {entry.status === "failed" ? (
+                      <>
+                        <span className="text-xs text-error-600">{entry.lastError ?? "Échec"}</span>
+                        <Button size="sm" variant="secondary" onClick={() => discardFailedEnrollmentEntry(entry.id)}>Ignorer</Button>
+                        <Button size="sm" onClick={() => retryFailedEnrollmentEntry(entry.id)}>Réessayer</Button>
+                      </>
+                    ) : entry.enroll ? (
+                      <Badge tone="blue">Classe choisie — en attente de connexion</Badge>
+                    ) : (
+                      <Button size="sm" variant="secondary" onClick={() => setOfflineEnrollingEntryId(entry.id)}>
+                        Choisir la classe
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
+
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {quotaError && (
           <div className="mb-4 rounded-xl border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
@@ -320,6 +371,20 @@ export default function StudentsPage() {
           onEnrolled={() => setEnrollingNew(null)}
         />
       )}
+
+      <Modal
+        open={!!offlineEnrollingEntryId}
+        onClose={() => setOfflineEnrollingEntryId(null)}
+        title="Inscrire l'élève (hors-ligne)"
+      >
+        {offlineEnrollingEntryId && (
+          <OfflineEnrollFields
+            entryId={offlineEnrollingEntryId}
+            onDone={() => setOfflineEnrollingEntryId(null)}
+            onSkip={() => setOfflineEnrollingEntryId(null)}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

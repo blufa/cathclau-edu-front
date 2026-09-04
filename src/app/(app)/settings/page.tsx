@@ -129,21 +129,21 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
     <div className="space-y-4">
       <Field><Label>Nom de l&apos;école</Label><Input value={profile.schoolName ?? ""} disabled={ro} onChange={(e) => set("schoolName", e.target.value)} /></Field>
       <Field><Label>Adresse</Label><Input value={profile.address ?? ""} disabled={ro} onChange={(e) => set("address", e.target.value)} /></Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Ville</Label><Input value={profile.city ?? ""} disabled={ro} onChange={(e) => set("city", e.target.value)} /></Field>
         <Field><Label>Pays</Label><Input value={profile.country ?? ""} disabled={ro} onChange={(e) => set("country", e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <PhoneInput label="Téléphone" value={profile.phone ?? ""} disabled={ro} onChange={(v) => set("phone", v)} />
         <Field><Label>Email</Label><Input value={profile.email ?? ""} disabled={ro} onChange={(e) => set("email", e.target.value)} /></Field>
       </div>
       <Field><Label>Site web</Label><Input value={profile.website ?? ""} disabled={ro} onChange={(e) => set("website", e.target.value)} /></Field>
       <Field><Label>Directeur</Label><Input value={profile.director ?? ""} disabled={ro} onChange={(e) => set("director", e.target.value)} /></Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Numéro d&apos;agrément</Label><Input value={profile.accreditationNumber ?? ""} disabled={ro} onChange={(e) => set("accreditationNumber", e.target.value)} /></Field>
         <Field><Label>Autorisation d&apos;ouverture</Label><Input value={profile.openingAuthorization ?? ""} disabled={ro} onChange={(e) => set("openingAuthorization", e.target.value)} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Devise de l&apos;établissement</Label>
           <p className="text-xs text-gray-400">Phrase courte et formelle, imprimée au verso des cartes/badges.</p>
@@ -165,7 +165,7 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
           ce compte Mobile Money. Renseignez le numéro marchand qui doit recevoir vos fonds.
         </p>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
               <Label>Numéro marchand</Label>
               <Input placeholder="Ex. 620 00 00 00" inputMode="tel" value={profile.payoutMerchantNumber ?? ""} disabled={ro}

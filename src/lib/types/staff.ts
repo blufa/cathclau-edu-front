@@ -37,6 +37,9 @@ export interface CreateTeacherInput {
   remunerationRate?: string | null;
   teachingAuthorizationNumber?: string | null;
   cnssNumber?: string | null;
+  /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
+   * réseau renvoie l'enseignant déjà créé côté serveur au lieu d'en créer un second. */
+  idempotencyKey?: string;
 }
 
 export type UpdateTeacherInput = Omit<CreateTeacherInput, "userId">;
