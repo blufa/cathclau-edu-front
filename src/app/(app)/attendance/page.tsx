@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarCheck, ClipboardList, ScanLine, UserCheck } from "lucide-react";
+import { CalendarCheck, ClipboardList, ScanLine, Settings, UserCheck } from "lucide-react";
+import { AttendanceSettingsPanel } from "@/components/attendance/attendance-settings-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -64,6 +65,7 @@ export default function AttendancePage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY");
   const canManageStaff = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canManageSettings = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
@@ -162,6 +164,9 @@ export default function AttendancePage() {
           {canManageStaff && (
             <TabsTrigger value="staff" icon={UserCheck}>Présences enseignants</TabsTrigger>
           )}
+          {canManageSettings && (
+            <TabsTrigger value="settings" icon={Settings}>Réglages</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsPanel value="appel">
@@ -186,6 +191,12 @@ export default function AttendancePage() {
               <TeacherRollCall date={date} />
               <TeacherMonthlyRecap />
             </div>
+          </TabsPanel>
+        )}
+
+        {canManageSettings && (
+          <TabsPanel value="settings">
+            <AttendanceSettingsPanel canWrite={canManageSettings} />
           </TabsPanel>
         )}
       </Tabs>
@@ -598,6 +609,7 @@ function TeacherMonthlyRecap() {
             { label: "Jours absents", value: String(s.absentDays) },
             { label: "Heures dues (mois)", value: fmtH(s.dueMinutes) },
             { label: "Retard cumulé", value: fmtH(s.totalLateMinutes), warn: s.totalLateMinutes > 0 },
+            { label: "Départ anticipé cumulé", value: fmtH(s.totalEarlyMinutes), warn: s.totalEarlyMinutes > 0 },
             { label: "Absences (heures)", value: fmtH(s.absentMinutes), warn: s.absentMinutes > 0 },
             { label: "Heures effectives", value: fmtH(s.effectiveMinutes), strong: true },
           ].map((c) => (
@@ -608,7 +620,7 @@ function TeacherMonthlyRecap() {
           ))}
         </div>
       ) : null}
-      <p className="mt-3 text-xs text-gray-400">Heures effectives = heures dues du mois − absences − retard cumulé. Le retard est calculé à chaque pointage (arrivée vs début du 1ᵉʳ cours du jour).</p>
+      <p className="mt-3 text-xs text-gray-400">Heures effectives = heures dues du mois − absences − retard cumulé − départ anticipé cumulé. Le retard tient compte de la marge de transition entre salles et des récréations (réglages).</p>
 
       {teacherId && (
         <div className="mt-5 border-t border-gray-100 pt-4">

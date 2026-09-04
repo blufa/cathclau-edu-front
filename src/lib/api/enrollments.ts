@@ -36,3 +36,8 @@ export function cancelEnrollment(id: number): Promise<Enrollment> {
 export function deleteEnrollment(id: number): Promise<void> {
   return api.delete<void>(`/enrollments/${id}`);
 }
+
+/** Modifie après coup le choix d'accès à la plateforme (le parent peut changer d'avis en cours d'année). */
+export function updatePlatformAccess(id: number, optIn: boolean): Promise<Enrollment> {
+  return api.patch<Enrollment>(`/enrollments/${id}/platform-access`, { optIn });
+}

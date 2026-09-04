@@ -13,9 +13,10 @@ export interface AnneeScolaire {
   createdAt: string | null;
 }
 
-export type SchoolCycle = "MATERNELLE" | "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR";
+export type SchoolCycle = "GARDERIE" | "MATERNELLE" | "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR";
 
 export const SCHOOL_CYCLE_LABEL: Record<SchoolCycle, string> = {
+  GARDERIE: "Garderie",
   MATERNELLE: "Maternelle",
   PRIMAIRE: "Primaire",
   COLLEGE: "Collège",

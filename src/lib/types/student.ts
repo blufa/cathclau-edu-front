@@ -41,6 +41,9 @@ export interface Enrollment {
   type: EnrollmentType;
   status: EnrollmentStatus;
   enrolledAt: string | null;
+  /** Le parent a accepté que l'élève soit connecté à la plateforme (frais annexe ajouté aux
+   * mensualités si oui, jamais sinon). */
+  platformAccessOptIn: boolean;
 }
 
 /** Body for POST /enrollments and /enrollments/re-enrollment. */
@@ -49,6 +52,7 @@ export interface EnrollInput {
   classId: number;
   academicYearId: number;
   type: EnrollmentType;
+  platformAccessOptIn?: boolean;
 }
 
 export interface EnrollmentSearchParams {

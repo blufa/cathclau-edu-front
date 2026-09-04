@@ -202,6 +202,7 @@ export default function EnrollmentsPage() {
               <TH>Classe</TH>
               <TH>Type</TH>
               <TH>Date</TH>
+              <TH>Plateforme</TH>
               <TH>Statut</TH>
               <TH className="text-right">Actions</TH>
             </tr>
@@ -209,7 +210,7 @@ export default function EnrollmentsPage() {
           <TBody>
             {enrollments.length === 0 && (
               <TR>
-                <TD colSpan={canCollect ? 7 : 6} className="py-10 text-center text-gray-400">
+                <TD colSpan={canCollect ? 8 : 7} className="py-10 text-center text-gray-400">
                   Aucune inscription pour ces filtres.
                 </TD>
               </TR>
@@ -237,6 +238,11 @@ export default function EnrollmentsPage() {
                 <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
                 <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                 <TD>{e.enrolledAt ?? "—"}</TD>
+                <TD>
+                  <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
+                    {e.platformAccessOptIn ? "Activé" : "Non activé"}
+                  </Badge>
+                </TD>
                 <TD>
                   <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
                 </TD>

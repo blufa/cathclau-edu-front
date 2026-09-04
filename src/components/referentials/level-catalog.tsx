@@ -13,9 +13,11 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
  * L'utilisateur coche les cycles à créer plutôt que de les saisir un par un. La Maternelle est
  * composée de ses 3 sections réelles (Petite/Moyenne/Grande Section) plutôt qu'un niveau générique
  * unique — chacune est créée avec le cycle MATERNELLE, qui déclenche le badge de retrait obligatoire.
+ * La Garderie n'appartient pas à la progression pédagogique de la Maternelle (pas de PS/MS/GS) : elle
+ * a son propre cycle GARDERIE, qui déclenche la même sécurité de retrait.
  */
 export const LEVEL_CATALOG: { label: string; cycle: string }[] = [
-  { label: "Garderie", cycle: "MATERNELLE" },
+  { label: "Garderie", cycle: "GARDERIE" },
   { label: "Petite Section", cycle: "MATERNELLE" },
   { label: "Moyenne Section", cycle: "MATERNELLE" },
   { label: "Grande Section", cycle: "MATERNELLE" },
