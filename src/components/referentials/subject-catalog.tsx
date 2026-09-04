@@ -64,7 +64,7 @@ export function SubjectCatalogPicker({
       <p className="text-sm text-gray-500">
         Le coefficient officiel de chaque matière est déterminé par le programme (cycle/série) — pas besoin de le saisir.
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Cycle</Label>
           <Select value={cycle} onChange={(e) => setCycle(e.target.value as SchoolCycle)}>

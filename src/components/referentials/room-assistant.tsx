@@ -67,7 +67,7 @@ export function RoomAssistant({
         Numérotation <strong>continue</strong> : l&apos;assistant reprend après la dernière salle
         (ex. « Salle 001 », « Salle 002 »… puis l&apos;étage suivant enchaîne « 003 », « 004 »…).
       </p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Bâtiment</Label>
           <Combobox value={building} onChange={setBuilding} options={BUILDINGS} />
@@ -77,7 +77,7 @@ export function RoomAssistant({
           <Input type="number" min={1} value={startNum} onChange={(e) => setStartNum(e.target.value)} disabled={saving} />
         </Field>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field>
           <Label>Nombre de salles</Label>
           <Input type="number" min={1} max={40} value={count} onChange={(e) => setCount(e.target.value)} disabled={saving} />

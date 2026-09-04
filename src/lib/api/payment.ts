@@ -41,6 +41,9 @@ export interface GroupPaymentInput {
    * élèves différents (encaissement multi-enfants) ; sinon retombe sur le studentId principal. */
   shares: { invoiceId: number; studentId?: number; amount: number }[];
   academicYearId?: number | null;
+  /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
+   * réseau renvoie le paiement déjà créé côté serveur au lieu d'en créer un second. */
+  idempotencyKey?: string;
 }
 
 /**

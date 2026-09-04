@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Clock, RefreshCw } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { listDpeAlerts, listDpeSchools, refreshDpeAlerts, updateDpeAlertStatus } from "@/lib/api/dpe";
 import { DPE_ALERT_TYPE_LABEL, type DpeAlertPriority, type DpeAlertStatus } from "@/lib/types/dpe";
+import { DpePrefectureBanner } from "@/components/platform/dpe-prefecture-banner";
 import { Card, CardBody } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -12,6 +14,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const PRIORITY_TONE: Record<DpeAlertPriority, "red" | "amber" | "gray"> = {
@@ -33,13 +36,23 @@ const STATUS_LABEL: Record<DpeAlertStatus, string> = {
 };
 
 export default function DpeAlertsPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>}>
+      <DpeAlertsContent />
+    </Suspense>
+  );
+}
+
+function DpeAlertsContent() {
+  const searchParams = useSearchParams();
+  const prefectureId = searchParams.get("prefectureId") ? Number(searchParams.get("prefectureId")) : undefined;
   const [statutFilter, setStatutFilter] = useState<DpeAlertStatus | "">("NOUVELLE");
   const [refreshing, setRefreshing] = useState(false);
   const alertsQuery = useQuery(
-    () => listDpeAlerts(statutFilter || undefined),
-    [statutFilter],
+    () => listDpeAlerts(statutFilter || undefined, prefectureId),
+    [statutFilter, prefectureId],
   );
-  const schoolsQuery = useQuery(() => listDpeSchools(), []);
+  const schoolsQuery = useQuery(() => listDpeSchools(prefectureId), [prefectureId]);
 
   const schoolName = useMemo(
     () => new Map((schoolsQuery.data ?? []).map((s) => [s.tenantId, s.schoolName])),
@@ -58,7 +71,7 @@ export default function DpeAlertsPage() {
   async function handleRefresh() {
     setRefreshing(true);
     try {
-      await refreshDpeAlerts();
+      await refreshDpeAlerts(prefectureId);
       notifySuccess("Alertes réévaluées");
       alertsQuery.refetch();
     } catch (err) {
@@ -70,7 +83,7 @@ export default function DpeAlertsPage() {
 
   async function changeStatus(id: number, statut: DpeAlertStatus) {
     try {
-      await updateDpeAlertStatus(id, statut);
+      await updateDpeAlertStatus(id, statut, prefectureId);
       notifySuccess("Statut mis à jour");
       alertsQuery.refetch();
     } catch (err) {
@@ -91,6 +104,8 @@ export default function DpeAlertsPage() {
           <RefreshCw className="mr-1.5 h-4 w-4" /> Réévaluer maintenant
         </Button>
       </div>
+
+      <DpePrefectureBanner />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard title="Nouvelles" value={counts.nouvelle} icon={AlertTriangle} accent="rose" />

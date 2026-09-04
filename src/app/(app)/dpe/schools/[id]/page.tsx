@@ -1,25 +1,40 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, GraduationCap, School, Users } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { getDpeSchool } from "@/lib/api/dpe";
+import { DpePrefectureBanner } from "@/components/platform/dpe-prefecture-banner";
 import { Card, CardBody } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatCardSkeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function DpeSchoolDetailPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>}>
+      <DpeSchoolDetailContent />
+    </Suspense>
+  );
+}
+
+function DpeSchoolDetailContent() {
   const params = useParams<{ id: string }>();
   const tenantId = Number(params.id);
-  const { data, loading, error } = useQuery(() => getDpeSchool(tenantId), [tenantId]);
+  const searchParams = useSearchParams();
+  const prefectureId = searchParams.get("prefectureId") ? Number(searchParams.get("prefectureId")) : undefined;
+  const { data, loading, error } = useQuery(() => getDpeSchool(tenantId, prefectureId), [tenantId, prefectureId]);
 
   return (
     <div className="space-y-6">
       <Link href="/dpe/schools" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
         <ArrowLeft className="h-4 w-4" /> Retour aux écoles
       </Link>
+
+      <DpePrefectureBanner />
 
       {error ? (
         <div className="rounded-lg bg-error-50 px-4 py-3 text-sm text-error-700">

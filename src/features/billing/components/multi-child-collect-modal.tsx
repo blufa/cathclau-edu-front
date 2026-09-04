@@ -5,9 +5,11 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent } from "@/lib/api/billing";
-import { initiateGroupPayment } from "@/lib/api/payment";
+import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Invoice } from "@/lib/types/billing";
 import { type PaymentChannel } from "@/lib/types/payment";
+import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
+import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -154,6 +156,31 @@ export function MultiChildCollectModal({
     catch (err) { notifyError(err); }
   }
 
+  const queuedPayments = useSyncQueueStore((s) => s.items)
+    .filter((i) => studentIds.some((sid) => i.studentIds.includes(sid)));
+
+  /** Reçu provisoire imprimable (pas de PDF serveur tant que le paiement n'est pas synchronisé) — voir
+   * CollectFeeModal.printProvisionalReceipt (même logique, dupliquée : deux écrans indépendants). */
+  function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
+    const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
+    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
+      <body>
+        <h1>Reçu PROVISOIRE</h1>
+        <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
+        <p>Référence locale : OFFLINE-${entry.id.slice(0, 8).toUpperCase()}</p>
+        <p>Date : ${new Date(entry.createdAt).toLocaleString("fr-FR")}</p>
+        <p>Détail : ${entry.input.coverageLabel}</p>
+        <p>Montant : ${formatGNF(total)}</p>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
   async function collect() {
     const shares = selectedRows
       .map((r) => ({ invoiceId: r.invoice.id, studentId: r.studentId, amount: amountFor(r) }))
@@ -163,12 +190,17 @@ export function MultiChildCollectModal({
     try {
       const coverageLabel = `Fratrie (${studentIds.length} enfant${studentIds.length > 1 ? "s" : ""}) — `
         + selectedRows.map((r) => `${r.studentName} : ${receiptLabelFor(r)}`).join(", ");
-      await initiateGroupPayment({
+      const attempt = await submitGroupPaymentOfflineAware({
         tenantId, studentId: rows[0]?.studentId, channel,
         payerNumber: online ? "614324299" : undefined,
         coverageLabel, monthsCount: selectedRows.length, remainingAfter, shares,
         academicYearId: selectedRows[0]?.invoice.academicYearId ?? null,
       });
+      if (attempt.outcome === "queued") {
+        notifySuccess("Encaissement enregistré hors-ligne — sera synchronisé automatiquement.");
+        setSelected([]); setCustomAmounts({}); setMonthSelections({});
+        return;
+      }
       notifySuccess(`${selectedRows.length} facture(s) encaissée(s) pour ${studentIds.length} enfant(s) — reçu unique généré.`);
       setSelected([]); setCustomAmounts({}); setMonthSelections({});
       onCollected();
@@ -182,6 +214,11 @@ export function MultiChildCollectModal({
           <div className="flex justify-center py-10"><Spinner /></div>
         ) : students.length === 0 ? (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">Aucun élève sélectionné.</p>
+        ) : rows.length === 0 && isNetworkError(q.error) ? (
+          <p className="rounded-md bg-warning-50 px-3 py-2 text-sm text-warning-800">
+            Impossible de charger les factures (hors-ligne) — rouvrez cette fenêtre pendant que vous étiez
+            connecté, ou reconnectez-vous pour continuer.
+          </p>
         ) : rows.length === 0 ? (
           <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Toutes les factures de tous les enfants sont soldées.</p>
         ) : (
@@ -274,6 +311,27 @@ export function MultiChildCollectModal({
                 Un seul paiement, un seul reçu listant chaque enfant et ses factures réglées.
               </p>
             </div>
+
+            {queuedPayments.length > 0 && (
+              <div className="space-y-2 border-t border-slate-100 pt-4">
+                <p className="text-xs font-medium text-warning-700">
+                  Reçus provisoires (hors-ligne — en attente de synchronisation)
+                </p>
+                {queuedPayments.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-600">
+                      <span className="font-mono text-xs">OFFLINE-{entry.id.slice(0, 8).toUpperCase()}</span> ·{" "}
+                      {formatGNF(entry.input.shares.reduce((s, x) => s + x.amount, 0))}
+                    </span>
+                    <button type="button"
+                      onClick={() => printProvisionalReceipt(entry)}
+                      className="inline-flex items-center gap-1 text-xs text-warning-700 hover:underline">
+                      Reçu provisoire
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </Modal>

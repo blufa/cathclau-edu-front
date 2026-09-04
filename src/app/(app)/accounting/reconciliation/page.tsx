@@ -212,7 +212,7 @@ function ReconciliationForm({ accounts, onCancel, onDone }: {
           {accounts.map((a) => (<option key={a.value} value={a.value}>{a.label}</option>))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Date du relevé</Label><DatePicker value={statementDate} clearable onChange={setStatementDate} /></Field>
         <Field><Label>Solde du relevé (GNF)</Label><Input type="number" value={statementBalance} onChange={(e) => setStatementBalance(e.target.value)} /></Field>
       </div>

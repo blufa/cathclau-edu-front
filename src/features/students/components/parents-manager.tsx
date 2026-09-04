@@ -8,10 +8,8 @@ import { Plus, UserPlus, Wallet } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import {
-  createParent,
   getParentChildren,
   getStudentParents,
-  linkParentToStudent,
   listParents,
   RELATIONSHIP_LABEL,
   setPrimaryGuardian,
@@ -20,6 +18,10 @@ import {
   type Relationship,
 } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
+import { useNetworkStore } from "@/lib/offline/network-store";
+import { useParentQueueStore } from "@/lib/offline/parent-queue-store";
+import { submitExistingParentLinkOfflineAware, submitNewParentOfflineAware } from "@/lib/offline/submit-parent-link";
+import { retryFailedParentEntry, discardFailedParentEntry } from "@/lib/offline/sync-engine";
 import { phoneRule } from "@/lib/phone";
 import { PhoneInput } from "@/components/ui/phone-input";
 import type { Parent } from "@/lib/types/student";
@@ -40,6 +42,7 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => getStudentParents(studentId), [studentId]);
+  const parentQueueItems = useParentQueueStore((s) => s.items).filter((i) => i.studentId === studentId);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Parent | null>(null);
   const [collectingFor, setCollectingFor] = useState<Parent | null>(null);
@@ -106,8 +109,33 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
           </ul>
         )}
 
+        {parentQueueItems.length > 0 && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <p className="mb-2 text-xs font-medium text-warning-700">
+              Parents en attente de synchronisation (hors-ligne)
+            </p>
+            <ul className="space-y-1.5">
+              {parentQueueItems.map((entry) => (
+                <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="text-slate-700">
+                    {entry.parentInput ? `${entry.parentInput.firstName} ${entry.parentInput.lastName}` : `Parent #${entry.existingParentId}`}
+                    {" "}({RELATIONSHIP_LABEL[entry.relationship]})
+                  </span>
+                  {entry.status === "failed" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-error-600">{entry.lastError ?? "Échec"}</span>
+                      <Button size="sm" variant="secondary" onClick={() => discardFailedParentEntry(entry.id)}>Ignorer</Button>
+                      <Button size="sm" onClick={() => retryFailedParentEntry(entry.id)}>Réessayer</Button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <Modal open={open} onClose={() => setOpen(false)} title="Ajouter un parent">
-          <AddParentForm studentId={studentId} onCancel={() => setOpen(false)} onDone={() => { setOpen(false); notifySuccess("Parent rattaché"); q.refetch(); }} />
+          <AddParentForm studentId={studentId} onCancel={() => setOpen(false)} onDone={(queued) => { setOpen(false); if (!queued) notifySuccess("Parent rattaché"); q.refetch(); }} />
         </Modal>
 
         <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier le parent">
@@ -168,7 +196,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
 
   return (
     <form onSubmit={handleSubmit(save)} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Prénom <span className="text-error-500">*</span></Label>
           <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
@@ -180,7 +208,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
           {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
         <Field>
           <Label>Email</Label>
@@ -224,7 +252,7 @@ const addSchema = z.object({
 });
 type AddFormValues = z.infer<typeof addSchema>;
 
-function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onCancel: () => void; onDone: () => void }) {
+function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onCancel: () => void; onDone: (queued?: boolean) => void }) {
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [relationship, setRelationship] = useState<Relationship>("FATHER");
   const [loading, setLoading] = useState(false);
@@ -242,16 +270,28 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
 
+  const online = useNetworkStore((s) => s.online);
+
   async function linkExisting(p: Parent) {
     setLoading(true);
-    try { await linkParentToStudent(p.id, studentId, relationship); onDone(); }
-    catch (err) { notifyError(err); } finally { setLoading(false); }
+    try {
+      const attempt = await submitExistingParentLinkOfflineAware(p.id, studentId, relationship);
+      if (attempt.outcome === "queued") {
+        notifySuccess("Lien enregistré hors-ligne — sera synchronisé automatiquement.");
+      }
+      onDone(attempt.outcome === "queued");
+    } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
   async function createAndLink(values: AddFormValues) {
+    // La création d'un accès portail (« créer un accès ») nécessite un second appel réseau
+    // (createUserWithRole) sans idempotence propre — exclue du mode hors-ligne (§students, Phase 3).
+    if (values.createLogin && !online) {
+      notifyError(new Error("Impossible de créer un accès portail hors-ligne — décochez cette option ou reconnectez-vous."));
+      return;
+    }
     setLoading(true);
     try {
-      // Optionally create a login account (role PARENT) and link the parent to it.
       let userId: number | null = null;
       if (values.createLogin) {
         const user = await createUserWithRole(
@@ -260,13 +300,15 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
         );
         userId = user.id;
       }
-      const parent = await createParent({
+      const attempt = await submitNewParentOfflineAware({
         firstName: values.firstName, lastName: values.lastName,
         phone: values.phone || null, email: values.email || null,
         occupation: values.occupation || null, address: values.address || null,
-      }, userId);
-      await linkParentToStudent(parent.id, studentId, relationship);
-      onDone();
+      }, studentId, relationship, userId);
+      if (attempt.outcome === "queued") {
+        notifySuccess("Parent enregistré hors-ligne — sera synchronisé automatiquement.");
+      }
+      onDone(attempt.outcome === "queued");
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
@@ -321,7 +363,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
         </div>
       ) : (
         <form onSubmit={handleSubmit(createAndLink)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
               <Label>Prénom <span className="text-error-500">*</span></Label>
               <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
@@ -333,7 +375,7 @@ function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onC
               {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
             <Field>
               <Label>Email</Label>

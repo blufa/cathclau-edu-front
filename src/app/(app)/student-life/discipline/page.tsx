@@ -236,7 +236,7 @@ function IncidentForm({ initial, studentOptions, onCancel, onCreated }: {
         <SearchableSelect value={v.studentId} options={studentOptions} onChange={(val) => setValue("studentId", val)} triggerClassName="w-full justify-between px-3" noResultsLabel="Aucun élève" />
         {errors.studentId && <p className="text-xs text-error-600">{errors.studentId.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Date</Label><DatePicker value={v.incidentDate} clearable onChange={(val) => setValue("incidentDate", val)} /></Field>
         <Field>
           <Label>Gravité</Label>
@@ -259,7 +259,7 @@ function IncidentForm({ initial, studentOptions, onCancel, onCreated }: {
 
       <div className="rounded-xl border border-gray-200 p-3">
         <p className="mb-2 text-sm font-semibold text-gray-700">Mesure (règlement intérieur)</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field>
             <Label>Nature</Label>
             <Select value={v.measureKind} onChange={(e) => { setValue("measureKind", e.target.value); setValue("measure", ""); }}>
@@ -283,7 +283,7 @@ function IncidentForm({ initial, studentOptions, onCancel, onCreated }: {
           </Field>
         )}
         {v.measureKind === "SANCTION" && (
-          <div className="mt-2 grid grid-cols-2 gap-3">
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
               <Label>Sursis</Label>
               <Select value={v.suspension} onChange={(e) => setValue("suspension", e.target.value)}>

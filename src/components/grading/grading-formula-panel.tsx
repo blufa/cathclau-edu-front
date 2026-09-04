@@ -246,7 +246,7 @@ export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? "Modifier la formule" : "Nouvelle formule de calcul"} className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Nom <span className="text-error-500">*</span></Label>
               <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex. Semestre standard" />
@@ -282,7 +282,7 @@ export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field>
                     <Label>Libellé</Label>
                     <Input value={s.label} onChange={(e) => updateStep(i, { label: e.target.value })} placeholder="Ex. Mois 1, Composition…" />
@@ -296,7 +296,7 @@ export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
                 </div>
 
                 {s.stepKind === "GROUP" ? (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field>
                       <Label>Filtrer par</Label>
                       <Select value={s.filterMode} onChange={(e) => updateStep(i, { filterMode: e.target.value as StepDraft["filterMode"] })}>
@@ -344,7 +344,7 @@ export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
                   </div>
                 )}
 
-                <div className="mt-3 grid grid-cols-2 gap-3 items-end">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input type="radio" name="finalStep" checked={s.finalStep} onChange={() => setFinal(i)} className="h-4 w-4 accent-brand-600" />
                     Étape finale (résultat de la formule)

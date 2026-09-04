@@ -3,6 +3,7 @@ import { ApiError } from "./errors";
 import type { ProblemDetail } from "./types";
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/auth/tokens";
 import { getImpersonatedTenantId } from "@/lib/auth/impersonation";
+import { useNetworkStore } from "@/lib/offline/network-store";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8284/api/v1";
 
@@ -98,7 +99,12 @@ async function toApiError(error: AxiosError): Promise<ApiError> {
 }
 
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Un aller-retour réussi prouve la connectivité — corrige immédiatement un faux "hors-ligne" (ex.
+    // navigator.onLine remonté à tort) sans attendre l'événement `online` du navigateur.
+    useNetworkStore.getState().setOnline(true);
+    return res;
+  },
   async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig | undefined;
     const withAuth = config?.requireAuth !== false;
@@ -111,6 +117,11 @@ http.interceptors.response.use(
       }
       clearTokens();
       onSessionExpired?.();
+    }
+    // Aucune réponse HTTP reçue (offline, DNS/timeout, CORS) : signale l'état hors-ligne — plus réactif
+    // que le seul événement `offline` du navigateur (ex. Wi-Fi local up mais backend injoignable).
+    if (!error.response) {
+      useNetworkStore.getState().setOnline(false);
     }
     return Promise.reject(await toApiError(error));
   },

@@ -114,7 +114,7 @@ function RouteForm({ initial, onCancel, onDone }: { initial: TransportRoute | nu
         <Input placeholder="Ex. Ligne Nord" value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
         {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Immatriculation</Label>
           <Input placeholder="RC-1234-A" value={v.vehicleRegistration} onChange={(e) => setValue("vehicleRegistration", e.target.value)} />
@@ -124,7 +124,7 @@ function RouteForm({ initial, onCancel, onDone }: { initial: TransportRoute | nu
           <Input type="number" min={0} value={v.capacity} onChange={(e) => setValue("capacity", e.target.value === "" ? "" : Number(e.target.value))} />
         </Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Chauffeur</Label>
           <Input value={v.driverName} onChange={(e) => setValue("driverName", e.target.value)} />
@@ -203,7 +203,7 @@ function StopsPanel({ route }: { route: TransportRoute }) {
             <Input value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
             {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
           </Field>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Field>
               <Label>Ramassage</Label>
               <Input type="time" value={v.pickupTime} onChange={(e) => setValue("pickupTime", e.target.value)} />

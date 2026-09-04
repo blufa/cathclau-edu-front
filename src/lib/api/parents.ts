@@ -17,6 +17,9 @@ export interface ParentInput {
   email?: string | null;
   occupation?: string | null;
   address?: string | null;
+  /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
+   * réseau renvoie le parent déjà créé côté serveur au lieu d'en créer un second. */
+  idempotencyKey?: string;
 }
 
 /** La fiche parent de l'utilisateur connecté (portail parent). */

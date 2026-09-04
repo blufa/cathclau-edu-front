@@ -118,7 +118,7 @@ function EventForm({ yearId, initial, onCancel, onDone }: { yearId: number; init
           {(Object.keys(EVENT_TYPE_LABEL) as AcademicEventType[]).map((t) => (<option key={t} value={t}>{EVENT_TYPE_LABEL[t]}</option>))}
         </Select>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Date de début <span className="text-error-500">*</span></Label><DatePicker value={startDate} clearable onChange={setStartDate} /></Field>
         <Field><Label>Date de fin</Label><DatePicker value={endDate} clearable onChange={setEndDate} /></Field>
       </div>

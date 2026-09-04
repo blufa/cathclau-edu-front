@@ -158,7 +158,7 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
               onChange={(e) => { setSlugEdited(true); setValue("slug", slugify(e.target.value)); }}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Ville</Label>
               <Input value={v.city} onChange={(e) => setValue("city", e.target.value)} />

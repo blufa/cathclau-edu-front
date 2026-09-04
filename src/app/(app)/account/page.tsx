@@ -249,7 +249,7 @@ export default function AccountPage() {
               </CardHeader>
               <CardBody>
                 <form onSubmit={handleSubmitProfile(submitProfile)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Info label="Nom complet" value={`${user.firstName} ${user.lastName}`} />
                     <Info label="E-mail" value={user.email} />
                   </div>

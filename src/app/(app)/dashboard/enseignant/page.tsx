@@ -5,6 +5,8 @@ import { CalendarClock, CalendarDays, ClipboardPen, GraduationCap, Percent } fro
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useNetworkStore } from "@/lib/offline/network-store";
 import { getMyTeacher, getTeacherClasses, getTeacherSchedule } from "@/lib/api/staff";
 import { getClass, getClassStudents, getScheduleByTeacher, listRooms, listSubjects } from "@/lib/api/academics";
 import { WeeklyTimetable } from "@/components/timetable/weekly-timetable";
@@ -89,15 +91,23 @@ export default function TeacherDashboardPage() {
     return { classCount: classIds.length, studentTotal, today: todayName, courses, toGrade, fillRate };
   }, []);
 
-  const scheduleQ = useQuery(async () => {
-    const me = await getMyTeacher();
-    const [slots, subjects, rooms] = await Promise.all([getScheduleByTeacher(me.id), listSubjects(), listRooms()]);
-    const classLabels = new Map<number, string>();
-    for (const id of [...new Set(slots.map((s) => s.schoolClassId))]) {
-      try { classLabels.set(id, (await getClass(id)).label); } catch { classLabels.set(id, `Classe #${id}`); }
-    }
-    return { slots, subjects, rooms, classLabels };
-  }, []);
+  // Consultation hors-ligne (§Phase 2) : affiche le dernier emploi du temps connu pendant qu'un
+  // rafraîchissement réseau tourne en tâche de fond — clé par utilisateur (userId), pas par teacherId
+  // encore inconnu à ce stade, pour rester utilisable dès le montage même hors-ligne.
+  const online = useNetworkStore((s) => s.online);
+  const scheduleQ = useCachedQuery(
+    user?.userId != null ? `teacher-schedule:${user.userId}` : null,
+    async () => {
+      const me = await getMyTeacher();
+      const [slots, subjects, rooms] = await Promise.all([getScheduleByTeacher(me.id), listSubjects(), listRooms()]);
+      const classLabels = new Map<number, string>();
+      for (const id of [...new Set(slots.map((s) => s.schoolClassId))]) {
+        try { classLabels.set(id, (await getClass(id)).label); } catch { classLabels.set(id, `Classe #${id}`); }
+      }
+      return { slots, subjects, rooms, classLabels };
+    },
+    [user?.userId],
+  );
 
   if (!isTeacher) {
     return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Espace réservé aux enseignants.</div>;
@@ -180,6 +190,11 @@ export default function TeacherDashboardPage() {
             <CardBody>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <CalendarDays className="h-4 w-4 text-brand-600" /> Mon emploi du temps
+                {scheduleQ.fromCache && !online && (
+                  <span className="rounded-full bg-warning-50 px-2 py-0.5 text-xs font-normal text-warning-700">
+                    Données en cache — hors-ligne
+                  </span>
+                )}
               </h2>
               {scheduleQ.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
                 <WeeklyTimetable

@@ -180,7 +180,7 @@ function GrantForm({ initial, onCancel, onDone }: { initial?: Grant | null; onCa
         <Label>Source (bailleur) <span className="text-error-500">*</span></Label>
         <Input placeholder="Ministère de l'Éducation, ONG…" value={source} onChange={(e) => setSource(e.target.value)} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Référence</Label><Input value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field><Label>Année scolaire</Label><Input placeholder="2025-2026" value={academicYear} onChange={(e) => setAcademicYear(e.target.value)} /></Field>
       </div>
@@ -214,11 +214,11 @@ function PaymentForm({ grantId, onCancel, onDone }: { grantId: number; onCancel:
   }
   return (
     <div className="space-y-3 rounded-xl border border-gray-200 p-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Date</Label><DatePicker value={paymentDate} clearable onChange={setPaymentDate} /></Field>
         <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Mode</Label><Input placeholder="Virement, chèque…" value={method} onChange={(e) => setMethod(e.target.value)} /></Field>
         <Field><Label>Référence</Label><Input value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
       </div>

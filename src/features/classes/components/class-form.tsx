@@ -163,7 +163,7 @@ export function ClassForm({
           <div className="rounded-lg bg-error-50 px-3.5 py-2.5 text-sm text-error-700">{error}</div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <Field>
               <Label>Niveau (cycle)</Label>
@@ -201,7 +201,7 @@ export function ClassForm({
           </div>
         </div>
 
-        <div className={showSeries ? "grid grid-cols-3 gap-4" : "grid grid-cols-2 gap-4"}>
+        <div className={showSeries ? "grid grid-cols-1 sm:grid-cols-3 gap-4" : "grid grid-cols-1 sm:grid-cols-2 gap-4"}>
           <Field>
             <Label>Classe (grade)</Label>
             <Input
@@ -239,7 +239,7 @@ export function ClassForm({
           {errors.label && <p className="mt-1 text-xs text-error-600">{errors.label.message}</p>}
         </Field>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field>
             <Label>Capacité max</Label>
             <Input
