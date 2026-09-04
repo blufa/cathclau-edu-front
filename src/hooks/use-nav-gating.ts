@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { NAVIGATION, type NavItem } from "@/config/navigation";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getActiveModules } from "@/lib/api/modules";
 import { getLatestSubscription } from "@/lib/api/platform";
@@ -24,8 +24,18 @@ export function useNavGating() {
   // SUPER_ADMIN voit toute la navigation (tests & supervision) ; les autres rôles ne voient que
   // les sections que leurs rôles autorisent. Les sections vides sont retirées.
   const isSuperAdmin = hasRole(user, "SUPER_ADMIN");
+  // Un item est visible si aucun filtre n'est posé, si le rôle de l'utilisateur figure dans
+  // `roles`, OU s'il détient au moins une des `permissions` — un rôle personnalisé (sans code fixe)
+  // n'a jamais de correspondance dans `roles` mais peut satisfaire `permissions`.
+  const isAllowed = (item: NavItem): boolean => {
+    if (isSuperAdmin) return true;
+    if (item.excludeRoles && hasRole(user, ...item.excludeRoles)) return false;
+    if (!item.roles && !item.permissions) return true;
+    return (!!item.roles && hasRole(user, ...item.roles))
+        || (!!item.permissions && hasAnyPermission(user, item.permissions));
+  };
   const filterItem = (item: NavItem): NavItem | null => {
-    if (!isSuperAdmin && item.roles && !hasRole(user, ...item.roles)) return null;
+    if (!isAllowed(item)) return null;
     if (item.children?.length) {
       const kids = item.children.map(filterItem).filter((c): c is NavItem => c !== null);
       if (kids.length === 0) return null;

@@ -1,26 +1,40 @@
 import { NAVIGATION, type NavItem } from "@/config/navigation";
 import type { AuthUser } from "@/lib/types/auth";
 import type { RoleCode } from "@/lib/types/enums";
-import { hasRole } from "./permissions";
+import { hasAnyPermission, hasRole } from "./permissions";
 
 interface RouteRoles {
   href: string;
   roles?: RoleCode[];
+  permissions?: string[];
+  excludeRoles?: RoleCode[];
 }
 
-/** Aplatit la navigation en { href, roles } ; un enfant sans `roles` hérite de son parent (ex.
- * les sous-pages "Mon abonnement" qui ne portent le filtre que sur l'entrée de groupe). */
-function flattenWithRoles(items: NavItem[], inherited?: RoleCode[]): RouteRoles[] {
+type Gate = Pick<NavItem, "roles" | "permissions" | "excludeRoles">;
+
+/** Aplatit la navigation en { href, roles, permissions, excludeRoles } ; un enfant sans filtre
+ * propre hérite de celui de son parent (ex. les sous-pages "Mon abonnement" qui ne portent le
+ * filtre que sur l'entrée de groupe). */
+function flattenWithRoles(items: NavItem[], inherited?: Gate): RouteRoles[] {
   const out: RouteRoles[] = [];
   for (const item of items) {
-    const roles = item.roles ?? inherited;
-    if (item.href) out.push({ href: item.href, roles });
-    if (item.children) out.push(...flattenWithRoles(item.children, roles));
+    const gate: Gate | undefined = item.roles || item.permissions
+      ? { roles: item.roles, permissions: item.permissions, excludeRoles: item.excludeRoles }
+      : inherited;
+    if (item.href) out.push({ href: item.href, ...gate });
+    if (item.children) out.push(...flattenWithRoles(item.children, gate));
   }
   return out;
 }
 
 const ROUTE_ROLES: RouteRoles[] = NAVIGATION.flatMap((section) => flattenWithRoles(section.items));
+
+function isRouteAllowed(user: AuthUser | null, route: RouteRoles): boolean {
+  if (route.excludeRoles && hasRole(user, ...route.excludeRoles)) return false;
+  if (!route.roles && !route.permissions) return true;
+  return (!!route.roles && hasRole(user, ...route.roles))
+      || (!!route.permissions && hasAnyPermission(user, route.permissions));
+}
 
 /**
  * Un chemin est autorisé pour l'utilisateur si aucune entrée de navigation ne le restreint
@@ -42,7 +56,7 @@ export function isPathAllowedForUser(user: AuthUser | null, pathname: string): b
   if (candidates.length === 0) return true;
 
   const match = candidates.reduce((best, r) => (r.href.length > best.href.length ? r : best));
-  return !match.roles || hasRole(user, ...match.roles);
+  return isRouteAllowed(user, match);
 }
 
 /** Route d'accueil de l'utilisateur — après connexion, et repli quand une page ne lui est pas destinée. */
@@ -58,6 +72,6 @@ export function roleHome(user: AuthUser | null): string {
   // plutôt qu'un chemin fixe (« /dashboard ») qui casse silencieusement (boucle de redirection, écran
   // bloqué sur le spinner) pour tout rôle qui n'y a pas accès — c'est ce qui laissait DPE_ADMIN sans
   // aucun menu visible après connexion.
-  const firstAllowed = ROUTE_ROLES.find((r) => !r.roles || hasRole(user, ...r.roles));
+  const firstAllowed = ROUTE_ROLES.find((r) => isRouteAllowed(user, r));
   return firstAllowed?.href ?? "/account";
 }

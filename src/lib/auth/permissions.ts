@@ -18,6 +18,12 @@ export function hasPermission(user: AuthUser | null, permission: string): boolea
   return !!user && user.permissions.includes(permission);
 }
 
+/** True if the user holds at least one of the given permissions — used for nav/route gating so a
+ * role built entirely from the permissions catalogue (no fixed role code) still sees its menus. */
+export function hasAnyPermission(user: AuthUser | null, permissions: string[]): boolean {
+  return !!user && permissions.some((p) => user.permissions.includes(p));
+}
+
 export function isSuperAdmin(user: AuthUser | null): boolean {
   return hasRole(user, "SUPER_ADMIN");
 }
