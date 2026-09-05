@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getScheduleByClass, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
@@ -28,7 +28,7 @@ const STATUS_TONE = { PLANNED: "amber", DONE: "green" } as const;
 
 export default function LessonsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["cahier:manage"]);
   // Valider qu'une séance a été réalisée relève de l'administration — l'enseignant saisit la séance
   // (et peut corriger sa saisie) mais ne valide pas lui-même sa réalisation.
   const isAdmin = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");

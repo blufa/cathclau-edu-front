@@ -5,17 +5,14 @@ import { usePathname } from "next/navigation";
 import { Lock } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { isNavItemAllowed, type RoleGate } from "@/lib/auth/permissions";
 import { useNavGating } from "@/hooks/use-nav-gating";
 import type { ModuleCode } from "@/config/navigation";
-import type { RoleCode } from "@/lib/types/enums";
 import { cn } from "@/lib/utils";
 
-export interface RouteTab {
+export interface RouteTab extends RoleGate {
   label: string;
   href: string;
-  /** Rôles autorisés à voir cet onglet ; omis = visible par tous les rôles du groupe (déjà filtrés en amont). */
-  roles?: RoleCode[];
   /** Grise l'onglet (cadenas) si ce module n'est pas actif pour le tenant — même logique que la sidebar. */
   module?: ModuleCode;
 }
@@ -29,9 +26,8 @@ export function RouteTabs({ tabs }: { tabs: RouteTab[] }) {
   const pathname = usePathname();
   const { user } = useAuth();
   const { isDisabled } = useNavGating();
-  const isSuperAdmin = hasRole(user, "SUPER_ADMIN");
 
-  const visible = tabs.filter((t) => isSuperAdmin || !t.roles || hasRole(user, ...t.roles));
+  const visible = tabs.filter((t) => isNavItemAllowed(user, t));
   if (visible.length <= 1) return null;
 
   return (

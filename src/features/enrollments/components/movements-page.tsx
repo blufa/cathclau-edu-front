@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Clock, LogIn, LogOut } from "lucide-react";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
@@ -18,7 +18,7 @@ import { Reveal } from "@/components/public/reveal";
 
 export default function EnrollmentMovementsPage() {
   const { user } = useAuth();
-  const allowed = hasRole(user, "SUPER_ADMIN", "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const allowed = hasRole(user, "SUPER_ADMIN", "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:read"]);
 
   const yearsQuery = useQuery(() => listAcademicYears(), []);
   const years = useMemo(() => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "")), [yearsQuery.data]);

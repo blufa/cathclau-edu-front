@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Lock, Plus, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   createRole,
@@ -29,7 +29,7 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function RolesPage() {
   const { user } = useAuth();
-  const allowed = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const allowed = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["role:read"]);
 
   const rolesQuery = useQuery(() => listRoles(), []);
   const permsQuery = useQuery(() => listPermissions(), []);

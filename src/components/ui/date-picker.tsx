@@ -11,10 +11,10 @@ function toISO(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-function fromISO(v?: string): Date | undefined {
-  if (!v) return undefined;
+function fromISO(v?: string): Date | string {
+  if (!v) return "";
   const d = new Date(`${v}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? undefined : d;
+  return Number.isNaN(d.getTime()) ? "" : d;
 }
 
 interface DatePickerProps {

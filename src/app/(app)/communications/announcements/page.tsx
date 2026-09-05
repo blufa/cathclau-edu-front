@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   createAnnouncement,
@@ -38,7 +38,7 @@ const SCOPE_TONE: Record<AnnouncementScope, "gray" | "amber" | "green"> = {
 
 export default function AnnouncementsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["annonce:manage"]);
 
   const q = useQuery(listAnnouncements, []);
   const yearQuery = useQuery(getCurrentAcademicYear, []);

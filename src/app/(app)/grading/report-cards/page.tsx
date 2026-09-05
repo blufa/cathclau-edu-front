@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses, listClassSubjects, listPeriods, listSubjects } from "@/lib/api/academics";
 import { getStudent, searchStudents } from "@/lib/api/students";
@@ -44,7 +44,7 @@ const STATUS_TONE = { DRAFT: "gray", GENERATED: "indigo", PUBLISHED: "green" } a
 
 export default function ReportCardsPage() {
   const { user } = useAuth();
-  const canPublish = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canPublish = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["bulletin:publish"]);
 
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");

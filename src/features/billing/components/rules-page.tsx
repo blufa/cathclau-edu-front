@@ -3,7 +3,7 @@
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { BadgePercent, CalendarCheck, Users, HeartHandshake } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { EarlyPaymentDiscountRulesPanel } from "@/features/billing/components/early-payment-discount-rules-panel";
 import { ExemptionsPanel } from "@/features/billing/components/exemptions-panel";
 import { FamilyDiscountRulesPanel } from "@/features/billing/components/family-discount-rules-panel";
@@ -11,7 +11,7 @@ import { StaffChildBenefitsPanel } from "@/features/billing/components/staff-chi
 
 export default function BillingRulesPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "ACCOUNTANT");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "ACCOUNTANT") || hasAnyPermission(user, ["frais:manage"]);
 
   return (
     <div className="space-y-5">

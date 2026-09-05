@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   changeAcademicYearStatus,
@@ -404,7 +404,7 @@ function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boo
 
 export default function AcademicYearsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["annee:manage"]);
   const q = useQuery(listAcademicYears, []);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<AnneeScolaire | null>(null);

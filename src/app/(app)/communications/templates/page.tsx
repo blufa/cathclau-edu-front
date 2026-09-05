@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   createTemplate,
@@ -33,7 +33,7 @@ const VARIABLES = ["{{nom_eleve}}", "{{montant}}", "{{moyenne}}", "{{classe}}", 
 export default function TemplatesPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["modele:manage"]);
 
   const q = useQuery(() => (tenantId ? listTemplates(tenantId) : Promise.resolve([])), [tenantId]);
   const [editing, setEditing] = useState<MessageTemplate | null>(null);

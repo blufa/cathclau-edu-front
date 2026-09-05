@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Upload } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { importStudentsCsv, type ImportReport } from "@/lib/api/students";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -21,7 +21,7 @@ const SAMPLE = [
 
 export default function StudentImportPage() {
   const { user } = useAuth();
-  const allowed = hasRole(user, "SUPER_ADMIN", "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR");
+  const allowed = hasRole(user, "SUPER_ADMIN", "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["eleve:create"]);
 
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);

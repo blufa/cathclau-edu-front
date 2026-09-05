@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
-import { enroll, reenroll, searchEnrollments, updateEnrollment } from "@/lib/api/enrollments";
+import { enroll, reenroll, searchEnrollments, updateEnrollment, updatePlatformAccess } from "@/lib/api/enrollments";
 import { listFeesByClass, subscribeAnnexFee } from "@/lib/api/billing";
 import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
 import { ApiError } from "@/lib/api/errors";
@@ -49,6 +49,9 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const [stopId, setStopId] = useState("");
   const [direction, setDirection] = useState<TransportDirection>("BOTH");
   const [wantsCanteen, setWantsCanteen] = useState(false);
+  // Frais annexe optionnel : accès de l'élève à la plateforme, décidé par le parent à l'inscription
+  // (modifiable ensuite). Si non coché, aucun frais plateforme n'est jamais ajouté à ses mensualités.
+  const [wantsPlatformAccess, setWantsPlatformAccess] = useState(enrollment?.platformAccessOptIn ?? false);
   const routesQuery = useQuery(() => (open && !editing ? listRoutes() : Promise.resolve([])), [open, editing]);
   const stopsQuery = useQuery(
     () => (routeId ? listStops(Number(routeId)) : Promise.resolve([])),
@@ -140,11 +143,20 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
       return;
     }
     setSubmitting(true);
-    const input = { studentId, classId: Number(effectiveClassId), academicYearId: yearId, type: effectiveType };
+    const input = {
+      studentId, classId: Number(effectiveClassId), academicYearId: yearId, type: effectiveType,
+      platformAccessOptIn: wantsPlatformAccess,
+    };
     try {
-      const result = editing
+      let result = editing
         ? await updateEnrollment(enrollment!.id, input)
         : await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
+
+      // En édition, le PUT ne modifie pas le choix d'accès plateforme (voir EnrollCommand côté
+      // backend) : on l'ajuste séparément si l'utilisateur l'a changé.
+      if (editing && wantsPlatformAccess !== (enrollment?.platformAccessOptIn ?? false)) {
+        result = await updatePlatformAccess(enrollment!.id, wantsPlatformAccess);
+      }
 
       // Abonnements optionnels : l'inscription est déjà actée, un échec ici ne doit pas la remettre en
       // cause — juste informer l'utilisateur pour qu'il réessaie depuis le module concerné.
@@ -260,6 +272,19 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
             </p>
           )}
         </Field>
+
+        <div className="rounded-xl border border-gray-200 p-3">
+          <Checkbox
+            label="Accès de l'élève à la plateforme"
+            checked={wantsPlatformAccess}
+            onChange={() => setWantsPlatformAccess((v) => !v)}
+          />
+          <p className="mt-1 pl-6 text-xs text-gray-400">
+            Si le parent accepte, le frais d&apos;accès à la plateforme est ajouté automatiquement
+            à toutes les mensualités de l&apos;élève pour cette année. Non coché par défaut —
+            modifiable à tout moment depuis cette fiche.
+          </p>
+        </div>
 
         {!editing && !existingForYear && (
           <div className="space-y-3 rounded-xl border border-gray-200 p-3">

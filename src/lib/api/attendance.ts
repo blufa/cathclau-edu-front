@@ -156,12 +156,42 @@ export interface TeacherMonthlySummary {
   presentDays: number;
   absentDays: number;
   totalLateMinutes: number;
+  totalEarlyMinutes: number;
   dueMinutes: number;
   absentMinutes: number;
   effectiveMinutes: number;
 }
 export function getTeacherMonthlySummary(teacherId: number, year: number, month: number): Promise<TeacherMonthlySummary> {
   return api.get<TeacherMonthlySummary>(`/attendance/teachers/${teacherId}/monthly-summary`, { query: { year, month } });
+}
+
+// ── Réglages : marge de transition entre salles et fenêtres de récréation ───
+export interface AttendanceSettings {
+  id: number | null;
+  tenantId: number;
+  transitionMarginMinutes: number;
+}
+export interface RecessWindow {
+  id: number;
+  tenantId: number;
+  label: string | null;
+  startTime: string;
+  endTime: string;
+}
+export function getAttendanceSettings(): Promise<AttendanceSettings> {
+  return api.get<AttendanceSettings>("/attendance/settings");
+}
+export function updateAttendanceSettings(transitionMarginMinutes: number): Promise<AttendanceSettings> {
+  return api.put<AttendanceSettings>("/attendance/settings", { transitionMarginMinutes });
+}
+export function listRecessWindows(): Promise<RecessWindow[]> {
+  return api.get<RecessWindow[]>("/attendance/settings/recess-windows");
+}
+export function addRecessWindow(label: string, startTime: string, endTime: string): Promise<RecessWindow> {
+  return api.post<RecessWindow>("/attendance/settings/recess-windows", { label, startTime, endTime });
+}
+export function deleteRecessWindow(id: number): Promise<void> {
+  return api.delete<void>(`/attendance/settings/recess-windows/${id}`);
 }
 
 // ── Teacher attendance (separate table) ─────────────────────────────────────

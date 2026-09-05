@@ -4,7 +4,7 @@ import { useState } from "react";
 import { HandCoins, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import {
   addGrantPayment,
   cancelGrant,
@@ -34,7 +34,7 @@ const STATUS_TONE: Record<GrantStatus, "amber" | "blue" | "green" | "gray"> = {
 
 export default function GrantsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["budget:manage"]);
 
   const q = useQuery(listGrants, []);
   const [creating, setCreating] = useState(false);

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { HeartPulse, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
 import {
   deleteVisit,
@@ -41,7 +41,7 @@ const OUTCOME_TONE: Record<VisitOutcome, "green" | "amber" | "red" | "gray"> = {
 
 export default function HealthPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["sante:manage"]);
 
   const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
   const studentName = useMemo(

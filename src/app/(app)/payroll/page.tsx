@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Banknote, Clock, FileSpreadsheet, Plus, Settings as SettingsIcon, HandCoins } from "lucide-react";
 import { FeeDeductionPanel } from "@/components/payroll/fee-deduction-panel";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listTeachers } from "@/lib/api/staff";
 import {
@@ -67,7 +67,7 @@ const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = { DR
 
 export default function PayrollPage() {
   const { user } = useAuth();
-  if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT")) {
+  if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") && !hasAnyPermission(user, ["paie:manage"])) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration / comptabilité.</div>;
   }
   return (
@@ -86,7 +86,7 @@ export default function PayrollPage() {
         <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
         <TabsPanel value="compensation"><CompensationTab /></TabsPanel>
         <TabsPanel value="structures"><StructuresTab /></TabsPanel>
-        <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT")} /></TabsPanel>
+        <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"])} /></TabsPanel>
       </Tabs>
     </div>
   );

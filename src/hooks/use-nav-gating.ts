@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { NAVIGATION, type NavItem } from "@/config/navigation";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { isNavItemAllowed } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getActiveModules } from "@/lib/api/modules";
 import { getLatestSubscription } from "@/lib/api/platform";
@@ -22,10 +22,10 @@ export function useNavGating() {
     isActive(item.href) || (item.children?.some((c) => isActive(c.href)) ?? false);
 
   // SUPER_ADMIN voit toute la navigation (tests & supervision) ; les autres rôles ne voient que
-  // les sections que leurs rôles autorisent. Les sections vides sont retirées.
-  const isSuperAdmin = hasRole(user, "SUPER_ADMIN");
+  // les sections que leurs rôles/permissions autorisent (isNavItemAllowed, partagé avec
+  // global-search.tsx et route-tabs.tsx). Les sections vides sont retirées.
   const filterItem = (item: NavItem): NavItem | null => {
-    if (!isSuperAdmin && item.roles && !hasRole(user, ...item.roles)) return null;
+    if (!isNavItemAllowed(user, item)) return null;
     if (item.children?.length) {
       const kids = item.children.map(filterItem).filter((c): c is NavItem => c !== null);
       if (kids.length === 0) return null;
