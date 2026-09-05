@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { setSessionExpiredHandler } from "@/lib/api/client";
+import { isNetworkError } from "@/lib/api/errors";
 import * as authService from "@/lib/auth/auth-service";
 import { getAccessToken } from "@/lib/auth/tokens";
 import {
@@ -19,6 +20,10 @@ import type { AuthUser } from "@/lib/types/auth";
 import { getMyParent } from "@/lib/api/parents";
 import { getMyStudent } from "@/lib/api/students";
 import { getMyTeacher } from "@/lib/api/staff";
+import { offlineDb } from "@/lib/offline/db";
+
+/** Clé du dernier profil connu, pour rester connecté hors-ligne (voir bootstrap ci-dessous). */
+const AUTH_CACHE_KEY = "auth:me";
 
 function roleNames(roles: string[]): string[] {
   return roles.map((r) => r.replace(/^ROLE_/, ""));
@@ -81,6 +86,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const me = await enrichWithBusinessProfile(await authService.fetchMe());
     setUser(me);
     setStatus("authenticated");
+    // Dernier profil connu, pour pouvoir rester connecté si le prochain chargement de l'app tombe
+    // hors-ligne (voir le bootstrap ci-dessous) — jamais utilisé pour authentifier, seulement pour
+    // afficher l'identité/permissions déjà validées par le serveur lors de cette connexion.
+    void offlineDb.readCache.put({ key: AUTH_CACHE_KEY, payload: me, updatedAt: new Date().toISOString() });
     return me;
   }, []);
 
@@ -89,7 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
-  // Bootstrap: if a token is present, resolve the profile; otherwise we're logged out.
+  // Bootstrap : un jeton présent suppose une session déjà validée par le serveur. On tente de
+  // rafraîchir le profil ; si l'appareil est hors-ligne, on retombe sur le dernier profil connu
+  // plutôt que de déconnecter localement quelqu'un qui s'était déjà authentifié avec succès — c'est
+  // ce qui permet de continuer à utiliser l'app (files d'attente hors-ligne) sans réseau. Une vraie
+  // session invalide (401) reste, elle, gérée par `setSessionExpiredHandler` (rejet non réseau).
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -99,8 +112,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         await loadUser();
-      } catch {
-        if (active) clearSession();
+      } catch (err) {
+        if (!active) return;
+        if (isNetworkError(err)) {
+          const cached = await offlineDb.readCache.get(AUTH_CACHE_KEY);
+          if (cached) {
+            setUser(cached.payload as AuthUser);
+            setStatus("authenticated");
+            return;
+          }
+        }
+        clearSession();
       }
     })();
     return () => {
