@@ -64,10 +64,12 @@ export interface TeacherSubjectInfo {
 export interface TeacherScheduleSlot {
   id: number;
   classId: number;
-  subjectId: number;
+  /** Nul pour une heure creuse sans matière formelle (étude, permanence, TD...) — voir `label`. */
+  subjectId: number | null;
   teacherId: number;
   roomId: number | null;
   day: string;
   startTime: string;
   endTime: string;
+  label: string | null;
 }

@@ -8,8 +8,8 @@ import { IdCard, Plus, Search, Tags } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
-import { searchStudents } from "@/lib/api/students";
-import { getClass } from "@/lib/api/academics";
+import { getStudent, searchStudents } from "@/lib/api/students";
+import { getClass, listAcademicYears } from "@/lib/api/academics";
 import {
   createCardTemplate,
   updateCardTemplate,
@@ -162,7 +162,22 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
   async function issue(s: Student) {
     setLoading(s.id);
     try {
-      await issueStudentCard(s.id, { studentNumber: s.studentNumber, photoUrl: s.photo, cardTemplateId: defaultTemplate?.id ?? null });
+      // La classe/année sont indispensables pour que le badge affiche la classe de l'élève —
+      // résolues depuis son inscription validée sur l'année courante, jamais laissées vides.
+      let classId: number | null = null;
+      let academicYearId: number | null = null;
+      try {
+        const [detail, years] = await Promise.all([getStudent(s.id), listAcademicYears()]);
+        const currentYear = years.find((y) => y.current) ?? years[0];
+        const enrollment = detail.enrollments?.find((e) => e.status === "VALIDATED" && e.academicYearId === currentYear?.id)
+          ?? detail.enrollments?.find((e) => e.status === "VALIDATED");
+        classId = enrollment?.classId ?? null;
+        academicYearId = enrollment?.academicYearId ?? currentYear?.id ?? null;
+      } catch { /* pas bloquant : la carte est quand même émise, sans classe affichée */ }
+      await issueStudentCard(s.id, {
+        studentNumber: s.studentNumber, photoUrl: s.photo, cardTemplateId: defaultTemplate?.id ?? null,
+        classId, academicYearId,
+      });
       onDone();
     } catch (e) { notifyError(e); } finally { setLoading(null); }
   }

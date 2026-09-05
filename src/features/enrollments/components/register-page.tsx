@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import {
@@ -50,7 +51,10 @@ export default function EnrollmentsPage() {
   const [familyOpen, setFamilyOpen] = useState(false);
   const [passageOpen, setPassageOpen] = useState(false);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  // Mis en cache (IndexedDB) sous les mêmes clés que le formulaire d'inscription hors-ligne
+  // (OfflineEnrollFields) : visiter cette page en ligne pré-charge la liste des classes qui sera
+  // ensuite disponible hors-ligne, au lieu de dépendre d'un premier appel jamais fait hors-ligne.
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
 
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
@@ -60,8 +64,9 @@ export default function EnrollmentsPage() {
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const yearId = selectedYearId ?? defaultYearId;
 
-  const classesQuery = useQuery(
-    () => (yearId ? listClasses(yearId) : Promise.resolve([])),
+  const classesQuery = useCachedQuery(
+    yearId != null ? `classes:${yearId}` : null,
+    () => listClasses(yearId as number),
     [yearId],
   );
   const classLabel = useMemo(

@@ -12,26 +12,27 @@ import {
   getTeacherSchedule,
   getTeacherSubjects,
 } from "@/lib/api/staff";
-import { listRooms, listSubjects } from "@/lib/api/academics";
+import { listAcademicYears, listClasses, listRooms, listSubjects } from "@/lib/api/academics";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { notifyError } from "@/lib/feedback";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
 import { TeacherSubjectsSection } from "@/components/staff/teacher-subjects";
 import { TeacherLevelsSection } from "@/components/staff/teacher-levels";
 
 const DAY_LABEL: Record<string, string> = {
-  MONDAY: "Lundi",
-  TUESDAY: "Mardi",
-  WEDNESDAY: "Mercredi",
-  THURSDAY: "Jeudi",
-  FRIDAY: "Vendredi",
-  SATURDAY: "Samedi",
-  SUNDAY: "Dimanche",
+  LUNDI: "Lundi",
+  MARDI: "Mardi",
+  MERCREDI: "Mercredi",
+  JEUDI: "Jeudi",
+  VENDREDI: "Vendredi",
+  SAMEDI: "Samedi",
 };
 
 const EMPLOYMENT_LABEL: Record<string, string> = {
@@ -84,6 +85,16 @@ export default function TeacherDetailPage() {
     [scheduleQuery.data],
   );
 
+  // Résolution des classes (libellés) de la grille hebdomadaire — l'emploi du temps réfère toujours
+  // à l'année scolaire courante en pratique.
+  const yearsQuery = useQuery(listAcademicYears, []);
+  const currentYearId = (yearsQuery.data ?? []).find((y) => y.current)?.id ?? (yearsQuery.data ?? [])[0]?.id ?? null;
+  const yearClassesQuery = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
+  const classLabel = useMemo(
+    () => new Map((yearClassesQuery.data ?? []).map((c) => [c.id, c.label])),
+    [yearClassesQuery.data],
+  );
+
   if (teacherQuery.loading) {
     return (
       <div className="flex justify-center py-16">
@@ -107,26 +118,74 @@ export default function TeacherDetailPage() {
   const subjects = subjectsQuery.data ?? [];
   const schedule = (scheduleQuery.data?.slots ?? []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime));
 
+  function printSheet() {
+    const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
+    const dayOrder = ["LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"];
+    const byDay = new Map(dayOrder.map((d) => [d, schedule.filter((s) => s.day === d).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))]));
+    const classesTaught = [...new Set(schedule.map((s) => s.classId))].map((id) => classLabel.get(id) ?? `#${id}`);
+    const cols = dayOrder.map((d) => {
+      const cells = (byDay.get(d) ?? []).map((s) => {
+        const title = s.subjectId != null ? esc(subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : esc(s.label ?? "Heure creuse");
+        const cls = esc(classLabel.get(s.classId) ?? `Classe #${s.classId}`);
+        const room = s.roomId ? esc(roomLabel.get(s.roomId) ?? `#${s.roomId}`) : "";
+        return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
+          + `<div class="subj">${title}</div><div>${cls}</div>` + (room ? `<div class="room">Salle : ${room}</div>` : "") + `</div>`;
+      }).join("") || `<span class="empty">—</span>`;
+      return `<td>${cells}</td>`;
+    }).join("");
+    const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Fiche enseignant — ${esc(t.firstName)} ${esc(t.lastName)}</title>`
+      + `<style>@page{size:landscape}body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
+      + `h1{font-size:20px;margin:0 0 2px}.sub{color:#64748b;font-size:12px;margin-bottom:16px}`
+      + `.info{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;font-size:12px}`
+      + `.info div span{display:block;color:#64748b;font-size:10px;text-transform:uppercase}`
+      + `table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}`
+      + `th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
+      + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
+      + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}`
+      + `.list{margin:0 0 16px;font-size:12px}@media print{body{padding:0}}</style></head><body>`
+      + `<h1>Fiche enseignant — ${esc(t.firstName)} ${esc(t.lastName)}</h1>`
+      + `<div class="sub">${esc(t.staffNumber ?? "")} — ${new Date().toLocaleDateString("fr-FR")}</div>`
+      + `<div class="info">`
+      + `<div><span>Spécialité</span>${esc(t.specialization ?? "—")}</div>`
+      + `<div><span>Téléphone</span>${esc(t.phone ?? "—")}</div>`
+      + `<div><span>Email</span>${esc(t.email ?? "—")}</div>`
+      + `<div><span>Date d'embauche</span>${esc(t.hireDate ?? "—")}</div>`
+      + `</div>`
+      + `<p class="list"><strong>Classes :</strong> ${classesTaught.length ? esc(classesTaught.join(", ")) : "—"}</p>`
+      + `<p class="list"><strong>Matières :</strong> ${subjects.length ? esc(subjects.map((s) => subjectLabel.get(s.subjectId) ?? `#${s.subjectId}`).join(", ")) : "—"}</p>`
+      + `<table><thead><tr>${dayOrder.map((d) => `<th>${DAY_LABEL[d] ?? d}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
+      + `<script>window.onload=function(){window.print()}</script></body></html>`;
+    const w = window.open("", "_blank", "width=1100,height=800");
+    if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
+    w.document.write(html);
+    w.document.close();
+  }
+
   return (
     <div className="space-y-6">
       <Link href="/teachers" className="text-sm text-brand-600 hover:underline">
         ← Retour aux enseignants
       </Link>
 
-      <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700">
-          {t.firstName[0]}
-          {t.lastName[0]}
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            {t.firstName} {t.lastName}
-          </h1>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm text-gray-500">{t.staffNumber}</span>
-            <Badge tone={t.active ? "green" : "gray"}>{t.active ? "Actif" : "Inactif"}</Badge>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700">
+            {t.firstName[0]}
+            {t.lastName[0]}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              {t.firstName} {t.lastName}
+            </h1>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm text-gray-500">{t.staffNumber}</span>
+              <Badge tone={t.active ? "green" : "gray"}>{t.active ? "Actif" : "Inactif"}</Badge>
+            </div>
           </div>
         </div>
+        <Button variant="secondary" onClick={printSheet} disabled={schedule.length === 0}>
+          Imprimer / Télécharger la fiche
+        </Button>
       </div>
 
       <Card>
@@ -268,10 +327,10 @@ export default function TeacherDetailPage() {
                     <TD>
                       {slot.startTime} – {slot.endTime}
                     </TD>
-                    <TD>{subjectLabel.get(slot.subjectId) ?? `#${slot.subjectId}`}</TD>
+                    <TD>{slot.subjectId != null ? (subjectLabel.get(slot.subjectId) ?? `#${slot.subjectId}`) : (slot.label ?? "Heure creuse")}</TD>
                     <TD>
                       <Link href={`/classes/${slot.classId}`} className="text-brand-600 hover:underline">
-                        #{slot.classId}
+                        {classLabel.get(slot.classId) ?? `#${slot.classId}`}
                       </Link>
                     </TD>
                     <TD>{slot.roomId ? (roomLabel.get(slot.roomId) ?? `#${slot.roomId}`) : "—"}</TD>

@@ -121,35 +121,40 @@ export interface EmploiDuTemps {
   id: number;
   tenantId: number;
   schoolClassId: number;
-  subjectId: number;
+  /** Nul pour une heure creuse sans matière formelle (étude, permanence, TD...) — voir `label`. */
+  subjectId: number | null;
   teacherId: number | null;
   roomId: number | null;
   day: JourSemaine;
   startTime: string;
   endTime: string;
+  /** Intitulé libre affiché quand `subjectId` est nul. */
+  label: string | null;
 }
 
 /** Body for POST/PUT schedule — tenantId resolved server-side. */
 export interface CreateScheduleInput {
   schoolClassId: number;
-  subjectId: number;
+  subjectId: number | null;
   teacherId: number | null;
   roomId: number | null;
   day: JourSemaine;
   startTime: string;
   endTime: string;
+  label?: string | null;
 }
 
 /** Créneau effectif d'une semaine précise (récurrent + déplacement/annulation ponctuel appliqué). */
 export interface EffectiveScheduleSlot {
   scheduleId: number;
   schoolClassId: number;
-  subjectId: number;
+  subjectId: number | null;
   teacherId: number | null;
   roomId: number | null;
   day: JourSemaine;
   startTime: string;
   endTime: string;
+  label: string | null;
   moved: boolean;
   cancelled: boolean;
   originalDay: JourSemaine | null;

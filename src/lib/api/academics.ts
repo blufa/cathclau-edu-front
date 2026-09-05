@@ -176,6 +176,9 @@ export function updatePeriod(periodId: number, input: CreatePeriodInput): Promis
 export function closePeriod(periodId: number): Promise<Periode> {
   return api.put<Periode>(`/academics/academic-years/periods/${periodId}/close`);
 }
+export function deletePeriod(periodId: number): Promise<void> {
+  return api.delete<void>(`/academics/academic-years/periods/${periodId}`);
+}
 
 // ── Levels ────────────────────────────────────────────────────────────────--
 export function listLevels(): Promise<Niveau[]> {
