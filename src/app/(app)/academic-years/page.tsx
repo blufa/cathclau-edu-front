@@ -12,14 +12,17 @@ import {
   closePeriod,
   createAcademicYear,
   createPeriod,
+  deletePeriod,
   listAcademicYears,
   listPeriods,
   setCurrentAcademicYear,
+  updatePeriod,
 } from "@/lib/api/academics";
 import type {
   AnneeScolaire,
   CreateAcademicYearInput,
   CreatePeriodInput,
+  Periode,
   StatutAnneeScolaire,
   TypePeriode,
   SchoolCycle,
@@ -122,11 +125,20 @@ const periodSchema = z.object({
 });
 type PeriodFormValues = z.infer<typeof periodSchema>;
 
-function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInput) => Promise<void>; onCancel: () => void }) {
+function PeriodForm({ initial, onSubmit, onCancel }: {
+  initial?: Periode | null; onSubmit: (input: CreatePeriodInput) => Promise<void>; onCancel: () => void;
+}) {
   const [submitting, setSubmitting] = useState(false);
   const { handleSubmit, watch, setValue, formState: { errors } } = useForm<PeriodFormValues>({
     resolver: zodResolver(periodSchema),
-    defaultValues: { label: "", cycle: "PRIMAIRE", type: "TRIMESTRE", sortOrder: "1", startDate: "", endDate: "" },
+    defaultValues: {
+      label: initial?.label ?? "",
+      cycle: initial?.cycle ?? "PRIMAIRE",
+      type: initial?.type ?? "TRIMESTRE",
+      sortOrder: initial ? String(initial.sortOrder) : "1",
+      startDate: initial?.startDate ?? "",
+      endDate: initial?.endDate ?? "",
+    },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
@@ -193,7 +205,7 @@ function PeriodForm({ onSubmit, onCancel }: { onSubmit: (input: CreatePeriodInpu
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
-        <Button type="submit" loading={submitting}>Créer</Button>
+        <Button type="submit" loading={submitting}>{initial ? "Enregistrer" : "Créer"}</Button>
       </div>
     </form>
   );
@@ -314,12 +326,20 @@ function EventForm({ yearId, onCancel, onDone }: { yearId: number; onCancel: () 
 function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boolean }) {
   const q = useQuery(() => listPeriods(year.id), [year.id]);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Periode | null>(null);
   const periods = (q.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
 
   async function handleCreate(input: CreatePeriodInput) {
     await createPeriod(year.id, input);
     setCreating(false);
     notifySuccess("Période créée");
+    q.refetch();
+  }
+  async function handleUpdate(input: CreatePeriodInput) {
+    if (!editing) return;
+    await updatePeriod(editing.id, input);
+    setEditing(null);
+    notifySuccess("Période modifiée");
     q.refetch();
   }
   function handleClose(periodId: number) {
@@ -331,6 +351,23 @@ function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boo
         try {
           await closePeriod(periodId);
           notifySuccess("Période clôturée");
+          q.refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+  }
+  function handleDelete(period: Periode) {
+    confirmAction({
+      title: "Supprimer la période",
+      message: `Supprimer « ${period.label} » ? Cette action est irréversible.`,
+      confirmLabel: "Supprimer",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deletePeriod(period.id);
+          notifySuccess("Période supprimée");
           q.refetch();
         } catch (err) {
           notifyError(err);
@@ -383,9 +420,17 @@ function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boo
                   </TD>
                   <TD className="text-right">
                     {canWrite && !p.closed && (
-                      <Button size="sm" variant="ghost" onClick={() => handleClose(p.id)}>
-                        Clôturer
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
+                          Modifier
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => handleClose(p.id)}>
+                          Clôturer
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(p)}>
+                          Suppr.
+                        </Button>
+                      </div>
                     )}
                   </TD>
                 </TR>
@@ -397,6 +442,9 @@ function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boo
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle période">
         {creating && <PeriodForm onSubmit={handleCreate} onCancel={() => setCreating(false)} />}
+      </Modal>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier la période">
+        {editing && <PeriodForm initial={editing} onSubmit={handleUpdate} onCancel={() => setEditing(null)} />}
       </Modal>
     </Card>
   );

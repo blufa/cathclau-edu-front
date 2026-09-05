@@ -116,17 +116,20 @@ export function IdBadge({ kind, fullName, subtitle, photoUrl, fields, qrData, fo
 
           {/* QR + pied */}
           <div className="flex items-center gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3 print:gap-2 print:px-2 print:py-1.5">
-            <div className="rounded-lg bg-white p-1.5 ring-1 ring-slate-200 print:p-1">
+            <div className="flex h-[68px] w-[68px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1.5 ring-1 ring-slate-200 print:h-10 print:w-10 print:p-1">
               {qrData ? (
+                // Le conteneur (pas le SVG) impose la taille : les attributs width/height bruts posés
+                // par la prop `size` de QRCodeSVG ne rétrécissaient pas de façon fiable à l'impression,
+                // ce qui décalait visuellement le QR par rapport au reste de la carte une fois imprimée.
                 <QRCodeSVG
                   value={qrData}
                   size={64}
                   level="M"
                   marginSize={4}
-                  className="print:h-10 print:w-10"
+                  className="h-full w-full"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center text-[10px] text-slate-400 print:h-10 print:w-10">—</div>
+                <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">—</div>
               )}
             </div>
             <p className="text-[11px] leading-snug text-slate-500 print:text-[7px]">

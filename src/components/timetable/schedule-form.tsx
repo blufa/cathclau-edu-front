@@ -45,13 +45,18 @@ interface ScheduleFormProps {
 
 const scheduleSchema = z.object({
   subjectId: z.string(),
+  label: z.string(),
   teacherId: z.string(),
   roomId: z.string(),
   day: z.string(),
   startTime: z.string(),
   endTime: z.string(),
 }).superRefine((v, ctx) => {
-  if (!v.subjectId) ctx.addIssue({ code: "custom", path: ["subjectId"], message: "Matière requise" });
+  // Heure creuse (§emploi du temps) : sans matière formelle, un libellé libre (Étude, Permanence,
+  // TD...) devient obligatoire à la place — sinon rien n'identifierait le créneau dans la grille.
+  if (!v.subjectId && !v.label.trim()) {
+    ctx.addIssue({ code: "custom", path: ["subjectId"], message: "Choisissez une matière ou saisissez un libellé (heure creuse)" });
+  }
   if (!v.startTime) ctx.addIssue({ code: "custom", path: ["startTime"], message: "Heure de début requise" });
   if (!v.endTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "Heure de fin requise" });
   else if (v.endTime <= v.startTime) ctx.addIssue({ code: "custom", path: ["endTime"], message: "La fin doit être après le début" });
@@ -66,6 +71,7 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
     resolver: zodResolver(scheduleSchema),
     defaultValues: {
       subjectId: initial?.subjectId ? String(initial.subjectId) : "",
+      label: initial?.label ?? "",
       teacherId: initial?.teacherId ? String(initial.teacherId) : "",
       roomId: initial?.roomId ? String(initial.roomId) : "",
       day: (initial?.day as JourSemaine) ?? "LUNDI",
@@ -110,12 +116,18 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
   const assigned = classSubjects ?? [];
   const teacherBySubject = new Map(assigned.map((cm) => [String(cm.subjectId), cm.teacherId]));
   // Si la classe a des matières affectées, on s'y limite (chacune a son enseignant) ; sinon toutes.
-  const subjectOptions: SearchableOption[] = (assigned.length > 0
-    ? assigned.map((cm) => {
-      const label = subjects.find((s) => s.id === cm.subjectId)?.label ?? `Matière #${cm.subjectId}`;
-      return { value: String(cm.subjectId), trigger: label, label, searchText: label };
-    })
-    : subjects.map((s) => ({ value: String(s.id), trigger: s.label, label: s.label, searchText: s.label })));
+  // « Heure creuse » permet un créneau sans matière formelle (étude, permanence, TD...), identifié
+  // par un libellé libre saisi à la place.
+  const HEURE_CREUSE = { value: "", trigger: "— Heure creuse (sans matière) —", label: "— Heure creuse (sans matière) —", searchText: "heure creuse etude permanence td" };
+  const subjectOptions: SearchableOption[] = [
+    HEURE_CREUSE,
+    ...(assigned.length > 0
+      ? assigned.map((cm) => {
+        const label = subjects.find((s) => s.id === cm.subjectId)?.label ?? `Matière #${cm.subjectId}`;
+        return { value: String(cm.subjectId), trigger: label, label, searchText: label };
+      })
+      : subjects.map((s) => ({ value: String(s.id), trigger: s.label, label: s.label, searchText: s.label }))),
+  ];
   // Classes enseignées par chaque prof de la matière (teacher_classes) : sert au filtrage par classe
   // ET au libellé. Map teacherId → liste des class ids affectés.
   const [teacherClassIds, setTeacherClassIds] = useState<Map<number, number[]>>(new Map());
@@ -158,6 +170,7 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
 
   function onSubjectChange(sid: string) {
     setValue("subjectId", sid);
+    if (sid) setValue("label", ""); // une matière formelle remplace le libellé libre
     // Charge les enseignants affectés à cette matière.
     if (sid) getTeachersBySubject(Number(sid)).then(setSubjectTeacherIds).catch(() => setSubjectTeacherIds([]));
     else setSubjectTeacherIds([]);
@@ -172,7 +185,8 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
     try {
       await onSubmit({
         schoolClassId: classId,
-        subjectId: Number(values.subjectId),
+        subjectId: values.subjectId ? Number(values.subjectId) : null,
+        label: values.subjectId ? null : values.label.trim(),
         teacherId: values.teacherId ? Number(values.teacherId) : null,
         roomId: values.roomId ? Number(values.roomId) : null,
         day: values.day as JourSemaine,
@@ -198,10 +212,17 @@ export function ScheduleForm({ classId, initial, subjects, teachers, rooms, clas
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       {error && <div className="rounded-lg bg-error-50 px-3.5 py-2.5 text-sm text-error-700">{error}</div>}
       <Field>
-        <Label>Matière <span className="text-error-500">*</span></Label>
+        <Label>Matière</Label>
         <SearchableSelect value={v.subjectId} options={subjectOptions} onChange={onSubjectChange} triggerClassName="w-full justify-between px-3" />
         {errors.subjectId && <p className="text-xs text-error-600">{errors.subjectId.message}</p>}
       </Field>
+      {!v.subjectId && (
+        <Field>
+          <Label>Libellé de l&apos;heure creuse <span className="text-error-500">*</span></Label>
+          <p className="mb-1.5 text-xs text-gray-400">Ex. Étude dirigée, Permanence, TD — utile pour un créneau sans matière ni professeur.</p>
+          <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} placeholder="Étude dirigée" />
+        </Field>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Enseignant</Label>

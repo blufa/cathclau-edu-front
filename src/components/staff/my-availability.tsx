@@ -57,7 +57,7 @@ export function MyAvailabilityManager() {
                     {slots.map((s) => (
                       <li key={s.id} className="text-sm text-slate-700">
                         <span className="font-medium">{hhmm(s.startTime)}–{hhmm(s.endTime)}</span>
-                        {" · "}{subjectLabel.get(s.subjectId) ?? "Cours"}
+                        {" · "}{s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? "Cours") : (s.label ?? "Heure creuse")}
                         {" · "}
                         <span className="text-amber-700">{classLabel.get(s.classId) ?? `Classe #${s.classId}`}</span>
                       </li>

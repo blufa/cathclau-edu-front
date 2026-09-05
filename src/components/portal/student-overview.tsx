@@ -63,11 +63,12 @@ export function StudentOverview({ student }: { student: Student }) {
     [lessonsQuery.data],
   );
   const doneCount = lessons.filter((l) => l.status === "DONE").length;
-  const subjectName = (id: number) => (scheduleQuery.data?.subjects ?? []).find((s) => s.id === id)?.label ?? `Matière #${id}`;
+  const subjectName = (id: number | null) => id == null ? undefined : ((scheduleQuery.data?.subjects ?? []).find((s) => s.id === id)?.label ?? `Matière #${id}`);
   const roomName = (id: number | null) => (id == null ? undefined : (scheduleQuery.data?.rooms ?? []).find((r) => r.id === id)?.label);
   const scheduleSlots: EmploiDuTemps[] = (scheduleQuery.data?.slots ?? []).map((s) => ({
     id: s.id, tenantId: 0, schoolClassId: s.classId, subjectId: s.subjectId,
     teacherId: s.teacherId, roomId: s.roomId, day: s.day as JourSemaine, startTime: s.startTime, endTime: s.endTime,
+    label: s.label,
   }));
 
   async function pdf(c: ReportCard) {

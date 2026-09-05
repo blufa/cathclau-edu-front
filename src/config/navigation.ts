@@ -123,6 +123,7 @@ export const NAVIGATION: NavSection[] = [
       },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
       { label: "Cahier de textes", href: "/lessons", icon: NotebookPen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["cahier:manage"] },
+      { label: "Cours en ligne", href: "/courses", icon: BookOpen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["cours:manage"], excludeRoles: ["PARENT", "STUDENT"] },
       { label: "Présences", href: "/attendance", icon: CalendarCheck, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["presence:read"], excludeRoles: ["PARENT", "STUDENT"], module: "ATTENDANCE" },
       {
         label: "Vie scolaire", icon: ShieldAlert,
@@ -187,6 +188,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "Mes classes", href: "/my-classes", icon: GraduationCap, roles: ["TEACHER"] },
       { label: "Mes enfants", href: "/children", icon: Users, roles: ["PARENT"] },
       { label: "Mes résultats", href: "/my-results", icon: Award, roles: ["STUDENT"] },
+      { label: "Cours en ligne", href: "/courses", icon: BookOpen, roles: ["PARENT", "STUDENT"] },
     ],
   },
   {
