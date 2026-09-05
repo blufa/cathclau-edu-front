@@ -63,7 +63,7 @@ export default function TeacherDashboardPage() {
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
       .map((s) => ({
         time: `${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}`,
-        subject: subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`,
+        subject: s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse"),
         classLabel: cName(s.classId),
         room: s.roomId ? (roomLabel.get(s.roomId) ?? `#${s.roomId}`) : "—",
       }));

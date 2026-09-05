@@ -120,12 +120,13 @@ export async function importStudentsCsv(file: File): Promise<ImportReport> {
 export interface StudentScheduleSlot {
   id: number;
   classId: number;
-  subjectId: number;
+  subjectId: number | null;
   teacherId: number | null;
   roomId: number | null;
   day: string;
   startTime: string;
   endTime: string;
+  label: string | null;
 }
 
 /** Emploi du temps de la classe courante d'un élève. */

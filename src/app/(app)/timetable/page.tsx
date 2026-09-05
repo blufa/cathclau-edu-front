@@ -84,6 +84,7 @@ export default function TimetablePage() {
   const [movingSlot, setMovingSlot] = useState<EffectiveScheduleSlot | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [fixedOpen, setFixedOpen] = useState(false);
+  const [printingAll, setPrintingAll] = useState(false);
 
   const yearsQuery = useQuery(listAcademicYears, []);
   const teachersQuery = useQuery(listTeachers, []);
@@ -203,8 +204,9 @@ export default function TimetablePage() {
           ? (s.teacherId != null ? (teacherName.get(s.teacherId) ?? "") : "")
           : (classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`);
         const room = s.roomId != null ? (roomLabel.get(s.roomId) ?? "") : "";
+        const title = s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse");
         return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
-          + `<div class="subj">${esc(subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`)}</div>`
+          + `<div class="subj">${esc(title)}</div>`
           + (who ? `<div>${esc(who)}</div>` : "")
           + (room ? `<div class="room">Salle : ${esc(room)}</div>` : "") + `</div>`;
       }).join("") || `<span class="empty">—</span>`;
@@ -223,6 +225,50 @@ export default function TimetablePage() {
     if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
     w.document.write(html);
     w.document.close();
+  }
+
+  /** Un seul document paysage, une classe par page — regroupe l'emploi du temps de toutes les
+   *  classes de l'année sélectionnée (une page = une classe, sauts de page automatiques). */
+  async function printAllClasses() {
+    if (classes.length === 0) return;
+    setPrintingAll(true);
+    try {
+      const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
+      const subjectLabelAll = new Map(subjects.map((s) => [s.id, s.label]));
+      const roomLabelAll = new Map(rooms.map((r) => [r.id, r.label]));
+      const perClass = await Promise.all(classes.map(async (c) => {
+        const slots = await getScheduleByClass(c.id);
+        const byDay = new Map(DAYS.map((d) => [d.key, slots.filter((s) => s.day === d.key).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))]));
+        const cols = DAYS.map((d) => {
+          const cells = (byDay.get(d.key) ?? []).map((s) => {
+            const title = s.subjectId != null ? esc(subjectLabelAll.get(s.subjectId) ?? `Matière #${s.subjectId}`) : esc(s.label ?? "Heure creuse");
+            const who = s.teacherId != null ? esc(teacherName.get(s.teacherId) ?? "") : "";
+            const room = s.roomId != null ? esc(roomLabelAll.get(s.roomId) ?? "") : "";
+            return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
+              + `<div class="subj">${title}</div>` + (who ? `<div>${who}</div>` : "") + (room ? `<div class="room">Salle : ${room}</div>` : "") + `</div>`;
+          }).join("") || `<span class="empty">—</span>`;
+          return `<td>${cells}</td>`;
+        }).join("");
+        return `<section class="page"><h1>Emploi du temps — ${esc(c.label)}</h1>`
+          + `<table><thead><tr>${DAYS.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table></section>`;
+      }));
+      const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Emplois du temps — toutes les classes</title>`
+        + `<style>@page{size:landscape}body{font-family:system-ui,Arial,sans-serif;color:#0f172a}`
+        + `.page{padding:24px;page-break-after:always}.page:last-child{page-break-after:auto}`
+        + `h1{font-size:18px;margin:0 0 12px}table{width:100%;border-collapse:collapse}`
+        + `th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
+        + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
+        + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}@media print{.page{padding:0 0 24px}}</style>`
+        + `</head><body>${perClass.join("")}<script>window.onload=function(){window.print()}</script></body></html>`;
+      const w = window.open("", "_blank", "width=1200,height=800");
+      if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
+      w.document.write(html);
+      w.document.close();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPrintingAll(false);
+    }
   }
 
   async function handleCreate(input: CreateScheduleInput) {
@@ -262,6 +308,16 @@ export default function TimetablePage() {
           >
             Imprimer / Télécharger
           </Button>
+          {mode === "class" && (
+            <Button
+              variant="secondary"
+              onClick={printAllClasses}
+              loading={printingAll}
+              disabled={classes.length === 0}
+            >
+              Imprimer toutes les classes
+            </Button>
+          )}
           {canWrite && mode === "class" && (
             <>
               <Button variant="outline" onClick={() => setGenOpen(true)} disabled={classes.length === 0}>
@@ -385,7 +441,7 @@ export default function TimetablePage() {
                       )}
                     </div>
                     <p className={cn("text-sm font-medium", s.cancelled ? "text-gray-400 line-through" : "text-gray-800")}>
-                      {subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`}
+                      {s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse")}
                     </p>
                     <p className="text-xs text-gray-500">
                       {mode === "class"

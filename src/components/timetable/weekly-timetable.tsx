@@ -22,7 +22,7 @@ export function WeeklyTimetable({
   emptyText = "Aucun créneau d'emploi du temps.",
 }: {
   slots: EmploiDuTemps[];
-  subjectName?: (id: number) => string;
+  subjectName?: (id: number | null) => string | undefined;
   roomName?: (id: number | null) => string | null | undefined;
   classLabel?: (id: number) => string;
   teacherName?: (id: number | null) => string | null | undefined;
@@ -53,7 +53,11 @@ export function WeeklyTimetable({
                   return (
                     <li key={s.id} className="rounded-lg bg-brand-50/70 p-2 text-xs">
                       <p className="font-semibold text-brand-800">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p>
-                      <p className="font-medium text-slate-800">{subjectName ? subjectName(s.subjectId) : `Matière #${s.subjectId}`}</p>
+                      <p className="font-medium text-slate-800">
+                        {s.subjectId != null
+                          ? (subjectName ? (subjectName(s.subjectId) ?? `Matière #${s.subjectId}`) : `Matière #${s.subjectId}`)
+                          : (s.label ?? "Heure creuse")}
+                      </p>
                       {classLabel && <p className="text-slate-500">{classLabel(s.schoolClassId)}</p>}
                       {teacher && <p className="text-slate-500">{teacher}</p>}
                       {room && <p className="text-slate-400">Salle : {room}</p>}
