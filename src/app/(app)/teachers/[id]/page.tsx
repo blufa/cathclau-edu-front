@@ -13,6 +13,8 @@ import {
   getTeacherSubjects,
 } from "@/lib/api/staff";
 import { listAcademicYears, listClasses, listRooms, listSubjects } from "@/lib/api/academics";
+import { getPayslipPdfObjectUrl, listPayslips } from "@/lib/api/payroll";
+import { PAYSLIP_STATUS_LABEL } from "@/lib/types/payroll";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError } from "@/lib/feedback";
+import { formatGNF } from "@/lib/format";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
 import { TeacherSubjectsSection } from "@/components/staff/teacher-subjects";
@@ -61,9 +64,11 @@ export default function TeacherDetailPage() {
 
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
+  const canViewPayroll = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"]);
   const teacherQuery = useQuery(() => getTeacher(id), [id]);
   const classesQuery = useQuery(() => getTeacherClasses(id), [id]);
   const subjectsQuery = useQuery(() => getTeacherSubjects(id), [id]);
+  const payslipsQuery = useQuery(() => (canViewPayroll ? listPayslips({ teacherId: id }) : Promise.resolve([])), [id, canViewPayroll]);
   // Consultation hors-ligne (§Phase 2) : affiche le dernier emploi du temps connu de cet enseignant
   // pendant qu'un rafraîchissement réseau tourne en tâche de fond.
   const online = useNetworkStore((s) => s.online);
@@ -341,6 +346,61 @@ export default function TeacherDetailPage() {
           )}
         </CardBody>
       </Card>
+
+      {canViewPayroll && (
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Fiches de paie</CardTitle>
+            <Link href="/payroll" className="text-sm text-brand-600 hover:underline">Gérer la paie</Link>
+          </CardHeader>
+          <CardBody className="p-0">
+            {payslipsQuery.loading ? (
+              <div className="flex justify-center py-8"><Spinner /></div>
+            ) : (payslipsQuery.data ?? []).length === 0 ? (
+              <p className="px-5 py-4 text-sm text-gray-400">Aucune fiche de paie pour l&apos;instant.</p>
+            ) : (
+              <Table>
+                <THead>
+                  <tr>
+                    <TH>Période</TH>
+                    <TH>Salaire net</TH>
+                    <TH>Statut</TH>
+                    <TH className="text-right">Actions</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {(payslipsQuery.data ?? []).map((p) => (
+                    <TR key={p.id}>
+                      <TD className="font-medium">{p.periodLabel}</TD>
+                      <TD>{formatGNF(p.netSalary)}</TD>
+                      <TD>
+                        <Badge tone={p.status === "PAID" ? "green" : p.status === "VALIDATED" ? "amber" : "gray"}>
+                          {PAYSLIP_STATUS_LABEL[p.status]}
+                        </Badge>
+                      </TD>
+                      <TD className="text-right">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            try {
+                              window.open(await getPayslipPdfObjectUrl(p.id), "_blank");
+                            } catch (err) {
+                              notifyError(err);
+                            }
+                          }}
+                        >
+                          PDF
+                        </Button>
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 }

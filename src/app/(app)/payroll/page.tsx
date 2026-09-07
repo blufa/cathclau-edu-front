@@ -770,7 +770,10 @@ function CompensationTab() {
                 {[
                   { label: "Heures réalisées", value: fmtH(p.realizedMinutes) },
                   { label: "Retard cumulé", value: fmtH(p.lateMinutes), warn: p.lateMinutes > 0 },
+                  { label: "Départ anticipé cumulé", value: fmtH(p.earlyMinutes), warn: p.earlyMinutes > 0 },
                   { label: "Heures effectives", value: fmtH(p.effectiveMinutes) },
+                  { label: "Dont classes normales", value: fmtH(p.normalEffectiveMinutes) },
+                  { label: "Dont classes d'examen", value: fmtH(p.examEffectiveMinutes) },
                   { label: "Paie des cours", value: formatGNF(p.teachingPay) },
                   { label: "Salaire fixe", value: p.payMode === "FIXED" ? formatGNF(p.fixedSalary) : "—" },
                   { label: "Net à payer", value: formatGNF(p.grossPay), strong: true },

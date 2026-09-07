@@ -1,29 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarCheck, ClipboardList, ScanLine, Settings, UserCheck } from "lucide-react";
+import { CalendarCheck, ClipboardList, ScanLine, Settings, UserCheck, Users } from "lucide-react";
 import { AttendanceSettingsPanel } from "@/components/attendance/attendance-settings-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/staff";
+import { listEmployees, listTeachers } from "@/lib/api/staff";
 import {
   getAbsenteeListPdfObjectUrl,
   getClassAttendance,
+  getEmployeeAttendance,
+  getEmployeeMonthlySummary,
   getLatenessReportPdfObjectUrl,
   getTeacherAttendance,
+  getTeacherCheckins,
   getTeacherMonthlySummary,
   getUnjustifiedAlerts,
   justifyAttendance,
+  markEmployeeAbsent,
   markParentNotified,
   recordBulkAttendance,
-  recordStudentManualEntry,
   recordTeacherAttendance,
-  recordTeacherManualEntry,
   updateAttendance,
 } from "@/lib/api/attendance";
+import { submitManualEntryOfflineAware, submitManualExitOfflineAware } from "@/lib/offline/submit-attendance-offline-aware";
 import {
   ATTENDANCE_STATUS_LABEL,
   type AttendanceStatus,
@@ -32,6 +35,7 @@ import {
 import { formatMinutes } from "@/lib/format";
 import type { Student } from "@/lib/types/student";
 import type { Teacher } from "@/lib/types/staff";
+import type { Employee } from "@/lib/api/staff";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Select } from "@/components/ui/select";
@@ -164,6 +168,9 @@ export default function AttendancePage() {
           {canManageStaff && (
             <TabsTrigger value="staff" icon={UserCheck}>Présences enseignants</TabsTrigger>
           )}
+          {canManageStaff && (
+            <TabsTrigger value="personnel" icon={Users}>Présences personnel</TabsTrigger>
+          )}
           {canManageSettings && (
             <TabsTrigger value="settings" icon={Settings}>Réglages</TabsTrigger>
           )}
@@ -190,6 +197,15 @@ export default function AttendancePage() {
             <div className="space-y-6">
               <TeacherRollCall date={date} />
               <TeacherMonthlyRecap />
+            </div>
+          </TabsPanel>
+        )}
+
+        {canManageStaff && (
+          <TabsPanel value="personnel">
+            <div className="space-y-6">
+              <EmployeeRollCall date={date} />
+              <EmployeeMonthlyRecap />
             </div>
           </TabsPanel>
         )}
@@ -320,6 +336,9 @@ function AttendanceLog({ classId, date, students, canWrite }: {
   // l'emploi du temps, comme pour un scan) — un id présent ici affiche l'éditeur inline pour la ligne.
   const [pendingPresent, setPendingPresent] = useState<Record<number, string>>({});
   const [savingPresent, setSavingPresent] = useState<number | null>(null);
+  // Sortie manuelle (badge oublié) : même principe, sur la séance en cours à l'heure saisie.
+  const [pendingExit, setPendingExit] = useState<Record<number, string>>({});
+  const [savingExit, setSavingExit] = useState<number | null>(null);
 
   async function justify(rec: StudentAttendance, justified: boolean) {
     try {
@@ -351,14 +370,40 @@ function AttendanceLog({ classId, date, students, canWrite }: {
     if (!time) return;
     setSavingPresent(rec.id);
     try {
-      await recordStudentManualEntry(rec.studentId, date, time);
-      notifySuccess("Présence corrigée");
+      const attempt = await submitManualEntryOfflineAware("STUDENT", rec.studentId, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Présence enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Présence corrigée");
       cancelEntryTime(rec);
       refetch();
     } catch (err) {
       notifyError(err);
     } finally {
       setSavingPresent(null);
+    }
+  }
+
+  function askExitTime(rec: StudentAttendance) {
+    setPendingExit((p) => ({ ...p, [rec.id]: nowHm() }));
+  }
+  function cancelExitTime(rec: StudentAttendance) {
+    setPendingExit((p) => { const next = { ...p }; delete next[rec.id]; return next; });
+  }
+  async function confirmExit(rec: StudentAttendance) {
+    const time = pendingExit[rec.id];
+    if (!time) return;
+    setSavingExit(rec.id);
+    try {
+      const attempt = await submitManualExitOfflineAware("STUDENT", rec.studentId, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Sortie enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Sortie enregistrée");
+      cancelExitTime(rec);
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSavingExit(null);
     }
   }
 
@@ -420,7 +465,7 @@ function AttendanceLog({ classId, date, students, canWrite }: {
                 <TD>{r.parentNotified ? <Badge tone="green">Notifié</Badge> : <Badge tone="gray">—</Badge>}</TD>
                 <TD className="text-right">
                   {canWrite && (
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {pendingPresent[r.id] !== undefined ? (
                         <>
                           <Input type="time" value={pendingPresent[r.id]}
@@ -429,19 +474,30 @@ function AttendanceLog({ classId, date, students, canWrite }: {
                           <Button size="sm" loading={savingPresent === r.id} onClick={() => confirmPresent(r)}>OK</Button>
                           <Button size="sm" variant="ghost" onClick={() => cancelEntryTime(r)}>Annuler</Button>
                         </>
+                      ) : pendingExit[r.id] !== undefined ? (
+                        <>
+                          <Input type="time" value={pendingExit[r.id]}
+                            onChange={(e) => setPendingExit((p) => ({ ...p, [r.id]: e.target.value }))}
+                            className="w-24" />
+                          <Button size="sm" loading={savingExit === r.id} onClick={() => confirmExit(r)}>OK</Button>
+                          <Button size="sm" variant="ghost" onClick={() => cancelExitTime(r)}>Annuler</Button>
+                        </>
                       ) : (
-                        <Select
-                          value={r.status}
-                          onChange={(e) => {
-                            const v = e.target.value as AttendanceStatus;
-                            if (v === "PRESENT") askEntryTime(r); else correct(r, v);
-                          }}
-                          className="max-w-[130px]"
-                        >
-                          {(["PRESENT", "ABSENT", "LATE"] as AttendanceStatus[]).map((st) => (
-                            <option key={st} value={st}>{ATTENDANCE_STATUS_LABEL[st]}</option>
-                          ))}
-                        </Select>
+                        <>
+                          <Select
+                            value={r.status}
+                            onChange={(e) => {
+                              const v = e.target.value as AttendanceStatus;
+                              if (v === "PRESENT") askEntryTime(r); else correct(r, v);
+                            }}
+                            className="max-w-[130px]"
+                          >
+                            {(["PRESENT", "ABSENT", "LATE"] as AttendanceStatus[]).map((st) => (
+                              <option key={st} value={st}>{ATTENDANCE_STATUS_LABEL[st]}</option>
+                            ))}
+                          </Select>
+                          <Button size="sm" variant="ghost" className="text-brand-700" onClick={() => askExitTime(r)}>Sortie</Button>
+                        </>
                       )}
                       {r.status !== "PRESENT" && !r.parentNotified && (
                         <Button size="sm" variant="ghost" onClick={() => notify(r)}>Notifier parent</Button>
@@ -478,7 +534,10 @@ function TeacherRollCall({ date }: { date: string }) {
   return (
     <Table>
       <THead>
-        <tr><TH>Enseignant</TH><TH>Matricule</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH><TH className="text-right">Marquer ({date})</TH></tr>
+        <tr>
+          <TH>Enseignant</TH><TH>Matricule</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH>
+          <TH>Heure de sortie</TH><TH>Départ anticipé</TH><TH className="text-right">Marquer ({date})</TH>
+        </tr>
       </THead>
       <TBody>
         {teachers.map((t) => <TeacherRollCallRow key={t.id} teacher={t} date={date} />)}
@@ -487,24 +546,50 @@ function TeacherRollCall({ date }: { date: string }) {
   );
 }
 
-/** Une ligne = un enseignant : affiche son pointage réel du jour (statut, heure d'entrée, retard —
- * qu'il vienne d'un scan de badge ou d'une saisie manuelle), avec les boutons pour la corriger. */
+/** Une ligne = un enseignant : affiche son pointage réel du jour (statut, entrée/sortie, retard et
+ * départ anticipé cumulés — qu'il vienne d'un scan de badge ou d'une saisie manuelle en cas de badge
+ * oublié), avec les boutons pour le corriger. Le retard et le départ anticipé sont tous deux déduits
+ * des heures effectives sur la fiche de paie (§payroll). */
 function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: string }) {
   const { data, loading, refetch } = useQuery(() => getTeacherAttendance(t.id, date, date), [t.id, date]);
+  const checkinsQuery = useQuery(() => getTeacherCheckins(t.id, date), [t.id, date]);
   const record = (data ?? []).find((a) => a.date === date) ?? null;
+  const checkins = checkinsQuery.data ?? [];
+  const lastCheckout = [...checkins].reverse().find((c) => c.checkOutTime)?.checkOutTime ?? null;
+  const totalEarly = checkins.reduce((sum, c) => sum + (c.earlyMinutes ?? 0), 0);
   const [busy, setBusy] = useState(false);
-  // Marquer « Présent » demande l'heure d'entrée — le retard est calculé automatiquement vs l'emploi
-  // du temps, comme pour un scan (§attendance/scan).
+  // Marquer « Présent »/« Sortie » demande l'heure — le retard/départ anticipé est calculé
+  // automatiquement vs l'emploi du temps, comme pour un scan (§attendance/scan).
   const [enteringTime, setEnteringTime] = useState(false);
+  const [exitingTime, setExitingTime] = useState(false);
   const [time, setTime] = useState(nowHm());
+
+  function refetchAll() { refetch(); checkinsQuery.refetch(); }
 
   async function markPresent() {
     setBusy(true);
     try {
-      await recordTeacherManualEntry(t.id, date, time);
-      notifySuccess("Présence enregistrée");
+      const attempt = await submitManualEntryOfflineAware("TEACHER", t.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Présence enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Présence enregistrée");
       setEnteringTime(false);
-      refetch();
+      refetchAll();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function recordExit() {
+    setBusy(true);
+    try {
+      const attempt = await submitManualExitOfflineAware("TEACHER", t.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Sortie enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Sortie enregistrée");
+      setExitingTime(false);
+      refetchAll();
     } catch (err) {
       notifyError(err);
     } finally {
@@ -516,7 +601,7 @@ function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: stri
     try {
       await recordTeacherAttendance(t.id, date, "ABSENT");
       notifySuccess("Présence enregistrée");
-      refetch();
+      refetchAll();
     } catch (err) {
       notifyError(err);
     } finally {
@@ -539,6 +624,10 @@ function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: stri
       <TD className={record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined}>
         {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
       </TD>
+      <TD>{lastCheckout ?? "—"}</TD>
+      <TD className={totalEarly > 0 ? "text-warning-600" : undefined}>
+        {totalEarly > 0 ? formatMinutes(totalEarly) : "—"}
+      </TD>
       <TD className="text-right">
         {enteringTime ? (
           <div className="inline-flex items-center gap-2">
@@ -546,10 +635,18 @@ function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: stri
             <Button size="sm" loading={busy} onClick={markPresent}>OK</Button>
             <Button size="sm" variant="ghost" onClick={() => setEnteringTime(false)}>Annuler</Button>
           </div>
+        ) : exitingTime ? (
+          <div className="inline-flex items-center gap-2">
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-24" />
+            <Button size="sm" loading={busy} onClick={recordExit}>OK</Button>
+            <Button size="sm" variant="ghost" onClick={() => setExitingTime(false)}>Annuler</Button>
+          </div>
         ) : (
           <div className="inline-flex items-center gap-2">
             <Button size="sm" variant="ghost" className="text-success-700" disabled={busy}
               onClick={() => { setTime(nowHm()); setEnteringTime(true); }}>Présent</Button>
+            <Button size="sm" variant="ghost" className="text-brand-700" disabled={busy}
+              onClick={() => { setTime(nowHm()); setExitingTime(true); }}>Sortie</Button>
             <Button size="sm" variant="ghost" className="text-error-600" disabled={busy} onClick={markAbsent}>Absent</Button>
           </div>
         )}
@@ -639,6 +736,221 @@ function TeacherMonthlyRecap() {
                     <TD>{a.checkInTime ?? "—"}</TD>
                     <TD className={a.lateMinutes && a.lateMinutes > 0 ? "text-warning-600" : undefined}>
                       {a.lateMinutes && a.lateMinutes > 0 ? fmtH(a.lateMinutes) : "—"}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Personnel non-enseignant : présence (un seul pointage par jour) ───────────
+function EmployeeRollCall({ date }: { date: string }) {
+  const employeesQuery = useQuery(() => listEmployees(), []);
+  const employees = useMemo<Employee[]>(() => employeesQuery.data ?? [], [employeesQuery.data]);
+
+  if (employeesQuery.loading) return <div className="flex justify-center py-10"><Spinner /></div>;
+  if (employees.length === 0) return <p className="py-8 text-center text-sm text-gray-400">Aucun membre du personnel.</p>;
+
+  return (
+    <Table>
+      <THead>
+        <tr>
+          <TH>Personnel</TH><TH>Matricule</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH>
+          <TH>Heure de sortie</TH><TH>Départ anticipé</TH><TH className="text-right">Marquer ({date})</TH>
+        </tr>
+      </THead>
+      <TBody>
+        {employees.map((e) => <EmployeeRollCallRow key={e.id} employee={e} date={date} />)}
+      </TBody>
+    </Table>
+  );
+}
+
+/** Une ligne = un membre du personnel (administratif, direction, soutien) : un seul pointage par jour
+ * (pas de créneau de cours comme les enseignants), vs l'horaire de référence de l'école (réglages). */
+function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: string }) {
+  const { data, loading, refetch } = useQuery(() => getEmployeeAttendance(e.id, date, date), [e.id, date]);
+  const record = (data ?? []).find((a) => a.date === date) ?? null;
+  const [busy, setBusy] = useState(false);
+  const [enteringTime, setEnteringTime] = useState(false);
+  const [exitingTime, setExitingTime] = useState(false);
+  const [time, setTime] = useState(nowHm());
+
+  async function markPresent() {
+    setBusy(true);
+    try {
+      const attempt = await submitManualEntryOfflineAware("EMPLOYEE", e.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Présence enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Présence enregistrée");
+      setEnteringTime(false);
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function recordExit() {
+    setBusy(true);
+    try {
+      const attempt = await submitManualExitOfflineAware("EMPLOYEE", e.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Sortie enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Sortie enregistrée");
+      setExitingTime(false);
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function markAbsent() {
+    setBusy(true);
+    try {
+      await markEmployeeAbsent(e.id);
+      notifySuccess("Présence enregistrée");
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <TR>
+      <TD className="font-medium text-gray-900">{e.firstName} {e.lastName}</TD>
+      <TD className="font-mono text-xs text-gray-500">{e.employeeNumber}</TD>
+      <TD>
+        {loading ? <Spinner className="h-3.5 w-3.5" /> : record ? (
+          <Badge tone={record.status === "PRESENT" ? "green" : "red"}>
+            {record.status === "PRESENT" ? "Présent" : "Absent"}
+          </Badge>
+        ) : <Badge tone="gray">Aucun pointage</Badge>}
+      </TD>
+      <TD>{record?.checkInTime ?? "—"}</TD>
+      <TD className={record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined}>
+        {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
+      </TD>
+      <TD>{record?.checkOutTime ?? "—"}</TD>
+      <TD className={record?.earlyMinutes && record.earlyMinutes > 0 ? "text-warning-600" : undefined}>
+        {record?.earlyMinutes && record.earlyMinutes > 0 ? formatMinutes(record.earlyMinutes) : "—"}
+      </TD>
+      <TD className="text-right">
+        {enteringTime ? (
+          <div className="inline-flex items-center gap-2">
+            <Input type="time" value={time} onChange={(e2) => setTime(e2.target.value)} className="w-24" />
+            <Button size="sm" loading={busy} onClick={markPresent}>OK</Button>
+            <Button size="sm" variant="ghost" onClick={() => setEnteringTime(false)}>Annuler</Button>
+          </div>
+        ) : exitingTime ? (
+          <div className="inline-flex items-center gap-2">
+            <Input type="time" value={time} onChange={(e2) => setTime(e2.target.value)} className="w-24" />
+            <Button size="sm" loading={busy} onClick={recordExit}>OK</Button>
+            <Button size="sm" variant="ghost" onClick={() => setExitingTime(false)}>Annuler</Button>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-2">
+            <Button size="sm" variant="ghost" className="text-success-700" disabled={busy}
+              onClick={() => { setTime(nowHm()); setEnteringTime(true); }}>Présent</Button>
+            <Button size="sm" variant="ghost" className="text-brand-700" disabled={busy}
+              onClick={() => { setTime(nowHm()); setExitingTime(true); }}>Sortie</Button>
+            <Button size="sm" variant="ghost" className="text-error-600" disabled={busy} onClick={markAbsent}>Absent</Button>
+          </div>
+        )}
+      </TD>
+    </TR>
+  );
+}
+
+// ── Récap mensuel pointage personnel (retard/départ anticipé cumulés) ─────────
+function EmployeeMonthlyRecap() {
+  const employeesQuery = useQuery(() => listEmployees(), []);
+  const employees = employeesQuery.data ?? [];
+  const now = new Date();
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [y, m] = period.split("-").map(Number);
+  const sumQuery = useQuery(
+    () => (employeeId ? getEmployeeMonthlySummary(Number(employeeId), y, m) : Promise.resolve(null)),
+    [employeeId, period],
+  );
+  const s = sumQuery.data;
+  const fmtH = (mins: number) => `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")}`;
+
+  const monthStart = `${period}-01`;
+  const monthEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+  const historyQuery = useQuery(
+    () => (employeeId ? getEmployeeAttendance(Number(employeeId), monthStart, monthEnd) : Promise.resolve([])),
+    [employeeId, period],
+  );
+  const history = [...(historyQuery.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold text-gray-700">Récap mensuel — pointage personnel</h3>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Membre du personnel</label>
+          <Select className="max-w-[240px]" value={employeeId ?? ""} onChange={(e) => setEmployeeId(e.target.value || null)}>
+            <option value="">Choisir…</option>
+            {employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}
+          </Select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Mois</label>
+          <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+        </div>
+      </div>
+      {!employeeId ? (
+        <p className="mt-4 text-sm text-gray-400">Sélectionnez un membre du personnel.</p>
+      ) : sumQuery.loading ? (
+        <div className="flex justify-center py-6"><Spinner /></div>
+      ) : s ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Jours présents", value: String(s.presentDays) },
+            { label: "Jours absents", value: String(s.absentDays) },
+            { label: "Retard cumulé", value: fmtH(s.totalLateMinutes), warn: s.totalLateMinutes > 0 },
+            { label: "Départ anticipé cumulé", value: fmtH(s.totalEarlyMinutes), warn: s.totalEarlyMinutes > 0 },
+          ].map((c) => (
+            <div key={c.label} className="rounded-xl bg-gray-50 px-3 py-3">
+              <p className="text-xs text-gray-500">{c.label}</p>
+              <p className={`mt-1 text-lg font-bold ${c.warn ? "text-error-600" : "text-gray-900"}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <p className="mt-3 text-xs text-gray-400">Retard/départ anticipé calculés vs l&apos;horaire de référence du personnel (réglages).</p>
+
+      {employeeId && (
+        <div className="mt-5 border-t border-gray-100 pt-4">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Détail jour par jour</h4>
+          {historyQuery.loading ? (
+            <div className="flex justify-center py-6"><Spinner /></div>
+          ) : (
+            <Table>
+              <THead><tr><TH>Date</TH><TH>Statut</TH><TH>Entrée</TH><TH>Retard</TH><TH>Sortie</TH><TH>Départ anticipé</TH></tr></THead>
+              <TBody>
+                {history.length === 0 && <TR><TD colSpan={6} className="py-6 text-center text-gray-400">Aucun pointage ce mois-ci.</TD></TR>}
+                {history.map((a) => (
+                  <TR key={a.id}>
+                    <TD>{a.date}</TD>
+                    <TD><Badge tone={a.status === "PRESENT" ? "green" : "red"}>{a.status === "PRESENT" ? "Présent" : "Absent"}</Badge></TD>
+                    <TD>{a.checkInTime ?? "—"}</TD>
+                    <TD className={a.lateMinutes && a.lateMinutes > 0 ? "text-warning-600" : undefined}>
+                      {a.lateMinutes && a.lateMinutes > 0 ? fmtH(a.lateMinutes) : "—"}
+                    </TD>
+                    <TD>{a.checkOutTime ?? "—"}</TD>
+                    <TD className={a.earlyMinutes && a.earlyMinutes > 0 ? "text-warning-600" : undefined}>
+                      {a.earlyMinutes && a.earlyMinutes > 0 ? fmtH(a.earlyMinutes) : "—"}
                     </TD>
                   </TR>
                 ))}

@@ -6,6 +6,7 @@ import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   createEmployee,
+  createTeacher,
   deleteEmployee,
   listEmployees,
   setEmployeeActive,
@@ -14,6 +15,7 @@ import {
   type EmployeeCategory,
   type EmployeeInput,
 } from "@/lib/api/staff";
+import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -21,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EMPLOYEE_CATEGORY_LABEL, EmployeeForm } from "@/components/staff/employee-form";
+import { TeacherForm } from "@/components/staff/teacher-form";
 import { IdBadge } from "@/components/cards/id-badge";
 import { useBranding } from "@/providers/branding-provider";
 import { buildIdentityQr } from "@/lib/identity-qr";
@@ -47,6 +50,11 @@ export default function PersonnelPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [badgeFor, setBadgeFor] = useState<Employee | null>(null);
+  // Personnel administratif/direction/soutien pouvant aussi enseigner des heures dans une classe :
+  // "Devenir enseignant" pré-remplit la création de fiche enseignant avec l'identité déjà saisie ici,
+  // plutôt que de tout ressaisir. Les deux fiches restent distinctes (salaire de base vs heures de
+  // cours), la paie les traite séparément — voir EmployeeType côté API.
+  const [teachingFor, setTeachingFor] = useState<Employee | null>(null);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -82,6 +90,11 @@ export default function PersonnelPage() {
       notifySuccess(e.active ? "Membre désactivé" : "Membre réactivé");
       q.refetch();
     } catch (err) { notifyError(err); }
+  }
+  async function handleCreateTeacher(input: CreateTeacherInput): Promise<Teacher> {
+    const teacher = await createTeacher(input);
+    notifySuccess("Fiche enseignant créée — affectez ses classes/matières depuis l'onglet Enseignants");
+    return teacher;
   }
   function handleDelete(e: Employee) {
     confirmAction({
@@ -131,6 +144,7 @@ export default function PersonnelPage() {
         canWrite ? (
           <div className="flex justify-end gap-1">
             <Button size="sm" variant="ghost" onClick={() => setBadgeFor(e)}>Badge</Button>
+            <Button size="sm" variant="ghost" onClick={() => setTeachingFor(e)}>Devenir enseignant</Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>Modifier</Button>
             <Button size="sm" variant="ghost" onClick={() => toggleActive(e)}>{e.active ? "Désactiver" : "Réactiver"}</Button>
             <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(e)}>Suppr.</Button>
@@ -144,7 +158,10 @@ export default function PersonnelPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Personnel</h1>
-          <p className="text-sm text-gray-500">Personnel non enseignant : administration, direction et soutien</p>
+          <p className="text-sm text-gray-500">
+            Personnel non enseignant : administration, direction et soutien. Un membre qui donne
+            aussi des heures de cours peut recevoir une fiche enseignant (« Devenir enseignant »).
+          </p>
         </div>
         {canWrite && <Button onClick={() => setCreating(true)}>Nouveau membre</Button>}
       </div>
@@ -184,6 +201,17 @@ export default function PersonnelPage() {
       </Modal>
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier la fiche">
         {editing && <EmployeeForm initial={editing} submitLabel="Enregistrer" onSubmit={handleUpdate} onCancel={() => setEditing(null)} />}
+      </Modal>
+      <Modal open={!!teachingFor} onClose={() => setTeachingFor(null)} title="Créer un profil enseignant" className="max-w-2xl">
+        {teachingFor && (
+          <TeacherForm
+            initial={{ firstName: teachingFor.firstName ?? "", lastName: teachingFor.lastName ?? "", phone: teachingFor.phone, email: teachingFor.email }}
+            submitLabel="Créer"
+            onSubmit={handleCreateTeacher}
+            onCancel={() => setTeachingFor(null)}
+            onFinish={() => setTeachingFor(null)}
+          />
+        )}
       </Modal>
       <Modal open={!!badgeFor} onClose={() => setBadgeFor(null)} title="Badge personnel">
         {badgeFor && (

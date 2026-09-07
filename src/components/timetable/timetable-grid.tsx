@@ -13,14 +13,16 @@ import { cn } from "@/lib/utils";
 import type { ClasseMatiere, CreateScheduleInput, EmploiDuTemps, JourSemaine, Matiere } from "@/lib/types/academics";
 
 /** Bandes horaires par défaut de la grille — un point de repère visuel, pas une contrainte : l'heure
- * réelle de chaque séance reste entièrement libre dans sa cellule (une matière d'1h n'occupe pas tout
- * le créneau de 2h). Ces bornes 08h-16h conviennent au secondaire, mais une école de garderie/primaire
- * peut avoir des horaires très différents (ex. dès 07h, ou au-delà de 16h) — {@link buildSlots} étend
- * automatiquement les bandes pour couvrir tout créneau réellement enregistré en dehors de cette plage
- * par défaut, pour ne jamais masquer une séance dans la grille. */
+ * réelle de chaque séance reste entièrement libre dans sa cellule. Bandes d'1h (au lieu de 2h) pour
+ * une saisie plus fine ; une matière qui dure plusieurs heures (ex. 8h-10h) fusionne visuellement les
+ * bandes concernées (voir {@link spanCount}) au lieu d'être coupée à la première heure. Ces bornes
+ * 08h-18h conviennent à la plupart des écoles, mais une école de garderie/primaire peut avoir des
+ * horaires différents (ex. dès 07h) — {@link buildSlots} étend automatiquement les bandes pour
+ * couvrir tout créneau réellement enregistré en dehors de cette plage par défaut, pour ne jamais
+ * masquer une séance dans la grille. */
 const DEFAULT_SLOT_START = "08:00";
-const DEFAULT_SLOT_END = "16:00";
-const SLOT_BAND_MINUTES = 120;
+const DEFAULT_SLOT_END = "18:00";
+const SLOT_BAND_MINUTES = 60;
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -43,7 +45,7 @@ function buildSlots(slots: EmploiDuTemps[]): { start: string; end: string; label
     rangeStart = Math.min(rangeStart, timeToMinutes(s.startTime.slice(0, 5)));
     rangeEnd = Math.max(rangeEnd, timeToMinutes(s.endTime.slice(0, 5)));
   }
-  // Aligne sur des bandes rondes de 2h pour rester lisible (ex. début à 6h50 → bande à partir de 6h).
+  // Aligne sur des bandes rondes d'1h pour rester lisible (ex. début à 6h50 → bande à partir de 6h).
   rangeStart = Math.floor(rangeStart / SLOT_BAND_MINUTES) * SLOT_BAND_MINUTES;
   rangeEnd = Math.ceil(rangeEnd / SLOT_BAND_MINUTES) * SLOT_BAND_MINUTES;
 
@@ -121,15 +123,28 @@ export function TimetableGrid({
     });
   }, [classSubjects, codesBySubject, subjectLabel, teacherName]);
 
-  // Un créneau fixe (ex. 08h–10h) peut contenir une séance plus courte (matières d'1h) : on
-  // rattache l'entrée dont l'heure de début tombe dans la fenêtre du créneau, pas seulement celles
-  // qui en couvrent exactement les 2h.
+  // Un créneau fixe (ex. 08h–09h) peut contenir une séance plus courte OU commencer une séance plus
+  // longue (matière sur plusieurs heures) : on rattache l'entrée dont l'heure de début tombe dans la
+  // fenêtre du créneau.
   function entryFor(day: JourSemaine, slot: { start: string; end: string }): EmploiDuTemps | undefined {
     return slots.find((s) => {
       const start = s.startTime.slice(0, 5);
       return s.day === day && start >= slot.start && start < slot.end;
     });
   }
+
+  // Nombre de bandes d'1h consécutives couvertes par une séance à partir de l'index `fromIndex`
+  // (ex. une matière 08h-10h sur une grille en bandes d'1h couvre 2 bandes : 08h-09h et 09h-10h).
+  function spanCount(entry: EmploiDuTemps, fromIndex: number): number {
+    const end = entry.endTime.slice(0, 5);
+    let count = 0;
+    for (let j = fromIndex; j < fixedSlots.length && fixedSlots[j].start < end; j++) count++;
+    return Math.max(1, count);
+  }
+
+  // Pointeur par jour : index de la prochaine bande à afficher (les bandes déjà couvertes par une
+  // séance fusionnée au-dessus, via rowSpan, ne doivent pas produire de <td> dans cette ligne).
+  const dayCursor = new Map<JourSemaine, number>(DAYS.map((d) => [d.key, 0]));
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-theme-xs">
@@ -147,13 +162,17 @@ export function TimetableGrid({
           </tr>
         </thead>
         <tbody>
-          {fixedSlots.map((slot) => (
+          {fixedSlots.map((slot, rowIndex) => (
             <tr key={slot.start} className="border-t border-gray-100">
               <td className="whitespace-nowrap px-3 py-2 align-top text-xs font-semibold text-gray-600">{slot.label}</td>
               {DAYS.map((d) => {
+                const cursor = dayCursor.get(d.key) ?? 0;
+                if (cursor > rowIndex) return null; // couvert par le rowSpan d'une séance au-dessus
                 const existing = entryFor(d.key, slot);
+                const span = existing ? spanCount(existing, rowIndex) : 1;
+                dayCursor.set(d.key, rowIndex + span);
                 return (
-                  <td key={d.key} className="px-1.5 py-1.5 align-top">
+                  <td key={d.key} rowSpan={span} className="px-1.5 py-1.5 align-top">
                     <GridCell
                       // Remonte avec un état frais quand l'entrée apparaît/disparaît (créée ailleurs,
                       // ex. génération automatique) — évite un effet de resynchronisation.

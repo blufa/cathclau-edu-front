@@ -7,11 +7,13 @@ import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
 import { useEnrollmentQueueStore } from "@/lib/offline/enrollment-queue-store";
 import { useTeacherQueueStore } from "@/lib/offline/teacher-queue-store";
 import { useParentQueueStore } from "@/lib/offline/parent-queue-store";
+import { useAttendanceQueueStore } from "@/lib/offline/attendance-queue-store";
 import {
   wireSyncTriggers, processQueue, retryFailedEntry, discardFailedEntry,
   processEnrollmentQueue, retryFailedEnrollmentEntry, discardFailedEnrollmentEntry,
   processTeacherQueue, retryFailedTeacherEntry, discardFailedTeacherEntry,
   processParentQueue, retryFailedParentEntry, discardFailedParentEntry,
+  processAttendanceQueue, retryFailedAttendanceEntry, discardFailedAttendanceEntry,
 } from "@/lib/offline/sync-engine";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -36,6 +38,8 @@ export function OfflineBanner() {
   const teacherSyncing = useTeacherQueueStore((s) => s.syncing);
   const parentItems = useParentQueueStore((s) => s.items);
   const parentSyncing = useParentQueueStore((s) => s.syncing);
+  const attendanceItems = useAttendanceQueueStore((s) => s.items);
+  const attendanceSyncing = useAttendanceQueueStore((s) => s.syncing);
   const [showFailed, setShowFailed] = useState(false);
 
   useEffect(() => {
@@ -43,7 +47,7 @@ export function OfflineBanner() {
     wireSyncTriggers();
   }, []);
 
-  const syncing = paymentSyncing || enrollmentSyncing || teacherSyncing || parentSyncing;
+  const syncing = paymentSyncing || enrollmentSyncing || teacherSyncing || parentSyncing || attendanceSyncing;
   const pendingPayments = paymentItems.filter((i) => i.status === "pending");
   const failedPayments = paymentItems.filter((i) => i.status === "failed");
   const pendingEnrollments = enrollmentItems.filter((i) => i.status === "pending");
@@ -52,9 +56,11 @@ export function OfflineBanner() {
   const failedTeachers = teacherItems.filter((i) => i.status === "failed");
   const pendingParents = parentItems.filter((i) => i.status === "pending");
   const failedParents = parentItems.filter((i) => i.status === "failed");
-  const pendingTotal = pendingPayments.length + pendingEnrollments.length + pendingTeachers.length + pendingParents.length;
-  const failedTotal = failedPayments.length + failedEnrollments.length + failedTeachers.length + failedParents.length;
-  const totalItems = paymentItems.length + enrollmentItems.length + teacherItems.length + parentItems.length;
+  const pendingAttendance = attendanceItems.filter((i) => i.status === "pending");
+  const failedAttendance = attendanceItems.filter((i) => i.status === "failed");
+  const pendingTotal = pendingPayments.length + pendingEnrollments.length + pendingTeachers.length + pendingParents.length + pendingAttendance.length;
+  const failedTotal = failedPayments.length + failedEnrollments.length + failedTeachers.length + failedParents.length + failedAttendance.length;
+  const totalItems = paymentItems.length + enrollmentItems.length + teacherItems.length + parentItems.length + attendanceItems.length;
 
   if (online && totalItems === 0) return null;
 
@@ -63,6 +69,7 @@ export function OfflineBanner() {
     void processEnrollmentQueue();
     void processTeacherQueue();
     void processParentQueue();
+    void processAttendanceQueue();
   }
 
   return (
@@ -82,8 +89,8 @@ export function OfflineBanner() {
             <>
               <WifiOff className="h-4 w-4" />
               <span>
-                Hors-ligne — encaissements en espèces, inscriptions d&apos;élèves, enseignants et
-                parents continuent de fonctionner
+                Hors-ligne — encaissements en espèces, inscriptions d&apos;élèves, enseignants,
+                parents et présences (scan et saisie manuelle) continuent de fonctionner
                 {pendingTotal > 0 ? ` (${pendingTotal} en attente de synchronisation)` : ""}.
               </span>
             </>
@@ -182,6 +189,25 @@ export function OfflineBanner() {
                       Ignorer
                     </Button>
                     <Button size="sm" onClick={() => void retryFailedParentEntry(entry.id)}>Réessayer</Button>
+                  </div>
+                </div>
+              ))}
+              {failedAttendance.map((entry) => (
+                <div key={`attendance-${entry.id}`} className="rounded-lg border border-error-100 bg-error-50/40 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-700">
+                      Présence · {entry.action.subjectType === "TEACHER" ? "Enseignant" : "Élève"} #{entry.action.subjectId}
+                      {" "}({entry.action.kind === "SCAN" ? `Scan ${entry.action.direction === "ENTRY" ? "entrée" : "sortie"}`
+                        : entry.action.kind === "MANUAL_ENTRY" ? "Saisie manuelle entrée" : "Saisie manuelle sortie"})
+                    </span>
+                  </div>
+                  {entry.lastError && <p className="mt-1 text-xs text-error-600">{entry.lastError}</p>}
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" leftSection={<X className="h-3.5 w-3.5" />}
+                      onClick={() => void discardFailedAttendanceEntry(entry.id)}>
+                      Ignorer
+                    </Button>
+                    <Button size="sm" onClick={() => void retryFailedAttendanceEntry(entry.id)}>Réessayer</Button>
                   </div>
                 </div>
               ))}

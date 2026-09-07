@@ -61,10 +61,18 @@ export interface SchoolProfile {
   director: string | null;
   accreditationNumber: string | null;
   openingAuthorization: string | null;
-  /** Devise de l'établissement (phrase courte et formelle), imprimée au verso des badges/cartes. */
+  /** Devise de l'établissement (phrase courte et formelle) — imprimée au verso des badges/cartes,
+   * et sous le nom de l'école dans l'en-tête des documents PDF générés. */
   motto: string | null;
   /** Slogan de l'établissement, imprimé au verso des badges/cartes. */
   slogan: string | null;
+  /** Inspection Régionale de l'Éducation de rattachement (ex. "KINDIA") — en-tête officiel des
+   * documents pédagogiques (bulletins, fiches de note...). */
+  ire: string | null;
+  /** Direction Préfectorale de l'Éducation de rattachement (ex. "COYAH"). */
+  dpeLabel: string | null;
+  /** Direction Sous-préfectorale/communale de l'Éducation de rattachement (ex. "MANGATA"). */
+  sousPrefectureLabel: string | null;
   /** Numéro marchand de reversement (Mobile Money) où la plateforme reverse les fonds de l'école. */
   payoutMerchantNumber: string | null;
   /** Opérateur du numéro marchand (ORANGE_MONEY, MTN_MONEY, WAVE…). */
@@ -80,6 +88,7 @@ export type SchoolProfileInput = Pick<
   SchoolProfile,
   "schoolName" | "logo" | "brandColor" | "address" | "city" | "country" | "phone" | "email"
   | "website" | "director" | "accreditationNumber" | "openingAuthorization" | "motto" | "slogan"
+  | "ire" | "dpeLabel" | "sousPrefectureLabel"
   | "payoutMerchantNumber" | "payoutOperator" | "payoutAccountName"
 >;
 
