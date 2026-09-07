@@ -8,6 +8,7 @@ import {
   getAttendanceSettings,
   listRecessWindows,
   updateAttendanceSettings,
+  updateEmployeeAttendanceHours,
 } from "@/lib/api/attendance";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -27,9 +28,14 @@ export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [adding, setAdding] = useState(false);
+  const [employeeCheckIn, setEmployeeCheckIn] = useState<string | null>(null);
+  const [employeeCheckOut, setEmployeeCheckOut] = useState<string | null>(null);
+  const [savingHours, setSavingHours] = useState(false);
 
   const effectiveMargin = margin ?? settingsQuery.data?.transitionMarginMinutes ?? 5;
   const windows = windowsQuery.data ?? [];
+  const effectiveCheckIn = employeeCheckIn ?? settingsQuery.data?.employeeCheckInTime?.slice(0, 5) ?? "08:00";
+  const effectiveCheckOut = employeeCheckOut ?? settingsQuery.data?.employeeCheckOutTime?.slice(0, 5) ?? "17:00";
 
   async function saveMargin() {
     setSaving(true);
@@ -41,6 +47,19 @@ export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
       notifyError(err);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveEmployeeHours() {
+    setSavingHours(true);
+    try {
+      await updateEmployeeAttendanceHours(effectiveCheckIn, effectiveCheckOut);
+      notifySuccess("Horaire du personnel enregistré.");
+      settingsQuery.refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSavingHours(false);
     }
   }
 
@@ -94,6 +113,29 @@ export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
         {canWrite && (
           <div className="mt-4 flex justify-end">
             <Button onClick={saveMargin} loading={saving}>Enregistrer</Button>
+          </div>
+        )}
+      </div>
+
+      <div className="max-w-xl rounded-2xl border border-gray-200 bg-white p-6">
+        <p className="mb-4 text-xs text-gray-400">
+          Horaire de référence du personnel non-enseignant (administratif, direction, soutien) — un
+          seul horaire pour tout le personnel, pas de créneau de cours par individu comme les
+          enseignants. Sert à calculer retard et départ anticipé au pointage.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field>
+            <Label>Heure d&apos;entrée</Label>
+            <Input type="time" disabled={!canWrite} value={effectiveCheckIn} onChange={(e) => setEmployeeCheckIn(e.target.value)} />
+          </Field>
+          <Field>
+            <Label>Heure de sortie</Label>
+            <Input type="time" disabled={!canWrite} value={effectiveCheckOut} onChange={(e) => setEmployeeCheckOut(e.target.value)} />
+          </Field>
+        </div>
+        {canWrite && (
+          <div className="mt-4 flex justify-end">
+            <Button onClick={saveEmployeeHours} loading={savingHours}>Enregistrer</Button>
           </div>
         )}
       </div>

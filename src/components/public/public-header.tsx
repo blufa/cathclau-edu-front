@@ -2,17 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, MapPin, Menu, Phone, Search, X } from "lucide-react";
+import { Mail, MapPin, Menu, Phone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getBranding } from "@/lib/branding";
 
 const NAV = [
-  { label: "Accueil", href: "/" },
-  { label: "Modules", href: "/#modules" },
-  { label: "À propos", href: "/a-propos" },
-  { label: "Blog", href: "/blog" },
-  { label: "Sécurité", href: "/#securite" },
+  { label: "Fonctionnalités", href: "/fonctionnalites" },
   { label: "Tarifs", href: "/tarifs" },
+  { label: "Blog", href: "/blog" },
+  { label: "À propos", href: "/a-propos" },
   { label: "FAQ", href: "/faqs" },
 ];
 
@@ -46,7 +44,7 @@ export function PublicHeader() {
 
       {/* Barre de navigation bleue */}
       <div className="bg-brand-600 shadow-md shadow-brand-900/10">
-        <div className="mx-auto flex h-[4.5rem] max-w-6xl items-center justify-between px-4 py-2.5">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 py-2.5 md:h-[4.5rem]">
           <Link href="/" className="flex items-center gap-2">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white font-bold text-brand-700 shadow-sm">
               {branding.logoLetter}
@@ -54,26 +52,19 @@ export function PublicHeader() {
             <span className="text-lg font-bold tracking-tight text-white">{branding.appName}</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden items-center gap-1 md:flex">
             {NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className="rounded-full px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
+                className="rounded-full px-3.5 py-2 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white lg:px-4"
               >
                 {n.label}
               </Link>
             ))}
           </nav>
 
-          <div className="hidden items-center gap-3 lg:flex">
-            <button
-              type="button"
-              aria-label="Rechercher"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition hover:bg-white/10 hover:text-white"
-            >
-              <Search className="h-4 w-4" />
-            </button>
+          <div className="hidden items-center gap-2 md:flex">
             <Link href="/login" className="rounded-full px-3 py-2 text-sm font-medium text-white/90 hover:text-white">
               Connexion
             </Link>
@@ -86,7 +77,7 @@ export function PublicHeader() {
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Menu"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-white lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-white md:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -96,8 +87,8 @@ export function PublicHeader() {
       {/* Mobile drawer */}
       {open && (
         <>
-          <div className="fixed inset-0 z-40 bg-gray-900/50 lg:hidden" onClick={close} />
-          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white p-6 shadow-xl lg:hidden">
+          <div className="fixed inset-0 z-40 bg-gray-900/50 md:hidden" onClick={close} />
+          <div className="fixed inset-y-0 right-0 z-50 w-72 max-w-[85vw] bg-white p-6 shadow-xl md:hidden">
             <div className="mb-6 flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-900">Menu</span>
               <button type="button" onClick={close} aria-label="Fermer" className="rounded-lg p-1 text-gray-500 hover:bg-gray-100">

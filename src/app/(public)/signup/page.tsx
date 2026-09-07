@@ -2,9 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { SignupForm } from "@/components/public/signup-form";
 import { FullPageSpinner } from "@/components/ui/spinner";
-import { Header5 } from "@/components/public/vankine/header5";
-import { Footer5 } from "@/components/public/vankine/footer5";
-import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
+import { PublicHeader } from "@/components/public/public-header";
+import { PublicFooter } from "@/components/public/public-footer";
 
 export const metadata: Metadata = {
   title: "Créer mon école — CathClau Edu",
@@ -12,39 +11,15 @@ export const metadata: Metadata = {
 };
 
 /**
- * Page d'inscription — Header5/Footer5 Vankine pour rester cohérente avec le reste du site public,
- * MAIS le formulaire (`SignupForm`) reste dans une zone séparée, hors de `.vankine-scope`.
- * Raison : `SignupForm` est un flux métier critique déjà testé qui utilise le kit Tailwind partagé
- * (Field/Label/Input/Stepper...) via des balises brutes (<label>, <h2>...) stylées par des classes
- * utilitaires Tailwind — or le CSS Vankine scopé définit ses propres règles globales sur ces mêmes
- * balises brutes (`.vankine-scope label`, `.vankine-scope h1..h6`, `.vankine-scope p`) avec une
- * spécificité qui l'emporte toujours sur une classe utilitaire Tailwind isolée, quel que soit
- * l'ordre de chargement. Le mélanger au scope casserait donc silencieusement l'apparence du
- * formulaire. Le header/footer restent scopés (aucune balise Tailwind à l'intérieur), donc sans
- * risque.
+ * Page d'inscription — en-tête/pied de page Tailwind simples (PublicHeader/PublicFooter), cohérents
+ * avec le reste du site public. Le formulaire (`SignupForm`) reste hors de tout scope Bootstrap :
+ * il utilise le kit Tailwind partagé (Field/Label/Input/Stepper...) via des balises brutes qu'un CSS
+ * Vankine scopé pourrait autrement re-styler avec une spécificité plus forte.
  */
 export default function SignupPage() {
   return (
     <>
-      {/* eslint-disable @next/next/no-css-tags */}
-      <link rel="stylesheet" href="/vankine/css/bootstrap.min.css" />
-      <link rel="stylesheet" href="/vankine/css/global-settings.css" />
-      <link rel="stylesheet" href="/vankine/css/theme.css" />
-      <link rel="stylesheet" href="/vankine/css/animate.min.css" />
-      <link rel="stylesheet" href="/vankine/css/flaticon_vankine.css" />
-      <link rel="stylesheet" href="/vankine/css/font-awesome.min.css" />
-      <link rel="stylesheet" href="/vankine/css/uicons-regular-rounded.css" />
-      <link rel="stylesheet" href="/vankine/css/uicons-regular-straight.css" />
-      {/* eslint-enable @next/next/no-css-tags */}
-
-      <div className="vankine-scope theme-vankine">
-        <Header5 />
-        <PageBannerVankine
-          title="Créer mon école"
-          crumbs={[{ label: "Accueil", href: "/" }, { label: "Créer mon école" }]}
-          background="/images/school-3.jpg"
-        />
-      </div>
+      <PublicHeader />
 
       <div className="bg-white px-4 py-16 sm:py-20">
         <div className="mx-auto w-full max-w-2xl">
@@ -65,9 +40,7 @@ export default function SignupPage() {
         </div>
       </div>
 
-      <div className="vankine-scope theme-vankine">
-        <Footer5 />
-      </div>
+      <PublicFooter />
     </>
   );
 }

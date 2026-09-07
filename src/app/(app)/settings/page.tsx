@@ -108,6 +108,9 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         openingAuthorization: profile.openingAuthorization,
         motto: profile.motto,
         slogan: profile.slogan,
+        ire: profile.ire,
+        dpeLabel: profile.dpeLabel,
+        sousPrefectureLabel: profile.sousPrefectureLabel,
         payoutMerchantNumber: profile.payoutMerchantNumber,
         payoutOperator: profile.payoutOperator,
         payoutAccountName: profile.payoutAccountName,
@@ -154,6 +157,18 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
           <p className="text-xs text-gray-400">Accroche de l&apos;école, imprimée au verso des cartes/badges.</p>
           <Input placeholder="Ex. Le savoir pour tous" value={profile.slogan ?? ""} disabled={ro} onChange={(e) => set("slogan", e.target.value)} />
         </Field>
+      </div>
+
+      <Field>
+        <Label>Rattachement administratif</Label>
+        <p className="text-xs text-gray-400">
+          Affiché en en-tête des documents pédagogiques officiels (bulletins, fiches de note...).
+        </p>
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Field><Label>Inspection régionale (IRE)</Label><Input placeholder="Ex. KINDIA" value={profile.ire ?? ""} disabled={ro} onChange={(e) => set("ire", e.target.value)} /></Field>
+        <Field><Label>Direction préfectorale / communale (DPE/DCE)</Label><Input placeholder="Ex. COYAH" value={profile.dpeLabel ?? ""} disabled={ro} onChange={(e) => set("dpeLabel", e.target.value)} /></Field>
+        <Field><Label>Sous-préfecture / commune (DSSEE)</Label><Input placeholder="Ex. MANGATA" value={profile.sousPrefectureLabel ?? ""} disabled={ro} onChange={(e) => set("sousPrefectureLabel", e.target.value)} /></Field>
       </div>
 
       <div className="pt-2">

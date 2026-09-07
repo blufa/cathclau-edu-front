@@ -60,6 +60,7 @@ export default function EnrollmentsPage() {
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
   const [classId, setClassId] = useState("");
   const [status, setStatus] = useState<EnrollmentStatus | "">("PENDING");
+  const [platformAccess, setPlatformAccess] = useState<"" | "yes" | "no">("");
 
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const yearId = selectedYearId ?? defaultYearId;
@@ -95,7 +96,11 @@ export default function EnrollmentsPage() {
         : Promise.resolve([]),
     [yearId, classId, status],
   );
-  const enrollments = enrollmentsQuery.data ?? [];
+  const enrollments = useMemo(() => {
+    const all = enrollmentsQuery.data ?? [];
+    if (!platformAccess) return all;
+    return all.filter((e) => (platformAccess === "yes" ? e.platformAccessOptIn : !e.platformAccessOptIn));
+  }, [enrollmentsQuery.data, platformAccess]);
 
   function handleCancel(id: number) {
     confirmAction({
@@ -179,6 +184,17 @@ export default function EnrollmentsPage() {
           <option value="PENDING">En attente</option>
           <option value="VALIDATED">Validée</option>
           <option value="CANCELLED">Annulée</option>
+        </Select>
+
+        <Select
+          className="max-w-[190px]"
+          value={platformAccess}
+          onChange={(e) => setPlatformAccess(e.target.value as "" | "yes" | "no")}
+          aria-label="Filtrer par accès plateforme"
+        >
+          <option value="">Accès plateforme : tous</option>
+          <option value="yes">Accès plateforme activé</option>
+          <option value="no">Accès plateforme non activé</option>
         </Select>
 
         {canCollect && picked.length > 0 && (

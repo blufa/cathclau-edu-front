@@ -72,6 +72,9 @@ export interface TeacherCheckin {
   checkInTime: string;
   checkOutTime: string | null;
   lateMinutes: number;
+  /** Minutes de départ anticipé (sortie pointée avant la fin prévue) — 0 si la sortie n'a jamais été
+   * pointée (bénéfice du doute, pas de pénalité). */
+  earlyMinutes: number | null;
 }
 
 /** Pointage d'une séance élève (miroir de TeacherCheckin). */
@@ -86,6 +89,45 @@ export interface StudentCheckin {
   checkInTime: string;
   checkOutTime: string | null;
   lateMinutes: number;
+  /** Minutes de départ anticipé (sortie pointée avant la fin prévue) — 0 si la sortie n'a jamais été
+   * pointée (bénéfice du doute, pas de pénalité). */
+  earlyMinutes: number | null;
+}
+
+// ── Employee attendance (personnel non-enseignant — un seul pointage par jour) ──
+export type EmployeeAttendanceStatus = "PRESENT" | "ABSENT";
+
+export interface EmployeeAttendance {
+  id: number;
+  tenantId: number | null;
+  employeeId: number;
+  date: string;
+  status: EmployeeAttendanceStatus;
+  reason: string | null;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  lateMinutes: number | null;
+  /** Minutes de départ anticipé (sortie pointée avant l'heure de sortie configurée) — 0 si la sortie
+   * n'a jamais été pointée (bénéfice du doute, pas de pénalité). */
+  earlyMinutes: number | null;
+}
+
+export interface EmployeeAttendanceStats {
+  employeeId: number;
+  totalDays: number;
+  presentDays: number;
+  absentDays: number;
+  attendanceRate: string;
+}
+
+export interface EmployeeMonthlySummary {
+  employeeId: number;
+  year: number;
+  month: number;
+  presentDays: number;
+  absentDays: number;
+  totalLateMinutes: number;
+  totalEarlyMinutes: number;
 }
 
 // ── Scan par caméra : entrée/sortie de séance, statut calculé automatiquement ───

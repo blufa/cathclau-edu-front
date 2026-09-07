@@ -14,15 +14,16 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Stepper } from "@/components/ui/stepper";
-import { TeacherClassSubjectsAssignment } from "@/components/staff/teacher-class-subjects";
-import { TeacherLevelsSection } from "@/components/staff/teacher-levels";
 
 interface TeacherFormProps {
-  initial?: Teacher;
+  /** En édition : la fiche enseignant existante. En pré-remplissage (ex. création d'un profil
+   * enseignant depuis une fiche personnel), seuls quelques champs (nom, contact) sont fournis. */
+  initial?: Partial<Teacher>;
   submitLabel: string;
   onSubmit: (input: CreateTeacherInput) => Promise<Teacher>;
   onCancel: () => void;
-  /** Appelé une fois l'étape « Affectations » terminée (ou ignorée) — ferme le formulaire. */
+  /** Appelé une fois l'enseignant créé/modifié — ferme le formulaire. Les affectations (niveaux,
+   * classes/matières) se font séparément, depuis la fiche de l'enseignant. */
   onFinish: () => void;
 }
 
@@ -55,15 +56,13 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 const FIELD_STEP: Record<string, number> = { firstName: 0, lastName: 0, email: 0, password: 2 };
-const STEPS = [{ label: "Identité" }, { label: "Professionnel" }, { label: "Compte" }, { label: "Affectations" }];
+const STEPS = [{ label: "Identité" }, { label: "Professionnel" }, { label: "Compte" }];
 const DIPLOMAS = ["Licence", "Master", "BTS", "Doctorat", "Ingénieur"];
 
 export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish }: TeacherFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [active, setActive] = useState(0);
-  // Connu dès le départ en édition (l'enseignant existe déjà) ; rempli après la création en mode création.
-  const [teacherId, setTeacherId] = useState<number | null>(initial?.id ?? null);
 
   const {
     handleSubmit, watch, setValue, setError: setFieldError, trigger,
@@ -111,7 +110,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
         );
         userId = user.id;
       }
-      const teacher = await onSubmit({
+      await onSubmit({
         userId,
         firstName: values.firstName,
         lastName: values.lastName,
@@ -131,8 +130,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
         teachingAuthorizationNumber: initial?.teachingAuthorizationNumber ?? null,
         cnssNumber: initial?.cnssNumber ?? null,
       });
-      setTeacherId(teacher.id);
-      setActive(3);
+      onFinish();
     } catch (err) {
       if (err instanceof ApiError) {
         const fieldErrors = err.fieldErrors;
@@ -156,15 +154,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
     <form onSubmit={handleSubmit(submit)} className="space-y-5">
       {error && <div className="rounded-lg bg-error-50 px-3.5 py-2.5 text-sm text-error-700">{error}</div>}
 
-      <Stepper
-        steps={STEPS}
-        active={active}
-        onStepClick={(i) => {
-          if (i === 3 && !teacherId) return; // affectations indisponibles tant que l'enseignant n'existe pas
-          if (i < 3 && active === 3) return; // pas de retour arrière une fois l'enregistrement effectué
-          setActive(i);
-        }}
-      />
+      <Stepper steps={STEPS} active={active} onStepClick={setActive} />
 
       {active === 0 && (
         <div className="space-y-4 pt-2">
@@ -278,37 +268,14 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
         </div>
       )}
 
-      {active === 3 && (
-        <div className="space-y-5 pt-2">
-          <div>
-            <p className="text-sm text-gray-500">
-              Niveaux où l&apos;enseignant est habilité à enseigner (ex. Primaire, Collège) — facultatif,
-              modifiable à tout moment depuis sa fiche.
-            </p>
-            {teacherId && <TeacherLevelsSection teacherId={teacherId} canWrite />}
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">
-              Facultatif — dès qu&apos;une classe et une matière sont choisies, l&apos;enseignant est directement
-              affecté et apparaît dans l&apos;emploi du temps de cette classe.
-            </p>
-            {teacherId && <TeacherClassSubjectsAssignment teacherId={teacherId} />}
-          </div>
-        </div>
-      )}
-
       <div className="flex items-center justify-between gap-3 pt-2">
-        {active < 3
-          ? <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
-          : <span />}
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>Annuler</Button>
         <div className="flex items-center gap-3">
-          {active > 0 && active < 3 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
+          {active > 0 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
           {active < 2 ? (
             <Button type="button" onClick={() => void nextStep()}>Suivant</Button>
-          ) : active === 2 ? (
-            <Button type="submit" loading={submitting}>{submitLabel}</Button>
           ) : (
-            <Button type="button" onClick={onFinish}>Terminer</Button>
+            <Button type="submit" loading={submitting}>{submitLabel}</Button>
           )}
         </div>
       </div>

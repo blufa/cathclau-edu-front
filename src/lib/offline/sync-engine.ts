@@ -3,16 +3,36 @@ import { createStudent } from "@/lib/api/students";
 import { enroll, reenroll, searchEnrollments } from "@/lib/api/enrollments";
 import { createTeacher } from "@/lib/api/staff";
 import { createParent, getStudentParents, linkParentToStudent, type Relationship } from "@/lib/api/parents";
+import {
+  recordEmployeeManualEntry,
+  recordEmployeeManualExit,
+  recordStudentManualEntry,
+  recordStudentManualExit,
+  recordTeacherManualEntry,
+  recordTeacherManualExit,
+  scanAttendance,
+  type ScanSubjectType,
+} from "@/lib/api/attendance";
+import type { ScanDirection } from "@/lib/types/attendance";
 import { ApiError, isNetworkError } from "@/lib/api/errors";
 import type { CreateStudentInput, EnrollmentType } from "@/lib/types/student";
 import type { CreateTeacherInput } from "@/lib/types/staff";
 import type { ParentInput } from "@/lib/api/parents";
-import { offlineDb, type QueuedEnrollment, type QueuedGroupPayment, type QueuedParent, type QueuedTeacher } from "./db";
+import {
+  offlineDb,
+  type QueuedAttendance,
+  type QueuedAttendanceAction,
+  type QueuedEnrollment,
+  type QueuedGroupPayment,
+  type QueuedParent,
+  type QueuedTeacher,
+} from "./db";
 import { useNetworkStore } from "./network-store";
 import { useSyncQueueStore } from "./sync-queue-store";
 import { useEnrollmentQueueStore } from "./enrollment-queue-store";
 import { useTeacherQueueStore } from "./teacher-queue-store";
 import { useParentQueueStore } from "./parent-queue-store";
+import { useAttendanceQueueStore } from "./attendance-queue-store";
 
 async function refreshQueueSnapshot(): Promise<void> {
   const items = await offlineDb.paymentQueue.orderBy("createdAt").toArray();
@@ -361,10 +381,118 @@ export async function discardFailedParentEntry(id: string): Promise<void> {
   await refreshParentQueueSnapshot();
 }
 
+// ── Présences hors-ligne (§attendance) : scan et saisie manuelle ───────────────────────────────
+
+async function refreshAttendanceQueueSnapshot(): Promise<void> {
+  const items = await offlineDb.attendanceQueue.orderBy("createdAt").toArray();
+  useAttendanceQueueStore.getState().setItems(items);
+}
+
+/** Enregistre un scan (badge, entrée/sortie) hors-ligne — l'horodatage d'origine (id/createdAt) est
+ * celui du geste, pas celui de la synchronisation ultérieure. Le retard/départ anticipé n'est calculé
+ * que côté serveur (emploi du temps) : aucun retour immédiat riche en mode hors-ligne, juste la mise
+ * en file. */
+export async function enqueueAttendanceScan(
+  subjectType: ScanSubjectType, subjectId: number, direction: ScanDirection,
+): Promise<QueuedAttendance> {
+  return enqueueAttendanceAction({ kind: "SCAN", subjectType, subjectId, direction });
+}
+
+/** Correction manuelle hors-ligne (badge oublié, chef de classe ou personnel) : entrée. */
+export async function enqueueManualEntry(
+  subjectType: ScanSubjectType, subjectId: number, date: string, time: string,
+): Promise<QueuedAttendance> {
+  return enqueueAttendanceAction({ kind: "MANUAL_ENTRY", subjectType, subjectId, date, time });
+}
+
+/** Correction manuelle hors-ligne (badge oublié) : sortie. */
+export async function enqueueManualExit(
+  subjectType: ScanSubjectType, subjectId: number, date: string, time: string,
+): Promise<QueuedAttendance> {
+  return enqueueAttendanceAction({ kind: "MANUAL_EXIT", subjectType, subjectId, date, time });
+}
+
+async function enqueueAttendanceAction(action: QueuedAttendanceAction): Promise<QueuedAttendance> {
+  const entry: QueuedAttendance = {
+    id: crypto.randomUUID(),
+    action,
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    attempts: 0,
+  };
+  await offlineDb.attendanceQueue.add(entry);
+  await refreshAttendanceQueueSnapshot();
+  return entry;
+}
+
+async function replayAttendanceAction(action: QueuedAttendanceAction): Promise<void> {
+  switch (action.kind) {
+    case "SCAN":
+      await scanAttendance({ subjectType: action.subjectType, subjectId: action.subjectId, direction: action.direction });
+      return;
+    case "MANUAL_ENTRY":
+      if (action.subjectType === "TEACHER") await recordTeacherManualEntry(action.subjectId, action.date, action.time);
+      else if (action.subjectType === "EMPLOYEE") await recordEmployeeManualEntry(action.subjectId, action.date, action.time);
+      else await recordStudentManualEntry(action.subjectId, action.date, action.time);
+      return;
+    case "MANUAL_EXIT":
+      if (action.subjectType === "TEACHER") await recordTeacherManualExit(action.subjectId, action.date, action.time);
+      else if (action.subjectType === "EMPLOYEE") await recordEmployeeManualExit(action.subjectId, action.date, action.time);
+      else await recordStudentManualExit(action.subjectId, action.date, action.time);
+      return;
+  }
+}
+
+let attendanceSyncing = false;
+
+/** Rejoue les présences en attente dès que le réseau revient, dans l'ordre d'origine (important pour
+ * une entrée suivie d'une sortie sur la même séance). Un échec réseau interrompt le cycle (on
+ * retentera plus tard) ; une vraie erreur métier marque l'entrée `failed` pour intervention manuelle. */
+export async function processAttendanceQueue(): Promise<void> {
+  if (attendanceSyncing || !useNetworkStore.getState().online) return;
+  attendanceSyncing = true;
+  useAttendanceQueueStore.getState().setSyncing(true);
+  try {
+    const pending = await offlineDb.attendanceQueue.where("status").equals("pending").sortBy("createdAt");
+    for (const entry of pending) {
+      try {
+        await replayAttendanceAction(entry.action);
+        await offlineDb.attendanceQueue.delete(entry.id);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          break;
+        }
+        await offlineDb.attendanceQueue.update(entry.id, {
+          status: "failed",
+          attempts: entry.attempts + 1,
+          lastError: err instanceof Error ? err.message : "Erreur inconnue",
+        });
+      }
+    }
+  } finally {
+    attendanceSyncing = false;
+    useAttendanceQueueStore.getState().setSyncing(false);
+    await refreshAttendanceQueueSnapshot();
+  }
+}
+
+/** Remet une entrée en échec dans la file pour une nouvelle tentative. */
+export async function retryFailedAttendanceEntry(id: string): Promise<void> {
+  await offlineDb.attendanceQueue.update(id, { status: "pending" });
+  await refreshAttendanceQueueSnapshot();
+  await processAttendanceQueue();
+}
+
+/** Supprime définitivement une entrée en échec. */
+export async function discardFailedAttendanceEntry(id: string): Promise<void> {
+  await offlineDb.attendanceQueue.delete(id);
+  await refreshAttendanceQueueSnapshot();
+}
+
 let wired = false;
 
-/** Déclenche la synchronisation (paiements, inscriptions, enseignants, parents) au retour du réseau
- * et une fois au démarrage (file déjà non vide). */
+/** Déclenche la synchronisation (paiements, inscriptions, enseignants, parents, présences) au retour
+ * du réseau et une fois au démarrage (file déjà non vide). */
 export function wireSyncTriggers(): void {
   if (wired || typeof window === "undefined") return;
   wired = true;
@@ -373,6 +501,7 @@ export function wireSyncTriggers(): void {
     void processEnrollmentQueue();
     void processTeacherQueue();
     void processParentQueue();
+    void processAttendanceQueue();
   });
   void refreshQueueSnapshot().then(() => {
     if (useNetworkStore.getState().online) void processQueue();
@@ -385,5 +514,8 @@ export function wireSyncTriggers(): void {
   });
   void refreshParentQueueSnapshot().then(() => {
     if (useNetworkStore.getState().online) void processParentQueue();
+  });
+  void refreshAttendanceQueueSnapshot().then(() => {
+    if (useNetworkStore.getState().online) void processAttendanceQueue();
   });
 }

@@ -3,6 +3,8 @@ import type { GroupPaymentInput } from "@/lib/api/payment";
 import type { CreateStudentInput, EnrollmentType } from "@/lib/types/student";
 import type { CreateTeacherInput } from "@/lib/types/staff";
 import type { ParentInput, Relationship } from "@/lib/api/parents";
+import type { ScanSubjectType } from "@/lib/api/attendance";
+import type { ScanDirection } from "@/lib/types/attendance";
 
 export type QueuedPaymentStatus = "pending" | "failed";
 
@@ -71,6 +73,27 @@ export interface QueuedParent {
   lastError?: string;
 }
 
+export type QueuedAttendanceStatus = "pending" | "failed";
+
+/** Action de présence à rejouer une fois le réseau revenu — couvre le scan (badge, entrée/sortie)
+ * et la correction manuelle (entrée/sortie, chef de classe ou personnel, badge oublié). Le pointage
+ * dépend d'un créneau réel (résolu côté serveur) : on ne recalcule rien côté client, on rejoue juste
+ * l'action telle que saisie, avec son horodatage d'origine (jamais l'heure de la synchronisation). */
+export type QueuedAttendanceAction =
+  | { kind: "SCAN"; subjectType: ScanSubjectType; subjectId: number; direction: ScanDirection }
+  | { kind: "MANUAL_ENTRY"; subjectType: ScanSubjectType; subjectId: number; date: string; time: string }
+  | { kind: "MANUAL_EXIT"; subjectType: ScanSubjectType; subjectId: number; date: string; time: string };
+
+export interface QueuedAttendance {
+  /** UUID généré côté client — horodatage d'origine du geste (scan ou saisie), pas celui de la sync. */
+  id: string;
+  action: QueuedAttendanceAction;
+  createdAt: string;
+  status: QueuedAttendanceStatus;
+  attempts: number;
+  lastError?: string;
+}
+
 class LacaOfflineDb extends Dexie {
   paymentQueue!: Table<QueuedGroupPayment, string>;
   /** Dernières données lues avec succès pour les écrans de consultation (emploi du temps, référentiels
@@ -83,6 +106,8 @@ class LacaOfflineDb extends Dexie {
   teacherQueue!: Table<QueuedTeacher, string>;
   /** Parents créés/liés hors-ligne en attente de synchronisation — §students. */
   parentQueue!: Table<QueuedParent, string>;
+  /** Présences (scan ou saisie manuelle) enregistrées hors-ligne en attente de synchronisation — §attendance. */
+  attendanceQueue!: Table<QueuedAttendance, string>;
 
   constructor() {
     super("laca-offline");
@@ -104,6 +129,14 @@ class LacaOfflineDb extends Dexie {
       enrollmentQueue: "id, status, createdAt",
       teacherQueue: "id, status, createdAt",
       parentQueue: "id, status, createdAt, studentId",
+    });
+    this.version(5).stores({
+      paymentQueue: "id, status, createdAt, *studentIds",
+      readCache: "key",
+      enrollmentQueue: "id, status, createdAt",
+      teacherQueue: "id, status, createdAt",
+      parentQueue: "id, status, createdAt, studentId",
+      attendanceQueue: "id, status, createdAt",
     });
   }
 }

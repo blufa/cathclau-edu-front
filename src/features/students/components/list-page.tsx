@@ -9,7 +9,7 @@ import { useSubscription } from "@/providers/subscription-provider";
 import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions";
 import { ApiError } from "@/lib/api/errors";
 import { qk } from "@/lib/query";
-import type { CreateStudentInput, EnrollmentStatus, Gender, Student } from "@/lib/types/student";
+import type { CreateStudentInput, Enrollment, EnrollmentStatus, Gender, Student } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -21,6 +21,7 @@ import { QuotaProgress } from "@/components/platform/quota-progress";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { StudentForm } from "./student-form";
 import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
+import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal";
 import { OfflineEnrollFields } from "@/features/enrollments/components/offline-enroll-fields";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
@@ -54,6 +55,10 @@ export default function StudentsPage() {
   // Proposé juste après la création : inscrire immédiatement (utile pour un ancien élève de
   // l'établissement qui n'était pas encore dans le logiciel — il choisit « Réinscription » ici).
   const [enrollingNew, setEnrollingNew] = useState<Student | null>(null);
+  // Enchaînement direct après l'inscription : montrer tout de suite les frais (inscription déjà
+  // facturée automatiquement, mensualités générées automatiquement) prêts à encaisser, sans exiger
+  // une étape manuelle de génération séparée.
+  const [collectingFor, setCollectingFor] = useState<Enrollment | null>(null);
   // Élève créé hors-ligne (réseau indisponible, §students) : propose de choisir sa classe tout de
   // suite via le formulaire simplifié, sur l'entrée en file plutôt que sur un élève réel.
   const [offlineEnrollingEntryId, setOfflineEnrollingEntryId] = useState<string | null>(null);
@@ -368,7 +373,21 @@ export default function StudentsPage() {
           studentId={enrollingNew.id}
           open={!!enrollingNew}
           onClose={() => setEnrollingNew(null)}
-          onEnrolled={() => setEnrollingNew(null)}
+          onEnrolled={(enrollment) => {
+            setEnrollingNew(null);
+            setCollectingFor(enrollment);
+          }}
+        />
+      )}
+
+      {collectingFor && user?.tenantId != null && (
+        <CollectFeeModal
+          studentId={collectingFor.studentId}
+          classId={collectingFor.classId}
+          tenantId={user.tenantId}
+          open={!!collectingFor}
+          onClose={() => setCollectingFor(null)}
+          onCollected={() => setCollectingFor(null)}
         />
       )}
 

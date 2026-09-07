@@ -3,7 +3,6 @@ import { VankinePage } from "@/components/public/vankine/vankine-page";
 import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
 import { AboutTabs } from "@/components/public/vankine/about-tabs";
 import { StatCounter } from "@/components/public/stat-counter";
-import { Testimonial4 } from "@/components/public/vankine/testimonial4";
 import { Cta2 } from "@/components/public/vankine/cta2";
 
 export const metadata: Metadata = {
@@ -28,8 +27,9 @@ const STATS = [
 /**
  * Page "À propos" — reproduction fidèle de "about-us" du template Vankine (mêmes classes CSS) :
  * bandeau titre, présentation + onglets À propos/Mission/Vision, 3 services clés, notre histoire,
- * mot du fondateur, statistiques, témoignages (Testimonial4 déjà utilisé sur l'accueil), CTA finale.
- * Sections "Équipe"/"Clients" de l'original omises (aucune fausse identité/logo fictif à afficher).
+ * mot du fondateur, statistiques, CTA finale.
+ * Sections "Équipe"/"Clients"/"Témoignages" de l'original omises (aucune fausse identité/logo/avis
+ * fictif à afficher).
  */
 export default function AboutPage() {
   return (
@@ -199,8 +199,6 @@ export default function AboutPage() {
         </div>
         <div className="pd_bottom_40" />
       </section>
-
-      <Testimonial4 />
 
       <Cta2 />
     </VankinePage>

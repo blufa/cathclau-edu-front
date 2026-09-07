@@ -61,3 +61,33 @@ export function getChildDocuments(studentId: number): Promise<ParentDocumentItem
 export function getParentReceiptPdfObjectUrl(receiptId: number): Promise<string> {
   return api.blobUrl(`/parent/receipts/${receiptId}/pdf/download`);
 }
+
+// ── Annuaire des contacts (enseignants de la classe, direction) ──────────────
+export interface TeacherContact {
+  teacherId: number;
+  fullName: string;
+  phone: string | null;
+  subject: string;
+}
+export interface ChildContacts {
+  studentId: number;
+  firstName: string | null;
+  lastName: string | null;
+  className: string | null;
+  teachers: TeacherContact[];
+}
+export interface LeadershipContact {
+  fullName: string;
+  phone: string | null;
+  role: string;
+}
+export interface ParentContacts {
+  children: ChildContacts[];
+  leadership: LeadershipContact[];
+}
+
+/** Contacts joignables de l'établissement : enseignants de la classe de chaque enfant, et direction
+ * (directeur, responsable pédagogique). */
+export function getParentContacts(): Promise<ParentContacts> {
+  return api.get<ParentContacts>("/parent/contacts");
+}

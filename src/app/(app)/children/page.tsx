@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Megaphone } from "lucide-react";
+import { Megaphone, Phone } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
-import { getMyChildren, getParentAnnouncements, getParentDashboard } from "@/lib/api/portal";
+import { getMyChildren, getParentAnnouncements, getParentContacts, getParentDashboard } from "@/lib/api/portal";
 import type { Student } from "@/lib/types/student";
 import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StudentOverview } from "@/components/portal/student-overview";
 import { formatGNF, formatDateTime } from "@/lib/format";
 
@@ -14,12 +15,15 @@ export default function ChildrenPage() {
   const q = useQuery(() => getMyChildren(), []);
   const dashboardQuery = useQuery(() => getParentDashboard(), []);
   const announcementsQuery = useQuery(() => getParentAnnouncements(), []);
+  const contactsQuery = useQuery(() => getParentContacts(), []);
   const [selected, setSelected] = useState<number | null>(null);
 
   const children = q.data ?? [];
   const current: Student | undefined = children.find((c) => c.id === selected) ?? children[0];
   const summary = dashboardQuery.data?.children.find((c) => c.studentId === current?.id);
   const announcements = announcementsQuery.data ?? [];
+  const currentContacts = contactsQuery.data?.children.find((c) => c.studentId === current?.id);
+  const leadership = contactsQuery.data?.leadership ?? [];
 
   return (
     <div className="space-y-6">
@@ -83,6 +87,63 @@ export default function ChildrenPage() {
                   </div>
                 )}
               </div>
+              <Card>
+                <CardHeader><CardTitle>Contacts de l&apos;établissement</CardTitle></CardHeader>
+                <CardBody className="space-y-4">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Enseignants de {current.firstName}
+                    </p>
+                    {contactsQuery.loading ? (
+                      <div className="flex justify-center py-4"><Spinner /></div>
+                    ) : !currentContacts || currentContacts.teachers.length === 0 ? (
+                      <p className="rounded-xl bg-slate-50 px-4 py-4 text-center text-sm text-slate-400">
+                        Aucun enseignant assigné à la classe pour l&apos;instant.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                        {currentContacts.teachers.map((t) => (
+                          <li key={t.teacherId} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                            <div>
+                              <p className="font-medium text-slate-900">{t.fullName}</p>
+                              <p className="text-xs text-slate-500">{t.subject}</p>
+                            </div>
+                            {t.phone ? (
+                              <a href={`tel:${t.phone}`} className="flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100">
+                                <Phone className="h-3.5 w-3.5" /> {t.phone}
+                              </a>
+                            ) : (
+                              <span className="text-xs text-slate-400">Téléphone non renseigné</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  {leadership.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Direction de l&apos;école</p>
+                      <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                        {leadership.map((l, i) => (
+                          <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                            <div>
+                              <p className="font-medium text-slate-900">{l.fullName}</p>
+                              <p className="text-xs text-slate-500">{l.role}</p>
+                            </div>
+                            {l.phone ? (
+                              <a href={`tel:${l.phone}`} className="flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100">
+                                <Phone className="h-3.5 w-3.5" /> {l.phone}
+                              </a>
+                            ) : (
+                              <span className="text-xs text-slate-400">Téléphone non renseigné</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
               <StudentOverview student={current} />
             </>
           )}

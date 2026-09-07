@@ -4,6 +4,10 @@ import type {
   AttendanceOutcome,
   AttendanceStats,
   AttendanceStatus,
+  EmployeeAttendance,
+  EmployeeAttendanceStats,
+  EmployeeAttendanceStatus,
+  EmployeeMonthlySummary,
   ScanDirection,
   StudentAttendance,
   StudentCheckin,
@@ -78,7 +82,7 @@ export function getStudentAttendanceStats(
 }
 
 // ── Pointage par scan de carte (élève + enseignant) : entrée/sortie de séance ──
-export type ScanSubjectType = "STUDENT" | "TEACHER";
+export type ScanSubjectType = "STUDENT" | "TEACHER" | "EMPLOYEE";
 export interface ScanResult {
   subjectType: string;
   subjectId: number;
@@ -125,6 +129,24 @@ export function recordTeacherManualEntry(teacherId: number, date: string, checkI
   return api.post<TeacherCheckin>(`/attendance/teachers/${teacherId}/manual-entry`, undefined, { query: { date, checkInTime } });
 }
 
+/** Correction manuelle : saisir l'heure de sortie d'un enseignant pour une date donnée — utile quand
+ * le badge a été oublié pour toute la séance. Crée le pointage s'il n'existait pas encore. */
+export function recordTeacherManualExit(teacherId: number, date: string, checkOutTime: string): Promise<TeacherCheckin> {
+  return api.post<TeacherCheckin>(`/attendance/teachers/${teacherId}/manual-exit`, undefined, { query: { date, checkOutTime } });
+}
+
+/** Correction manuelle : saisir l'heure de sortie d'un élève pour une date donnée — utile quand le
+ * badge a été oublié pour toute la séance. Crée le pointage s'il n'existait pas encore. */
+export function recordStudentManualExit(studentId: number, date: string, checkOutTime: string): Promise<StudentCheckin> {
+  return api.post<StudentCheckin>(`/attendance/students/${studentId}/manual-exit`, undefined, { query: { date, checkOutTime } });
+}
+
+/** Pointages (par séance) d'un élève à une date donnée — heure d'entrée/sortie par créneau (ex.
+ * dashboard parent : à quelle heure l'enfant est rentré/sorti de chaque cours). */
+export function getStudentCheckins(studentId: number, date: string): Promise<StudentCheckin[]> {
+  return api.get<StudentCheckin[]>(`/attendance/students/${studentId}/checkins`, { query: { date } });
+}
+
 // ── Badge de retrait (maternelle/primaire) ──────────────────────────────────
 export interface ChildPickup {
   id: number;
@@ -165,11 +187,14 @@ export function getTeacherMonthlySummary(teacherId: number, year: number, month:
   return api.get<TeacherMonthlySummary>(`/attendance/teachers/${teacherId}/monthly-summary`, { query: { year, month } });
 }
 
-// ── Réglages : marge de transition entre salles et fenêtres de récréation ───
+// ── Réglages : marge de transition entre salles, horaire du personnel, récréation ───
 export interface AttendanceSettings {
   id: number | null;
   tenantId: number;
   transitionMarginMinutes: number;
+  /** Horaire de référence du personnel non-enseignant (un seul horaire pour tout le personnel). */
+  employeeCheckInTime: string;
+  employeeCheckOutTime: string;
 }
 export interface RecessWindow {
   id: number;
@@ -183,6 +208,9 @@ export function getAttendanceSettings(): Promise<AttendanceSettings> {
 }
 export function updateAttendanceSettings(transitionMarginMinutes: number): Promise<AttendanceSettings> {
   return api.put<AttendanceSettings>("/attendance/settings", { transitionMarginMinutes });
+}
+export function updateEmployeeAttendanceHours(checkInTime: string, checkOutTime: string): Promise<AttendanceSettings> {
+  return api.put<AttendanceSettings>("/attendance/settings/employee-hours", { checkInTime, checkOutTime });
 }
 export function listRecessWindows(): Promise<RecessWindow[]> {
   return api.get<RecessWindow[]>("/attendance/settings/recess-windows");
@@ -212,5 +240,43 @@ export function getTeacherAttendance(teacherId: number, from: string, to: string
  * pointé pour une séance précise (ex. cahier de textes → durée réalisée depuis le pointage). */
 export function getTeacherCheckins(teacherId: number, date: string): Promise<TeacherCheckin[]> {
   return api.get<TeacherCheckin[]>(`/attendance/teachers/${teacherId}/checkins`, { query: { date } });
+}
+
+// ── Employee attendance (personnel non-enseignant — un seul pointage par jour) ──
+export function recordEmployeeAttendance(
+  employeeId: number,
+  date: string,
+  status: EmployeeAttendanceStatus,
+  reason?: string | null,
+): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>("/attendance/employees", { employeeId, date, status, reason });
+}
+
+/** Marquer manuellement un membre du personnel absent aujourd'hui. */
+export function markEmployeeAbsent(employeeId: number, reason?: string): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>(`/attendance/employees/${employeeId}/mark-absent`, undefined, { query: { reason } });
+}
+
+/** Correction manuelle : saisir l'heure d'entrée d'un membre du personnel pour une date donnée. */
+export function recordEmployeeManualEntry(employeeId: number, date: string, checkInTime: string): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>(`/attendance/employees/${employeeId}/manual-entry`, undefined, { query: { date, checkInTime } });
+}
+
+/** Correction manuelle : saisir l'heure de sortie d'un membre du personnel pour une date donnée —
+ * utile quand le badge a été oublié pour toute la journée. Crée le pointage s'il n'existait pas encore. */
+export function recordEmployeeManualExit(employeeId: number, date: string, checkOutTime: string): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>(`/attendance/employees/${employeeId}/manual-exit`, undefined, { query: { date, checkOutTime } });
+}
+
+export function getEmployeeAttendance(employeeId: number, from: string, to: string): Promise<EmployeeAttendance[]> {
+  return api.get<EmployeeAttendance[]>(`/attendance/employees/employee/${employeeId}`, { query: { from, to } });
+}
+
+export function getEmployeeAttendanceStats(employeeId: number, from?: string, to?: string): Promise<EmployeeAttendanceStats> {
+  return api.get<EmployeeAttendanceStats>(`/attendance/employees/${employeeId}/stats`, { query: { from, to } });
+}
+
+export function getEmployeeMonthlySummary(employeeId: number, year: number, month: number): Promise<EmployeeMonthlySummary> {
+  return api.get<EmployeeMonthlySummary>(`/attendance/employees/${employeeId}/monthly-summary`, { query: { year, month } });
 }
 

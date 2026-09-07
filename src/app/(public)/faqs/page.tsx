@@ -3,7 +3,6 @@ import Link from "next/link";
 import { VankinePage } from "@/components/public/vankine/vankine-page";
 import { PageBannerVankine } from "@/components/public/vankine/page-banner-vankine";
 import { FaqAccordionVankine } from "@/components/public/vankine/faq-accordion-vankine";
-import { Testimonial4 } from "@/components/public/vankine/testimonial4";
 import { Cta2 } from "@/components/public/vankine/cta2";
 
 export const metadata: Metadata = {
@@ -58,8 +57,8 @@ const SECONDARY_FAQ = [
 /**
  * Page FAQ — reproduction fidèle de "faqs" du template Vankine (mêmes classes CSS) : bloc principal
  * intro + CTA + accordéon complet, bloc secondaire accordéon paiement/essai + grille de 3 photos
- * réelles de l'établissement (remplace les photos de démonstration), témoignages (Testimonial4),
- * CTA finale.
+ * réelles de l'établissement (remplace les photos de démonstration), CTA finale. Pas de section
+ * témoignages (aucun avis client fictif à afficher).
  */
 const FAQ_JSON_LD = {
   "@context": "https://schema.org",
@@ -142,8 +141,6 @@ export default function FaqsPage() {
         </div>
         <div className="pd_bottom_40" />
       </section>
-
-      <Testimonial4 />
 
       <Cta2 />
     </VankinePage>

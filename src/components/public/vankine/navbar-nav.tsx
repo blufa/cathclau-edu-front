@@ -16,6 +16,7 @@ export function NavbarNav() {
           <li className="menu-item nav-item"><Link href="/fonctionnalites/communication" className="nav_link"><span className="text-link">Communication</span></Link></li>
           <li className="menu-item nav-item"><Link href="/fonctionnalites/facturation" className="nav_link"><span className="text-link">Facturation & paiements</span></Link></li>
           <li className="menu-item nav-item"><Link href="/fonctionnalites/pilotage" className="nav_link"><span className="text-link">Pilotage</span></Link></li>
+          <li className="menu-item nav-item"><Link href="/fonctionnalites/cours-en-ligne" className="nav_link"><span className="text-link">Cours en ligne</span></Link></li>
         </ul>
         <div className="dropdown-btn"><span className="fa fa-angle-down" /></div>
       </li>

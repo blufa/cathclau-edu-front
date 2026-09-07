@@ -100,10 +100,14 @@ export interface TeacherCompensation {
   /** Avantage accordé par la direction : payé même pendant les jours fériés/vacances. */
   paidDuringVacation: boolean;
 }
+/** Paie basée sur les heures réellement réalisées (cahier de textes), retard/départ anticipé cumulés
+ * déduits, répartie par typologie de classe (normal/examen, §6) pour appliquer le bon tarif à chacune. */
 export interface MonthlyPay {
   teacherId: number; year: number; month: number; payMode: string;
-  realizedMinutes: number; lateMinutes: number; effectiveMinutes: number;
-  hourlyRate: string; fixedSalary: string; teachingPay: string; grossPay: string;
+  realizedMinutes: number; lateMinutes: number; earlyMinutes: number; effectiveMinutes: number;
+  normalEffectiveMinutes: number; examEffectiveMinutes: number;
+  hourlyRateNormal: string; hourlyRateExam: string;
+  fixedSalary: string; teachingPay: string; grossPay: string;
 }
 /** Paie calculée automatiquement depuis l'emploi du temps validé, par typologie de classe (§6). */
 export interface TheoreticalMonthlyPay {

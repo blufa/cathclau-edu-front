@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GraduationCap, TrendingUp, Wallet, AlertTriangle, Award, Users } from "lucide-react";
+import { GraduationCap, TrendingUp, Wallet, AlertTriangle, Award, Users, HelpCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listPeriods } from "@/lib/api/academics";
 import {
@@ -14,6 +14,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatCardSkeleton, CardSkeleton } from "@/components/ui/skeleton";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
@@ -207,7 +208,18 @@ export default function ReportsPage() {
           <CardBody>
             <Table>
               <THead>
-                <TR><TH>Enseignant</TH><TH>Indice</TH><TH>Charge</TH><TH>Assiduité</TH><TH>Ponctualité</TH><TH>Heures</TH></TR>
+                <TR>
+                  <TH>Enseignant</TH>
+                  <TH>
+                    <span className="inline-flex items-center gap-1">
+                      Indice global (/100)
+                      <Tooltip label="Score composite sur 100 : 50 % charge de cours réalisée, 30 % assiduité, 20 % ponctualité. Vert ≥ 75, orange ≥ 50, rouge en dessous.">
+                        <HelpCircle className="h-3.5 w-3.5 text-gray-400" />
+                      </Tooltip>
+                    </span>
+                  </TH>
+                  <TH>Charge</TH><TH>Assiduité</TH><TH>Ponctualité</TH><TH>Heures</TH>
+                </TR>
               </THead>
               <TBody>
                 {(performance.data?.teachers ?? []).map((t) => (

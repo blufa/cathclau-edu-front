@@ -1,11 +1,14 @@
-import { Header5 } from "@/components/public/vankine/header5";
-import { Footer5 } from "@/components/public/vankine/footer5";
+import { PublicHeader } from "@/components/public/public-header";
+import { PublicFooter } from "@/components/public/public-footer";
 
 /**
- * Enveloppe partagée par toutes les pages publiques reconstruites en Vankine natif : charge les
- * mêmes fichiers CSS que le template (scopés sous .vankine-scope), et fournit Header5/Footer5.
- * Voir src/app/(public)/page.tsx pour le détail de pourquoi des balises <link> manuelles plutôt
- * qu'un import global — même raisonnement ici, à l'identique sur chaque page.
+ * Enveloppe partagée par les pages publiques secondaires : charge encore les feuilles de style du
+ * template (les sections de contenu de ces pages restent en classes Bootstrap pour l'instant), mais
+ * utilise désormais l'en-tête/pied de page Tailwind (PublicHeader/PublicFooter) — navbar et footer
+ * simples, cohérents avec le reste de l'app, sans le bandeau/menu Bootstrap plus lourd et sujet à
+ * des sauts de mise en page sur mobile (classes Bootstrap "vankine-scope" qui pouvaient déborder
+ * sur des éléments Tailwind). Voir src/app/(public)/page.tsx pour le détail de pourquoi des balises
+ * <link> manuelles plutôt qu'un import global — même raisonnement ici, à l'identique sur chaque page.
  */
 export function VankinePage({ children }: { children: React.ReactNode }) {
   return (
@@ -20,11 +23,9 @@ export function VankinePage({ children }: { children: React.ReactNode }) {
       <link rel="stylesheet" href="/vankine/css/uicons-regular-rounded.css" />
       <link rel="stylesheet" href="/vankine/css/uicons-regular-straight.css" />
       {/* eslint-enable @next/next/no-css-tags */}
-      <div className="vankine-scope theme-vankine">
-        <Header5 />
-        {children}
-        <Footer5 />
-      </div>
+      <PublicHeader />
+      <div className="vankine-scope theme-vankine">{children}</div>
+      <PublicFooter />
     </>
   );
 }

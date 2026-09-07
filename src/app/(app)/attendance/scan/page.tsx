@@ -7,10 +7,11 @@ import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/staff";
+import { listTeachers, listEmployees } from "@/lib/api/staff";
 import { getStudentParents } from "@/lib/api/parents";
-import { scanAttendance, markStudentAbsent, markTeacherAbsent, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
+import { markEmployeeAbsent, markStudentAbsent, markTeacherAbsent, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
 import { ATTENDANCE_OUTCOME_LABEL, SCAN_DIRECTION_LABEL, type AttendanceOutcome, type ScanDirection } from "@/lib/types/attendance";
+import { submitScanOfflineAware } from "@/lib/offline/submit-attendance-offline-aware";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,7 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { IdBadge } from "@/components/cards/id-badge";
 import { Reveal } from "@/components/public/reveal";
 import { matriculeFromQr } from "@/lib/identity-qr";
-import { notifyError } from "@/lib/feedback";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 import { formatMinutes } from "@/lib/format";
 
 interface ScanFeedItem {
@@ -44,7 +45,7 @@ type ParseResult =
  * Décode un QR scanné :
  *  - QR d'identité lisible (« … Matricule : GSC-ELV-… ») → on retrouve l'élève par matricule ;
  *  - ancien format carte « LACA|tenant|studentId|… » (rétro-compat) → élève par id ;
- *  - badge biométrique « BADGE|tenant|TYPE|id » → élève ou enseignant par id.
+ *  - badge biométrique « BADGE|tenant|TYPE|id » → élève, enseignant ou personnel par id.
  */
 function parseScan(raw: string): ParseResult | null {
   const parts = raw.split("|");
@@ -55,7 +56,7 @@ function parseScan(raw: string): ParseResult | null {
   if (parts[0] === "BADGE" && parts.length >= 4) {
     const type = parts[2];
     const id = Number(parts[3]);
-    if ((type === "STUDENT" || type === "TEACHER") && Number.isFinite(id) && id > 0) {
+    if ((type === "STUDENT" || type === "TEACHER" || type === "EMPLOYEE") && Number.isFinite(id) && id > 0) {
       return { subjectType: type, subjectId: id };
     }
   }
@@ -84,18 +85,25 @@ export default function AttendanceScanPage() {
   // Badge de retrait (maternelle/primaire) : ouvert automatiquement après une sortie qui le requiert.
   const [pickupPrompt, setPickupPrompt] = useState<{ studentId: number; name: string } | null>(null);
 
-  // Manual / teacher fallback
+  // Manual / teacher / employee fallback
   const [subjectType, setSubjectType] = useState<ScanSubjectType>("STUDENT");
   const [manualId, setManualId] = useState("");
   const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
   const teachersQuery = useQuery(listTeachers, []);
+  const employeesQuery = useQuery(() => listEmployees(), []);
   const manualOptions: SearchableOption[] = useMemo(() => {
+    if (subjectType === "EMPLOYEE") {
+      return (employeesQuery.data ?? []).map((p) => {
+        const label = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim();
+        return { value: String(p.id), trigger: label, label, searchText: label };
+      });
+    }
     const src = subjectType === "STUDENT" ? (studentsQuery.data ?? []) : (teachersQuery.data ?? []);
     return src.map((p) => {
       const label = `${p.firstName} ${p.lastName}`;
       return { value: String(p.id), trigger: label, label, searchText: label };
     });
-  }, [subjectType, studentsQuery.data, teachersQuery.data]);
+  }, [subjectType, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
 
   const pushFeed = useCallback((item: ScanFeedItem) => {
     setFeed((f) => [item, ...f].slice(0, 25));
@@ -106,7 +114,18 @@ export default function AttendanceScanPage() {
     if (inFlightRef.current.has(key)) return; // un pointage est déjà en cours pour ce sujet
     inFlightRef.current.add(key);
     try {
-      const res = await scanAttendance({ subjectType: type, subjectId, direction: dir });
+      const attempt = await submitScanOfflineAware(type, subjectId, dir);
+      if (attempt.outcome === "queued") {
+        // Hors-ligne : le retard/durée n'est calculé que côté serveur, donc pas de retour riche ici —
+        // seul le fait que le scan a bien été enregistré localement est garanti (synchro automatique).
+        pushFeed({
+          id: `${Date.now()}`, name: `#${subjectId}`, kind: dir,
+          ok: true, at: new Date().toLocaleTimeString(),
+        });
+        notifySuccess("Scan enregistré hors-ligne — sera synchronisé automatiquement.");
+        return;
+      }
+      const res = attempt.result;
       pushFeed({
         id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, kind: res.direction,
         outcome: res.outcome, lateMinutes: res.lateMinutes, checkOutTime: res.checkOutTime,
@@ -127,6 +146,7 @@ export default function AttendanceScanPage() {
   const markAbsent = useCallback(async (type: ScanSubjectType, subjectId: number, name: string) => {
     try {
       if (type === "STUDENT") await markStudentAbsent(subjectId);
+      else if (type === "EMPLOYEE") await markEmployeeAbsent(subjectId);
       else await markTeacherAbsent(subjectId);
       pushFeed({ id: `${Date.now()}`, name, kind: "ABSENT", ok: true, at: new Date().toLocaleTimeString() });
     } catch (err) {
@@ -145,7 +165,7 @@ export default function AttendanceScanPage() {
     lastRef.current = { key: debounceKey, at: now };
     if ("matricule" in parsed) {
       // QR d'identité lisible : on retrouve la personne par son matricule (listes déjà chargées) —
-      // élève d'abord, sinon enseignant.
+      // élève, puis enseignant, puis personnel non-enseignant.
       const mat = parsed.matricule.toLowerCase();
       const student = (studentsQuery.data ?? []).find((s) => (s.studentNumber ?? "").trim().toLowerCase() === mat);
       if (student) {
@@ -157,11 +177,16 @@ export default function AttendanceScanPage() {
         submit("TEACHER", teacher.id, direction);
         return;
       }
+      const employee = (employeesQuery.data ?? []).find((e) => (e.employeeNumber ?? "").trim().toLowerCase() === mat);
+      if (employee) {
+        submit("EMPLOYEE", employee.id, direction);
+        return;
+      }
       notifyError(`Matricule introuvable : ${parsed.matricule}`);
       return;
     }
     submit(parsed.subjectType, parsed.subjectId, direction);
-  }, [direction, submit, studentsQuery.data, teachersQuery.data]);
+  }, [direction, submit, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
 
   const stopCamera = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -275,15 +300,15 @@ export default function AttendanceScanPage() {
             <div>
               <h3 className="mb-2 text-sm font-semibold text-gray-700">Pointage manuel</h3>
               <div className="mb-2 flex gap-2">
-                {(["STUDENT", "TEACHER"] as ScanSubjectType[]).map((t) => (
+                {(["STUDENT", "TEACHER", "EMPLOYEE"] as ScanSubjectType[]).map((t) => (
                   <button key={t} type="button" onClick={() => { setSubjectType(t); setManualId(""); }}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${subjectType === t ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                    {t === "STUDENT" ? "Élève" : "Enseignant / Direction"}
+                    {t === "STUDENT" ? "Élève" : t === "TEACHER" ? "Enseignant" : "Personnel"}
                   </button>
                 ))}
               </div>
               <SearchableSelect
-                noResultsLabel={subjectType === "STUDENT" ? "Aucun élève" : "Aucun enseignant"}
+                noResultsLabel={subjectType === "STUDENT" ? "Aucun élève" : subjectType === "TEACHER" ? "Aucun enseignant" : "Aucun membre du personnel"}
                 options={manualOptions} value={manualId} onChange={setManualId}
                 triggerClassName="w-full justify-between px-3" />
               <div className="mt-2 flex flex-wrap gap-2">
@@ -302,7 +327,7 @@ export default function AttendanceScanPage() {
                   Marquer absent
                 </Button>
               </div>
-              {subjectType === "TEACHER" && <p className="mt-1 text-xs text-gray-400">Le personnel de direction doit être enregistré comme membre du staff pour pouvoir pointer.</p>}
+              {subjectType === "EMPLOYEE" && <p className="mt-1 text-xs text-gray-400">Personnel administratif, direction et soutien — un seul pointage par jour (pas par cours).</p>}
             </div>
 
             <div>
