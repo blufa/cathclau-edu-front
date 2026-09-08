@@ -31,6 +31,9 @@ import {
   payPayslip,
   getCompensation,
   setCompensation,
+  listVacationPayMonths,
+  addVacationPayMonth,
+  removeVacationPayMonth,
   getMonthlyPay,
   getTheoreticalPay,
   generatePayslipFromHours,
@@ -39,6 +42,7 @@ import {
   type MonthlyPay,
   type TheoreticalMonthlyPay,
   type TeacherCompensation,
+  type TeacherVacationPayMonth,
 } from "@/lib/api/payroll";
 import {
   COMPUTATION_LABEL,
@@ -852,7 +856,6 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
   const [hourlyRateNormal, setHourlyRateNormal] = useState<number | string>(initial ? Number(initial.hourlyRateNormal) : (fbHourly ? fbRate : 0));
   const [hourlyRateExam, setHourlyRateExam] = useState<number | string>(initial ? Number(initial.hourlyRateExam) : 0);
   const [fixedSalary, setFixedSalary] = useState<number | string>(initial ? Number(initial.fixedSalary) : (fbHourly ? 0 : fbRate));
-  const [paidDuringVacation, setPaidDuringVacation] = useState(initial?.paidDuringVacation ?? false);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -861,7 +864,6 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
       await setCompensation(teacherId, {
         payMode, hourlyRateNormal: Number(hourlyRateNormal) || 0,
         hourlyRateExam: Number(hourlyRateExam) || 0, fixedSalary: Number(fixedSalary) || 0,
-        paidDuringVacation,
       });
       notifySuccess("Rémunération enregistrée");
       onSaved();
@@ -892,17 +894,7 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
           <MoneyInput value={fixedSalary} onValueChange={setFixedSalary} disabled={payMode === "HOURLY"} />
         </Field>
       </div>
-      <div className="mt-3">
-        <Checkbox
-          label="Payé même pendant les vacances (avantage accordé par la direction)"
-          checked={paidDuringVacation}
-          onChange={() => setPaidDuringVacation((v) => !v)}
-        />
-        <p className="mt-1 pl-6 text-xs text-gray-400">
-          Par défaut, les jours fériés et vacances scolaires ne comptent pas dans les heures dues du
-          mois. Cochez pour cet enseignant s&apos;il doit être payé même pendant ces périodes.
-        </p>
-      </div>
+      <VacationPayMonths teacherId={teacherId} />
       <div className="mt-3 flex items-center justify-between gap-2">
         {prefilled
           ? <p className="text-xs text-success-600">Pré-rempli depuis la fiche enseignant — enregistrez pour confirmer.</p>
@@ -913,6 +905,62 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
         Horaire : paie = heures effectives × tarif. Fixe : salaire fixe + heures de cours effectives × tarif
         (direction qui enseigne aussi). Deux tarifs distincts selon la typologie de la classe (normale / examen).
       </p>
+    </div>
+  );
+}
+
+/** Mois de vacances payés — choisis au cas par cas (année + mois précis), pas un interrupteur valable
+ * toute l'année : la direction accorde cet avantage ponctuellement (ex. juillet 2026 seulement).
+ * Le salaire fixe, lui, est de toute façon toujours versé en entier — ceci ne concerne que le calcul
+ * des heures de cours théoriques (utile pour un enseignant à l'heure, ou la part « heures de cours »
+ * d'un salarié fixe qui enseigne aussi). */
+function VacationPayMonths({ teacherId }: { teacherId: number }) {
+  const q = useQuery(() => listVacationPayMonths(teacherId), [teacherId]);
+  const months = q.data ?? [];
+  const now = new Date();
+  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [adding, setAdding] = useState(false);
+
+  async function add() {
+    const [y, m] = period.split("-").map(Number);
+    if (!y || !m) return;
+    setAdding(true);
+    try {
+      await addVacationPayMonth(teacherId, y, m);
+      notifySuccess("Mois de vacances payé ajouté");
+      q.refetch();
+    } catch (err) { notifyError(err); } finally { setAdding(false); }
+  }
+  async function remove(id: number) {
+    try {
+      await removeVacationPayMonth(teacherId, id);
+      notifySuccess("Mois retiré");
+      q.refetch();
+    } catch (err) { notifyError(err); }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-gray-200 p-3">
+      <p className="text-sm font-medium text-gray-700">Mois payés pendant les vacances</p>
+      <p className="mt-1 text-xs text-gray-400">
+        Par défaut, les jours fériés et vacances scolaires ne comptent pas dans les heures de cours
+        dues du mois. Ajoutez ici les mois précis (avantage accordé au cas par cas par la direction,
+        pas toute l&apos;année) où cet enseignant doit quand même être compté comme en poste — le
+        salaire fixe, lui, reste de toute façon toujours versé en entier.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {months.length === 0 && !q.loading && <span className="text-xs text-gray-400">Aucun mois ajouté.</span>}
+        {months.map((m: TeacherVacationPayMonth) => (
+          <Badge key={m.id} tone="brand">
+            <span className="mr-1.5">{String(m.month).padStart(2, "0")}/{m.year}</span>
+            <button type="button" onClick={() => remove(m.id)} aria-label="Retirer" className="text-brand-700 hover:text-brand-900">✕</button>
+          </Badge>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-40" />
+        <Button size="sm" variant="secondary" onClick={add} loading={adding}>Ajouter</Button>
+      </div>
     </div>
   );
 }

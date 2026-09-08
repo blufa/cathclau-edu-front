@@ -97,8 +97,11 @@ export interface TeacherCompensation {
   /** Tarif horaire pour les classes normales / classes d'examen (§6). */
   hourlyRateNormal: string; hourlyRateExam: string;
   fixedSalary: string;
-  /** Avantage accordé par la direction : payé même pendant les jours fériés/vacances. */
-  paidDuringVacation: boolean;
+}
+/** Mois précis (année + mois) où l'enseignant est payé pendant les vacances — avantage accordé au
+ * cas par cas par la direction (§6), voir addVacationPayMonth/listVacationPayMonths. */
+export interface TeacherVacationPayMonth {
+  id: number; tenantId: number | null; teacherId: number; year: number; month: number;
 }
 /** Paie basée sur les heures réellement réalisées (cahier de textes), retard/départ anticipé cumulés
  * déduits, répartie par typologie de classe (normal/examen, §6) pour appliquer le bon tarif à chacune. */
@@ -121,9 +124,18 @@ export function getCompensation(teacherId: number): Promise<TeacherCompensation 
 }
 export function setCompensation(
   teacherId: number,
-  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number; paidDuringVacation: boolean },
+  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number },
 ): Promise<TeacherCompensation> {
   return api.put<TeacherCompensation>(`/payroll/compensation/${teacherId}`, input);
+}
+export function listVacationPayMonths(teacherId: number): Promise<TeacherVacationPayMonth[]> {
+  return api.get<TeacherVacationPayMonth[]>(`/payroll/compensation/${teacherId}/vacation-pay`);
+}
+export function addVacationPayMonth(teacherId: number, year: number, month: number): Promise<TeacherVacationPayMonth> {
+  return api.post<TeacherVacationPayMonth>(`/payroll/compensation/${teacherId}/vacation-pay`, undefined, { query: { year, month } });
+}
+export function removeVacationPayMonth(teacherId: number, id: number): Promise<void> {
+  return api.delete<void>(`/payroll/compensation/${teacherId}/vacation-pay/${id}`);
 }
 export function getMonthlyPay(teacherId: number, year: number, month: number): Promise<MonthlyPay> {
   return api.get<MonthlyPay>(`/payroll/teachers/${teacherId}/monthly-pay`, { query: { year, month } });
