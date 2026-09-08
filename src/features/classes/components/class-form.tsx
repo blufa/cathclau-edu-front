@@ -10,6 +10,7 @@ import type { Classe, CreateClassInput, CreateRoomInput, Niveau, Salle } from "@
 import { Modal } from "@/components/ui/modal";
 import { Input, Label, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { RoomForm } from "@/components/referentials/room-form";
 import { LevelCatalogPicker } from "@/components/referentials/level-catalog";
@@ -252,11 +253,14 @@ export function ClassForm({
           </Field>
           <Field>
             <Label>Typologie</Label>
-            <p className="mb-1 text-xs text-gray-400">Détermine le tarif horaire de paie des enseignants</p>
-            <Select value={values.classType} onChange={(e) => setValue("classType", e.target.value)}>
-              <option value="NORMALE">Classe normale</option>
-              <option value="EXAMEN">Classe d&apos;examen</option>
-            </Select>
+            <div className="mt-1.5 rounded-lg border border-gray-200 px-3 py-2.5">
+              <Checkbox
+                label="Classe d'examen (CM2, BEPC/10ème, Terminale…)"
+                checked={values.classType === "EXAMEN"}
+                onChange={(e) => setValue("classType", e.target.checked ? "EXAMEN" : "NORMALE")}
+              />
+              <p className="mt-1 pl-6 text-xs text-gray-400">Détermine le tarif horaire de paie des enseignants qui y interviennent.</p>
+            </div>
           </Field>
         </div>
         <p className="text-xs text-gray-400">

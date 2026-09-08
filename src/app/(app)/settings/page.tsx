@@ -72,6 +72,13 @@ export default function SettingsPage() {
 }
 
 function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
+  // Le logo/couleur ne sont pas édités sur ce formulaire (voir carte « Apparence » plus bas) : on
+  // resoumet systématiquement la valeur la plus fraîche connue via le contexte de branding partagé
+  // (tenu à jour par `BrandingForm.onSaved` → `refresh()`), jamais l'instantané chargé au montage de
+  // CE formulaire. Sans ça, enregistrer ce formulaire APRÈS avoir changé le logo dans « Apparence »
+  // réécrasait silencieusement le logo tout juste téléversé avec l'ancienne valeur (deux formulaires
+  // distincts, deux copies locales du même champ, la dernière sauvegarde gagne).
+  const { branding } = useBranding();
   const [profile, setProfile] = useState<SchoolProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -95,8 +102,8 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
     try {
       const updated = await updateSchoolProfile({
         schoolName: profile.schoolName,
-        logo: profile.logo,
-        brandColor: profile.brandColor,
+        logo: branding?.logo ?? profile.logo,
+        brandColor: branding?.brandColor ?? profile.brandColor,
         address: profile.address,
         city: profile.city,
         country: profile.country,

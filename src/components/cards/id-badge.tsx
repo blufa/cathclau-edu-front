@@ -70,10 +70,17 @@ export function IdBadge({ kind, fullName, subtitle, photoUrl, fields, qrData, fo
       {/* À l'impression : recto et verso côte à côte sur une seule page (papier bristol à découper et
           plastifier), chacun à la taille réelle d'une carte d'identité standard (CR80, 85,6 × 54 mm) —
           à l'écran, l'affichage empilé habituel est inchangé. */}
-      <div ref={badgeRef} className="print:flex print:flex-row print:items-start print:gap-0">
-        <div className="print:relative">
+      <div ref={badgeRef} className="print:flex print:flex-row print:gap-0">
+        <div className="print:relative print:flex print:flex-col">
           <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 print:hidden">Recto</p>
-          <div className="badge-printable mx-auto flex w-[340px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg print:h-[53.98mm] print:w-[85.6mm] print:rounded-none print:border-0 print:shadow-none">
+          {/* `min-h` + `flex-1` (pas `h` seul) : une hauteur figée + `overflow-hidden` écrasait/rognait
+              la dernière ligne (QR + pied) dès que le rendu d'impression du texte prenait quelques
+              pixels de plus que prévu (variable selon navigateur/moteur d'impression), donnant
+              l'impression que le QR « descendait » et quittait sa position. `flex-1` sur le parent en
+              `flex-col` fait en sorte que le recto s'étire à la même hauteur que le verso (côte à côte
+              dans la rangée, `align-items: stretch` par défaut) — sans quoi le côté le plus court
+              (typiquement le verso, moins chargé) ressortait visiblement plus petit que l'autre. */}
+          <div className="badge-printable mx-auto flex w-[340px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg print:min-h-[53.98mm] print:w-[85.6mm] print:flex-1 print:rounded-none print:border-0 print:shadow-none">
           {/* En-tête aux couleurs de l'école */}
           <div className="flex items-center gap-3 bg-gradient-to-r from-brand-600 to-brand-500 p-3.5 text-white print:gap-2 print:p-1.5">
             {branding?.logo ? (
@@ -143,11 +150,20 @@ export function IdBadge({ kind, fullName, subtitle, photoUrl, fields, qrData, fo
 
         {/* Ligne de découpe entre recto et verso, visible uniquement à l'impression (papier bristol à
             découper puis plastifier) — recto et verso sortent côte à côte sur une seule page. */}
-        <div className="hidden print:block print:h-[53.98mm] print:border-l print:border-dashed print:border-slate-300" aria-hidden />
+        {/* Pas de hauteur fixe : s'étire (align-items: stretch, par défaut) sur la hauteur réelle du
+            recto/verso, quelle qu'elle soit une fois le contenu rendu. */}
+        <div className="hidden print:block print:border-l print:border-dashed print:border-slate-300" aria-hidden />
 
-        <div className="print:relative">
+        <div className="print:relative print:flex print:flex-col">
           <p className="mb-1 mt-4 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 print:mt-0 print:hidden">Verso</p>
-          <BadgeBack schoolMotto={branding?.motto} schoolSlogan={branding?.slogan} schoolName={branding?.schoolName} />
+          <BadgeBack
+            schoolMotto={branding?.motto}
+            schoolSlogan={branding?.slogan}
+            schoolName={branding?.schoolName}
+            ire={branding?.ire}
+            dpeLabel={branding?.dpeLabel}
+            sousPrefectureLabel={branding?.sousPrefectureLabel}
+          />
         </div>
       </div>
 
@@ -163,21 +179,40 @@ export function IdBadge({ kind, fullName, subtitle, photoUrl, fields, qrData, fo
 }
 
 /**
- * Verso officiel : armoiries de la République de Guinée en filigrane, devise nationale, puis la
- * devise et le slogan propres à l'établissement (renseignables dans Paramètres).
+ * Verso officiel : hiérarchie administrative (IRE, DPE/DCE, DSSEE — renseignables dans Paramètres),
+ * armoiries de la République de Guinée en filigrane, devise nationale, puis la devise et le slogan
+ * propres à l'établissement.
  */
 function BadgeBack({
   schoolMotto,
   schoolSlogan,
   schoolName,
+  ire,
+  dpeLabel,
+  sousPrefectureLabel,
 }: {
   schoolMotto?: string | null;
   schoolSlogan?: string | null;
   schoolName?: string | null;
+  ire?: string | null;
+  dpeLabel?: string | null;
+  sousPrefectureLabel?: string | null;
 }) {
+  const hierarchy = [
+    ire ? `IRE : ${ire}` : null,
+    dpeLabel ? `DPE/DCE : ${dpeLabel}` : null,
+    sousPrefectureLabel ? `DSSEE : ${sousPrefectureLabel}` : null,
+  ].filter(Boolean);
+
   return (
-    <div className="badge-printable mx-auto w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg print:flex print:h-[53.98mm] print:w-[85.6mm] print:flex-col print:rounded-none print:border-0 print:shadow-none">
+    <div className="badge-printable mx-auto w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg print:flex print:min-h-[53.98mm] print:w-[85.6mm] print:flex-1 print:flex-col print:rounded-none print:border-0 print:shadow-none">
       <TricolorBar />
+      {hierarchy.length > 0 && (
+        <div className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-center print:px-2 print:py-0.5">
+          <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500 print:text-[6px]">MEPU-A</p>
+          <p className="text-[9px] uppercase tracking-wide text-slate-500 print:text-[6px]">{hierarchy.join(" · ")}</p>
+        </div>
+      )}
       <div className="relative flex min-h-[260px] flex-col items-center justify-center gap-2 px-6 py-8 text-center print:min-h-0 print:flex-1 print:justify-center print:gap-1 print:px-4 print:py-2">
         {/* Armoiries en filigrane : derrière le texte, faible opacité. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -9,6 +9,12 @@ export interface TenantBranding {
   motto: string | null;
   /** Slogan de l'établissement, imprimé au verso des badges/cartes. */
   slogan: string | null;
+  /** Inspection régionale de l'éducation, imprimée au verso des badges/cartes. */
+  ire: string | null;
+  /** Direction préfectorale ou communale de l'éducation (DPE/DCE), imprimée au verso des badges/cartes. */
+  dpeLabel: string | null;
+  /** Sous-préfecture / commune (DSSEE), imprimée au verso des badges/cartes. */
+  sousPrefectureLabel: string | null;
 }
 
 export function getTenantBranding(): Promise<TenantBranding> {
