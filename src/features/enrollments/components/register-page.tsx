@@ -9,6 +9,7 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import {
+  abandonEnrollment,
   cancelEnrollment,
   deleteEnrollment,
   searchEnrollments,
@@ -25,15 +26,17 @@ import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal
 import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
-const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
+const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red" | "indigo"> = {
   PENDING: "amber",
   VALIDATED: "green",
   CANCELLED: "red",
+  ABANDONED: "indigo",
 };
 const STATUS_LABEL: Record<EnrollmentStatus, string> = {
   PENDING: "En attente",
   VALIDATED: "Validée",
   CANCELLED: "Annulée",
+  ABANDONED: "Abandon",
 };
 
 export default function EnrollmentsPage() {
@@ -111,6 +114,23 @@ export default function EnrollmentsPage() {
         try {
           await cancelEnrollment(id);
           notifySuccess("Inscription annulée");
+          enrollmentsQuery.refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+  }
+  function handleAbandon(id: number) {
+    confirmAction({
+      title: "Marquer comme abandon",
+      message: "L'élève arrête les cours en cours d'année ? Il restera visible pour cette classe "
+        + "(facturation, recouvrement) mais disparaîtra des listes d'appel et de saisie de notes.",
+      confirmLabel: "Marquer comme abandon",
+      onConfirm: async () => {
+        try {
+          await abandonEnrollment(id);
+          notifySuccess("Inscription marquée comme abandon");
           enrollmentsQuery.refetch();
         } catch (err) {
           notifyError(err);
@@ -279,7 +299,12 @@ export default function EnrollmentsPage() {
                         Modifier
                       </Button>
                     )}
-                    {canDecide && e.status !== "CANCELLED" && (
+                    {canDecide && e.status === "VALIDATED" && (
+                      <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => handleAbandon(e.id)}>
+                        Abandon
+                      </Button>
+                    )}
+                    {canDecide && e.status !== "CANCELLED" && e.status !== "ABANDONED" && (
                       <Button size="sm" variant="ghost" onClick={() => handleCancel(e.id)}>
                         Annuler
                       </Button>

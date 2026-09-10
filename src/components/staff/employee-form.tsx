@@ -6,7 +6,8 @@ import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PhoneInput } from "@/components/ui/phone-input";
-import type { Employee, EmployeeCategory, EmployeeInput } from "@/lib/api/staff";
+import { useQuery } from "@/hooks/use-query";
+import { listTeachers, type Employee, type EmployeeCategory, type EmployeeInput } from "@/lib/api/staff";
 
 export const EMPLOYEE_CATEGORY_LABEL: Record<EmployeeCategory, string> = {
   ADMINISTRATIVE: "Administratif",
@@ -32,8 +33,14 @@ export function EmployeeForm({
   const [hireDate, setHireDate] = useState(initial?.hireDate ?? "");
   const [baseSalary, setBaseSalary] = useState<string>(initial?.baseSalary ? String(initial.baseSalary) : "");
   const [cnssNumber, setCnssNumber] = useState(initial?.cnssNumber ?? "");
+  const [linkedTeacherId, setLinkedTeacherId] = useState<string>(
+    initial?.linkedTeacherId != null ? String(initial.linkedTeacherId) : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const teachersQuery = useQuery(listTeachers, []);
+  const teachers = teachersQuery.data ?? [];
 
   async function submit() {
     if (!firstName.trim() || !lastName.trim()) {
@@ -54,6 +61,7 @@ export function EmployeeForm({
         hireDate: hireDate || null,
         baseSalary: baseSalary === "" ? null : Number(baseSalary),
         cnssNumber: cnssNumber.trim() || null,
+        linkedTeacherId: linkedTeacherId === "" ? null : Number(linkedTeacherId),
       });
     } finally {
       setSaving(false);
@@ -111,6 +119,21 @@ export function EmployeeForm({
           <Label>Numéro CNSS</Label>
           <Input value={cnssNumber} onChange={(e) => setCnssNumber(e.target.value)} />
         </Field>
+      </div>
+      <div className="rounded-xl border border-gray-200 p-3">
+        <Field>
+          <Label>Enseigne aussi (optionnel)</Label>
+          <Select value={linkedTeacherId} onChange={(e) => setLinkedTeacherId(e.target.value)}>
+            <option value="">Non — poste administratif/direction uniquement</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+            ))}
+          </Select>
+        </Field>
+        <p className="mt-1.5 text-xs text-gray-400">
+          Si cette personne donne aussi des cours, reliez sa fiche enseignant ici — la paie pourra
+          alors générer une fiche combinée (salaire de base + heures d&apos;enseignement).
+        </p>
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>

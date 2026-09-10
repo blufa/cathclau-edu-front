@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import jsQR from "jsqr";
-import { CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
 import { listTeachers, listEmployees } from "@/lib/api/staff";
 import { getStudentParents } from "@/lib/api/parents";
-import { markEmployeeAbsent, markStudentAbsent, markTeacherAbsent, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
+import { justifyAttendance, markEmployeeAbsent, markStudentAbsent, markTeacherAbsent, notifyParentNow, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
 import { ATTENDANCE_OUTCOME_LABEL, SCAN_DIRECTION_LABEL, type AttendanceOutcome, type ScanDirection } from "@/lib/types/attendance";
 import { submitScanOfflineAware } from "@/lib/offline/submit-attendance-offline-aware";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import { IdBadge } from "@/components/cards/id-badge";
 import { Reveal } from "@/components/public/reveal";
 import { matriculeFromQr } from "@/lib/identity-qr";
 import { notifyError, notifySuccess } from "@/lib/feedback";
-import { formatMinutes } from "@/lib/format";
+import { formatMinutes, formatTime } from "@/lib/format";
 
 interface ScanFeedItem {
   id: string;
@@ -33,6 +34,10 @@ interface ScanFeedItem {
   checkOutTime?: string | null;
   realizedMinutes?: number | null;
   scheduledMinutes?: number | null;
+  earlyMinutes?: number | null;
+  /** Entrée élève en retard uniquement : permet d'afficher « Notifier »/« Justifier » directement. */
+  subjectType?: ScanSubjectType;
+  studentAttendanceId?: number | null;
   ok: boolean;
   at: string;
 }
@@ -130,6 +135,8 @@ export default function AttendanceScanPage() {
         id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, kind: res.direction,
         outcome: res.outcome, lateMinutes: res.lateMinutes, checkOutTime: res.checkOutTime,
         realizedMinutes: res.realizedMinutes, scheduledMinutes: res.scheduledMinutes,
+        earlyMinutes: res.earlyMinutes,
+        subjectType: res.subjectType as ScanSubjectType, studentAttendanceId: res.studentAttendanceId,
         ok: true, at: new Date().toLocaleTimeString(),
       });
       if (res.requiresPickupInfo) {
@@ -188,6 +195,16 @@ export default function AttendanceScanPage() {
     submit(parsed.subjectType, parsed.subjectId, direction);
   }, [direction, submit, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
 
+  // La boucle de lecture caméra (tick, ci-dessous) est lancée UNE fois par startCamera() et se
+  // rappelle elle-même en boucle via requestAnimationFrame — sa closure sur handleRaw reste donc
+  // figée à sa valeur du moment où la caméra a démarré. Sans cette ref, basculer Entrée/Sortie (ou le
+  // profil élève/enseignant/personnel) après le démarrage de la caméra n'avait aucun effet sur les
+  // scans suivants : ils continuaient à utiliser l'ancien sens (« Entrée ») malgré le bouton « Sortie »
+  // sélectionné à l'écran — d'où un scan de sortie traité comme une nouvelle entrée (même retard
+  // affiché, calculé sur la même séance déjà pointée en entrée).
+  const handleRawRef = useRef(handleRaw);
+  useEffect(() => { handleRawRef.current = handleRaw; }, [handleRaw]);
+
   const stopCamera = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -228,7 +245,7 @@ export default function AttendanceScanPage() {
             // "attemptBoth" : essaie aussi les couleurs inversées (code clair sur fond sombre,
             // reflets d'écran de téléphone…) — améliore la détection quelle que soit la position.
             const code = jsQR(frame.data, frame.width, frame.height, { inversionAttempts: "attemptBoth" });
-            if (code?.data) handleRaw(code.data);
+            if (code?.data) handleRawRef.current(code.data);
           }
         }
         rafRef.current = requestAnimationFrame(tick);
@@ -237,7 +254,7 @@ export default function AttendanceScanPage() {
     } catch {
       setError("Caméra inaccessible : autorisez l'accès à la caméra.");
     }
-  }, [handleRaw]);
+  }, []);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
@@ -245,6 +262,10 @@ export default function AttendanceScanPage() {
 
   return (
     <div className="space-y-6">
+      <Link href="/attendance" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700">
+        <ArrowLeft className="h-4 w-4" /> Retour aux présences
+      </Link>
+
       <Reveal y={12}>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <ScanLine className="h-6 w-6 text-brand-600" /> Pointage par scan de carte
@@ -456,6 +477,65 @@ function PickupModal({ studentId, studentName, onClose }: { studentId: number; s
   );
 }
 
+/** Actions immédiates pour un élève en retard, directement dans le fil de scan — le surveillant n'a
+ * pas besoin de naviguer vers /attendance. « Notifier » relance l'envoi SMS/email (déjà tenté
+ * automatiquement à l'instant du scan, utile si le premier essai a échoué) ; « Justifier »/« Non
+ * justifié » enregistrent la décision du surveillant sur le retard. */
+function LateActions({ attendanceId }: { attendanceId: number }) {
+  const [notifying, setNotifying] = useState(false);
+  const [notified, setNotified] = useState(false);
+  const [justifying, setJustifying] = useState<"yes" | "no" | null>(null);
+  const [justified, setJustified] = useState<boolean | null>(null);
+
+  async function notify() {
+    setNotifying(true);
+    try {
+      await notifyParentNow(attendanceId);
+      setNotified(true);
+      notifySuccess("Parent notifié.");
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setNotifying(false);
+    }
+  }
+
+  async function justify(value: boolean) {
+    setJustifying(value ? "yes" : "no");
+    try {
+      await justifyAttendance(attendanceId, { justified: value });
+      setJustified(value);
+      notifySuccess(value ? "Retard justifié." : "Retard marqué non justifié.");
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setJustifying(null);
+    }
+  }
+
+  return (
+    <span className="flex items-center gap-1.5">
+      {notified ? (
+        <span className="text-xs text-success-600">Parent notifié</span>
+      ) : (
+        <Button size="sm" variant="ghost" loading={notifying} onClick={notify}>Notifier parent</Button>
+      )}
+      {justified == null ? (
+        <>
+          <Button size="sm" variant="ghost" className="text-success-700" loading={justifying === "yes"} onClick={() => justify(true)}>
+            Justifier
+          </Button>
+          <Button size="sm" variant="ghost" className="text-error-600" loading={justifying === "no"} onClick={() => justify(false)}>
+            Non justifié
+          </Button>
+        </>
+      ) : (
+        <span className="text-xs text-gray-400">{justified ? "Justifié" : "Non justifié"}</span>
+      )}
+    </span>
+  );
+}
+
 function FeedOutcome({ item }: { item: ScanFeedItem }) {
   if (!item.ok) {
     return <span className="text-xs text-gray-400">{item.at}</span>;
@@ -471,24 +551,28 @@ function FeedOutcome({ item }: { item: ScanFeedItem }) {
   if (item.kind === "ENTRY") {
     const outcome = item.outcome ?? "PRESENT";
     return (
-      <span className="flex items-center gap-2">
+      <span className="flex flex-wrap items-center gap-2">
         <Badge tone={outcome === "LATE" ? "amber" : "green"}>
           {ATTENDANCE_OUTCOME_LABEL[outcome]}{outcome === "LATE" && item.lateMinutes ? ` (${formatMinutes(item.lateMinutes)})` : ""}
         </Badge>
         <span className="text-xs text-gray-400">{item.at}</span>
+        {outcome === "LATE" && item.subjectType === "STUDENT" && item.studentAttendanceId != null && (
+          <LateActions attendanceId={item.studentAttendanceId} />
+        )}
       </span>
     );
   }
-  // EXIT : compare la durée réalisée à la durée prévue par l'emploi du temps.
-  const hasBoth = item.realizedMinutes != null && item.scheduledMinutes != null;
-  const diff = hasBoth ? item.realizedMinutes! - item.scheduledMinutes! : null;
-  const label = hasBoth
-    ? `${formatMinutes(item.realizedMinutes)} réalisées / ${formatMinutes(item.scheduledMinutes)} prévues (${diff! >= 0 ? "+" : ""}${formatMinutes(diff)})`
-    : item.checkOutTime ? `Sortie ${item.checkOutTime}` : "Sortie enregistrée";
-  const tone = diff == null ? "gray" : diff < 0 ? "amber" : "green";
+  // EXIT : heure de sortie réelle toujours affichée, avec un badge « À l'heure »/« Anticipé X min »
+  // basé sur earlyMinutes (calculé et enregistré côté serveur) — pas une approximation recalculée ici
+  // à partir de réalisé/prévu, qui ne montrait ni l'heure ni un libellé clair de départ anticipé.
+  const early = item.earlyMinutes ?? 0;
+  const tone = early > 0 ? "amber" : "green";
+  const time = item.checkOutTime ? `Sortie ${formatTime(item.checkOutTime)}` : "Sortie enregistrée";
   return (
     <span className="flex items-center gap-2">
-      <Badge tone={tone}>{label}</Badge>
+      <Badge tone={tone}>
+        {time}{early > 0 ? ` — Anticipé ${formatMinutes(early)}` : ""}
+      </Badge>
       <span className="text-xs text-gray-400">{item.at}</span>
     </span>
   );

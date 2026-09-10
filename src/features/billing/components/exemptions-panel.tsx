@@ -22,7 +22,7 @@ import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatGNF } from "@/lib/format";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const EMPTY: ExemptionInput = {
@@ -94,7 +94,7 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
               <TR key={e.id}>
                 <TD className="font-medium text-slate-900">{studentName(e.studentId)}</TD>
                 <TD><Badge tone="blue">{EXEMPTION_TYPE_LABEL[e.type]}</Badge></TD>
-                <TD>{e.percentage != null ? `${e.percentage} %` : e.amount != null ? `${e.amount}` : "—"}</TD>
+                <TD>{e.percentage != null ? `${e.percentage} %` : e.amount != null ? formatGNF(e.amount) : "—"}</TD>
                 <TD className="text-sm text-slate-600">{e.feeType ? FEE_TYPE_LABEL[e.feeType] : "Tous"}</TD>
                 <TD className="text-sm text-slate-500">{formatDate(e.startDate)}{e.endDate ? ` → ${formatDate(e.endDate)}` : ""}</TD>
                 <TD><Badge tone={e.active ? "green" : "gray"}>{e.active ? "Active" : "Révoquée"}</Badge></TD>

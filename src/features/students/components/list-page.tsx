@@ -387,7 +387,9 @@ export default function StudentsPage() {
           tenantId={user.tenantId}
           open={!!collectingFor}
           onClose={() => setCollectingFor(null)}
-          onCollected={() => setCollectingFor(null)}
+          // Ne ferme plus la modale automatiquement : le reçu s'affiche dans la même fenêtre juste
+          // après l'encaissement, l'utilisateur ferme lui-même une fois qu'il l'a visualisé/imprimé.
+          onCollected={() => {}}
         />
       )}
 

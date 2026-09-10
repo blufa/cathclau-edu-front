@@ -10,14 +10,20 @@ import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
+  abandonEnrollment,
   cancelEnrollment,
   deleteEnrollment,
+  transferEnrollmentClass,
 } from "@/lib/api/enrollments";
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
+import type { Classe } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { Modal } from "@/components/ui/modal";
+import { Field, Label } from "@/components/ui/input";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
 import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal";
@@ -29,15 +35,17 @@ import { CertificateAction } from "./certificate-action";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useStudentQuery } from "../hooks/use-students";
 
-const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
+const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red" | "indigo"> = {
   PENDING: "amber",
   VALIDATED: "green",
   CANCELLED: "red",
+  ABANDONED: "indigo",
 };
 const STATUS_LABEL: Record<EnrollmentStatus, string> = {
   PENDING: "En attente",
   VALIDATED: "Validée",
   CANCELLED: "Annulée",
+  ABANDONED: "Abandon",
 };
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
@@ -62,6 +70,7 @@ export default function StudentDetailPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [editing, setEditing] = useState<Enrollment | null>(null);
   const [collecting, setCollecting] = useState<{ classId: number | null } | null>(null);
+  const [transferring, setTransferring] = useState<Enrollment | null>(null);
 
   const yearIds = useMemo(
     () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId))],
@@ -94,6 +103,23 @@ export default function StudentDetailPage() {
         try {
           await cancelEnrollment(enrollmentId);
           notifySuccess("Inscription annulée");
+          refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+  }
+  function handleAbandon(enrollmentId: number) {
+    confirmAction({
+      title: "Marquer comme abandon",
+      message: "L'élève arrête les cours en cours d'année ? Il restera visible pour cette classe "
+        + "(facturation, recouvrement) mais disparaîtra des listes d'appel et de saisie de notes.",
+      confirmLabel: "Marquer comme abandon",
+      onConfirm: async () => {
+        try {
+          await abandonEnrollment(enrollmentId);
+          notifySuccess("Inscription marquée comme abandon");
           refetch();
         } catch (err) {
           notifyError(err);
@@ -283,7 +309,17 @@ export default function StudentDetailPage() {
                             Modifier
                           </Button>
                         )}
-                        {canDecide && e.status !== "CANCELLED" && (
+                        {canDecide && e.status === "VALIDATED" && (
+                          <Button size="sm" variant="ghost" onClick={() => setTransferring(e)}>
+                            Transférer
+                          </Button>
+                        )}
+                        {canDecide && e.status === "VALIDATED" && (
+                          <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => handleAbandon(e.id)}>
+                            Marquer comme abandon
+                          </Button>
+                        )}
+                        {canDecide && e.status !== "CANCELLED" && e.status !== "ABANDONED" && (
                           <Button size="sm" variant="ghost" onClick={() => handleCancel(e.id)}>
                             Annuler
                           </Button>
@@ -382,6 +418,75 @@ export default function StudentDetailPage() {
           onCollected={refetch}
         />
       )}
+
+      {transferring && (
+        <TransferClassModal
+          enrollment={transferring}
+          classOptions={(classesQuery.data ?? []).filter(
+            (c) => c.academicYearId === transferring.academicYearId && c.id !== transferring.classId,
+          )}
+          onClose={() => setTransferring(null)}
+          onTransferred={() => {
+            setTransferring(null);
+            refetch();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Transfert d'une inscription validée vers une autre classe en cours d'année. Si les frais de
+ * scolarité diffèrent entre les deux classes, les mensualités impayées de l'ancienne classe sont
+ * annulées côté serveur et ce qui a déjà été payé est automatiquement reporté en crédit sur les
+ * nouvelles mensualités — rien à faire ici, juste choisir la nouvelle classe.
+ */
+function TransferClassModal({ enrollment, classOptions, onClose, onTransferred }: {
+  enrollment: Enrollment; classOptions: Classe[]; onClose: () => void; onTransferred: () => void;
+}) {
+  const [classId, setClassId] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const options: SearchableOption[] = classOptions.map((c) => ({
+    value: String(c.id), trigger: c.label, label: c.label, searchText: c.label,
+  }));
+
+  async function submit() {
+    if (!classId) return;
+    setSubmitting(true);
+    try {
+      await transferEnrollmentClass(enrollment.id, Number(classId));
+      notifySuccess("Élève transféré vers la nouvelle classe");
+      onTransferred();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Transférer vers une autre classe">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">
+          Si la scolarité de la nouvelle classe a un tarif différent, les mensualités impayées de
+          l&apos;ancienne classe seront annulées et ce qui a déjà été payé sera automatiquement
+          reporté en crédit sur les nouvelles mensualités.
+        </p>
+        <Field>
+          <Label>Nouvelle classe</Label>
+          {options.length === 0 ? (
+            <p className="text-sm text-slate-400">Aucune autre classe disponible pour cette année scolaire.</p>
+          ) : (
+            <SearchableSelect value={classId} options={options} onChange={setClassId}
+              triggerClassName="w-full justify-between px-3" />
+          )}
+        </Field>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>Annuler</Button>
+          <Button onClick={submit} disabled={!classId} loading={submitting}>Transférer</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }

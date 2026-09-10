@@ -12,6 +12,7 @@ export type BroadcastAudience =
   | "CLASS_PARENTS_BOYS"
   | "CLASS_PARENTS_GIRLS"
   | "ALL_TEACHERS"
+  | "ALL_STAFF"
   | "STUDENT_PARENTS";
 
 export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
@@ -20,6 +21,7 @@ export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
   CLASS_PARENTS_BOYS: "Parents des garçons d'une classe",
   CLASS_PARENTS_GIRLS: "Parents des filles d'une classe",
   ALL_TEACHERS: "Tous les enseignants",
+  ALL_STAFF: "Tout le personnel (enseignants + personnel)",
   STUDENT_PARENTS: "Parent(s) d'un élève précis",
 };
 
@@ -70,6 +72,10 @@ export interface SendCommunicationInput {
   content: string;
   reason: CommunicationReason;
   recipientUserIds: number[];
+  /** Téléphone/e-mail bruts (déjà résolus côté appelant) pour un destinataire précis — indispensable
+   * pour qu'un envoi manuel parte réellement : un recipientUserId seul, sans destination, reste "en
+   * attente" indéfiniment côté serveur (aucune résolution différée n'existe). */
+  recipientDestinations?: string[];
 }
 
 /** Diffusion de masse segmentée — le serveur résout lui-même les destinataires réels. */

@@ -56,9 +56,14 @@ export function DocumentsManager({ studentId, canWrite }: { studentId: number; c
   }
 
   async function sendRelance() {
-    const recipientUserIds = (parentsQuery.data ?? []).map((p) => p.userId).filter((u): u is number => u != null);
-    if (recipientUserIds.length === 0) {
-      notifyError("Aucun parent avec un compte — impossible d'envoyer la relance.");
+    // Toujours viser le téléphone/e-mail directement (pas besoin d'un compte plateforme pour recevoir
+    // une relance) — un recipientUserId seul, sans destination, ne déclenche jamais l'envoi réel côté
+    // serveur (reste indéfiniment "en attente").
+    const recipientDestinations = (parentsQuery.data ?? [])
+      .map((p) => (channel === "EMAIL" ? p.email : p.phone))
+      .filter((d): d is string => !!d);
+    if (recipientDestinations.length === 0) {
+      notifyError(channel === "EMAIL" ? "Aucun parent avec une adresse e-mail connue." : "Aucun parent avec un numéro connu.");
       return;
     }
     if (!motif.trim()) {
@@ -73,7 +78,8 @@ export function DocumentsManager({ studentId, canWrite }: { studentId: number; c
         reason: "GENERAL",
         subject: "Pièces manquantes au dossier",
         content: motif.trim(),
-        recipientUserIds,
+        recipientUserIds: [],
+        recipientDestinations,
       });
       notifySuccess("Relance envoyée au(x) parent(s)");
       setRelanceOpen(false);

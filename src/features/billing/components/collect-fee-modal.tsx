@@ -280,6 +280,7 @@ export function CollectFeeModal({
                 tenantId={tenantId}
                 studentId={studentId}
                 onShowPdf={(inv) => showPdf(`Facture ${inv.reference}`, () => getInvoicePdfObjectUrl(inv.id))}
+                onPaid={(paymentId) => showPdf("Reçu de paiement", () => getReceiptPdfObjectUrl(paymentId))}
                 onDone={refetchAll}
               />
             )}
@@ -430,7 +431,7 @@ export function CollectFeeModal({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, labelFor, installmentMonths, monthlyFeeId, tenantId, studentId, onShowPdf, onDone,
+  invoices, labelFor, installmentMonths, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
   labelFor: (inv: Invoice) => string;
@@ -441,6 +442,9 @@ function InvoiceCollect({
   tenantId: number;
   studentId: number;
   onShowPdf: (inv: Invoice) => void;
+  /** Appelé juste après un encaissement guichet réussi, avec l'id du paiement — ouvre aussitôt le reçu
+   * (visualiser/télécharger/imprimer) au lieu de forcer un aller-retour par la fiche élève. */
+  onPaid: (paymentId: number) => void;
   onDone: () => void;
 }) {
   const [selected, setSelected] = useState<number[]>([]);
@@ -601,6 +605,7 @@ function InvoiceCollect({
         setSelected([]);
         setCustomAmounts({});
         setMonthSelections({});
+        onPaid(res.payment.id);
         onDone();
       }
     } catch (err) {

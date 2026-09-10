@@ -31,6 +31,12 @@ export function getClassAttendance(classId: number, date: string): Promise<Stude
   return api.get<StudentAttendance[]>(`/attendance/students/class/${classId}`, { query: { date } });
 }
 
+/** Pointages (par séance, tous élèves) d'une classe à une date donnée — heure de sortie/départ
+ * anticipé par élève, un élève pouvant avoir plusieurs séances (donc plusieurs sorties) par jour. */
+export function getClassCheckins(classId: number, date: string): Promise<StudentCheckin[]> {
+  return api.get<StudentCheckin[]>(`/attendance/students/class/${classId}/checkins`, { query: { date } });
+}
+
 /** Historique de présence d'un élève sur une période (from/to inclus). */
 export function getStudentAttendanceRange(
   studentId: number,
@@ -59,7 +65,9 @@ export function updateAttendance(
   return api.put<StudentAttendance>(`/attendance/students/${id}`, undefined, { query: { status, reason } });
 }
 
-export function markParentNotified(id: number): Promise<void> {
+/** Redéclenche réellement l'envoi (SMS + email) au parent puis marque la ligne comme traitée — pas
+ * un simple « cocher la case » malgré le nom trompeur de l'ancienne version. */
+export function notifyParentNow(id: number): Promise<void> {
   return api.put<void>(`/attendance/students/${id}/notify-parent`);
 }
 
@@ -99,9 +107,15 @@ export interface ScanResult {
   realizedMinutes: number | null;
   /** Sortie uniquement : durée prévue par l'emploi du temps, en minutes. */
   scheduledMinutes: number | null;
+  /** Sortie uniquement : minutes de départ anticipé (sortie pointée avant la fin prévue de la
+   * séance) — 0 si parti à l'heure ou après. */
+  earlyMinutes: number | null;
   /** Sortie élève uniquement : classe de cycle maternelle/primaire — le badge de retrait doit être
    * renseigné avant de considérer la sortie terminée. */
   requiresPickupInfo: boolean | null;
+  /** Entrée élève uniquement : id de la fiche de présence quotidienne — permet de notifier le parent
+   * ou de justifier le retard directement depuis le fil de scan. */
+  studentAttendanceId: number | null;
   date: string;
 }
 export function scanAttendance(input: { subjectType: ScanSubjectType; subjectId: number; direction: ScanDirection }): Promise<ScanResult> {
@@ -191,7 +205,10 @@ export function getTeacherMonthlySummary(teacherId: number, year: number, month:
 export interface AttendanceSettings {
   id: number | null;
   tenantId: number;
+  /** Marge de tolérance enseignants + personnel non-enseignant. */
   transitionMarginMinutes: number;
+  /** Marge de tolérance distincte pour les élèves — voir `updateStudentAttendanceMargin`. */
+  studentTransitionMarginMinutes: number;
   /** Horaire de référence du personnel non-enseignant (un seul horaire pour tout le personnel). */
   employeeCheckInTime: string;
   employeeCheckOutTime: string;
@@ -208,6 +225,9 @@ export function getAttendanceSettings(): Promise<AttendanceSettings> {
 }
 export function updateAttendanceSettings(transitionMarginMinutes: number): Promise<AttendanceSettings> {
   return api.put<AttendanceSettings>("/attendance/settings", { transitionMarginMinutes });
+}
+export function updateStudentAttendanceMargin(studentTransitionMarginMinutes: number): Promise<AttendanceSettings> {
+  return api.put<AttendanceSettings>("/attendance/settings/student-margin", { studentTransitionMarginMinutes });
 }
 export function updateEmployeeAttendanceHours(checkInTime: string, checkOutTime: string): Promise<AttendanceSettings> {
   return api.put<AttendanceSettings>("/attendance/settings/employee-hours", { checkInTime, checkOutTime });

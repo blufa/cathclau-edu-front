@@ -148,7 +148,9 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
             tenantId={tenantId}
             open={!!collectingFor}
             onClose={() => setCollectingFor(null)}
-            onCollected={() => setCollectingFor(null)}
+            // Ne ferme plus la modale automatiquement : le reçu s'affiche dans la même fenêtre juste
+            // après l'encaissement (voir list-page.tsx pour le même correctif).
+            onCollected={() => {}}
           />
         )}
       </CardBody>

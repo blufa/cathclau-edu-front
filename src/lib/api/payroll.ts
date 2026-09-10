@@ -68,6 +68,19 @@ export function generateBatch(input: {
 export function addPayslipLine(id: number, input: { label: string; lineType: PayslipLineType; amount: number }): Promise<Payslip> {
   return api.post<Payslip>(`/payroll/payslips/${id}/lines`, input);
 }
+
+/** Fiche de paie combinée pour un personnel direction/administratif qui enseigne aussi (§payroll) :
+ * une seule fiche, salaire de base fixe + une ligne d'heures d'enseignement calculée automatiquement
+ * depuis l'enseignant lié (`Employee.linkedTeacherId`). */
+export function generateCombinedPayslip(input: {
+  year: number; month: number; employeeId: number; employeeName?: string | null;
+  employeeType: EmployeeType; baseSalary: number; linkedTeacherId: number; structureId?: number | null;
+}): Promise<Payslip> {
+  return api.post<Payslip>("/payroll/payslips/combined", {
+    employeeId: input.employeeId, employeeName: input.employeeName, employeeType: input.employeeType,
+    baseSalary: input.baseSalary, linkedTeacherId: input.linkedTeacherId, structureId: input.structureId,
+  }, { query: { year: input.year, month: input.month } });
+}
 export function removePayslipLine(id: number, lineId: number): Promise<Payslip> {
   return api.delete<Payslip>(`/payroll/payslips/${id}/lines/${lineId}`);
 }

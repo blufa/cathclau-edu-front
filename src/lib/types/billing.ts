@@ -56,12 +56,15 @@ export interface InstallmentInput {
   months?: string[];
 }
 
-export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID";
+/** CANCELLED : facture annulée sans effet financier (ex. mensualités d'une ancienne classe après un
+ * transfert), conservée pour l'historique mais plus jamais comptée dans le facturé/impayé. */
+export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
 
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   UNPAID: "Impayée",
   PARTIAL: "Partielle",
   PAID: "Payée",
+  CANCELLED: "Annulée",
 };
 
 export interface Invoice {

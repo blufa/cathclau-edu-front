@@ -156,6 +156,9 @@ export interface Employee {
   baseSalary: string | null;
   cnssNumber: string | null;
   active: boolean;
+  /** Fiche Teacher de la même personne si elle enseigne aussi, en plus de son poste — lien manuel,
+   * utilisé pour générer une fiche de paie combinée (salaire fixe + heures d'enseignement). */
+  linkedTeacherId: number | null;
 }
 
 export interface EmployeeInput {
@@ -170,6 +173,7 @@ export interface EmployeeInput {
   hireDate?: string | null;
   baseSalary?: number | null;
   cnssNumber?: string | null;
+  linkedTeacherId?: number | null;
 }
 
 export function listEmployees(category?: EmployeeCategory): Promise<Employee[]> {

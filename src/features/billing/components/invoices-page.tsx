@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,7 +37,7 @@ import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
 
-const STATUS_TONE: Record<InvoiceStatus, "red" | "amber" | "green"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green" };
+const STATUS_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
 /** Module-scope reference generator (kept out of render to stay pure). */
 function genRef(prefix: string): string {
@@ -48,8 +49,12 @@ export default function InvoicesPage() {
   const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
 
+  // Arrivée depuis la fiche élève (onglet Scolarité → « Factures de l'élève ») : pré-filtre sur cet
+  // élève au lieu d'atterrir sur la liste complète de tous les élèves — sans ça, `?student=` était
+  // silencieusement ignoré et la page s'ouvrait toujours sans filtre.
+  const initialStudentId = useSearchParams().get("student");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
-  const [studentFilter, setStudentFilter] = useState<string>("");
+  const [studentFilter, setStudentFilter] = useState<string>(initialStudentId ?? "");
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(
     () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
@@ -287,7 +292,7 @@ function InvoiceForm({ tenantId, academicYearId, fees, onCancel, onCreated }: {
   );
   const feeOptions: SearchableOption[] = useMemo(
     () => fees.map((f) => {
-      const label = `${FEE_TYPE_LABEL[f.type]} — ${f.amount}`;
+      const label = `${FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
       return { value: String(f.id), trigger: label, label, searchText: label };
     }),
     [fees],
@@ -367,7 +372,7 @@ function BulkInvoiceForm({ tenantId, academicYearId, fees, onCancel, onDone }: {
   );
   const feeOptions: SearchableOption[] = useMemo(
     () => fees.map((f) => {
-      const label = `${FEE_TYPE_LABEL[f.type]} — ${f.amount}`;
+      const label = `${FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
       return { value: String(f.id), trigger: label, label, searchText: label };
     }),
     [fees],

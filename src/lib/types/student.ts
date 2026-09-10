@@ -1,7 +1,7 @@
 /** Student contracts mirrored from the backend students module. */
 
 export type Gender = "MALE" | "FEMALE";
-export type EnrollmentStatus = "PENDING" | "VALIDATED" | "CANCELLED";
+export type EnrollmentStatus = "PENDING" | "VALIDATED" | "CANCELLED" | "ABANDONED";
 export type Relationship = "FATHER" | "MOTHER" | "GUARDIAN";
 export type EnrollmentType = "NEW" | "RE_ENROLLMENT";
 

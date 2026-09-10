@@ -66,3 +66,14 @@ export function nextClassOrdinal(previous: string | number | null | undefined, r
   const n = Number(s);
   return formatClassOrdinal(repeating ? n : n + 1);
 }
+
+/** SMS : au-delà de 160 caractères purs GSM-7 (ou 70 dès qu'un accent/caractère spécial force
+ * l'encodage UCS-2), le message est découpé en plusieurs segments facturés séparément — l'école doit
+ * pouvoir le voir avant d'envoyer/enregistrer un texte trop long. */
+export function smsSegmentInfo(text: string): { length: number; unicode: boolean; limit: number; segments: number } {
+  const unicode = /[^\x00-\x7F]/.test(text);
+  const limit = unicode ? 70 : 160;
+  const length = text.length;
+  const segments = length === 0 ? 0 : Math.ceil(length / limit);
+  return { length, unicode, limit, segments };
+}
