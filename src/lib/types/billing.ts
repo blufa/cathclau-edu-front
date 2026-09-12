@@ -85,6 +85,13 @@ export interface Invoice {
   discountReason?: string | null;
   recoveryStage?: RecoveryStage | null;
   lastReminderAt?: string | null;
+  /** Sous-ensemble de mois "YYYY-MM" (parmi ceux de l'échéance liée) effectivement réglés jusqu'ici —
+   * pour une facture multi-mois (tranche) payée en plusieurs fois. Vide/absent pour une facture d'un
+   * seul mois, ou une tranche réglée en une seule fois (periodLabel suffit alors). */
+  paidMonths?: string[] | null;
+  /** Part de frais d'usage plateforme incluse dans totalAmount (mensualité, si le parent a accès
+   * plateforme) — figée à la génération. Null/absent si aucun frais plateforme sur cette facture. */
+  platformFeeAmount?: string | null;
 }
 
 export type RecoveryStage = "NONE" | "REMINDER_1" | "REMINDER_2" | "EXCLUDED";

@@ -282,7 +282,7 @@ function MovementForm({ accounts, onCancel, onCreated }: { accounts: TreasuryAcc
             {(Object.keys(CATEGORY_LABEL) as CashFlowCategory[]).map((c) => (<option key={c} value={c}>{CATEGORY_LABEL[c]}</option>))}
           </Select>
         </Field>
-        <Field><Label>Date</Label><DatePicker value={date} clearable onChange={setDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={date} clearable onChange={setDate} maxDate={new Date()} /></Field>
       </div>
       <Field><Label>Libellé</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
       <div className="flex justify-end gap-2">
@@ -615,7 +615,7 @@ function EntryForm({ journals, accounts, years, onCancel, onCreated }: {
         </Field>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={date} onChange={setDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={date} onChange={setDate} maxDate={new Date()} /></Field>
         <Field><Label>Libellé</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
       </div>
       <div className="space-y-2">

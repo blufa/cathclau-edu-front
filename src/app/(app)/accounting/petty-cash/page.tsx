@@ -222,7 +222,7 @@ function TxForm({ fundId, type, suggested, onCancel, onDone }: {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={txDate} clearable onChange={setTxDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={txDate} clearable onChange={setTxDate} maxDate={new Date()} /></Field>
         <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
       </div>
       {type === "DISBURSEMENT" && (

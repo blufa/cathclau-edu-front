@@ -73,13 +73,17 @@ export default function StudentDetailPage() {
   const [transferring, setTransferring] = useState<Enrollment | null>(null);
 
   const yearIds = useMemo(
-    () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId))],
+    () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId).filter((id): id is number => id != null))],
     [data?.enrollments],
   );
   const classesQuery = useQuery(
     () =>
       yearIds.length
-        ? Promise.all(yearIds.map((y) => listClasses(y))).then((lists) => lists.flat())
+        ? // allSettled : une année en échec (ex. année archivée/supprimée) ne doit pas faire perdre le
+          // nom de classe de TOUTES les inscriptions — c'était la cause du « #<id> » affiché à la place
+          // du nom de classe dès qu'une seule année posait problème (Promise.all rejette tout le lot).
+          Promise.allSettled(yearIds.map((y) => listClasses(y)))
+            .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])))
         : Promise.resolve([]),
     [yearIds.join(",")],
   );
@@ -89,6 +93,11 @@ export default function StudentDetailPage() {
   const alreadyEnrolledThisYear = (data?.enrollments ?? []).some(
     (e) => e.academicYearId === currentYearId && e.status !== "CANCELLED",
   );
+  // Inscription à afficher dans l'en-tête pour le badge « Accès plateforme » : celle de l'année
+  // courante si validée, sinon la dernière inscription validée connue (élève d'une année antérieure).
+  const currentEnrollment = (data?.enrollments ?? []).find(
+    (e) => e.academicYearId === currentYearId && e.status === "VALIDATED",
+  ) ?? [...(data?.enrollments ?? [])].reverse().find((e) => e.status === "VALIDATED");
   const classLabel = useMemo(
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
     [classesQuery.data],
@@ -191,6 +200,11 @@ export default function StudentDetailPage() {
             {student.firstName} {student.lastName}
           </h1>
           <p className="font-mono text-sm text-slate-500">{student.studentNumber}</p>
+          {currentEnrollment && (
+            <Badge tone={currentEnrollment.platformAccessOptIn ? "green" : "gray"} className="mt-1.5">
+              {currentEnrollment.platformAccessOptIn ? "Accès plateforme activé" : "Accès plateforme non activé"}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -285,6 +299,7 @@ export default function StudentDetailPage() {
                   <TH>Année</TH>
                   <TH>Type</TH>
                   <TH>Statut</TH>
+                  <TH>Plateforme</TH>
                   <TH className="text-right">Actions</TH>
                 </tr>
               </THead>
@@ -296,6 +311,11 @@ export default function StudentDetailPage() {
                     <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                    </TD>
+                    <TD>
+                      <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
+                        {e.platformAccessOptIn ? "Activé" : "Non activé"}
+                      </Badge>
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">

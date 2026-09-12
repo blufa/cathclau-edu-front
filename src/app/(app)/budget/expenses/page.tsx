@@ -216,7 +216,7 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
-        <Field><Label>Date</Label><DatePicker value={expenseDate} clearable onChange={setExpenseDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={expenseDate} clearable onChange={setExpenseDate} maxDate={new Date()} /></Field>
       </div>
       <Field>
         <Label>Catégorie</Label>

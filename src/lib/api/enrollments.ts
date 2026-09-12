@@ -57,3 +57,8 @@ export function deleteEnrollment(id: number): Promise<void> {
 export function updatePlatformAccess(id: number, optIn: boolean): Promise<Enrollment> {
   return api.patch<Enrollment>(`/enrollments/${id}/platform-access`, { optIn });
 }
+
+/** Modifie après coup le choix de paiement mensuel (le parent peut changer d'avis en cours d'année). */
+export function updateMonthlyPayment(id: number, optIn: boolean): Promise<Enrollment> {
+  return api.patch<Enrollment>(`/enrollments/${id}/monthly-payment`, { optIn });
+}

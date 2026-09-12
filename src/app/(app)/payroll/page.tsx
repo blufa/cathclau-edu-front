@@ -73,6 +73,29 @@ import { formatGNF } from "@/lib/format";
 
 const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = { DRAFT: "gray", VALIDATED: "indigo", PAID: "green" };
 
+/**
+ * Si l'enseignant n'a encore jamais enregistré sa rémunération (via l'onglet dédié), computeMonthlyPay
+ * côté serveur renvoie un brut à 0 (aucune TeacherCompensation en base) — la fiche générée nettait
+ * alors toujours à 0 GNF, même avec des heures réalisées. On persiste ici automatiquement, avec les
+ * mêmes valeurs de repli que le formulaire de rémunération (taux/type saisis à la création de
+ * l'enseignant), pour que « Générer » fonctionne dès le premier clic sans étape cachée à confirmer.
+ */
+async function ensureTeacherCompensation(
+  teacherId: number,
+  teacher?: { remunerationType?: string | null; remunerationRate?: string | number | null } | null,
+): Promise<void> {
+  const existing = await getCompensation(teacherId);
+  if (existing) return;
+  const fbRate = teacher?.remunerationRate != null && teacher.remunerationRate !== "" ? Number(teacher.remunerationRate) : 0;
+  if (fbRate <= 0) return;
+  const fbHourly = teacher?.remunerationType === "HORAIRE";
+  await setCompensation(teacherId, {
+    payMode: fbHourly ? "HOURLY" : "FIXED",
+    hourlyRateNormal: fbHourly ? fbRate : 0, hourlyRateExam: 0,
+    fixedSalary: fbHourly ? 0 : fbRate,
+  });
+}
+
 export default function PayrollPage() {
   const { user } = useAuth();
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") && !hasAnyPermission(user, ["paie:manage"])) {
@@ -244,6 +267,7 @@ function StaffPayslipPanel({ structures, onGenerated }: { structures: SalaryStru
         employeeType: emp.category, teacherId: emp.id, teacherName: `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim(),
         periodLabel, baseSalary: Number(emp.baseSalary ?? 0),
         structureId: structureId ? Number(structureId) : null,
+        teacherPhone: emp.phone, bankAccount: emp.bankAccount,
       });
       onGenerated();
     } catch (err) { notifyError(err); } finally { setGeneratingId(null); }
@@ -257,6 +281,7 @@ function StaffPayslipPanel({ structures, onGenerated }: { structures: SalaryStru
         year: y, month: m, employeeId: emp.id, employeeName: `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim(),
         employeeType: emp.category, baseSalary: Number(emp.baseSalary ?? 0),
         linkedTeacherId: emp.linkedTeacherId, structureId: structureId ? Number(structureId) : null,
+        employeePhone: emp.phone, bankAccount: emp.bankAccount,
       });
       onGenerated();
     } catch (err) { notifyError(err); } finally { setGeneratingId(null); }
@@ -324,7 +349,7 @@ const generateSchema = z.object({
 type GenerateFormValues = z.infer<typeof generateSchema>;
 
 function GenerateForm({ teachers, structures, onCancel, onDone }: {
-  teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null }[];
+  teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null; phone?: string | null; bankAccount?: string | null }[];
   structures: SalaryStructure[]; onCancel: () => void; onDone: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -382,6 +407,8 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
         overtimeHours: Number(values.overtimeHours) || 0,
         overtimeRate: Number(values.overtimeRate) || 0,
         overtimeMultiplier: Number(values.overtimeMultiplier) || 1,
+        teacherPhone: t?.phone ?? null,
+        bankAccount: t?.bankAccount ?? null,
       });
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -402,11 +429,11 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Du</Label>
-          <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable />
+          <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable maxDate={new Date()} />
         </Field>
         <Field>
           <Label>Au</Label>
-          <DatePicker value={v.periodEnd} onChange={(val) => setValue("periodEnd", val)} clearable />
+          <DatePicker value={v.periodEnd} onChange={(val) => setValue("periodEnd", val)} clearable maxDate={new Date()} />
         </Field>
       </div>
       <Field>
@@ -548,7 +575,8 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
  * (même calcul que l'onglet Rémunération, un enseignant à la fois — voir generatePayslipFromHours).
  */
 function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
-  teachers: { id: number; firstName: string; lastName: string }[];
+  teachers: { id: number; firstName: string; lastName: string; phone?: string | null; bankAccount?: string | null;
+    remunerationType?: string | null; remunerationRate?: string | number | null }[];
   structures: SalaryStructure[]; onCancel: () => void; onDone: (count: number) => void;
 }) {
   const now = new Date();
@@ -578,9 +606,11 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
     if (ids.length === 0) { notifyError(new Error("Sélectionnez au moins un enseignant.")); return; }
     setLoading(true);
     try {
-      const results = await Promise.all(ids.map((id) => {
+      const results = await Promise.all(ids.map(async (id) => {
         const t = teachers.find((x) => x.id === id);
-        return generatePayslipFromHours(id, y, m, t ? `${t.firstName} ${t.lastName}` : null, structureId ? Number(structureId) : null);
+        await ensureTeacherCompensation(id, t);
+        return generatePayslipFromHours(id, y, m, t ? `${t.firstName} ${t.lastName}` : null,
+          structureId ? Number(structureId) : null, t?.phone ?? null, t?.bankAccount ?? null);
       }));
       onDone(results.length);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -891,7 +921,10 @@ function CompensationTab() {
     if (!tid) return;
     setGenLoading(true);
     try {
-      await generatePayslipFromHours(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null);
+      await ensureTeacherCompensation(tid, teacherName);
+      compQuery.refetch();
+      await generatePayslipFromHours(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null,
+        null, teacherName?.phone ?? null, teacherName?.bankAccount ?? null);
       notifySuccess("Fiche de paie générée (onglet Fiches de paie)");
     } catch (e) { notifyError(e); } finally { setGenLoading(false); }
   }
@@ -900,7 +933,10 @@ function CompensationTab() {
     if (!tid) return;
     setGenTimetableLoading(true);
     try {
-      await generatePayslipFromTimetable(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null);
+      await ensureTeacherCompensation(tid, teacherName);
+      compQuery.refetch();
+      await generatePayslipFromTimetable(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null,
+        teacherName?.phone ?? null, teacherName?.bankAccount ?? null);
       notifySuccess("Estimation générée (onglet Fiches de paie) — à ne pas confondre avec le bulletin réel");
     } catch (e) { notifyError(e); } finally { setGenTimetableLoading(false); }
   }

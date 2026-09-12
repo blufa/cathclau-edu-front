@@ -290,11 +290,15 @@ function BadgeBack({
             négative mordait sur le texte IRE/DPE-DCE/DSSEE juste au-dessus au lieu de ne recouvrir que
             la vague décorative. */}
         <div className="relative z-10 -mt-3 flex items-end justify-between gap-2 px-3 pb-2 print:-mt-1.5 print:px-2 print:pb-1">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white p-1 shadow-sm print:h-7 print:w-7">
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white p-1 shadow-sm print:h-14 print:w-14">
             {qrData ? (
               // Le conteneur (pas le SVG) impose la taille : les attributs width/height bruts posés par
               // la prop `size` de QRCodeSVG ne rétrécissaient pas de façon fiable à l'impression.
-              <QRCodeSVG value={qrData} size={44} level="M" marginSize={4} className="h-full w-full" />
+              // Agrandi une seconde fois (40px -> 56px à l'impression, +40%, ~14,8mm) : le scan restait
+              // difficile sur le badge physique même après le premier agrandissement — combiné à un
+              // contenu de QR raccourci (voir identity-qr.ts, plus de "École : …") qui réduit la densité
+              // de modules pour la même taille imprimée.
+              <QRCodeSVG value={qrData} size={76} level="M" marginSize={2} className="h-full w-full" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-[9px] text-slate-400">—</div>
             )}

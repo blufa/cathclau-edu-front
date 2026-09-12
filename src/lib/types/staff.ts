@@ -19,6 +19,9 @@ export interface Teacher {
   remunerationRate: string | null;
   teachingAuthorizationNumber: string | null;
   cnssNumber: string | null;
+  /** Compte bancaire (RIB/IBAN) optionnel — pour le fichier bancaire de paie. Le téléphone reste
+   * prioritaire pour le virement Mobile Money. */
+  bankAccount: string | null;
 }
 
 /** Body for POST /staff/teachers — tenantId resolved server-side. */
@@ -37,6 +40,7 @@ export interface CreateTeacherInput {
   remunerationRate?: string | null;
   teachingAuthorizationNumber?: string | null;
   cnssNumber?: string | null;
+  bankAccount?: string | null;
   /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
    * réseau renvoie l'enseignant déjà créé côté serveur au lieu d'en créer un second. */
   idempotencyKey?: string;

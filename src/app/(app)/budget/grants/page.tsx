@@ -215,7 +215,7 @@ function PaymentForm({ grantId, onCancel, onDone }: { grantId: number; onCancel:
   return (
     <div className="space-y-3 rounded-xl border border-gray-200 p-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={paymentDate} clearable onChange={setPaymentDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={paymentDate} clearable onChange={setPaymentDate} maxDate={new Date()} /></Field>
         <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

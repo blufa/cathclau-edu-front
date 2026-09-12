@@ -291,7 +291,7 @@ function VisitForm({ defaultStudentId, initial, studentOptions, onCancel, onDone
         {errors.studentId && <p className="text-xs text-error-600">{errors.studentId.message}</p>}
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={v.visitDate} clearable onChange={(val) => setValue("visitDate", val)} /></Field>
+        <Field><Label>Date</Label><DatePicker value={v.visitDate} clearable onChange={(val) => setValue("visitDate", val)} maxDate={new Date()} /></Field>
         <Field><Label>Température (°C)</Label><Input type="number" step={0.1} min={30} max={45} value={v.temperature} onChange={(e) => setValue("temperature", e.target.value)} /></Field>
       </div>
       <Field><Label>Motif <span className="text-error-500">*</span></Label><Textarea rows={2} value={v.reason} onChange={(e) => setValue("reason", e.target.value)} /></Field>

@@ -184,7 +184,10 @@ export default function AttendancePage() {
   );
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
-    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    () => [
+      { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "toutes" },
+      ...classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    ],
     [classes],
   );
 
@@ -250,7 +253,7 @@ export default function AttendancePage() {
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Date</label>
-          <DatePicker value={date} onChange={(v) => setDate(v)} className="max-w-[180px]" />
+          <DatePicker value={date} onChange={(v) => setDate(v)} className="max-w-[180px]" maxDate={new Date()} />
         </div>
         <div className="ml-auto flex gap-2">
           <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "absents"} onClick={openAbsentees}>
@@ -289,7 +292,7 @@ export default function AttendancePage() {
           {classId ? (
             <AttendanceLog classId={classId} date={date} students={students} canWrite={canWrite} />
           ) : (
-            <SelectClassHint />
+            <AttendanceLogAllClasses classes={classes} date={date} onPickClass={setClassId} />
           )}
         </TabsPanel>
 
@@ -700,8 +703,63 @@ function AttendanceLog({ classId, date, students, canWrite }: {
 function SelectClassHint() {
   return (
     <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
-      Sélectionnez une classe pour faire l&apos;appel ou consulter les présences.
+      Sélectionnez une classe ci-dessus pour faire l&apos;appel — l&apos;appel se fait forcément classe
+      par classe.
     </p>
+  );
+}
+
+/**
+ * Vue d'ensemble en lecture seule des présences élèves de TOUTES les classes pour une date, quand
+ * aucune classe n'est sélectionnée (§Correction-hier.md : plus de filtre obligatoire par défaut). Pas
+ * d'actions de correction ici (retard/sortie anticipée/justification) — celles-ci restent sur
+ * AttendanceLog, qui a besoin de l'emploi du temps d'UNE classe pour les calculer correctement ;
+ * sélectionner une classe précise bascule sur cette vue complète.
+ */
+function AttendanceLogAllClasses({ classes, date, onPickClass }: {
+  classes: Classe[]; date: string; onPickClass: (classId: number) => void;
+}) {
+  const rowsQuery = useQuery(
+    () => Promise.allSettled(classes.map((c) => getClassAttendance(c.id, date).then((rows) => ({ c, rows }))))
+      .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value.rows.map((row) => ({ row, classLabel: r.value.c.label, classId: r.value.c.id })) : []))),
+    [classes.map((c) => c.id).join(","), date],
+  );
+  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const nameOf = useMemo(
+    () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
+    [studentsQuery.data],
+  );
+  const [search, setSearch] = useState("");
+  const rows = useMemo(() => {
+    const all = rowsQuery.data ?? [];
+    const q = search.trim().toLowerCase();
+    return q ? all.filter((r) => (nameOf.get(r.row.studentId) ?? "").toLowerCase().includes(q) || r.classLabel.toLowerCase().includes(q)) : all;
+  }, [rowsQuery.data, search, nameOf]);
+
+  return (
+    <div className="space-y-3">
+      <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un élève ou une classe..." className="max-w-xs" />
+      {rowsQuery.loading ? (
+        <div className="flex justify-center py-12"><Spinner /></div>
+      ) : (
+        <Table>
+          <THead><TR><TH>Élève</TH><TH>Classe</TH><TH>Statut</TH><TH className="text-right">Action</TH></TR></THead>
+          <TBody>
+            {rows.length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucune présence enregistrée pour cette date.</TD></TR>}
+            {rows.map(({ row, classLabel, classId: cId }) => (
+              <TR key={row.id}>
+                <TD>{nameOf.get(row.studentId) ?? `#${row.studentId}`}</TD>
+                <TD>{classLabel}</TD>
+                <TD><Badge tone={STATUS_TONE[row.status]}>{ATTENDANCE_STATUS_LABEL[row.status]}</Badge></TD>
+                <TD className="text-right">
+                  <Button size="sm" variant="ghost" onClick={() => onPickClass(cId)}>Voir la classe</Button>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      )}
+    </div>
   );
 }
 
@@ -875,6 +933,13 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
 function TeacherMonthlyRecap() {
   const teachersQuery = useQuery(() => listTeachers(), []);
   const teachers = teachersQuery.data ?? [];
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachers],
+  );
   const now = new Date();
   const [teacherId, setTeacherId] = useState<string | null>(null);
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -901,10 +966,8 @@ function TeacherMonthlyRecap() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs text-gray-500">Enseignant</label>
-          <Select className="max-w-[240px]" value={teacherId ?? ""} onChange={(e) => setTeacherId(e.target.value || null)}>
-            <option value="">Choisir…</option>
-            {teachers.map((t) => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
-          </Select>
+          <SearchableSelect value={teacherId ?? ""} options={teacherOptions} onChange={(v) => setTeacherId(v || null)}
+            triggerClassName="w-full max-w-[240px] justify-between px-3" noResultsLabel="Aucun enseignant" />
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Mois</label>
@@ -1098,6 +1161,13 @@ function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: 
 function EmployeeMonthlyRecap() {
   const employeesQuery = useQuery(() => listEmployees(), []);
   const employees = employeesQuery.data ?? [];
+  const employeeOptions: SearchableOption[] = useMemo(
+    () => employees.map((e) => {
+      const label = `${e.firstName} ${e.lastName}`;
+      return { value: String(e.id), trigger: label, label, searchText: label };
+    }),
+    [employees],
+  );
   const now = new Date();
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -1123,10 +1193,8 @@ function EmployeeMonthlyRecap() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs text-gray-500">Membre du personnel</label>
-          <Select className="max-w-[240px]" value={employeeId ?? ""} onChange={(e) => setEmployeeId(e.target.value || null)}>
-            <option value="">Choisir…</option>
-            {employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}
-          </Select>
+          <SearchableSelect value={employeeId ?? ""} options={employeeOptions} onChange={(v) => setEmployeeId(v || null)}
+            triggerClassName="w-full max-w-[240px] justify-between px-3" noResultsLabel="Aucun membre du personnel" />
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Mois</label>

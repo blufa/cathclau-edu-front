@@ -24,7 +24,6 @@ import { TeacherForm } from "@/components/staff/teacher-form";
 import { OfflineTeacherFields } from "@/components/staff/offline-teacher-fields";
 import { IdBadge } from "@/components/cards/id-badge";
 import { generateBadge } from "@/lib/api/biometric";
-import { useBranding } from "@/providers/branding-provider";
 import { buildIdentityQr } from "@/lib/identity-qr";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useNetworkStore } from "@/lib/offline/network-store";
@@ -39,7 +38,6 @@ export default function TeachersPage() {
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
 
   const q = useQuery(listTeachers, []);
-  const schoolName = useBranding().branding?.schoolName ?? null;
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [creating, setCreating] = useState(false);
@@ -251,7 +249,7 @@ export default function TeachersPage() {
               { label: "Téléphone", value: badgeFor.phone ?? "—" },
               { label: "Statut", value: badgeFor.active ? "Actif" : "Inactif" },
             ]}
-            qrData={buildIdentityQr({ schoolName, fullName: `${badgeFor.firstName} ${badgeFor.lastName}`, matricule: badgeFor.staffNumber })}
+            qrData={buildIdentityQr({ type: "TEACHER", fullName: `${badgeFor.firstName} ${badgeFor.lastName}`, matricule: badgeFor.staffNumber })}
             footerNote={badgeQr ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}
           />
         )}

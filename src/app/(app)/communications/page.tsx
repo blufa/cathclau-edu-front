@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Send, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -8,7 +8,7 @@ import { useQuery } from "@/hooks/use-query";
 import { listUsers } from "@/lib/api/iam";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
-import { listParents } from "@/lib/api/parents";
+import { listParentsWithPlatformAccess } from "@/lib/api/parents";
 import { listTeachers } from "@/lib/api/staff";
 import {
   deleteCommunication,
@@ -175,8 +175,10 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
 
   // Selon le type choisi, la liste vient d'une source différente : les parents et enseignants sont
   // des fiches métier (students/staff), pas forcément liées à un compte plateforme, contrairement aux
-  // élèves/groupes qui restent sur la liste générique des utilisateurs.
-  const parentsQuery = useQuery(() => (recipientType === "PARENT" ? listParents(undefined, 1000) : Promise.resolve([])), [recipientType]);
+  // élèves/groupes qui restent sur la liste générique des utilisateurs. Pour « Parent », seuls ceux
+  // dont un enfant a accepté l'accès plateforme sont proposés — et présélectionnés automatiquement
+  // (voir useEffect plus bas) : plus besoin de tous les cocher un par un dans la barre de recherche.
+  const parentsQuery = useQuery(() => (recipientType === "PARENT" ? listParentsWithPlatformAccess() : Promise.resolve([])), [recipientType]);
   const teachersQuery = useQuery(() => (recipientType === "TEACHER" ? listTeachers() : Promise.resolve([])), [recipientType]);
   const usersQuery = useQuery(
     () => (recipientType === "STUDENT" || recipientType === "GROUP" ? listUsers(0, 300).then((p) => p.content) : Promise.resolve([])),
@@ -191,7 +193,7 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
       return (parentsQuery.data ?? []).map((p) => ({
         key: `p-${p.id}`, name: `${p.firstName} ${p.lastName}`,
         sub: [p.phone, p.email].filter(Boolean).join(" · "),
-        userId: p.userId, destination: destinationFor(p.phone, p.email),
+        userId: null, destination: destinationFor(p.phone, p.email),
       }));
     }
     if (recipientType === "TEACHER") {
@@ -207,6 +209,16 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
       userId: u.id, destination: destinationFor(u.phone, u.email),
     }));
   }, [recipientType, parentsQuery.data, teachersQuery.data, usersQuery.data, channel]);
+
+  // Dès que « Parent » est choisi et que la liste (avec accès plateforme) est chargée, tous les
+  // parents joignables sont présélectionnés — la recherche ci-dessous ne sert plus qu'à retirer
+  // quelqu'un si besoin, elle n'est plus une étape obligatoire pour pouvoir envoyer.
+  useEffect(() => {
+    if (recipientType === "PARENT" && !parentsQuery.loading) {
+      setRecipientKeys(candidates.filter((c) => c.destination).map((c) => c.key));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipientType, parentsQuery.loading, parentsQuery.data]);
 
   const filteredCandidates = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -278,6 +290,12 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
           Destinataires <span className="text-error-500">*</span>
           {recipientKeys.length > 0 && <span className="ml-1.5 font-normal text-gray-400">({recipientKeys.length} sélectionné(s))</span>}
         </Label>
+        {recipientType === "PARENT" && (
+          <p className="mb-1.5 text-xs text-gray-400">
+            Tous les parents joignables ayant accès à la plateforme sont déjà sélectionnés — décochez-en
+            au besoin, aucune sélection manuelle n&apos;est requise.
+          </p>
+        )}
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher par nom ou numéro..." className="mb-2" />
         <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
           {sourceLoading ? (

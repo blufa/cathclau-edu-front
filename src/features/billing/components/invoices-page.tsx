@@ -18,6 +18,7 @@ import {
   createInvoice,
   generateInvoicesBulk,
   getInvoicePdfObjectUrl,
+  listInstallments,
 } from "@/lib/api/billing";
 import { useFeesQuery, useInvoicesQuery } from "../hooks/use-invoices";
 import { FEE_TYPE_LABEL, INVOICE_STATUS_LABEL, RECOVERY_STAGE_LABEL, type Invoice, type InvoiceStatus, type SchoolFee } from "@/lib/types/billing";
@@ -35,7 +36,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { FileText } from "lucide-react";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, monthShortLabel } from "@/lib/format";
 
 const STATUS_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
@@ -82,6 +83,22 @@ export default function InvoicesPage() {
   const invoices = useMemo(
     () => (studentFilter && status ? (q.data ?? []).filter((i) => i.status === status) : (q.data ?? [])),
     [q.data, studentFilter, status],
+  );
+
+  // Mois couverts par chaque échéance (tranche) liée aux factures affichées — pour afficher, sur une
+  // facture multi-mois, quels mois sont déjà réglés (Invoice.paidMonths) vs restants, au lieu d'un
+  // simple libellé de tranche figé qui ne reflète jamais un règlement partiel.
+  const feeIdsWithInvoices = useMemo(
+    () => [...new Set(invoices.map((i) => i.feeId).filter((id): id is number => id != null))],
+    [invoices],
+  );
+  const installmentsQuery = useQuery(
+    () => Promise.all(feeIdsWithInvoices.map((id) => listInstallments(id))).then((lists) => lists.flat()),
+    [feeIdsWithInvoices.join(",")],
+  );
+  const installmentMonths = useMemo(
+    () => new Map((installmentsQuery.data ?? []).map((i) => [i.id, i.months ?? []])),
+    [installmentsQuery.data],
   );
 
   const [creating, setCreating] = useState(false);
@@ -163,7 +180,22 @@ export default function InvoicesPage() {
             {invoices.map((inv) => (
               <TR key={inv.id}>
                 <TD className="text-gray-900">{studentName.get(inv.studentId) ?? `#${inv.studentId}`}</TD>
-                <TD className="text-sm text-gray-700">{inv.periodLabel ?? "Inscription / frais"}</TD>
+                <TD className="text-sm text-gray-700">
+                  {inv.periodLabel ?? "Inscription / frais"}
+                  {(() => {
+                    const covered = inv.installmentId != null ? installmentMonths.get(inv.installmentId) ?? [] : [];
+                    if (covered.length <= 1) return null;
+                    const paid = inv.paidMonths ?? [];
+                    const remaining = covered.filter((m) => !paid.includes(m));
+                    if (paid.length === 0) return null;
+                    return (
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        Réglé : {[...paid].sort().map(monthShortLabel).join(", ")}
+                        {remaining.length > 0 && <> — Restant : {[...remaining].sort().map(monthShortLabel).join(", ")}</>}
+                      </p>
+                    );
+                  })()}
+                </TD>
                 <TD className="font-mono text-xs text-gray-600">{inv.reference}</TD>
                 <TD className="font-medium text-gray-900">
                   {formatGNF(inv.totalAmount)}
@@ -173,6 +205,11 @@ export default function InvoicesPage() {
                         Remise −{formatGNF(inv.discountAmount)}
                       </Badge>
                     </span>
+                  )}
+                  {inv.platformFeeAmount != null && Number(inv.platformFeeAmount) > 0 && (
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      dont frais plateforme : {formatGNF(inv.platformFeeAmount)}
+                    </p>
                   )}
                 </TD>
                 <TD>{formatGNF(inv.paidAmount ?? 0)}</TD>

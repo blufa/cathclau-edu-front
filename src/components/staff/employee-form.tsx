@@ -33,6 +33,7 @@ export function EmployeeForm({
   const [hireDate, setHireDate] = useState(initial?.hireDate ?? "");
   const [baseSalary, setBaseSalary] = useState<string>(initial?.baseSalary ? String(initial.baseSalary) : "");
   const [cnssNumber, setCnssNumber] = useState(initial?.cnssNumber ?? "");
+  const [bankAccount, setBankAccount] = useState(initial?.bankAccount ?? "");
   const [linkedTeacherId, setLinkedTeacherId] = useState<string>(
     initial?.linkedTeacherId != null ? String(initial.linkedTeacherId) : "",
   );
@@ -61,6 +62,7 @@ export function EmployeeForm({
         hireDate: hireDate || null,
         baseSalary: baseSalary === "" ? null : Number(baseSalary),
         cnssNumber: cnssNumber.trim() || null,
+        bankAccount: bankAccount.trim() || null,
         linkedTeacherId: linkedTeacherId === "" ? null : Number(linkedTeacherId),
       });
     } finally {
@@ -120,6 +122,11 @@ export function EmployeeForm({
           <Input value={cnssNumber} onChange={(e) => setCnssNumber(e.target.value)} />
         </Field>
       </div>
+      <Field>
+        <Label>Compte bancaire (optionnel)</Label>
+        <p className="text-xs text-gray-400">RIB/IBAN — pour le fichier bancaire de paie. Le téléphone reste prioritaire (Mobile Money).</p>
+        <Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+      </Field>
       <div className="rounded-xl border border-gray-200 p-3">
         <Field>
           <Label>Enseigne aussi (optionnel)</Label>

@@ -13,6 +13,7 @@ import {
   cancelEnrollment,
   deleteEnrollment,
   searchEnrollments,
+  updatePlatformAccess,
 } from "@/lib/api/enrollments";
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,8 @@ export default function EnrollmentsPage() {
   const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["inscription:validate"]);
   const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["paiement:create"]);
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:create"]);
+  // Colonne de sélection partagée par les deux actions en masse (encaissement famille + accès plateforme).
+  const canBulkSelect = canCollect || canEdit;
 
   // Open the enrollment fee invoice for collection; full payment validates the enrollment server-side.
   const [collectFor, setCollectFor] = useState<{ studentId: number; classId: number } | null>(null);
@@ -53,6 +56,7 @@ export default function EnrollmentsPage() {
   const [picked, setPicked] = useState<number[]>([]);
   const [familyOpen, setFamilyOpen] = useState(false);
   const [passageOpen, setPassageOpen] = useState(false);
+  const [bulkPlatformLoading, setBulkPlatformLoading] = useState(false);
 
   // Mis en cache (IndexedDB) sous les mêmes clés que le formulaire d'inscription hors-ligne
   // (OfflineEnrollFields) : visiter cette page en ligne pré-charge la liste des classes qui sera
@@ -138,6 +142,30 @@ export default function EnrollmentsPage() {
       },
     });
   }
+  async function bulkSetPlatformAccess(optIn: boolean) {
+    // picked contient des studentId (partagé avec la sélection "Encaisser famille") — on retrouve
+    // l'inscription correspondante dans la liste déjà filtrée à l'écran pour récupérer son id.
+    const targets = picked
+      .map((studentId) => enrollments.find((e) => e.studentId === studentId))
+      .filter((e): e is Enrollment => !!e);
+    if (targets.length === 0) return;
+    setBulkPlatformLoading(true);
+    try {
+      const results = await Promise.allSettled(targets.map((e) => updatePlatformAccess(e.id, optIn)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const ok = results.length - failed;
+      if (failed === 0) {
+        notifySuccess(`Accès plateforme ${optIn ? "activé" : "désactivé"} pour ${ok} élève(s)`);
+      } else {
+        notifyError(`${ok} mis à jour, ${failed} échec(s) — réessayez pour les élèves restants`);
+      }
+      enrollmentsQuery.refetch();
+      setPicked([]);
+    } finally {
+      setBulkPlatformLoading(false);
+    }
+  }
+
   function handleDelete(id: number) {
     confirmAction({
       title: "Supprimer l'inscription",
@@ -217,10 +245,20 @@ export default function EnrollmentsPage() {
           <option value="no">Accès plateforme non activé</option>
         </Select>
 
-        {canCollect && picked.length > 0 && (
-          <div className="ml-auto flex items-center gap-3">
+        {canBulkSelect && picked.length > 0 && (
+          <div className="ml-auto flex flex-wrap items-center gap-3">
             <span className="text-sm text-slate-500">{picked.length} élève(s) sélectionné(s)</span>
-            <Button size="sm" onClick={() => setFamilyOpen(true)}>Encaisser (famille)</Button>
+            {canCollect && <Button size="sm" onClick={() => setFamilyOpen(true)}>Encaisser (famille)</Button>}
+            {canEdit && (
+              <>
+                <Button size="sm" variant="secondary" loading={bulkPlatformLoading} onClick={() => bulkSetPlatformAccess(true)}>
+                  Activer l&apos;accès plateforme
+                </Button>
+                <Button size="sm" variant="ghost" loading={bulkPlatformLoading} onClick={() => bulkSetPlatformAccess(false)}>
+                  Désactiver
+                </Button>
+              </>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setPicked([])}>Effacer</Button>
           </div>
         )}
@@ -238,7 +276,7 @@ export default function EnrollmentsPage() {
         <Table>
           <THead>
             <tr>
-              {canCollect && <TH className="w-8"></TH>}
+              {canBulkSelect && <TH className="w-8"></TH>}
               <TH>Élève</TH>
               <TH>Classe</TH>
               <TH>Type</TH>
@@ -251,14 +289,14 @@ export default function EnrollmentsPage() {
           <TBody>
             {enrollments.length === 0 && (
               <TR>
-                <TD colSpan={canCollect ? 8 : 7} className="py-10 text-center text-gray-400">
+                <TD colSpan={canBulkSelect ? 8 : 7} className="py-10 text-center text-gray-400">
                   Aucune inscription pour ces filtres.
                 </TD>
               </TR>
             )}
             {enrollments.map((e) => (
               <TR key={e.id}>
-                {canCollect && (
+                {canBulkSelect && (
                   <TD>
                     <input
                       type="checkbox"
@@ -267,7 +305,7 @@ export default function EnrollmentsPage() {
                       onChange={() =>
                         setPicked((p) => (p.includes(e.studentId) ? p.filter((x) => x !== e.studentId) : [...p, e.studentId]))
                       }
-                      aria-label="Sélectionner pour encaissement famille"
+                      aria-label="Sélectionner pour action en masse"
                     />
                   </TD>
                 )}

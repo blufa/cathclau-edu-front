@@ -19,7 +19,7 @@ import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 
@@ -32,13 +32,6 @@ const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
 ];
 
 const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
-
-const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-/** À partir d'un mois "YYYY-MM", son libellé court (ex. "mai"). */
-function monthShortLabel(monthValue: string): string {
-  const [, m] = monthValue.split("-").map(Number);
-  return MONTHS_FR[m - 1] ?? monthValue;
-}
 
 /** Ordre d'affichage naturel du guichet : inscription/réinscription d'abord, puis la scolarité
  * (tranches, triées chronologiquement), puis les frais annexes (transport, cantine, examen…). */
@@ -563,7 +556,14 @@ function InvoiceCollect({
   }, [onlineWaiting, onDone]);
 
   async function collect() {
-    const shares = selectedInvoices.map((m) => ({ invoiceId: m.id, amount: amountFor(m) })).filter((s) => s.amount > 0);
+    // paidMonths : sur une tranche multi-mois, précise quels mois sont réglés par cette part — pour
+    // que la facture affiche « Tranche 1 — avril, mai réglés » plutôt qu'un simple solde, y compris
+    // quand le règlement ne couvre qu'une partie des mois cochés à l'écran.
+    const shares = selectedInvoices.map((m) => {
+      const coveredMonths = installmentMonths.get(m.installmentId ?? -1) ?? [];
+      const paidMonths = coveredMonths.length > 1 ? (monthSelections[m.id] ?? coveredMonths) : undefined;
+      return { invoiceId: m.id, amount: amountFor(m), paidMonths };
+    }).filter((s) => s.amount > 0);
     if (shares.length === 0) return;
     setLoading(true);
     try {
@@ -649,6 +649,11 @@ function InvoiceCollect({
                       {m.discountAmount != null && Number(m.discountAmount) > 0 && (
                         <span className="ml-1.5 text-xs font-medium text-success-600" title={m.discountReason ?? undefined}>
                           (remise −{formatGNF(m.discountAmount)})
+                        </span>
+                      )}
+                      {m.platformFeeAmount != null && Number(m.platformFeeAmount) > 0 && (
+                        <span className="ml-1.5 text-xs text-slate-400">
+                          (dont frais plateforme {formatGNF(m.platformFeeAmount)})
                         </span>
                       )}
                     </span>

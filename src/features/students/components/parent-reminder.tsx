@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { getStudentParents } from "@/lib/api/parents";
 import { sendCommunication } from "@/lib/api/communication";
 import { CHANNEL_LABEL, type CommunicationChannel, type CommunicationReason } from "@/lib/types/communication";
@@ -23,6 +24,7 @@ interface Props {
 
 /** Reusable "remind the parent" action: pick a channel (Email/SMS/WhatsApp) + message, then send. */
 export function ParentReminderButton({ studentId, reason, subject, defaultMessage, label = "Relancer", size = "sm", variant = "outline" }: Props) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [channel, setChannel] = useState<CommunicationChannel>("EMAIL");
   const [message, setMessage] = useState("");
@@ -55,7 +57,12 @@ export function ParentReminderButton({ studentId, reason, subject, defaultMessag
     }
     setSending(true);
     try {
-      await sendCommunication({ channel, recipientType: "PARENT", reason, subject, content: message.trim(), recipientUserIds: [], recipientDestinations });
+      await sendCommunication({
+        tenantId: user?.tenantId ?? null,
+        senderId: user?.userId ?? null,
+        channel, recipientType: "PARENT", reason, subject, content: message.trim(),
+        recipientUserIds: [], recipientDestinations,
+      });
       notifySuccess("Relance envoyée au(x) parent(s)");
       setOpen(false);
     } catch (err) {

@@ -25,7 +25,6 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { EMPLOYEE_CATEGORY_LABEL, EmployeeForm } from "@/components/staff/employee-form";
 import { TeacherForm } from "@/components/staff/teacher-form";
 import { IdBadge } from "@/components/cards/id-badge";
-import { useBranding } from "@/providers/branding-provider";
 import { buildIdentityQr } from "@/lib/identity-qr";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -43,7 +42,6 @@ export default function PersonnelPage() {
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
 
   const q = useQuery(() => listEmployees(), []);
-  const schoolName = useBranding().branding?.schoolName ?? null;
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<EmployeeCategory | "all">("all");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
@@ -224,7 +222,7 @@ export default function PersonnelPage() {
               { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[badgeFor.category] },
               { label: "Statut", value: badgeFor.active ? "Actif" : "Inactif" },
             ]}
-            qrData={buildIdentityQr({ schoolName, fullName: `${badgeFor.firstName ?? ""} ${badgeFor.lastName ?? ""}`, matricule: badgeFor.employeeNumber })}
+            qrData={buildIdentityQr({ type: "EMPLOYEE", fullName: `${badgeFor.firstName ?? ""} ${badgeFor.lastName ?? ""}`, matricule: badgeFor.employeeNumber })}
             footerNote="Personnel de l'établissement."
           />
         )}

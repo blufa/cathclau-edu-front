@@ -44,6 +44,9 @@ export interface Enrollment {
   /** Le parent a accepté que l'élève soit connecté à la plateforme (frais annexe ajouté aux
    * mensualités si oui, jamais sinon). */
   platformAccessOptIn: boolean;
+  /** Ce parent règle mois par mois plutôt que par tranche groupée — les tranches multi-mois de sa
+   * classe sont alors facturées en autant de factures séparées d'un mois. */
+  monthlyPaymentOptIn: boolean;
 }
 
 /** Body for POST /enrollments and /enrollments/re-enrollment. */
@@ -53,6 +56,7 @@ export interface EnrollInput {
   academicYearId: number;
   type: EnrollmentType;
   platformAccessOptIn?: boolean;
+  monthlyPaymentOptIn?: boolean;
 }
 
 export interface EnrollmentSearchParams {

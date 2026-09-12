@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell, CheckCircle2, CircleAlert, FileText, Plus } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { Select } from "@/components/ui/select";
 import { Textarea, Label, Field } from "@/components/ui/input";
 import { useQuery } from "@/hooks/use-query";
@@ -29,6 +30,7 @@ const RECOMMENDED_DOCS: DocumentType[] = ["ACADEMIC_RECORD", "MEDICAL_CERTIFICAT
 
 /** A student's administrative documents: upload (Cloudinary) + list + delete. */
 export function DocumentsManager({ studentId, canWrite }: { studentId: number; canWrite: boolean }) {
+  const { user } = useAuth();
   const q = useQuery(() => getStudentDocuments(studentId), [studentId]);
   const parentsQuery = useQuery(() => getStudentParents(studentId), [studentId]);
   const [open, setOpen] = useState(false);
@@ -73,6 +75,8 @@ export function DocumentsManager({ studentId, canWrite }: { studentId: number; c
     setRelancing(true);
     try {
       await sendCommunication({
+        tenantId: user?.tenantId ?? null,
+        senderId: user?.userId ?? null,
         channel,
         recipientType: "PARENT",
         reason: "GENERAL",

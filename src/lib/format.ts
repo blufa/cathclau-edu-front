@@ -77,3 +77,11 @@ export function smsSegmentInfo(text: string): { length: number; unicode: boolean
   const segments = length === 0 ? 0 : Math.ceil(length / limit);
   return { length, unicode, limit, segments };
 }
+
+const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+/** Libellé court d'un mois "YYYY-MM" (ex. "2026-04" → "avril") — mois d'une échéance/tranche. */
+export function monthShortLabel(monthValue: string): string {
+  const [, m] = monthValue.split("-").map(Number);
+  return MONTHS_FR[m - 1] ?? monthValue;
+}

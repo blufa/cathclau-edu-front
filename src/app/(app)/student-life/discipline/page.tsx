@@ -237,7 +237,7 @@ function IncidentForm({ initial, studentOptions, onCancel, onCreated }: {
         {errors.studentId && <p className="text-xs text-error-600">{errors.studentId.message}</p>}
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={v.incidentDate} clearable onChange={(val) => setValue("incidentDate", val)} /></Field>
+        <Field><Label>Date</Label><DatePicker value={v.incidentDate} clearable onChange={(val) => setValue("incidentDate", val)} maxDate={new Date()} /></Field>
         <Field>
           <Label>Gravité</Label>
           <Select value={v.severity} onChange={(e) => setValue("severity", e.target.value)}>
