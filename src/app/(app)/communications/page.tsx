@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Send, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -177,7 +177,7 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
   // des fiches métier (students/staff), pas forcément liées à un compte plateforme, contrairement aux
   // élèves/groupes qui restent sur la liste générique des utilisateurs. Pour « Parent », seuls ceux
   // dont un enfant a accepté l'accès plateforme sont proposés — et présélectionnés automatiquement
-  // (voir useEffect plus bas) : plus besoin de tous les cocher un par un dans la barre de recherche.
+  // (voir plus bas) : plus besoin de tous les cocher un par un dans la barre de recherche.
   const parentsQuery = useQuery(() => (recipientType === "PARENT" ? listParentsWithPlatformAccess() : Promise.resolve([])), [recipientType]);
   const teachersQuery = useQuery(() => (recipientType === "TEACHER" ? listTeachers() : Promise.resolve([])), [recipientType]);
   const usersQuery = useQuery(
@@ -186,9 +186,8 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
   );
   const sourceLoading = parentsQuery.loading || teachersQuery.loading || usersQuery.loading;
 
-  const destinationFor = (phone: string | null, email: string | null) => (channel === "EMAIL" ? email : phone);
-
   const candidates: RecipientCandidate[] = useMemo(() => {
+    const destinationFor = (phone: string | null, email: string | null) => (channel === "EMAIL" ? email : phone);
     if (recipientType === "PARENT") {
       return (parentsQuery.data ?? []).map((p) => ({
         key: `p-${p.id}`, name: `${p.firstName} ${p.lastName}`,
@@ -212,13 +211,18 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
 
   // Dès que « Parent » est choisi et que la liste (avec accès plateforme) est chargée, tous les
   // parents joignables sont présélectionnés — la recherche ci-dessous ne sert plus qu'à retirer
-  // quelqu'un si besoin, elle n'est plus une étape obligatoire pour pouvoir envoyer.
-  useEffect(() => {
-    if (recipientType === "PARENT" && !parentsQuery.loading) {
-      setRecipientKeys(candidates.filter((c) => c.destination).map((c) => c.key));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipientType, parentsQuery.loading, parentsQuery.data]);
+  // quelqu'un si besoin, elle n'est plus une étape obligatoire pour pouvoir envoyer. Ajustement
+  // pendant le rendu (pas dans un Effect) : évite un rendu intermédiaire sans sélection avant que
+  // l'Effect ne s'exécute — le motif recommandé par React pour « réinitialiser un état quand une
+  // valeur change », voir react.dev/learn/you-might-not-need-an-effect.
+  const [autoSelectedForParents, setAutoSelectedForParents] = useState(false);
+  if (recipientType === "PARENT" && !parentsQuery.loading && !autoSelectedForParents) {
+    setAutoSelectedForParents(true);
+    setRecipientKeys(candidates.filter((c) => c.destination).map((c) => c.key));
+  } else if (recipientType !== "PARENT" && autoSelectedForParents) {
+    // Permet de re-déclencher la présélection si l'utilisateur repasse sur « Parent » plus tard.
+    setAutoSelectedForParents(false);
+  }
 
   const filteredCandidates = useMemo(() => {
     const q = search.trim().toLowerCase();

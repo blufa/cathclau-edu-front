@@ -571,7 +571,7 @@ function PersonGridSection<T>({ items, getName, getKey, renderCard, emptyLabel, 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q ? items.filter((it) => getName(it).toLowerCase().includes(q)) : items;
-  }, [items, search]);
+  }, [items, search, getName]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PEOPLE_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const visible = filtered.slice(currentPage * PEOPLE_PAGE_SIZE, (currentPage + 1) * PEOPLE_PAGE_SIZE);

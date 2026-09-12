@@ -932,7 +932,7 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
 // ── Récap mensuel pointage enseignant (heures + retard cumulé) ────────────────
 function TeacherMonthlyRecap() {
   const teachersQuery = useQuery(() => listTeachers(), []);
-  const teachers = teachersQuery.data ?? [];
+  const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const teacherOptions: SearchableOption[] = useMemo(
     () => teachers.map((t) => {
       const label = `${t.firstName} ${t.lastName}`;
@@ -1160,7 +1160,7 @@ function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: 
 // ── Récap mensuel pointage personnel (retard/départ anticipé cumulés) ─────────
 function EmployeeMonthlyRecap() {
   const employeesQuery = useQuery(() => listEmployees(), []);
-  const employees = employeesQuery.data ?? [];
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
   const employeeOptions: SearchableOption[] = useMemo(
     () => employees.map((e) => {
       const label = `${e.firstName} ${e.lastName}`;

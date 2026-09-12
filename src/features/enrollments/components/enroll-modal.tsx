@@ -66,7 +66,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
     () => (yearId ? listClasses(yearId) : Promise.resolve([])),
     [yearId],
   );
-  const classes = classesQuery.data ?? [];
+  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
     () => classes.map((c) => {
       const label = c.label + (c.maxCapacity != null ? ` (${c.headcount ?? 0}/${c.maxCapacity})` : "");
