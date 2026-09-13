@@ -109,12 +109,18 @@ http.interceptors.response.use(
     const config = error.config as InternalAxiosRequestConfig | undefined;
     const withAuth = config?.requireAuth !== false;
 
-    if (error.response?.status === 401 && withAuth && config && !config._retried) {
-      const refreshed = await ensureRefreshed();
-      if (refreshed) {
-        config._retried = true;
-        return http(config);
+    if (error.response?.status === 401 && withAuth && config) {
+      if (!config._retried) {
+        const refreshed = await ensureRefreshed();
+        if (refreshed) {
+          config._retried = true;
+          return http(config);
+        }
       }
+      // Le token a échoué même après rafraîchissement (ou la requête rejouée essuie elle-même un
+      // nouveau 401) : sans ce nettoyage, la session reste « zombie » — token mort en localStorage,
+      // l'appli paraît connectée mais toute requête échoue silencieusement jusqu'à un F5 manuel
+      // (l'utilisateur croit alors avoir perdu ses données/actions).
       clearTokens();
       onSessionExpired?.();
     }

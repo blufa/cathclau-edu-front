@@ -116,16 +116,16 @@ export default function DisciplinePage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Élève</TH><TH>Date</TH><TH>Type</TH><TH>Gravité</TH><TH>Mesure</TH><TH>Statut</TH><TH>Parent</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Élève</TH><TH>Date</TH><TH className="hidden sm:table-cell">Type</TH><TH>Gravité</TH><TH className="hidden sm:table-cell">Mesure</TH><TH>Statut</TH><TH className="hidden sm:table-cell">Parent</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucun incident.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun incident.</TD></TR>}
             {(q.data ?? []).map((i) => (
               <TR key={i.id}>
                 <TD className="font-medium text-gray-900">{studentName.get(i.studentId) ?? `#${i.studentId}`}</TD>
                 <TD>{i.incidentDate}</TD>
-                <TD>{CATEGORY_LABEL[i.category]}</TD>
+                <TD className="hidden sm:table-cell">{CATEGORY_LABEL[i.category]}</TD>
                 <TD><Badge tone={SEV_TONE[i.severity]}>{SEVERITY_LABEL[i.severity]}</Badge></TD>
-                <TD className="text-sm text-gray-600">
+                <TD className="hidden text-sm text-gray-600 sm:table-cell">
                   {i.measure ? (
                     <div className="flex flex-wrap items-center gap-1">
                       <span className="font-medium text-gray-700">{MEASURE_LABEL[i.measure]}</span>
@@ -136,7 +136,7 @@ export default function DisciplinePage() {
                   ) : (i.sanction ?? "—")}
                 </TD>
                 <TD><Badge tone={STATUS_TONE[i.status]}>{DISCIPLINE_STATUS_LABEL[i.status]}</Badge></TD>
-                <TD>{i.parentNotified ? <Badge tone="green">Notifié</Badge> : <span className="text-gray-400">—</span>}</TD>
+                <TD className="hidden sm:table-cell">{i.parentNotified ? <Badge tone="green">Notifié</Badge> : <span className="text-gray-400">—</span>}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     {canWrite && !i.parentNotified && (
@@ -237,7 +237,7 @@ function IncidentForm({ initial, studentOptions, onCancel, onCreated }: {
         {errors.studentId && <p className="text-xs text-error-600">{errors.studentId.message}</p>}
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={v.incidentDate} clearable onChange={(val) => setValue("incidentDate", val)} /></Field>
+        <Field><Label>Date</Label><DatePicker value={v.incidentDate} clearable onChange={(val) => setValue("incidentDate", val)} maxDate={new Date()} /></Field>
         <Field>
           <Label>Gravité</Label>
           <Select value={v.severity} onChange={(e) => setValue("severity", e.target.value)}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell, CheckCircle2, CircleAlert, FileText, Plus } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { Select } from "@/components/ui/select";
 import { Textarea, Label, Field } from "@/components/ui/input";
 import { useQuery } from "@/hooks/use-query";
@@ -29,6 +30,7 @@ const RECOMMENDED_DOCS: DocumentType[] = ["ACADEMIC_RECORD", "MEDICAL_CERTIFICAT
 
 /** A student's administrative documents: upload (Cloudinary) + list + delete. */
 export function DocumentsManager({ studentId, canWrite }: { studentId: number; canWrite: boolean }) {
+  const { user } = useAuth();
   const q = useQuery(() => getStudentDocuments(studentId), [studentId]);
   const parentsQuery = useQuery(() => getStudentParents(studentId), [studentId]);
   const [open, setOpen] = useState(false);
@@ -56,9 +58,14 @@ export function DocumentsManager({ studentId, canWrite }: { studentId: number; c
   }
 
   async function sendRelance() {
-    const recipientUserIds = (parentsQuery.data ?? []).map((p) => p.userId).filter((u): u is number => u != null);
-    if (recipientUserIds.length === 0) {
-      notifyError("Aucun parent avec un compte — impossible d'envoyer la relance.");
+    // Toujours viser le téléphone/e-mail directement (pas besoin d'un compte plateforme pour recevoir
+    // une relance) — un recipientUserId seul, sans destination, ne déclenche jamais l'envoi réel côté
+    // serveur (reste indéfiniment "en attente").
+    const recipientDestinations = (parentsQuery.data ?? [])
+      .map((p) => (channel === "EMAIL" ? p.email : p.phone))
+      .filter((d): d is string => !!d);
+    if (recipientDestinations.length === 0) {
+      notifyError(channel === "EMAIL" ? "Aucun parent avec une adresse e-mail connue." : "Aucun parent avec un numéro connu.");
       return;
     }
     if (!motif.trim()) {
@@ -68,12 +75,15 @@ export function DocumentsManager({ studentId, canWrite }: { studentId: number; c
     setRelancing(true);
     try {
       await sendCommunication({
+        tenantId: user?.tenantId ?? null,
+        senderId: user?.userId ?? null,
         channel,
         recipientType: "PARENT",
         reason: "GENERAL",
         subject: "Pièces manquantes au dossier",
         content: motif.trim(),
-        recipientUserIds,
+        recipientUserIds: [],
+        recipientDestinations,
       });
       notifySuccess("Relance envoyée au(x) parent(s)");
       setRelanceOpen(false);

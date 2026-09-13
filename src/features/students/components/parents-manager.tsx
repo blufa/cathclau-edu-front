@@ -148,7 +148,9 @@ export function ParentsManager({ studentId, canWrite }: { studentId: number; can
             tenantId={tenantId}
             open={!!collectingFor}
             onClose={() => setCollectingFor(null)}
-            onCollected={() => setCollectingFor(null)}
+            // Ne ferme plus la modale automatiquement : le reçu s'affiche dans la même fenêtre juste
+            // après l'encaissement (voir list-page.tsx pour le même correctif).
+            onCollected={() => {}}
           />
         )}
       </CardBody>
@@ -252,7 +254,10 @@ const addSchema = z.object({
 });
 type AddFormValues = z.infer<typeof addSchema>;
 
-function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onCancel: () => void; onDone: (queued?: boolean) => void }) {
+/** Exporté pour être réutilisé dans la chaîne « créer élève → rattacher parent → inscrire → encaisser »
+ * (voir list-page.tsx) — le SMS de confirmation de paiement part au parent, qui doit donc exister
+ * avant de proposer l'encaissement. */
+export function AddParentForm({ studentId, onCancel, onDone }: { studentId: number; onCancel: () => void; onDone: (queued?: boolean) => void }) {
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [relationship, setRelationship] = useState<Relationship>("FATHER");
   const [loading, setLoading] = useState(false);

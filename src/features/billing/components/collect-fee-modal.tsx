@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
-import { confirmSchoolPaymentViaDjomy, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
+import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
@@ -19,9 +19,10 @@ import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
+import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 
 /** Modes d'encaissement : guichet (immédiat) + en ligne via Djomy (une seule transaction). */
 const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
@@ -32,13 +33,6 @@ const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
 ];
 
 const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
-
-const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-/** À partir d'un mois "YYYY-MM", son libellé court (ex. "mai"). */
-function monthShortLabel(monthValue: string): string {
-  const [, m] = monthValue.split("-").map(Number);
-  return MONTHS_FR[m - 1] ?? monthValue;
-}
 
 /** Ordre d'affichage naturel du guichet : inscription/réinscription d'abord, puis la scolarité
  * (tranches, triées chronologiquement), puis les frais annexes (transport, cantine, examen…). */
@@ -280,6 +274,7 @@ export function CollectFeeModal({
                 tenantId={tenantId}
                 studentId={studentId}
                 onShowPdf={(inv) => showPdf(`Facture ${inv.reference}`, () => getInvoicePdfObjectUrl(inv.id))}
+                onPaid={(paymentId) => showPdf("Reçu de paiement", () => getReceiptPdfObjectUrl(paymentId))}
                 onDone={refetchAll}
               />
             )}
@@ -383,11 +378,20 @@ export function CollectFeeModal({
                     <span className="text-slate-600">
                       <span className="font-mono text-xs">{p.reference}</span> · {formatGNF(p.amount)}
                     </span>
-                    <button type="button"
-                      onClick={() => showPdf(`Reçu ${p.reference}`, () => getReceiptPdfObjectUrl(p.id))}
-                      className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
-                      <ReceiptIcon className="h-4 w-4" /> Reçu PDF
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button type="button"
+                        onClick={() => showPdf(`Reçu ${p.reference}`, () => getReceiptPdfObjectUrl(p.id))}
+                        className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
+                        <ReceiptIcon className="h-4 w-4" /> Reçu PDF
+                      </button>
+                      <WhatsAppInvoiceButton
+                        studentId={studentId}
+                        buildMessage={async () => {
+                          const { url } = await getPaymentReceiptPdf(p.id);
+                          return `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} (réf. ${p.reference}).${url ? ` ${url}` : ""}`;
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -430,7 +434,7 @@ export function CollectFeeModal({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, labelFor, installmentMonths, monthlyFeeId, tenantId, studentId, onShowPdf, onDone,
+  invoices, labelFor, installmentMonths, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
   labelFor: (inv: Invoice) => string;
@@ -441,6 +445,9 @@ function InvoiceCollect({
   tenantId: number;
   studentId: number;
   onShowPdf: (inv: Invoice) => void;
+  /** Appelé juste après un encaissement guichet réussi, avec l'id du paiement — ouvre aussitôt le reçu
+   * (visualiser/télécharger/imprimer) au lieu de forcer un aller-retour par la fiche élève. */
+  onPaid: (paymentId: number) => void;
   onDone: () => void;
 }) {
   const [selected, setSelected] = useState<number[]>([]);
@@ -559,7 +566,14 @@ function InvoiceCollect({
   }, [onlineWaiting, onDone]);
 
   async function collect() {
-    const shares = selectedInvoices.map((m) => ({ invoiceId: m.id, amount: amountFor(m) })).filter((s) => s.amount > 0);
+    // paidMonths : sur une tranche multi-mois, précise quels mois sont réglés par cette part — pour
+    // que la facture affiche « Tranche 1 — avril, mai réglés » plutôt qu'un simple solde, y compris
+    // quand le règlement ne couvre qu'une partie des mois cochés à l'écran.
+    const shares = selectedInvoices.map((m) => {
+      const coveredMonths = installmentMonths.get(m.installmentId ?? -1) ?? [];
+      const paidMonths = coveredMonths.length > 1 ? (monthSelections[m.id] ?? coveredMonths) : undefined;
+      return { invoiceId: m.id, amount: amountFor(m), paidMonths };
+    }).filter((s) => s.amount > 0);
     if (shares.length === 0) return;
     setLoading(true);
     try {
@@ -601,6 +615,7 @@ function InvoiceCollect({
         setSelected([]);
         setCustomAmounts({});
         setMonthSelections({});
+        onPaid(res.payment.id);
         onDone();
       }
     } catch (err) {
@@ -644,6 +659,11 @@ function InvoiceCollect({
                       {m.discountAmount != null && Number(m.discountAmount) > 0 && (
                         <span className="ml-1.5 text-xs font-medium text-success-600" title={m.discountReason ?? undefined}>
                           (remise −{formatGNF(m.discountAmount)})
+                        </span>
+                      )}
+                      {m.platformFeeAmount != null && Number(m.platformFeeAmount) > 0 && (
+                        <span className="ml-1.5 text-xs text-slate-400">
+                          (dont frais plateforme {formatGNF(m.platformFeeAmount)})
                         </span>
                       )}
                     </span>

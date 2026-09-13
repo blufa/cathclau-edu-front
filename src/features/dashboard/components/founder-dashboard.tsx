@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Award,
   Banknote,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  GraduationCap,
+  MessageSquare,
   TrendingDown,
   TrendingUp,
   Users,
@@ -15,15 +21,26 @@ import { useQuery } from "@/hooks/use-query";
 import { listPaymentsByTenant } from "@/lib/api/payment";
 import { listExpenses } from "@/lib/api/expense";
 import { getCurrentAcademicYear, listAcademicYears } from "@/lib/api/academics";
-import { getFounderDashboard } from "@/lib/api/reporting";
+import { getFinanceDashboard, getFounderDashboard, getHrDashboard } from "@/lib/api/reporting";
+import { listEmployees, listTeachers } from "@/lib/api/staff";
+import { listPayslips } from "@/lib/api/payroll";
+import { listCommunicationsByTenant } from "@/lib/api/communication";
+import { checkOverdueInstallmentsNow } from "@/lib/api/billing";
+import { searchStudents } from "@/lib/api/students";
+import { notifyError, notifySuccess } from "@/lib/feedback";
+import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatCardSkeleton, CardSkeleton } from "@/components/ui/skeleton";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
+import { PieBreakdownChart } from "@/components/charts/pie-breakdown-chart";
+import { PersonPayrollCard } from "./person-payroll-card";
 import { Reveal } from "@/components/public/reveal";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, formatMinutes } from "@/lib/format";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 const pct = (v: string | number | null | undefined) => `${Number(v ?? 0).toFixed(2)} %`;
@@ -46,13 +63,51 @@ export default function FounderDashboard() {
 
   const paymentsQuery = useQuery(() => (tenantId ? listPaymentsByTenant(tenantId) : Promise.resolve([])), [tenantId]);
   const expensesQuery = useQuery(() => listExpenses("PAID"), []);
-  const loading = paymentsQuery.loading || expensesQuery.loading;
+  // Même appel que /reports (Rapports & analytique) pour la carte « Recettes de l'école » — avant, ce
+  // montant était recalculé ici à partir des paiements bruts (`Payment.amount`), une source différente
+  // de celle des Rapports (`Invoice.paidAmount`), ce qui produisait deux chiffres divergents pour ce
+  // qui devrait être « la même chose ». `paymentsQuery` reste utilisé, mais uniquement pour la courbe
+  // mensuelle « Recettes vs dépenses » ci-dessous (vue de tendance, pas de total).
+  const financeQuery = useQuery(() => getFinanceDashboard(), []);
+  const teachersQuery = useQuery(() => listTeachers(), []);
+  const employeesQuery = useQuery(() => listEmployees(), []);
+  const now0 = new Date();
+  const hrQuery = useQuery(() => getHrDashboard(now0.getFullYear(), now0.getMonth() + 1), []);
+  // Nombre d'élèves de l'école — un seul élève réellement transféré (size=1), seul totalElements compte.
+  const studentsCountQuery = useQuery(() => searchStudents({ size: 1 }).then((p) => p.totalElements), []);
+  // SMS de relance de recouvrement envoyés ce mois-ci (motif ECHEANCE_PAIEMENT côté backend →
+  // "PAYMENT_DUE" ici) — pour que le fondateur sache combien de relances sont réellement parties, pas
+  // seulement combien de factures sont en retard.
+  const communicationsQuery = useQuery(() => (tenantId ? listCommunicationsByTenant(tenantId) : Promise.resolve([])), [tenantId]);
+  // Fiches de paie enseignants du mois — pour distinguer qui est déjà payé de qui ne l'est pas encore.
+  const payslipsQuery = useQuery(() => listPayslips(), []);
+  const loading = paymentsQuery.loading || expensesQuery.loading || financeQuery.loading;
+
+  // Le job de relance des échéances en retard ne tourne automatiquement qu'une fois par jour à 6h —
+  // ce bouton permet de le déclencher tout de suite (utile en test, ou si le serveur n'a pas tourné en
+  // continu depuis le dernier passage), plutôt que d'attendre le lendemain matin pour voir un résultat.
+  const [checkingOverdue, setCheckingOverdue] = useState(false);
+  // Détails/projections repliés par défaut : chiffres utiles mais moins urgents au quotidien que le
+  // reste de la page (heures réalisées par enseignant, projection sur toute l'année scolaire).
+  const [showPayrollDetails, setShowPayrollDetails] = useState(false);
+  async function runOverdueCheckNow() {
+    setCheckingOverdue(true);
+    try {
+      await checkOverdueInstallmentsNow();
+      notifySuccess("Vérification des échéances en retard effectuée.");
+      communicationsQuery.refetch();
+    } catch (err) { notifyError(err); } finally { setCheckingOverdue(false); }
+  }
 
   const payments = paymentsQuery.data ?? [];
   const expenses = expensesQuery.data ?? [];
-  const revenue = payments.filter((p) => p.status === "SUCCEEDED").reduce((s, p) => s + Number(p.amount), 0);
+  const revenue = Number(financeQuery.data?.collected ?? 0);
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const balance = revenue - totalExpenses;
+
+  const teacherPhotoById = new Map((teachersQuery.data ?? []).map((t) => [t.id, t.photo]));
+  const teacherSpecializationById = new Map((teachersQuery.data ?? []).map((t) => [t.id, t.specialization]));
+  const hrByTeacherId = new Map((hrQuery.data?.teachers ?? []).map((t) => [t.teacherId, t]));
 
   const revenueByMonth = new Map<string, number>();
   for (const p of payments) {
@@ -66,12 +121,37 @@ export default function FounderDashboard() {
     if (!key) continue;
     expensesByMonth.set(key, (expensesByMonth.get(key) ?? 0) + Number(e.amount));
   }
-  const months = [...new Set([...revenueByMonth.keys(), ...expensesByMonth.keys()])].sort().slice(-6);
-  const trend = months.map((k) => ({
-    name: MONTHS[Number(k.slice(5, 7)) - 1] ?? k,
-    Recettes: Math.round(revenueByMonth.get(k) ?? 0),
-    Dépenses: Math.round(expensesByMonth.get(k) ?? 0),
-  }));
+  const currentMonthKey = `${now0.getFullYear()}-${String(now0.getMonth() + 1).padStart(2, "0")}`;
+
+  // SMS de relance de recouvrement envoyés ce mois (motif PAYMENT_DUE, canal SMS uniquement).
+  const smsRecoveryThisMonth = (communicationsQuery.data ?? []).filter(
+    (c) => c.channel === "SMS" && c.reason === "PAYMENT_DUE" && (c.sentAt ?? "").startsWith(currentMonthKey),
+  ).length;
+
+  // Enseignants payés / non payés ce mois — distingue les fiches déjà réglées (statut PAID) du reste.
+  // employeeType filtré explicitement : teacherId est un champ partagé entre les référentiels
+  // Teacher/Employee (deux séquences d'identifiants distinctes pouvant coïncider), sans quoi un
+  // employé portant le même numéro qu'un enseignant pouvait être compté comme "payé" à sa place.
+  const teacherIds = new Set((teachersQuery.data ?? []).map((t) => t.id));
+  const paidTeacherIdsThisMonth = new Set(
+    (payslipsQuery.data ?? [])
+      .filter((p) => p.employeeType === "TEACHER" && teacherIds.has(p.teacherId)
+        && (p.periodStart ?? "").startsWith(currentMonthKey) && p.status === "PAID")
+      .map((p) => p.teacherId),
+  );
+  const teachersPaidCount = paidTeacherIdsThisMonth.size;
+  const teachersUnpaidCount = Math.max(0, teacherIds.size - teachersPaidCount);
+
+  // Personnel administratif payé / non payé ce mois — même logique, côté Employee.
+  const activeEmployeeIds = new Set((employeesQuery.data ?? []).filter((e) => e.active).map((e) => e.id));
+  const paidEmployeeIdsThisMonth = new Set(
+    (payslipsQuery.data ?? [])
+      .filter((p) => p.employeeType !== "TEACHER" && activeEmployeeIds.has(p.teacherId)
+        && (p.periodStart ?? "").startsWith(currentMonthKey) && p.status === "PAID")
+      .map((p) => p.teacherId),
+  );
+  const employeesPaidCount = paidEmployeeIdsThisMonth.size;
+  const employeesUnpaidCount = Math.max(0, activeEmployeeIds.size - employeesPaidCount);
 
   // ── Année scolaire courante + précédente (comparatif automatique, §V3) ────
   const { data: currentYear } = useQuery(() => getCurrentAcademicYear(), []);
@@ -97,10 +177,44 @@ export default function FounderDashboard() {
   );
   const founder = founderQuery.data;
 
+  // Masse salariale RÉELLEMENT payée (fiches au statut PAID, jamais une projection théorique comme
+  // founder.payroll) — mais comptée sur le mois de la PÉRIODE TRAVAILLÉE (`periodStart`), pas sur le
+  // mois où l'argent est physiquement sorti (`paidAt`) : la paie se fait traditionnellement entre le
+  // 30 du mois et le 5 du mois suivant (peu importe aussi le jour où la fiche a été générée), donc un
+  // salaire de mars réglé le 5 avril doit rester une charge de mars, jamais glisser sur le bénéfice
+  // d'avril — recettes/dépenses restent, elles, en base caisse (leur date réelle), seule la masse
+  // salariale suit ici la période qu'elle couvre.
+  const payrollPaidByMonth = new Map<string, number>();
+  for (const p of payslipsQuery.data ?? []) {
+    if (p.status !== "PAID" || !p.periodStart) continue;
+    const key = p.periodStart.slice(0, 7);
+    payrollPaidByMonth.set(key, (payrollPaidByMonth.get(key) ?? 0) + Number(p.netSalary));
+  }
+
+  // Bénéfice réel du mois : recettes − dépenses − masse salariale réellement payée (enseignants +
+  // personnel) — un chiffre qui n'existait nulle part ailleurs, contrairement à « Balance globale »
+  // (recettes − dépenses seules, sans déduire la masse salariale) affichée plus haut.
+  const monthlyProfit = (revenueByMonth.get(currentMonthKey) ?? 0)
+    - (expensesByMonth.get(currentMonthKey) ?? 0)
+    - (payrollPaidByMonth.get(currentMonthKey) ?? 0);
+
+  // Coût des retards/départs anticipés des enseignants : écart entre la masse salariale théorique
+  // (projetée depuis l'emploi du temps) et la masse salariale réelle (heures effectivement
+  // réalisées, cahier de textes) — positif = économisé sur des heures non réalisées.
+  const teacherPayrollGap = founder
+    ? Number(founder.payroll.teacherMonthlyPayroll) - Number(founder.realPayroll.teacherMonthlyPayroll)
+    : 0;
+
   const periodTrend = (founder?.recovery.byPeriod ?? []).map((p) => ({
     name: p.periodLabel,
     Facturé: Math.round(Number(p.invoiced)),
     Encaissé: Math.round(Number(p.collected)),
+  }));
+
+  const payrollProjectionTrend = (founder?.payrollProjection.months ?? []).map((mp) => ({
+    name: `${MONTHS[mp.month - 1]} ${mp.year}`,
+    Enseignants: Math.round(Number(mp.teacherPayroll)),
+    Personnel: Math.round(Number(mp.staffPayroll)),
   }));
 
   return (
@@ -111,34 +225,24 @@ export default function FounderDashboard() {
       </Reveal>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
         </div>
       ) : (
         <Reveal y={12}>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard title="Élèves dans l'école" value={studentsCountQuery.data ?? 0} icon={GraduationCap} accent="indigo" />
             <StatCard title="Recettes de l'école" value={formatGNF(revenue)} icon={TrendingUp} accent="teal"
               hint="Scolarité, inscriptions, frais annexes" />
             <StatCard title="Dépenses totales" value={formatGNF(totalExpenses)} icon={TrendingDown} accent="rose"
               hint="Dépenses payées, toutes catégories" />
             <StatCard title="Balance globale" value={formatGNF(balance)} icon={balance >= 0 ? Wallet : Banknote}
-              accent={balance >= 0 ? "indigo" : "rose"} />
+              accent={balance >= 0 ? "indigo" : "rose"} hint="Recettes − dépenses courantes, hors salaires (toutes périodes confondues)" />
+            <StatCard title="Bénéfice du mois" value={formatGNF(monthlyProfit)} icon={monthlyProfit >= 0 ? Award : Banknote}
+              accent={monthlyProfit >= 0 ? "emerald" : "rose"}
+              hint="Le vrai bénéfice de ce mois : recettes − dépenses − salaires versés (mois de travail, pas de virement)" />
           </div>
         </Reveal>
-      )}
-
-      {loading ? <CardSkeleton lines={6} /> : (
-        <Card>
-          <CardHeader><CardTitle>Recettes vs dépenses — 6 derniers mois</CardTitle></CardHeader>
-          <CardBody>
-            {trend.length === 0 ? (
-              <p className="py-10 text-center text-sm text-gray-400">Pas encore de données.</p>
-            ) : (
-              <BarTrendChart data={trend} valueFormatter={(v) => formatGNF(v)}
-                series={[{ key: "Recettes", name: "Recettes", color: "#14b8a6" }, { key: "Dépenses", name: "Dépenses", color: "#f43f5e" }]} />
-            )}
-          </CardBody>
-        </Card>
       )}
 
       {/* ── Alertes automatiques ─────────────────────────────────────────── */}
@@ -173,6 +277,19 @@ export default function FounderDashboard() {
           </div>
         )}
 
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" loading={checkingOverdue} onClick={runOverdueCheckNow}>
+            Vérifier les échéances en retard maintenant
+          </Button>
+          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+            <MessageSquare className="h-3.5 w-3.5" /> {smsRecoveryThisMonth} SMS de relance envoyé(s) ce mois
+          </span>
+          <p className="w-full text-xs text-gray-400 sm:w-auto">
+            La relance automatique ne tourne qu&apos;une fois par jour à 6h — utile pour tester sans
+            attendre le lendemain.
+          </p>
+        </div>
+
         {founder?.comparison && (
           <p className="text-xs text-gray-500">
             Vs année précédente : facturé {Number(founder.comparison.invoicedDelta) >= 0 ? "+" : ""}
@@ -184,6 +301,19 @@ export default function FounderDashboard() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
+            <CardHeader><CardTitle>Encaissé vs impayés</CardTitle></CardHeader>
+            <CardBody>
+              <PieBreakdownChart
+                centerLabel="Facturé"
+                valueFormatter={(v) => formatGNF(v)}
+                data={[
+                  { name: "Encaissé", value: Number(founder?.recovery.overall.collected ?? 0), color: "#10b981" },
+                  { name: "Impayés", value: Number(founder?.recovery.overall.outstanding ?? 0), color: "#f43f5e" },
+                ]}
+              />
+            </CardBody>
+          </Card>
+          <Card>
             <CardHeader><CardTitle>Recouvrement par mois / tranche</CardTitle></CardHeader>
             <CardBody>
               {periodTrend.length === 0 ? (
@@ -194,44 +324,24 @@ export default function FounderDashboard() {
               )}
             </CardBody>
           </Card>
-          <Card>
-            <CardHeader><CardTitle>Recouvrement par classe</CardTitle></CardHeader>
-            <CardBody>
-              <Table>
-                <THead><TR><TH>Classe</TH><TH>Facturé</TH><TH>Impayés</TH><TH>Taux</TH></TR></THead>
-                <TBody>
-                  {(founder?.recovery.byClass ?? []).map((c) => (
-                    <TR key={c.classId}>
-                      <TD>{c.className}</TD>
-                      <TD>{formatGNF(c.invoiced)}</TD>
-                      <TD>{formatGNF(c.outstanding)}</TD>
-                      <TD>{pct(c.recoveryRate)}</TD>
-                    </TR>
-                  ))}
-                  {!founderQuery.loading && !(founder?.recovery.byClass ?? []).length && (
-                    <TR><TD colSpan={4} className="text-gray-400">Aucune facture pour cette année.</TD></TR>
-                  )}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
         </div>
 
         <Card>
-          <CardHeader><CardTitle>Plus gros débiteurs</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Recouvrement par classe</CardTitle></CardHeader>
           <CardBody>
             <Table>
-              <THead><TR><TH>Élève</TH><TH>Classe</TH><TH>Reste dû</TH></TR></THead>
+              <THead><TR><TH>Classe</TH><TH>Facturé</TH><TH>Impayés</TH><TH>Taux</TH></TR></THead>
               <TBody>
-                {(founder?.recovery.topDebtors ?? []).map((d) => (
-                  <TR key={d.studentId}>
-                    <TD className="font-medium">{d.studentName}</TD>
-                    <TD>{d.className ?? "—"}</TD>
-                    <TD>{formatGNF(d.outstanding)}</TD>
+                {(founder?.recovery.byClass ?? []).map((c) => (
+                  <TR key={c.classId}>
+                    <TD>{c.className}</TD>
+                    <TD>{formatGNF(c.invoiced)}</TD>
+                    <TD>{formatGNF(c.outstanding)}</TD>
+                    <TD>{pct(c.recoveryRate)}</TD>
                   </TR>
                 ))}
-                {!founderQuery.loading && !(founder?.recovery.topDebtors ?? []).length && (
-                  <TR><TD colSpan={3} className="text-gray-400">Aucun impayé.</TD></TR>
+                {!founderQuery.loading && !(founder?.recovery.byClass ?? []).length && (
+                  <TR><TD colSpan={4} className="text-gray-400">Aucune facture pour cette année.</TD></TR>
                 )}
               </TBody>
             </Table>
@@ -246,11 +356,14 @@ export default function FounderDashboard() {
           <div className="grid gap-4 sm:grid-cols-3"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard title="Enseignants" value={formatGNF(founder?.payroll.teacherMonthlyPayroll)} icon={Users} accent="indigo"
-              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s)`} />
-            <StatCard title="Personnel administratif" value={formatGNF(founder?.payroll.staffMonthlyPayroll)} icon={Users} accent="teal"
-              hint={`${founder?.payroll.staffCount ?? 0} membre(s)`} />
-            <StatCard title="Total masse salariale" value={formatGNF(founder?.payroll.totalMonthlyPayroll)} icon={Wallet} accent="rose" />
+            <StatCard title="Masse salariale théorique" value={formatGNF(founder?.payroll.totalMonthlyPayroll)} icon={Wallet} accent="rose"
+              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s) (${formatGNF(founder?.payroll.teacherMonthlyPayroll)}) + ${founder?.payroll.staffCount ?? 0} personnel (${formatGNF(founder?.payroll.staffMonthlyPayroll)}) — estimation, pas forcément déjà versée`} />
+            <StatCard title="Enseignants payés ce mois" value={`${teachersPaidCount} / ${teacherIds.size}`} icon={Award}
+              accent={teachersUnpaidCount === 0 ? "emerald" : "amber"}
+              hint={teachersUnpaidCount > 0 ? `${teachersUnpaidCount} pas encore payé(s)` : "Tous payés"} />
+            <StatCard title="Personnel payé ce mois" value={`${employeesPaidCount} / ${activeEmployeeIds.size}`} icon={Award}
+              accent={employeesUnpaidCount === 0 ? "emerald" : "amber"}
+              hint={employeesUnpaidCount > 0 ? `${employeesUnpaidCount} pas encore payé(s)` : "Tous payés"} />
           </div>
         )}
       </section>
@@ -259,41 +372,87 @@ export default function FounderDashboard() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Salaire par enseignant</h2>
         <p className="-mt-2 text-sm text-gray-500">
-          Salaire du mois affiché et estimation cumulée jusqu&apos;à la fin de l&apos;année scolaire, pour
-          chaque enseignant individuellement.
+          Estimation théorique (emploi du temps/tarif horaire, ou salaire fixe) du mois et projection
+          cumulée jusqu&apos;à la fin de l&apos;année scolaire — pas forcément le montant déjà versé,
+          voir la fiche de paie réelle de l&apos;enseignant pour ce qui a été effectivement payé.
         </p>
         {founderQuery.loading ? <CardSkeleton lines={5} /> : (
-          <Card>
-            <CardBody className="p-0">
-              <Table>
-                <THead>
-                  <tr><TH>Enseignant</TH><TH>Ce mois</TH><TH>Estimation annuelle</TH></tr>
-                </THead>
-                <TBody>
-                  {(founder?.teacherSalaries ?? []).map((t) => (
-                    <TR key={t.teacherId}>
-                      <TD className="font-medium">{t.teacherName}</TD>
-                      <TD>{formatGNF(t.monthlyPay)}</TD>
-                      <TD className="font-semibold">{formatGNF(t.annualProjection)}</TD>
-                    </TR>
-                  ))}
-                  {!founderQuery.loading && !(founder?.teacherSalaries ?? []).length && (
-                    <TR><TD colSpan={3} className="py-6 text-center text-gray-400">Aucun enseignant configuré.</TD></TR>
-                  )}
-                </TBody>
-              </Table>
-            </CardBody>
-          </Card>
+          <PersonGridSection
+            items={founder?.teacherSalaries ?? []}
+            getKey={(t) => t.teacherId}
+            getName={(t) => t.teacherName}
+            emptyLabel="Aucun enseignant configuré."
+            searchPlaceholder="Rechercher un enseignant..."
+            renderCard={(t) => (
+              <PersonPayrollCard
+                name={t.teacherName}
+                photoUrl={teacherPhotoById.get(t.teacherId)}
+                subtitle={teacherSpecializationById.get(t.teacherId) ?? "Enseignant"}
+                monthlyAmount={Number(t.monthlyPay)}
+                secondaryAmount={Number(t.annualProjection)}
+                secondaryLabel="Estimation annuelle"
+                attendanceRate={hrByTeacherId.get(t.teacherId)?.attendanceRate != null ? Number(hrByTeacherId.get(t.teacherId)!.attendanceRate) : null}
+              />
+            )}
+          />
         )}
       </section>
 
-      {/* ── Projection de la masse salariale sur l'année scolaire ────────── */}
+      {/* ── Personnel administratif ──────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Personnel administratif</h2>
+        <p className="-mt-2 text-sm text-gray-500">Salaire fixe mensuel, par membre du personnel non-enseignant.</p>
+        {employeesQuery.loading ? <CardSkeleton lines={5} /> : (
+          <PersonGridSection
+            items={(employeesQuery.data ?? []).filter((e) => e.active)}
+            getKey={(e) => e.id}
+            getName={(e) => `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() || "—"}
+            emptyLabel="Aucun membre du personnel configuré."
+            searchPlaceholder="Rechercher un membre du personnel..."
+            renderCard={(e) => (
+              <PersonPayrollCard
+                name={`${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() || "—"}
+                subtitle={e.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[e.category]}
+                monthlyAmount={Number(e.baseSalary ?? 0)}
+                monthlyLabel="Salaire fixe"
+              />
+            )}
+          />
+        )}
+      </section>
+
+      {/* ── Détails & projections (repliés par défaut) ───────────────────── */}
+      <button
+        type="button"
+        onClick={() => setShowPayrollDetails((v) => !v)}
+        className="flex items-center gap-2 text-sm font-medium text-brand-700 hover:text-brand-800"
+      >
+        {showPayrollDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        Détails & projections (heures réalisées, estimation sur l&apos;année)
+      </button>
+
+      {showPayrollDetails && (
+      <>
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Estimation de la masse salariale sur l&apos;année scolaire</h2>
         <p className="-mt-2 text-sm text-gray-500">
           Enseignants (heures théoriques selon l&apos;emploi du temps et le calendrier, jours fériés exclus,
-          ou salaire fixe) + personnel non-enseignant, mois par mois.
+          ou salaire fixe) + personnel non-enseignant, mois par mois — vue agrégée dans le temps,
+          distincte du détail par enseignant ci-dessus.
         </p>
+        {founderQuery.loading ? <CardSkeleton lines={5} /> : (
+          <Card>
+            <CardHeader><CardTitle>Évolution mensuelle</CardTitle></CardHeader>
+            <CardBody>
+              {payrollProjectionTrend.length === 0 ? (
+                <p className="py-10 text-center text-sm text-gray-400">Pas encore de données.</p>
+              ) : (
+                <BarTrendChart data={payrollProjectionTrend} valueFormatter={(v) => formatGNF(v)}
+                  series={[{ key: "Enseignants", name: "Enseignants", color: "#6366f1" }, { key: "Personnel", name: "Personnel", color: "#14b8a6" }]} />
+              )}
+            </CardBody>
+          </Card>
+        )}
         {founderQuery.loading ? <CardSkeleton lines={5} /> : (
           <Card>
             <CardBody>
@@ -330,6 +489,12 @@ export default function FounderDashboard() {
       {/* ── Heures enseignants (cahier de textes) ────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Heures réalisées vs heures dues du mois</h2>
+        <p className="-mt-2 text-sm text-gray-500">
+          Masse salariale sur heures réellement réalisées (cahier de textes) : {formatGNF(founder?.realPayroll.teacherMonthlyPayroll)}
+          {" "}sur {formatMinutes(founder?.realPayroll.totalRealizedMinutes)} — écart de {formatGNF(teacherPayrollGap)} avec
+          {" "}l&apos;estimation théorique ci-dessus, principalement dû aux séances non réalisées (annulées ou non
+          {" "}encore consignées), pas aux simples retards/départs anticipés (informatifs, jamais déduits du salaire).
+        </p>
         {founderQuery.loading ? <CardSkeleton lines={4} /> : (
           <Card>
             <CardBody className="space-y-3">
@@ -359,6 +524,8 @@ export default function FounderDashboard() {
           </Card>
         )}
       </section>
+      </>
+      )}
 
       {/* ── Élèves pris en charge ────────────────────────────────────────── */}
       <section className="space-y-4">
@@ -377,6 +544,64 @@ export default function FounderDashboard() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+const PEOPLE_PAGE_SIZE = 12;
+
+/**
+ * Grille de cartes « personne » (enseignant ou personnel) avec recherche par nom + pagination — sans
+ * ça, une école avec une centaine d'enseignants/personnel rend la page interminable à faire défiler
+ * (et « afficher tout » n'aide pas : la liste redevient interminable dès qu'on clique).
+ */
+function PersonGridSection<T>({ items, getName, getKey, renderCard, emptyLabel, searchPlaceholder }: {
+  items: T[];
+  getName: (item: T) => string;
+  getKey: (item: T) => string | number;
+  renderCard: (item: T) => React.ReactNode;
+  emptyLabel: string;
+  searchPlaceholder: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? items.filter((it) => getName(it).toLowerCase().includes(q)) : items;
+  }, [items, search, getName]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PEOPLE_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = filtered.slice(currentPage * PEOPLE_PAGE_SIZE, (currentPage + 1) * PEOPLE_PAGE_SIZE);
+
+  if (items.length === 0) {
+    return <p className="py-6 text-center text-sm text-gray-400">{emptyLabel}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {items.length > PEOPLE_PAGE_SIZE && (
+        <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          placeholder={searchPlaceholder} className="max-w-xs" />
+      )}
+      {filtered.length === 0 ? (
+        <p className="py-6 text-center text-sm text-gray-400">Aucun résultat.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {visible.map((it) => <div key={getKey(it)}>{renderCard(it)}</div>)}
+        </div>
+      )}
+      {pageCount > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <Button variant="secondary" size="sm" disabled={currentPage === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm text-gray-500">Page {currentPage + 1} / {pageCount}</span>
+          <Button variant="secondary" size="sm" disabled={currentPage >= pageCount - 1}
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

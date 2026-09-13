@@ -40,6 +40,7 @@ const schema = z
     diploma: z.string(),
     remunerationType: z.string(),
     remunerationRate: z.string(),
+    bankAccount: z.string(),
     createLogin: z.boolean(),
     password: z.string(),
   })
@@ -81,6 +82,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
       diploma: initial?.diploma ?? "",
       remunerationType: initial?.remunerationType ?? "MENSUEL",
       remunerationRate: initial?.remunerationRate != null ? String(initial.remunerationRate) : "",
+      bankAccount: initial?.bankAccount ?? "",
       createLogin: false,
       password: "",
     },
@@ -129,6 +131,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
         // l'écraser silencieusement au prochain enregistrement.
         teachingAuthorizationNumber: initial?.teachingAuthorizationNumber ?? null,
         cnssNumber: initial?.cnssNumber ?? null,
+        bankAccount: values.bankAccount.trim() || null,
       });
       onFinish();
     } catch (err) {
@@ -235,10 +238,17 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
               </Field>
             )}
           </div>
-          <Field>
-            <Label>Date d&apos;embauche</Label>
-            <DatePicker value={v.hireDate} onChange={(val) => setValue("hireDate", val)} clearable />
-          </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field>
+              <Label>Date d&apos;embauche</Label>
+              <DatePicker value={v.hireDate} onChange={(val) => setValue("hireDate", val)} clearable />
+            </Field>
+            <Field>
+              <Label>Compte bancaire (optionnel)</Label>
+              <p className="text-xs text-gray-400">RIB/IBAN — pour le fichier bancaire de paie. Le téléphone reste prioritaire (Mobile Money).</p>
+              <Input value={v.bankAccount} onChange={(e) => setValue("bankAccount", e.target.value)} />
+            </Field>
+          </div>
         </div>
       )}
 

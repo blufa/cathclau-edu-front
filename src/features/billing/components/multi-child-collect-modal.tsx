@@ -5,6 +5,7 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent } from "@/lib/api/billing";
+import { getReceiptPdfObjectUrl } from "@/lib/api/payment";
 import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Invoice } from "@/lib/types/billing";
 import { type PaymentChannel } from "@/lib/types/payment";
@@ -17,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "@/components/ui/select";
 import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { FileText } from "lucide-react";
 
@@ -32,11 +33,6 @@ const GROUP_ORDER: Record<FeeType, number> = {
   ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1, TRANSPORT: 2, CANTEEN: 2, EXAM: 2, OTHER: 2,
 };
 
-const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-function monthShortLabel(monthValue: string): string {
-  const [, m] = monthValue.split("-").map(Number);
-  return MONTHS_FR[m - 1] ?? monthValue;
-}
 
 const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
 
@@ -182,8 +178,13 @@ export function MultiChildCollectModal({
   }
 
   async function collect() {
+    // paidMonths : sur une tranche multi-mois, précise quels mois sont réglés par cette part (voir
+    // CollectFeeModal, même logique).
     const shares = selectedRows
-      .map((r) => ({ invoiceId: r.invoice.id, studentId: r.studentId, amount: amountFor(r) }))
+      .map((r) => ({
+        invoiceId: r.invoice.id, studentId: r.studentId, amount: amountFor(r),
+        paidMonths: r.coveredMonths.length > 1 ? (monthSelections[r.invoice.id] ?? r.coveredMonths) : undefined,
+      }))
       .filter((s) => s.amount > 0);
     if (shares.length === 0) return;
     setLoading(true);
@@ -203,6 +204,12 @@ export function MultiChildCollectModal({
       }
       notifySuccess(`${selectedRows.length} facture(s) encaissée(s) pour ${studentIds.length} enfant(s) — reçu unique généré.`);
       setSelected([]); setCustomAmounts({}); setMonthSelections({});
+      // Affiche aussitôt le reçu (visualiser/télécharger/imprimer) au lieu de forcer un aller-retour
+      // par la fiche élève — voir CollectFeeModal.onPaid (même correction, deux écrans).
+      if (!online) {
+        try { setPreview({ url: await getReceiptPdfObjectUrl(attempt.response.payment.id), title: "Reçu de paiement" }); }
+        catch (err) { notifyError(err); }
+      }
       onCollected();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -253,6 +260,11 @@ export function MultiChildCollectModal({
                                     {row.invoice.discountAmount != null && Number(row.invoice.discountAmount) > 0 && (
                                       <span className="ml-1.5 text-xs font-medium text-success-600" title={row.invoice.discountReason ?? undefined}>
                                         (remise −{formatGNF(row.invoice.discountAmount)})
+                                      </span>
+                                    )}
+                                    {row.invoice.platformFeeAmount != null && Number(row.invoice.platformFeeAmount) > 0 && (
+                                      <span className="ml-1.5 text-xs text-slate-400">
+                                        (dont frais plateforme {formatGNF(row.invoice.platformFeeAmount)})
                                       </span>
                                     )}
                                   </span>

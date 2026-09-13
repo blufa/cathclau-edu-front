@@ -37,13 +37,20 @@ export default function LessonsPage() {
   const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
   const classesQuery = useQuery(() => (cy ? listClasses(cy.id) : Promise.resolve([])), [cy?.id]);
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  // Pas de classe présélectionnée par défaut : une classe sans séance planifiée donnait un tableau
+  // vide à l'arrivée sur la page, laissant croire qu'aucune séance n'existe dans toute l'école.
   const [classId, setClassId] = useState<number | null>(null);
-  const effectiveClassId = classId ?? classes[0]?.id ?? null;
+  const effectiveClassId = classId;
   const [subjectId, setSubjectId] = useState<number | null>(null);
   const classOptions: SearchableOption[] = useMemo(
-    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    () => [
+      { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "toutes" },
+      ...classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    ],
     [classes],
   );
+
+  const classNameById = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
 
   const subjectsQuery = useQuery(listSubjects, []);
   const subjectName = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
@@ -56,7 +63,7 @@ export default function LessonsPage() {
   );
 
   const q = useQuery(
-    () => (effectiveClassId ? listLessons({ classId: effectiveClassId, subjectId: subjectId ?? undefined }) : Promise.resolve([])),
+    () => listLessons({ classId: effectiveClassId ?? undefined, subjectId: subjectId ?? undefined }),
     [effectiveClassId, subjectId],
   );
   const lessons = useMemo(
@@ -83,7 +90,7 @@ export default function LessonsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Cahier de textes</h1>
           <p className="text-sm text-gray-500">Séances, contenu des cours et devoirs donnés — suivi de progression</p>
         </div>
-        {canWrite && effectiveClassId && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle séance</Button>}
+        {canWrite && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle séance</Button>}
       </Reveal>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -99,7 +106,7 @@ export default function LessonsPage() {
         </Field>
       </div>
 
-      {effectiveClassId && lessons.length > 0 && (() => {
+      {lessons.length > 0 && (() => {
         const done = lessons.filter((l) => l.status === "DONE").length;
         const rate = Math.round((done / lessons.length) * 100);
         return (
@@ -114,13 +121,14 @@ export default function LessonsPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Date</TH><TH>Matière</TH><TH>Thème</TH><TH>Devoirs</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr>{!effectiveClassId && <TH className="hidden sm:table-cell">Classe</TH>}<TH>Date</TH><TH className="hidden sm:table-cell">Matière</TH><TH>Thème</TH><TH>Devoirs</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {lessons.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucune séance.</TD></TR>}
+            {lessons.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune séance.</TD></TR>}
             {lessons.map((l) => (
               <TR key={l.id}>
+                {!effectiveClassId && <TD className="hidden sm:table-cell">{classNameById.get(l.classId) ?? `#${l.classId}`}</TD>}
                 <TD>{l.lessonDate}</TD>
-                <TD>{l.subjectId != null ? (subjectName.get(l.subjectId) ?? `#${l.subjectId}`) : "Journée complète"}</TD>
+                <TD className="hidden sm:table-cell">{l.subjectId != null ? (subjectName.get(l.subjectId) ?? `#${l.subjectId}`) : "Journée complète"}</TD>
                 <TD className="max-w-[220px]">
                   <p className="font-medium text-gray-900">{l.title}</p>
                   {l.content && <p className="truncate text-xs text-gray-500" title={l.content}>{l.content}</p>}
@@ -143,9 +151,13 @@ export default function LessonsPage() {
       )}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle séance" className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        {effectiveClassId && (
+        {creating && (
           <LessonForm classes={classes} defaultClassId={effectiveClassId} subjectName={subjectName} onCancel={() => setCreating(false)}
-            onCreated={() => { setCreating(false); notifySuccess("Séance créée"); q.refetch(); }} />
+            onCreated={() => {
+              setCreating(false);
+              notifySuccess("Séance créée");
+              q.refetch();
+            }} />
         )}
       </Modal>
 
@@ -237,7 +249,9 @@ function TeacherCheckinCard({ teacherId, date, slotId }: { teacherId: number | n
  * depuis l'emploi du temps de la classe (reste éditable manuellement).
  */
 function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated }: {
-  classes: Classe[]; defaultClassId: number | null; subjectName: Map<number, string>; onCancel: () => void; onCreated: () => void;
+  classes: Classe[]; defaultClassId: number | null; subjectName: Map<number, string>; onCancel: () => void;
+  /** Ids (dédupliqués, dans l'ordre des lignes) des classes pour lesquelles une séance vient d'être créée. */
+  onCreated: (classIds: number[]) => void;
 }) {
   const teachersQuery = useQuery(listTeachers, []);
   const teacherName = useMemo(
@@ -358,7 +372,7 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
           status: "PLANNED",
         });
       }
-      onCreated();
+      onCreated([...new Set(valid.map((r) => Number(r.classId)))]);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
@@ -368,7 +382,7 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
 
       {rows.map((row, idx) => (
         <div key={idx} className="space-y-2 rounded-xl border border-gray-200 p-3">
-          <div className="grid grid-cols-[1fr_1fr_100px_auto] items-end gap-2">
+          <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_100px_auto]">
             <Field>
               <Label>Classe <span className="text-error-500">*</span></Label>
               <SearchableSelect value={row.classId} options={classOptions} onChange={(v) => updateRow(idx, "classId", v)} triggerClassName="w-full justify-between px-3" />
@@ -573,13 +587,15 @@ function EditLessonForm({ lesson, classes, subjectName, canSetStatus, onCancel, 
  * mais éditable — un professeur en retard peut avoir rattrapé (ou perdu) du temps. C'est cette durée
  * réalisée, jamais la durée planifiée, qui alimente ensuite la masse salariale (§payroll).
  */
+type DurationSource = "THEORETICAL" | "ACTUAL" | "CUSTOM";
+
 function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCancel: () => void; onDone: () => void }) {
-  const [duration, setDuration] = useState(lesson.durationMinutes != null ? String(lesson.durationMinutes) : "");
   const [loading, setLoading] = useState(false);
 
-  // Option : compter depuis l'heure de pointage jusqu'à la fin prévue du créneau, plutôt que de saisir
-  // la durée à la main — utile quand le professeur est arrivé en retard (ou en avance) et qu'on veut
-  // exactement le temps réellement disponible pour le cours.
+  // Deux sources possibles pour la durée réalisée (qui compte pour la paie) : la durée THÉORIQUE du
+  // créneau programmé, ou la durée RÉELLE entre l'heure d'arrivée et de sortie pointées par
+  // l'enseignant — choix explicite demandé à chaque validation plutôt qu'une simple suggestion
+  // facultative, pour que la personne qui valide sache toujours laquelle des deux s'applique.
   const scheduleQuery = useQuery(() => getScheduleByClass(lesson.classId), [lesson.classId]);
   const slot = resolveSlot(scheduleQuery.data ?? [], String(lesson.subjectId), lesson.lessonDate ?? "");
   const checkinsQuery = useQuery(
@@ -591,9 +607,23 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
   // Priorité à l'heure de sortie réellement pointée (plus précise) ; à défaut, on suppose que
   // l'enseignant est resté jusqu'à la fin prévue du créneau.
   const endReference = checkin?.checkOutTime ?? slot?.endTime;
-  const computedFromCheckin = checkin && endReference
+  const actualMinutes = checkin && endReference
     ? Math.max(0, timeToMinutes(endReference.slice(0, 5)) - timeToMinutes(checkin.checkInTime.slice(0, 5)))
     : null;
+  const theoreticalMinutes = lesson.durationMinutes
+    ?? (slot ? Math.max(0, timeToMinutes(slot.endTime.slice(0, 5)) - timeToMinutes(slot.startTime.slice(0, 5))) : null);
+
+  const [source, setSource] = useState<DurationSource>("THEORETICAL");
+  const [duration, setDuration] = useState(theoreticalMinutes != null ? String(theoreticalMinutes) : "");
+
+  function selectTheoretical() {
+    setSource("THEORETICAL");
+    if (theoreticalMinutes != null) setDuration(String(theoreticalMinutes));
+  }
+  function selectActual() {
+    setSource("ACTUAL");
+    if (actualMinutes != null) setDuration(String(actualMinutes));
+  }
 
   async function confirm() {
     setLoading(true);
@@ -603,27 +633,41 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
 
+  const optionClass = (active: boolean) =>
+    `w-full rounded-lg border px-3 py-2 text-left text-xs transition ${
+      active ? "border-brand-500 bg-brand-50/80 ring-1 ring-brand-500" : "border-gray-200 hover:border-gray-300"
+    }`;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Durée planifiée : <strong>{lesson.durationMinutes != null ? formatMinutes(lesson.durationMinutes) : "non renseignée"}</strong>.
-        Corrigez si nécessaire (rattrapage ou retard) — c&apos;est la durée réalisée qui compte pour la paie de l&apos;enseignant.
+        Choisissez la durée à retenir pour cette séance — c&apos;est elle qui compte pour la paie de
+        l&apos;enseignant.
       </p>
-      {checkin && computedFromCheckin != null && (
-        <div className="flex items-center justify-between rounded-lg bg-brand-50/60 px-3 py-2 text-xs">
-          <span className="text-gray-600">
-            Pointage à <strong>{checkin.checkInTime.slice(0, 5)}</strong>
-            {checkin.lateMinutes > 0 && <span className="text-warning-600"> (retard {formatMinutes(checkin.lateMinutes)})</span>}
-            {" "}→ {checkin.checkOutTime ? "sortie" : "fin prévue"} {endReference?.slice(0, 5)} = <strong>{formatMinutes(computedFromCheckin)}</strong>
+      <div className="space-y-2">
+        <button type="button" onClick={selectTheoretical} className={optionClass(source === "THEORETICAL")}>
+          <span className="font-medium text-gray-800">Durée théorique du créneau</span>
+          <br />
+          <span className="text-gray-500">
+            {theoreticalMinutes != null ? formatMinutes(theoreticalMinutes) : "non renseignée"}
           </span>
-          <Button type="button" size="sm" variant="secondary" onClick={() => setDuration(String(computedFromCheckin))}>
-            Utiliser cette durée
-          </Button>
-        </div>
-      )}
+        </button>
+        {checkin && actualMinutes != null && (
+          <button type="button" onClick={selectActual} className={optionClass(source === "ACTUAL")}>
+            <span className="font-medium text-gray-800">Durée réelle pointée</span>
+            <br />
+            <span className="text-gray-500">
+              {formatMinutes(actualMinutes)} — de <strong>{checkin.checkInTime.slice(0, 5)}</strong>
+              {checkin.lateMinutes > 0 && <span className="text-warning-600"> (retard {formatMinutes(checkin.lateMinutes)})</span>}
+              {" "}à <strong>{endReference?.slice(0, 5)}</strong>{!checkin.checkOutTime && " (fin prévue, pas encore pointée)"}
+            </span>
+          </button>
+        )}
+      </div>
       <Field>
-        <Label>Durée réalisée (min)</Label>
-        <Input type="number" min={0} value={duration} onChange={(e) => setDuration(e.target.value)} />
+        <Label>Durée réalisée (min){source === "CUSTOM" ? " — personnalisée" : ""}</Label>
+        <Input type="number" min={0} value={duration}
+          onChange={(e) => { setDuration(e.target.value); setSource("CUSTOM"); }} />
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>

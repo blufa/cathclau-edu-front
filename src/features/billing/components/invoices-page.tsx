@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,8 +17,11 @@ import {
   cancelInvoice,
   createInvoice,
   generateInvoicesBulk,
+  getInvoicePdf,
   getInvoicePdfObjectUrl,
+  listInstallments,
 } from "@/lib/api/billing";
+import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 import { useFeesQuery, useInvoicesQuery } from "../hooks/use-invoices";
 import { FEE_TYPE_LABEL, INVOICE_STATUS_LABEL, RECOVERY_STAGE_LABEL, type Invoice, type InvoiceStatus, type SchoolFee } from "@/lib/types/billing";
 import { PayInvoiceForm } from "@/features/billing/components/pay-invoice-form";
@@ -34,9 +38,9 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { FileText } from "lucide-react";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, monthShortLabel } from "@/lib/format";
 
-const STATUS_TONE: Record<InvoiceStatus, "red" | "amber" | "green"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green" };
+const STATUS_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
 /** Module-scope reference generator (kept out of render to stay pure). */
 function genRef(prefix: string): string {
@@ -48,8 +52,12 @@ export default function InvoicesPage() {
   const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
 
+  // Arrivée depuis la fiche élève (onglet Scolarité → « Factures de l'élève ») : pré-filtre sur cet
+  // élève au lieu d'atterrir sur la liste complète de tous les élèves — sans ça, `?student=` était
+  // silencieusement ignoré et la page s'ouvrait toujours sans filtre.
+  const initialStudentId = useSearchParams().get("student");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
-  const [studentFilter, setStudentFilter] = useState<string>("");
+  const [studentFilter, setStudentFilter] = useState<string>(initialStudentId ?? "");
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = useMemo(
     () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
@@ -77,6 +85,22 @@ export default function InvoicesPage() {
   const invoices = useMemo(
     () => (studentFilter && status ? (q.data ?? []).filter((i) => i.status === status) : (q.data ?? [])),
     [q.data, studentFilter, status],
+  );
+
+  // Mois couverts par chaque échéance (tranche) liée aux factures affichées — pour afficher, sur une
+  // facture multi-mois, quels mois sont déjà réglés (Invoice.paidMonths) vs restants, au lieu d'un
+  // simple libellé de tranche figé qui ne reflète jamais un règlement partiel.
+  const feeIdsWithInvoices = useMemo(
+    () => [...new Set(invoices.map((i) => i.feeId).filter((id): id is number => id != null))],
+    [invoices],
+  );
+  const installmentsQuery = useQuery(
+    () => Promise.all(feeIdsWithInvoices.map((id) => listInstallments(id))).then((lists) => lists.flat()),
+    [feeIdsWithInvoices.join(",")],
+  );
+  const installmentMonths = useMemo(
+    () => new Map((installmentsQuery.data ?? []).map((i) => [i.id, i.months ?? []])),
+    [installmentsQuery.data],
   );
 
   const [creating, setCreating] = useState(false);
@@ -152,15 +176,30 @@ export default function InvoicesPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Élève</TH><TH>Objet</TH><TH>Référence</TH><TH>Total</TH><TH>Payé</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Objet</TH><TH className="hidden sm:table-cell">Référence</TH><TH className="hidden sm:table-cell">Total</TH><TH className="hidden sm:table-cell">Payé</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {invoices.length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucune facture.</TD></TR>}
+            {invoices.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune facture.</TD></TR>}
             {invoices.map((inv) => (
               <TR key={inv.id}>
                 <TD className="text-gray-900">{studentName.get(inv.studentId) ?? `#${inv.studentId}`}</TD>
-                <TD className="text-sm text-gray-700">{inv.periodLabel ?? "Inscription / frais"}</TD>
-                <TD className="font-mono text-xs text-gray-600">{inv.reference}</TD>
-                <TD className="font-medium text-gray-900">
+                <TD className="hidden text-sm text-gray-700 sm:table-cell">
+                  {inv.periodLabel ?? "Inscription / frais"}
+                  {(() => {
+                    const covered = inv.installmentId != null ? installmentMonths.get(inv.installmentId) ?? [] : [];
+                    if (covered.length <= 1) return null;
+                    const paid = inv.paidMonths ?? [];
+                    const remaining = covered.filter((m) => !paid.includes(m));
+                    if (paid.length === 0) return null;
+                    return (
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        Réglé : {[...paid].sort().map(monthShortLabel).join(", ")}
+                        {remaining.length > 0 && <> — Restant : {[...remaining].sort().map(monthShortLabel).join(", ")}</>}
+                      </p>
+                    );
+                  })()}
+                </TD>
+                <TD className="hidden font-mono text-xs text-gray-600 sm:table-cell">{inv.reference}</TD>
+                <TD className="hidden font-medium text-gray-900 sm:table-cell">
                   {formatGNF(inv.totalAmount)}
                   {inv.discountAmount != null && Number(inv.discountAmount) > 0 && (
                     <span className="mt-1 block">
@@ -169,9 +208,14 @@ export default function InvoicesPage() {
                       </Badge>
                     </span>
                   )}
+                  {inv.platformFeeAmount != null && Number(inv.platformFeeAmount) > 0 && (
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      dont frais plateforme : {formatGNF(inv.platformFeeAmount)}
+                    </p>
+                  )}
                 </TD>
-                <TD>{formatGNF(inv.paidAmount ?? 0)}</TD>
-                <TD>{formatGNF(inv.remainingBalance ?? inv.totalAmount)}</TD>
+                <TD className="hidden sm:table-cell">{formatGNF(inv.paidAmount ?? 0)}</TD>
+                <TD className="font-medium text-gray-900">{formatGNF(inv.remainingBalance ?? inv.totalAmount)}</TD>
                 <TD>
                   <Badge tone={STATUS_TONE[inv.status]}>{INVOICE_STATUS_LABEL[inv.status]}</Badge>
                   {inv.recoveryStage && inv.recoveryStage !== "NONE" && (
@@ -183,6 +227,15 @@ export default function InvoicesPage() {
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" leftSection={<FileText className="h-4 w-4" />} onClick={() => showInvoicePdf(inv)}>Aperçu</Button>
+                    <WhatsAppInvoiceButton
+                      studentId={inv.studentId}
+                      buildMessage={async () => {
+                        const { url } = await getInvoicePdf(inv.id);
+                        const name = studentName.get(inv.studentId) ?? "";
+                        const solde = inv.status === "PAID" ? "soldée" : `reste à payer : ${formatGNF(inv.remainingBalance ?? inv.totalAmount)}`;
+                        return `Bonjour, voici la facture ${inv.reference} de ${name} (${solde}).${url ? ` ${url}` : ""}`;
+                      }}
+                    />
                     {canWrite && inv.status !== "PAID" && <Button size="sm" onClick={() => setPaying(inv)}>Payer</Button>}
                     {canWrite && inv.status !== "PAID" && inv.recoveryStage !== "EXCLUDED" && <Button size="sm" variant="ghost" onClick={() => advance(inv)}>{inv.recoveryStage === "REMINDER_2" ? "Exclure" : "Relancer"}</Button>}
                     {canWrite && inv.status !== "PAID" && <Button size="sm" variant="ghost" onClick={() => setDiscountFor(inv)}>Remise</Button>}
@@ -287,7 +340,7 @@ function InvoiceForm({ tenantId, academicYearId, fees, onCancel, onCreated }: {
   );
   const feeOptions: SearchableOption[] = useMemo(
     () => fees.map((f) => {
-      const label = `${FEE_TYPE_LABEL[f.type]} — ${f.amount}`;
+      const label = `${FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
       return { value: String(f.id), trigger: label, label, searchText: label };
     }),
     [fees],
@@ -367,7 +420,7 @@ function BulkInvoiceForm({ tenantId, academicYearId, fees, onCancel, onDone }: {
   );
   const feeOptions: SearchableOption[] = useMemo(
     () => fees.map((f) => {
-      const label = `${FEE_TYPE_LABEL[f.type]} — ${f.amount}`;
+      const label = `${FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
       return { value: String(f.id), trigger: label, label, searchText: label };
     }),
     [fees],

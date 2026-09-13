@@ -19,6 +19,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Label } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Reveal } from "@/components/public/reveal";
+import { InstallAppCard } from "@/components/pwa/install-app-card";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -325,6 +326,10 @@ export default function AccountPage() {
                 </form>
               </CardBody>
             </Card>
+          </Reveal>
+
+          <Reveal y={12} delay={0.15}>
+            <InstallAppCard />
           </Reveal>
         </div>
       </div>

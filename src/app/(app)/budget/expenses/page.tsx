@@ -131,16 +131,16 @@ function ExpensesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Libellé</TH><TH>Catégorie</TH><TH>Fournisseur</TH><TH>Montant</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Libellé</TH><TH className="hidden sm:table-cell">Catégorie</TH><TH className="hidden sm:table-cell">Fournisseur</TH><TH>Montant</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucune dépense.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune dépense.</TD></TR>}
             {(q.data ?? []).map((e) => (
               <TR key={e.id}>
                 <TD className="font-medium text-gray-900">{e.label}
                   {e.status === "REJECTED" && e.rejectionReason && <span className="block text-xs text-error-500">Motif : {e.rejectionReason}</span>}
                 </TD>
-                <TD>{e.categoryId ? (categoryName.get(e.categoryId) ?? "—") : "—"}</TD>
-                <TD>{e.supplierId ? (supplierName.get(e.supplierId) ?? "—") : "—"}</TD>
+                <TD className="hidden sm:table-cell">{e.categoryId ? (categoryName.get(e.categoryId) ?? "—") : "—"}</TD>
+                <TD className="hidden sm:table-cell">{e.supplierId ? (supplierName.get(e.supplierId) ?? "—") : "—"}</TD>
                 <TD className="font-medium text-gray-900">{formatGNF(e.amount)}</TD>
                 <TD><Badge tone={STATUS_TONE[e.status]}>{EXPENSE_STATUS_LABEL[e.status]}</Badge></TD>
                 <TD className="text-right">
@@ -216,7 +216,7 @@ function ExpenseForm({ initial, suppliers, categories, onCancel, onSaved }: {
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Montant</Label><MoneyInput value={amount} onValueChange={(n) => setAmount(String(n))} /></Field>
-        <Field><Label>Date</Label><DatePicker value={expenseDate} clearable onChange={setExpenseDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={expenseDate} clearable onChange={setExpenseDate} maxDate={new Date()} /></Field>
       </div>
       <Field>
         <Label>Catégorie</Label>

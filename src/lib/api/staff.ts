@@ -155,7 +155,13 @@ export interface Employee {
   hireDate: string | null;
   baseSalary: string | null;
   cnssNumber: string | null;
+  /** Compte bancaire (RIB/IBAN) optionnel — pour le fichier bancaire de paie. Le téléphone reste
+   * prioritaire pour le virement Mobile Money. */
+  bankAccount: string | null;
   active: boolean;
+  /** Fiche Teacher de la même personne si elle enseigne aussi, en plus de son poste — lien manuel,
+   * utilisé pour générer une fiche de paie combinée (salaire fixe + heures d'enseignement). */
+  linkedTeacherId: number | null;
 }
 
 export interface EmployeeInput {
@@ -170,6 +176,8 @@ export interface EmployeeInput {
   hireDate?: string | null;
   baseSalary?: number | null;
   cnssNumber?: string | null;
+  bankAccount?: string | null;
+  linkedTeacherId?: number | null;
 }
 
 export function listEmployees(category?: EmployeeCategory): Promise<Employee[]> {

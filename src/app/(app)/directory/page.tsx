@@ -66,17 +66,17 @@ export default function DirectoryPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Élève</TH><TH>Matricule</TH><TH>Naissance</TH><TH>École (plateforme)</TH><TH>Dernière classe</TH><TH>Décision</TH><TH>Finances</TH><TH>Moyenne</TH></tr></THead>
+          <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH className="hidden sm:table-cell">Naissance</TH><TH className="hidden sm:table-cell">École (plateforme)</TH><TH>Dernière classe</TH><TH className="hidden sm:table-cell">Décision</TH><TH>Finances</TH><TH>Moyenne</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-slate-400">Aucun élève trouvé.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucun élève trouvé.</TD></TR>}
             {(q.data ?? []).map((e, i) => (
               <TR key={`${e.studentNumber}-${i}`}>
                 <TD className="font-medium text-slate-900">{e.firstName} {e.lastName}</TD>
-                <TD className="font-mono text-xs text-slate-600">{e.studentNumber ?? "—"}</TD>
-                <TD className="text-slate-500">{e.birthDate ?? "—"}</TD>
-                <TD>{e.schoolName ?? "—"}</TD>
+                <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{e.studentNumber ?? "—"}</TD>
+                <TD className="hidden text-slate-500 sm:table-cell">{e.birthDate ?? "—"}</TD>
+                <TD className="hidden sm:table-cell">{e.schoolName ?? "—"}</TD>
                 <TD>{e.lastClass ?? "—"}</TD>
-                <TD>{e.lastDecision ? <Badge tone="indigo">{e.lastDecision}</Badge> : "—"}</TD>
+                <TD className="hidden sm:table-cell">{e.lastDecision ? <Badge tone="indigo">{e.lastDecision}</Badge> : "—"}</TD>
                 <TD>
                   {e.unpaidMonths > 0
                     ? <Badge tone="red">Pas à jour · {e.unpaidMonths} mois</Badge>

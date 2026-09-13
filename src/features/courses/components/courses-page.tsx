@@ -318,16 +318,16 @@ function CourseManagement({ tenantId, classLabel, classes }: {
 
       {coursesQuery.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Titre</TH><TH>Classe</TH><TH>Prix</TH><TH>Statut</TH><TH>Achats</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Titre</TH><TH className="hidden sm:table-cell">Classe</TH><TH>Prix</TH><TH>Statut</TH><TH className="hidden sm:table-cell">Achats</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(coursesQuery.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-6 text-center text-gray-400">Aucun cours.</TD></TR>}
+            {(coursesQuery.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-6 text-center text-gray-400">Aucun cours.</TD></TR>}
             {(coursesQuery.data ?? []).map((c) => (
               <TR key={c.id}>
                 <TD className="font-medium text-gray-900">{c.title}{c.subjectLabel ? ` — ${c.subjectLabel}` : ""}</TD>
-                <TD>{classLabel.get(c.classId) ?? `#${c.classId}`}</TD>
+                <TD className="hidden sm:table-cell">{classLabel.get(c.classId) ?? `#${c.classId}`}</TD>
                 <TD>{formatGNF(c.price)}</TD>
                 <TD>{c.published ? <Badge tone="green">Publié</Badge> : <Badge tone="gray">Brouillon</Badge>}</TD>
-                <TD>{paidCountByCourse.get(c.id) ?? 0}</TD>
+                <TD className="hidden sm:table-cell">{paidCountByCourse.get(c.id) ?? 0}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setManagingResources(c)}>Contenu</Button>

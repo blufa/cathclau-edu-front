@@ -147,6 +147,20 @@ export interface PayrollMassSummary {
   teacherCount: number;
   staffCount: number;
 }
+/**
+ * Masse salariale RÉELLE : contrairement à PayrollMassSummary (part enseignants projetée depuis
+ * l'emploi du temps), celle-ci se base sur les heures réellement réalisées (cahier de textes,
+ * retards/départs anticipés déjà déduits) — avec le cumul des retards/départs anticipés de tous
+ * les enseignants, pour repérer l'écart entre le théorique et le réel.
+ */
+export interface RealPayrollSummary {
+  teacherMonthlyPayroll: string;
+  staffMonthlyPayroll: string;
+  totalMonthlyPayroll: string;
+  totalLateMinutes: number;
+  totalEarlyMinutes: number;
+  totalRealizedMinutes: number;
+}
 /** Heures réalisées (cahier de textes) vs heures dues (emploi du temps) ce mois-ci, par enseignant. */
 export interface TeacherHoursProgress {
   teacherId: number;
@@ -199,6 +213,7 @@ export interface FounderDashboard {
   academicYearId: number;
   recovery: RecoveryView;
   payroll: PayrollMassSummary;
+  realPayroll: RealPayrollSummary;
   teacherHours: TeacherHoursProgress[];
   payrollProjection: SchoolYearProjection;
   teacherSalaries: TeacherSalary[];

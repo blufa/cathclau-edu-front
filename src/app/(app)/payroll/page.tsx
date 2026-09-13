@@ -5,12 +5,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { Banknote, Clock, FileSpreadsheet, Plus, Settings as SettingsIcon, HandCoins } from "lucide-react";
+import { Banknote, Clock, FileSpreadsheet, Megaphone, Plus, Settings as SettingsIcon, HandCoins } from "lucide-react";
 import { FeeDeductionPanel } from "@/components/payroll/fee-deduction-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
-import { listTeachers } from "@/lib/api/staff";
+import { getAssignedClasses, listEmployees, listTeachers, type Employee } from "@/lib/api/staff";
+import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
+import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
+import { sendDiffusion } from "@/lib/api/communication";
 import {
   addRule,
   addPayslipLine,
@@ -38,6 +41,7 @@ import {
   getTheoreticalPay,
   generatePayslipFromHours,
   generatePayslipFromTimetable,
+  generateCombinedPayslip,
   type PayMode,
   type MonthlyPay,
   type TheoreticalMonthlyPay,
@@ -69,6 +73,29 @@ import { formatGNF } from "@/lib/format";
 
 const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = { DRAFT: "gray", VALIDATED: "indigo", PAID: "green" };
 
+/**
+ * Si l'enseignant n'a encore jamais enregistré sa rémunération (via l'onglet dédié), computeMonthlyPay
+ * côté serveur renvoie un brut à 0 (aucune TeacherCompensation en base) — la fiche générée nettait
+ * alors toujours à 0 GNF, même avec des heures réalisées. On persiste ici automatiquement, avec les
+ * mêmes valeurs de repli que le formulaire de rémunération (taux/type saisis à la création de
+ * l'enseignant), pour que « Générer » fonctionne dès le premier clic sans étape cachée à confirmer.
+ */
+async function ensureTeacherCompensation(
+  teacherId: number,
+  teacher?: { remunerationType?: string | null; remunerationRate?: string | number | null } | null,
+): Promise<void> {
+  const existing = await getCompensation(teacherId);
+  if (existing) return;
+  const fbRate = teacher?.remunerationRate != null && teacher.remunerationRate !== "" ? Number(teacher.remunerationRate) : 0;
+  if (fbRate <= 0) return;
+  const fbHourly = teacher?.remunerationType === "HORAIRE";
+  await setCompensation(teacherId, {
+    payMode: fbHourly ? "HOURLY" : "FIXED",
+    hourlyRateNormal: fbHourly ? fbRate : 0, hourlyRateExam: 0,
+    fixedSalary: fbHourly ? 0 : fbRate,
+  });
+}
+
 export default function PayrollPage() {
   const { user } = useAuth();
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") && !hasAnyPermission(user, ["paie:manage"])) {
@@ -97,6 +124,7 @@ export default function PayrollPage() {
 }
 
 function PayslipsTab() {
+  const { user } = useAuth();
   const teachersQuery = useQuery(listTeachers, []);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const teacherName = useMemo(() => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachers]);
@@ -108,6 +136,8 @@ function PayslipsTab() {
   const [generating, setGenerating] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [linesFor, setLinesFor] = useState<Payslip | null>(null);
+  const [notifying, setNotifying] = useState(false);
+  const [staffPayslipOpen, setStaffPayslipOpen] = useState(false);
 
   function act(p: Promise<unknown>) { p.then(() => { notifySuccess("Mis à jour"); q.refetch(); }).catch(notifyError); }
   function remove(p: Payslip) {
@@ -116,6 +146,32 @@ function PayslipsTab() {
   }
   async function downloadBankFile() {
     try { window.open(await bankFileUrl(), "_blank"); } catch (e) { notifyError(e); }
+  }
+  function notifyStaffSalariesAvailable() {
+    confirmAction({
+      title: "Notifier tout le personnel",
+      message: "Un SMS « Les salaires sont disponibles » sera envoyé à tous les enseignants et à tout le personnel. Confirmer ?",
+      confirmLabel: "Envoyer",
+      onConfirm: async () => {
+        setNotifying(true);
+        try {
+          await sendDiffusion({
+            tenantId: user?.tenantId ?? null,
+            senderId: user?.userId ?? null,
+            channel: "SMS",
+            audience: "ALL_STAFF",
+            reason: "GENERAL",
+            subject: "Salaires disponibles",
+            content: "Les salaires sont disponibles. Merci de vous rapprocher de la comptabilité.",
+          });
+          notifySuccess("SMS envoyé à tout le personnel");
+        } catch (e) {
+          notifyError(e);
+        } finally {
+          setNotifying(false);
+        }
+      },
+    });
   }
 
   return (
@@ -126,23 +182,27 @@ function PayslipsTab() {
           {(Object.keys(PAYSLIP_STATUS_LABEL) as Payslip["status"][]).map((s) => (<option key={s} value={s}>{PAYSLIP_STATUS_LABEL[s]}</option>))}
         </Select>
         <div className="flex gap-2">
+          <Button variant="secondary" loading={notifying} leftSection={<Megaphone className="h-4 w-4" />} onClick={notifyStaffSalariesAvailable}>
+            Notifier salaires disponibles
+          </Button>
           <Button variant="secondary" leftSection={<FileSpreadsheet className="h-4 w-4" />} onClick={downloadBankFile}>Fichier bancaire</Button>
           <Button variant="secondary" leftSection={<Banknote className="h-4 w-4" />} onClick={() => setBatchOpen(true)}>Générer en lot</Button>
+          <Button variant="secondary" onClick={() => setStaffPayslipOpen(true)}>Personnel (direction/admin.)</Button>
           <Button leftSection={<Plus className="h-4 w-4" />} onClick={() => setGenerating(true)}>Générer une fiche</Button>
         </div>
       </div>
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Enseignant</TH><TH>Période</TH><TH>Base</TH><TH>Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Enseignant</TH><TH>Période</TH><TH className="hidden sm:table-cell">Base</TH><TH className="hidden sm:table-cell">Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
             {(q.data ?? []).map((p) => (
               <TR key={p.id}>
                 <TD className="font-medium text-gray-900">{teacherName.get(p.teacherId) ?? `#${p.teacherId}`}</TD>
                 <TD>{p.periodLabel}</TD>
-                <TD>{formatGNF(p.baseSalary)}</TD>
-                <TD>{formatGNF(p.grossSalary)}</TD>
+                <TD className="hidden sm:table-cell">{formatGNF(p.baseSalary)}</TD>
+                <TD className="hidden sm:table-cell">{formatGNF(p.grossSalary)}</TD>
                 <TD className="font-semibold text-gray-900">{formatGNF(p.netSalary)}</TD>
                 <TD><Badge tone={STATUS_TONE[p.status]}>{PAYSLIP_STATUS_LABEL[p.status]}</Badge></TD>
                 <TD className="text-right">
@@ -175,6 +235,100 @@ function PayslipsTab() {
       <Modal open={!!linesFor} onClose={() => setLinesFor(null)} title={linesFor ? `Détail — ${teacherName.get(linesFor.teacherId) ?? ""} (${linesFor.periodLabel})` : ""}>
         {linesFor && <LinesPanel payslip={linesFor} onChanged={() => q.refetch()} />}
       </Modal>
+
+      <Modal open={staffPayslipOpen} onClose={() => setStaffPayslipOpen(false)} title="Fiches de paie — personnel direction/administratif" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <StaffPayslipPanel structures={structuresQuery.data ?? []} onGenerated={() => { notifySuccess("Fiche générée"); q.refetch(); }} />
+      </Modal>
+    </div>
+  );
+}
+
+/**
+ * Génération de fiche de paie pour le personnel non-enseignant (direction/administratif/soutien) —
+ * absent du formulaire « Générer une fiche » (réservé aux enseignants, calcul sur heures). Deux
+ * options par personne : fiche simple (salaire de base fixe), ou — si un enseignant est lié à sa
+ * fiche (§staff, « Enseigne aussi ») — fiche combinée (salaire de base + heures d'enseignement
+ * calculées automatiquement, voir generateCombinedPayslip).
+ */
+function StaffPayslipPanel({ structures, onGenerated }: { structures: SalaryStructure[]; onGenerated: () => void }) {
+  const employeesQuery = useQuery(listEmployees, []);
+  const employees = employeesQuery.data ?? [];
+  const now = new Date();
+  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [structureId, setStructureId] = useState("");
+  const [generatingId, setGeneratingId] = useState<number | null>(null);
+  const [y, m] = period.split("-").map(Number);
+  const periodLabel = `${["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"][m - 1]} ${y}`;
+
+  async function generateFixed(emp: Employee) {
+    setGeneratingId(emp.id);
+    try {
+      await generatePayslip({
+        employeeType: emp.category, teacherId: emp.id, teacherName: `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim(),
+        periodLabel, baseSalary: Number(emp.baseSalary ?? 0),
+        structureId: structureId ? Number(structureId) : null,
+        teacherPhone: emp.phone, bankAccount: emp.bankAccount,
+      });
+      onGenerated();
+    } catch (err) { notifyError(err); } finally { setGeneratingId(null); }
+  }
+
+  async function generateCombined(emp: Employee) {
+    if (!emp.linkedTeacherId) return;
+    setGeneratingId(emp.id);
+    try {
+      await generateCombinedPayslip({
+        year: y, month: m, employeeId: emp.id, employeeName: `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim(),
+        employeeType: emp.category, baseSalary: Number(emp.baseSalary ?? 0),
+        linkedTeacherId: emp.linkedTeacherId, structureId: structureId ? Number(structureId) : null,
+        employeePhone: emp.phone, bankAccount: emp.bankAccount,
+      });
+      onGenerated();
+    } catch (err) { notifyError(err); } finally { setGeneratingId(null); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field>
+          <Label>Mois</Label>
+          <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+        </Field>
+        <Field>
+          <Label>Structure salariale</Label>
+          <Select value={structureId} onChange={(e) => setStructureId(e.target.value)}>
+            <option value="">Aucune (base seule)</option>
+            {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+          </Select>
+        </Field>
+      </div>
+      {employeesQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
+        <Table>
+          <THead><tr><TH>Personnel</TH><TH>Poste</TH><TH>Salaire de base</TH><TH className="text-right">Actions</TH></tr></THead>
+          <TBody>
+            {employees.length === 0 && <TR><TD colSpan={4} className="py-8 text-center text-gray-400">Aucun personnel.</TD></TR>}
+            {employees.map((emp) => (
+              <TR key={emp.id}>
+                <TD className="font-medium text-gray-900">{emp.firstName} {emp.lastName}</TD>
+                <TD className="text-gray-600">{EMPLOYEE_CATEGORY_LABEL[emp.category]}{emp.jobTitle ? ` — ${emp.jobTitle}` : ""}</TD>
+                <TD>{formatGNF(emp.baseSalary ?? 0)}</TD>
+                <TD className="text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" loading={generatingId === emp.id} onClick={() => generateFixed(emp)}>
+                      Fiche simple
+                    </Button>
+                    {emp.linkedTeacherId != null && (
+                      <Button size="sm" variant="ghost" loading={generatingId === emp.id} onClick={() => generateCombined(emp)}>
+                        Fiche combinée
+                      </Button>
+                    )}
+                  </div>
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      )}
     </div>
   );
 }
@@ -195,7 +349,7 @@ const generateSchema = z.object({
 type GenerateFormValues = z.infer<typeof generateSchema>;
 
 function GenerateForm({ teachers, structures, onCancel, onDone }: {
-  teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null }[];
+  teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null; phone?: string | null; bankAccount?: string | null }[];
   structures: SalaryStructure[]; onCancel: () => void; onDone: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -253,6 +407,8 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
         overtimeHours: Number(values.overtimeHours) || 0,
         overtimeRate: Number(values.overtimeRate) || 0,
         overtimeMultiplier: Number(values.overtimeMultiplier) || 1,
+        teacherPhone: t?.phone ?? null,
+        bankAccount: t?.bankAccount ?? null,
       });
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -273,11 +429,11 @@ function GenerateForm({ teachers, structures, onCancel, onDone }: {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Du</Label>
-          <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable />
+          <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable maxDate={new Date()} />
         </Field>
         <Field>
           <Label>Au</Label>
-          <DatePicker value={v.periodEnd} onChange={(val) => setValue("periodEnd", val)} clearable />
+          <DatePicker value={v.periodEnd} onChange={(val) => setValue("periodEnd", val)} clearable maxDate={new Date()} />
         </Field>
       </div>
       <Field>
@@ -368,6 +524,13 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
         <div className="rounded-lg bg-gray-50 p-2"><p className="text-xs text-gray-500">Brut</p><p className="font-semibold">{formatGNF(current.grossSalary)}</p></div>
         <div className="rounded-lg bg-success-50 p-2"><p className="text-xs text-gray-500">Net</p><p className="font-semibold text-success-700">{formatGNF(current.netSalary)}</p></div>
       </div>
+
+      {current.notes && (
+        <div className="rounded-lg border border-brand-100 bg-brand-50/50 p-3">
+          <p className="text-xs font-semibold text-brand-700">Détail du calcul (heures réalisées, retard, départ anticipé)</p>
+          <p className="mt-1 text-sm text-gray-700">{current.notes}</p>
+        </div>
+      )}
       {linesQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
         <Table>
           <THead><tr><TH>Libellé</TH><TH>Type</TH><TH className="text-right">Montant</TH>{editable && <TH />}</tr></THead>
@@ -412,7 +575,8 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
  * (même calcul que l'onglet Rémunération, un enseignant à la fois — voir generatePayslipFromHours).
  */
 function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
-  teachers: { id: number; firstName: string; lastName: string }[];
+  teachers: { id: number; firstName: string; lastName: string; phone?: string | null; bankAccount?: string | null;
+    remunerationType?: string | null; remunerationRate?: string | number | null }[];
   structures: SalaryStructure[]; onCancel: () => void; onDone: (count: number) => void;
 }) {
   const now = new Date();
@@ -442,9 +606,11 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
     if (ids.length === 0) { notifyError(new Error("Sélectionnez au moins un enseignant.")); return; }
     setLoading(true);
     try {
-      const results = await Promise.all(ids.map((id) => {
+      const results = await Promise.all(ids.map(async (id) => {
         const t = teachers.find((x) => x.id === id);
-        return generatePayslipFromHours(id, y, m, t ? `${t.firstName} ${t.lastName}` : null, structureId ? Number(structureId) : null);
+        await ensureTeacherCompensation(id, t);
+        return generatePayslipFromHours(id, y, m, t ? `${t.firstName} ${t.lastName}` : null,
+          structureId ? Number(structureId) : null, t?.phone ?? null, t?.bankAccount ?? null);
       }));
       onDone(results.length);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -702,6 +868,30 @@ function CompensationTab() {
   const [teacherId, setTeacherId] = useState<string>("");
   const tid = teacherId ? Number(teacherId) : null;
 
+  // Classes de chaque enseignant — pour que le sélecteur affiche « Nom (Classe A, Classe B) » au lieu
+  // du seul nom : avec plusieurs enseignants homonymes ou peu connus, impossible de savoir dans quelle
+  // classe chacun évolue avant de le sélectionner.
+  const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const classesQuery = useQuery(
+    () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
+    [currentYearQuery.data?.id],
+  );
+  const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
+  const assignedClassesQuery = useQuery(
+    () => Promise.all(teachers.map((t) => getAssignedClasses(t.id).then((ids) => [t.id, ids] as const)))
+      .then((entries) => new Map(entries)),
+    [teachers.map((t) => t.id).join(",")],
+  );
+  const classesLabelByTeacher = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const t of teachers) {
+      const ids = assignedClassesQuery.data?.get(t.id) ?? [];
+      const labels = ids.map((id) => classLabelById.get(id)).filter((l): l is string => !!l);
+      map.set(t.id, labels.join(", "));
+    }
+    return map;
+  }, [teachers, assignedClassesQuery.data, classLabelById]);
+
   const compQuery = useQuery(() => (tid ? getCompensation(tid) : Promise.resolve(null)), [teacherId]);
 
   const now = new Date();
@@ -719,17 +909,22 @@ function CompensationTab() {
 
   const teacherOptions: SearchableOption[] = useMemo(
     () => teachers.map((t) => {
-      const label = `${t.firstName} ${t.lastName}`;
+      const classesLabel = classesLabelByTeacher.get(t.id);
+      const name = `${t.firstName} ${t.lastName}`;
+      const label = classesLabel ? `${name} — ${classesLabel}` : name;
       return { value: String(t.id), trigger: label, label, searchText: label };
     }),
-    [teachers],
+    [teachers, classesLabelByTeacher],
   );
 
   async function genPayslip() {
     if (!tid) return;
     setGenLoading(true);
     try {
-      await generatePayslipFromHours(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null);
+      await ensureTeacherCompensation(tid, teacherName);
+      compQuery.refetch();
+      await generatePayslipFromHours(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null,
+        null, teacherName?.phone ?? null, teacherName?.bankAccount ?? null);
       notifySuccess("Fiche de paie générée (onglet Fiches de paie)");
     } catch (e) { notifyError(e); } finally { setGenLoading(false); }
   }
@@ -738,7 +933,10 @@ function CompensationTab() {
     if (!tid) return;
     setGenTimetableLoading(true);
     try {
-      await generatePayslipFromTimetable(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null);
+      await ensureTeacherCompensation(tid, teacherName);
+      compQuery.refetch();
+      await generatePayslipFromTimetable(tid, y, m, teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null,
+        teacherName?.phone ?? null, teacherName?.bankAccount ?? null);
       notifySuccess("Estimation générée (onglet Fiches de paie) — à ne pas confondre avec le bulletin réel");
     } catch (e) { notifyError(e); } finally { setGenTimetableLoading(false); }
   }
@@ -780,7 +978,7 @@ function CompensationTab() {
                   { label: "Dont classes d'examen", value: fmtH(p.examEffectiveMinutes) },
                   { label: "Paie des cours", value: formatGNF(p.teachingPay) },
                   { label: "Salaire fixe", value: p.payMode === "FIXED" ? formatGNF(p.fixedSalary) : "—" },
-                  { label: "Net à payer", value: formatGNF(p.grossPay), strong: true },
+                  { label: "Montant brut estimé", value: formatGNF(p.grossPay), strong: true },
                 ].map((c) => (
                   <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-gray-50"}`}>
                     <p className="text-xs text-gray-500">{c.label}</p>
@@ -790,9 +988,15 @@ function CompensationTab() {
               </div>
             ) : null}
             {p && (
-              <div className="mt-3 flex justify-end">
-                <Button onClick={genPayslip} loading={genLoading}>Générer la fiche de paie</Button>
-              </div>
+              <>
+                <p className="mt-2 text-xs text-gray-400">
+                  Montant brut, avant déductions (CNSS, frais scolarité du personnel…) — le net à payer
+                  n&apos;est calculé qu&apos;une fois la fiche de paie générée ci-dessous.
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <Button onClick={genPayslip} loading={genLoading}>Générer la fiche de paie</Button>
+                </div>
+              </>
             )}
           </div>
 
@@ -814,7 +1018,7 @@ function CompensationTab() {
                   { label: "Tarif normale", value: formatGNF(tp.hourlyRateNormal) },
                   { label: "Tarif examen", value: formatGNF(tp.hourlyRateExam) },
                   { label: "Salaire fixe", value: tp.payMode === "FIXED" ? formatGNF(tp.fixedSalary) : "—" },
-                  { label: "Net à payer", value: formatGNF(tp.grossPay), strong: true },
+                  { label: "Montant brut estimé", value: formatGNF(tp.grossPay), strong: true },
                 ].map((c) => (
                   <div key={c.label} className={`rounded-xl px-3 py-3 ${c.strong ? "bg-brand-50" : "bg-gray-50"}`}>
                     <p className="text-xs text-gray-500">{c.label}</p>

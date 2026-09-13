@@ -19,9 +19,14 @@ export const COMPUTATION_LABEL: Record<RuleComputation, string> = {
   PERCENT_OF_GROSS: "% du brut",
 };
 
+/** Nature du salarié (§7.1) : distingue le référentiel Teacher/Employee, qui partagent le même champ
+ * `teacherId` numérique (deux séquences d'identifiants distinctes pouvant coïncider). */
+export type PayslipEmployeeType = "TEACHER" | "ADMINISTRATIVE" | "DIRECTION" | "SUPPORT";
+
 export interface Payslip {
   id: number;
   teacherId: number;
+  employeeType: PayslipEmployeeType;
   periodLabel: string;
   periodStart: string | null;
   periodEnd: string | null;

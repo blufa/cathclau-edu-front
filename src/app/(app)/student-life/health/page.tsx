@@ -105,17 +105,17 @@ export default function HealthPage() {
             <p className="py-8 text-center text-sm text-gray-400">Aucun passage enregistré.</p>
           ) : (
             <Table>
-              <THead><tr><TH>Date</TH><TH>Élève</TH><TH>Motif</TH><TH>Soins</TH><TH>T°</TH><TH>Issue</TH><TH>Parent</TH><TH className="text-right">Actions</TH></tr></THead>
+              <THead><tr><TH>Date</TH><TH>Élève</TH><TH>Motif</TH><TH className="hidden sm:table-cell">Soins</TH><TH className="hidden sm:table-cell">T°</TH><TH>Issue</TH><TH className="hidden sm:table-cell">Parent</TH><TH className="text-right">Actions</TH></tr></THead>
               <TBody>
                 {(visitsQuery.data ?? []).map((v) => (
                   <TR key={v.id}>
                     <TD className="whitespace-nowrap text-sm">{v.visitDate}{v.visitTime ? ` ${v.visitTime.slice(0, 5)}` : ""}</TD>
                     <TD className="font-medium text-gray-900">{studentName.get(v.studentId) ?? `#${v.studentId}`}</TD>
                     <TD className="max-w-[200px] truncate text-sm text-gray-600" title={v.reason ?? ""}>{v.reason ?? "—"}</TD>
-                    <TD className="max-w-[200px] truncate text-sm text-gray-600" title={v.careGiven ?? ""}>{v.careGiven ?? "—"}</TD>
-                    <TD className="text-sm">{v.temperature ? `${v.temperature}°` : "—"}</TD>
+                    <TD className="hidden max-w-[200px] truncate text-sm text-gray-600 sm:table-cell" title={v.careGiven ?? ""}>{v.careGiven ?? "—"}</TD>
+                    <TD className="hidden text-sm sm:table-cell">{v.temperature ? `${v.temperature}°` : "—"}</TD>
                     <TD><Badge tone={OUTCOME_TONE[v.outcome]}>{VISIT_OUTCOME_LABEL[v.outcome]}</Badge></TD>
-                    <TD>{v.parentNotified ? <Badge tone="green">Prévenu</Badge> : <span className="text-gray-400">—</span>}</TD>
+                    <TD className="hidden sm:table-cell">{v.parentNotified ? <Badge tone="green">Prévenu</Badge> : <span className="text-gray-400">—</span>}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         {canWrite && !v.parentNotified && (
@@ -291,7 +291,7 @@ function VisitForm({ defaultStudentId, initial, studentOptions, onCancel, onDone
         {errors.studentId && <p className="text-xs text-error-600">{errors.studentId.message}</p>}
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={v.visitDate} clearable onChange={(val) => setValue("visitDate", val)} /></Field>
+        <Field><Label>Date</Label><DatePicker value={v.visitDate} clearable onChange={(val) => setValue("visitDate", val)} maxDate={new Date()} /></Field>
         <Field><Label>Température (°C)</Label><Input type="number" step={0.1} min={30} max={45} value={v.temperature} onChange={(e) => setValue("temperature", e.target.value)} /></Field>
       </div>
       <Field><Label>Motif <span className="text-error-500">*</span></Label><Textarea rows={2} value={v.reason} onChange={(e) => setValue("reason", e.target.value)} /></Field>

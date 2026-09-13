@@ -38,8 +38,10 @@ export interface GroupPaymentInput {
   monthsCount: number;
   remainingAfter: number;
   /** studentId par part optionnel — nécessaire seulement quand les factures appartiennent à des
-   * élèves différents (encaissement multi-enfants) ; sinon retombe sur le studentId principal. */
-  shares: { invoiceId: number; studentId?: number; amount: number }[];
+   * élèves différents (encaissement multi-enfants) ; sinon retombe sur le studentId principal.
+   * paidMonths : mois "YYYY-MM" cochés pour cette part sur une facture multi-mois (tranche) —
+   * reportés sur Invoice.paidMonths pour que la facture reflète les mois réellement réglés. */
+  shares: { invoiceId: number; studentId?: number; amount: number; paidMonths?: string[] }[];
   academicYearId?: number | null;
   /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
    * réseau renvoie le paiement déjà créé côté serveur au lieu d'en créer un second. */

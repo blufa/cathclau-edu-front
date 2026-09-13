@@ -15,6 +15,10 @@ export function notifyError(error: unknown, fallback = "Une erreur est survenue"
   toast.error("Erreur", { description: message });
 }
 
+export function notifyInfo(message: string, title = "Information") {
+  toast.info(title, { description: message });
+}
+
 interface ConfirmOptions {
   title: string;
   message: string;

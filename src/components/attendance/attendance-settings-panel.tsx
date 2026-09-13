@@ -9,6 +9,7 @@ import {
   listRecessWindows,
   updateAttendanceSettings,
   updateEmployeeAttendanceHours,
+  updateStudentAttendanceMargin,
 } from "@/lib/api/attendance";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,14 +17,16 @@ import { Field, Input, Label } from "@/components/ui/input";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
-/** Réglages du calcul des heures enseignant : marge de transition entre deux séances consécutives
- * dans des salles différentes, et fenêtres de récréation (temps défini par l'école, non imputable
+/** Réglages du calcul de présence/heures : marge de tolérance générale avant de compter un retard
+ * (élève, enseignant, personnel), et fenêtres de récréation (temps défini par l'école, non imputable
  * à l'enseignant sur son heure d'arrivée). */
 export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
   const settingsQuery = useQuery(getAttendanceSettings, []);
   const windowsQuery = useQuery(listRecessWindows, []);
   const [margin, setMargin] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [studentMargin, setStudentMargin] = useState<number | null>(null);
+  const [savingStudentMargin, setSavingStudentMargin] = useState(false);
   const [label, setLabel] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -32,7 +35,10 @@ export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
   const [employeeCheckOut, setEmployeeCheckOut] = useState<string | null>(null);
   const [savingHours, setSavingHours] = useState(false);
 
-  const effectiveMargin = margin ?? settingsQuery.data?.transitionMarginMinutes ?? 5;
+  // Pas de tolérance tant que l'école ne l'a pas explicitement configurée — 0 par défaut, jamais une
+  // valeur non nulle silencieuse (demande explicite de la direction des études).
+  const effectiveMargin = margin ?? settingsQuery.data?.transitionMarginMinutes ?? 0;
+  const effectiveStudentMargin = studentMargin ?? settingsQuery.data?.studentTransitionMarginMinutes ?? 0;
   const windows = windowsQuery.data ?? [];
   const effectiveCheckIn = employeeCheckIn ?? settingsQuery.data?.employeeCheckInTime?.slice(0, 5) ?? "08:00";
   const effectiveCheckOut = employeeCheckOut ?? settingsQuery.data?.employeeCheckOutTime?.slice(0, 5) ?? "17:00";
@@ -41,12 +47,25 @@ export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
     setSaving(true);
     try {
       await updateAttendanceSettings(effectiveMargin);
-      notifySuccess("Marge de transition enregistrée.");
+      notifySuccess("Marge de tolérance enseignants/personnel enregistrée.");
       settingsQuery.refetch();
     } catch (err) {
       notifyError(err);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveStudentMargin() {
+    setSavingStudentMargin(true);
+    try {
+      await updateStudentAttendanceMargin(effectiveStudentMargin);
+      notifySuccess("Marge de tolérance élèves enregistrée.");
+      settingsQuery.refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSavingStudentMargin(false);
     }
   }
 
@@ -102,17 +121,35 @@ export function AttendanceSettingsPanel({ canWrite }: { canWrite: boolean }) {
     <div className="space-y-6">
       <div className="max-w-xl rounded-2xl border border-gray-200 bg-white p-6">
         <p className="mb-4 text-xs text-gray-400">
-          Temps de trajet toléré entre deux séances consécutives d&apos;un même enseignant dans des
-          salles différentes, avant de compter un retard sur la seconde séance.
+          Délai de tolérance avant de compter un retard, à l&apos;entrée d&apos;un enseignant ou d&apos;un
+          membre du personnel (quel que soit le cours ou la salle) — 0 minute tant que non configuré,
+          aucune tolérance appliquée par défaut. Marge distincte de celle des élèves, ci-dessous.
         </p>
         <Field>
-          <Label>Marge de transition (minutes)</Label>
+          <Label>Marge de tolérance enseignants / personnel (minutes)</Label>
           <Input type="number" min={0} max={60} disabled={!canWrite} value={effectiveMargin}
             onChange={(e) => setMargin(Number(e.target.value) || 0)} />
         </Field>
         {canWrite && (
           <div className="mt-4 flex justify-end">
             <Button onClick={saveMargin} loading={saving}>Enregistrer</Button>
+          </div>
+        )}
+      </div>
+
+      <div className="max-w-xl rounded-2xl border border-gray-200 bg-white p-6">
+        <p className="mb-4 text-xs text-gray-400">
+          Délai de tolérance avant de compter un retard à l&apos;entrée d&apos;un élève — réglable
+          indépendamment de la marge enseignants/personnel ci-dessus. 0 minute tant que non configuré.
+        </p>
+        <Field>
+          <Label>Marge de tolérance élèves (minutes)</Label>
+          <Input type="number" min={0} max={60} disabled={!canWrite} value={effectiveStudentMargin}
+            onChange={(e) => setStudentMargin(Number(e.target.value) || 0)} />
+        </Field>
+        {canWrite && (
+          <div className="mt-4 flex justify-end">
+            <Button onClick={saveStudentMargin} loading={savingStudentMargin}>Enregistrer</Button>
           </div>
         )}
       </div>

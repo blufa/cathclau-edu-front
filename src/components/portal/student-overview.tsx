@@ -25,9 +25,10 @@ import { Input } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError } from "@/lib/feedback";
-import { formatGNF, formatMinutes } from "@/lib/format";
+import { formatGNF, formatMinutes, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-const INVOICE_TONE: Record<InvoiceStatus, "red" | "amber" | "green"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green" };
+const INVOICE_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
 export function StudentOverview({ student }: { student: Student }) {
   const reportsQuery = useQuery(() => getStudentReportCards(student.id), [student.id]);
@@ -130,7 +131,7 @@ export function StudentOverview({ student }: { student: Student }) {
           </p>
         ) : (
           <Table>
-            <THead><tr><TH>Cours</TH><TH>Entrée</TH><TH>Retard</TH><TH>Sortie</TH><TH>Départ anticipé</TH></tr></THead>
+            <THead><tr><TH>Cours</TH><TH>Entrée</TH><TH>Retard</TH><TH className="hidden sm:table-cell">Sortie</TH><TH className="hidden sm:table-cell">Départ anticipé</TH></tr></THead>
             <TBody>
               {(checkinsQuery.data ?? [])
                 .sort((a, b) => a.checkInTime.localeCompare(b.checkInTime))
@@ -141,12 +142,12 @@ export function StudentOverview({ student }: { student: Student }) {
                         ? subjectName((scheduleQuery.data?.slots ?? []).find((s) => s.id === c.scheduleSlotId)?.subjectId ?? null)
                         : "Cours"}
                     </TD>
-                    <TD>{c.checkInTime}</TD>
+                    <TD>{formatTime(c.checkInTime)}</TD>
                     <TD className={c.lateMinutes > 0 ? "text-warning-600" : undefined}>
                       {c.lateMinutes > 0 ? formatMinutes(c.lateMinutes) : "—"}
                     </TD>
-                    <TD>{c.checkOutTime ?? "—"}</TD>
-                    <TD className={c.earlyMinutes && c.earlyMinutes > 0 ? "text-warning-600" : undefined}>
+                    <TD className="hidden sm:table-cell">{formatTime(c.checkOutTime)}</TD>
+                    <TD className={cn("hidden sm:table-cell", c.earlyMinutes && c.earlyMinutes > 0 ? "text-warning-600" : undefined)}>
                       {c.earlyMinutes && c.earlyMinutes > 0 ? formatMinutes(c.earlyMinutes) : "—"}
                     </TD>
                   </TR>
@@ -162,13 +163,13 @@ export function StudentOverview({ student }: { student: Student }) {
           <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">Aucun bulletin publié.</p>
         ) : (
           <Table>
-            <THead><tr><TH>Moyenne</TH><TH>Rang</TH><TH>Mention</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
+            <THead><tr><TH>Moyenne</TH><TH className="hidden sm:table-cell">Rang</TH><TH className="hidden sm:table-cell">Mention</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
             <TBody>
               {published.map((c) => (
                 <TR key={c.id}>
                   <TD className="font-medium text-slate-900">{c.overallAverage ?? "—"}</TD>
-                  <TD>{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
-                  <TD>{c.honor ?? "—"}</TD>
+                  <TD className="hidden sm:table-cell">{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
+                  <TD className="hidden sm:table-cell">{c.honor ?? "—"}</TD>
                   <TD><Badge tone="green">{REPORT_CARD_STATUS_LABEL[c.status]}</Badge></TD>
                   <TD className="text-right"><Button size="sm" variant="ghost" onClick={() => pdf(c)}>PDF</Button></TD>
                 </TR>
@@ -208,14 +209,14 @@ export function StudentOverview({ student }: { student: Student }) {
           <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">Aucune facture.</p>
         ) : (
           <Table>
-            <THead><tr><TH>Objet</TH><TH>Référence</TH><TH>Total</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
+            <THead><tr><TH>Objet</TH><TH className="hidden sm:table-cell">Référence</TH><TH className="hidden sm:table-cell">Total</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
             <TBody>
               {invoices.map((i: Invoice) => (
                 <TR key={i.id}>
                   <TD className="text-sm text-slate-700">{i.periodLabel ?? "Frais / inscription"}</TD>
-                  <TD className="font-mono text-xs text-slate-600">{i.reference}</TD>
-                  <TD className="font-medium text-slate-900">{formatGNF(i.totalAmount)}</TD>
-                  <TD>{formatGNF(i.remainingBalance ?? i.totalAmount)}</TD>
+                  <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{i.reference}</TD>
+                  <TD className="hidden font-medium text-slate-900 sm:table-cell">{formatGNF(i.totalAmount)}</TD>
+                  <TD className="font-medium text-slate-900">{formatGNF(i.remainingBalance ?? i.totalAmount)}</TD>
                   <TD><Badge tone={INVOICE_TONE[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Badge></TD>
                   <TD className="text-right">{i.status !== "PAID" && <span className="text-xs text-slate-400">À régler à l&apos;école</span>}</TD>
                 </TR>

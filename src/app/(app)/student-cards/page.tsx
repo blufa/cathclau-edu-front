@@ -109,15 +109,15 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>N° carte</TH><TH>Élève</TH><TH>Matricule</TH><TH>Émission</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH className="hidden sm:table-cell">N° carte</TH><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Émission</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {rows.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucune carte.</TD></TR>}
+            {rows.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune carte.</TD></TR>}
             {rows.map((c) => (
               <TR key={c.id}>
-                <TD className="font-mono text-xs text-gray-600">{c.cardNumber}</TD>
+                <TD className="hidden font-mono text-xs text-gray-600 sm:table-cell">{c.cardNumber}</TD>
                 <TD>{studentName(c.studentId)}</TD>
-                <TD>{c.studentNumber ?? "—"}</TD>
-                <TD className="text-gray-500">{formatDate(c.issueDate)}</TD>
+                <TD className="hidden sm:table-cell">{c.studentNumber ?? "—"}</TD>
+                <TD className="hidden text-gray-500 sm:table-cell">{formatDate(c.issueDate)}</TD>
                 <TD><Badge tone={STATUS_TONE[c.status]}>{CARD_STATUS_LABEL[c.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
