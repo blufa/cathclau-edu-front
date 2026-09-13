@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { getStudentParents } from "@/lib/api/parents";
 import { sendCommunication } from "@/lib/api/communication";
 import { CHANNEL_LABEL, type CommunicationChannel, type CommunicationReason } from "@/lib/types/communication";
@@ -23,6 +24,7 @@ interface Props {
 
 /** Reusable "remind the parent" action: pick a channel (Email/SMS/WhatsApp) + message, then send. */
 export function ParentReminderButton({ studentId, reason, subject, defaultMessage, label = "Relancer", size = "sm", variant = "outline" }: Props) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [channel, setChannel] = useState<CommunicationChannel>("EMAIL");
   const [message, setMessage] = useState("");
@@ -39,9 +41,14 @@ export function ParentReminderButton({ studentId, reason, subject, defaultMessag
     // Destinataire par défaut : le responsable principal (« responsable 1 ») s'il est désigné ; sinon tous.
     const primary = parents.filter((p) => p.primaryGuardian);
     const targets = primary.length > 0 ? primary : parents;
-    const recipientUserIds = targets.map((p) => p.userId).filter((u): u is number => u != null);
-    if (recipientUserIds.length === 0) {
-      notifyError("Aucun parent avec un compte — impossible d'envoyer la relance.");
+    // Toujours viser le téléphone/e-mail directement (pas besoin d'un compte plateforme pour recevoir
+    // une relance) — un recipientUserId seul, sans destination, ne déclenche jamais l'envoi réel côté
+    // serveur (reste indéfiniment "en attente").
+    const recipientDestinations = targets
+      .map((p) => (channel === "EMAIL" ? p.email : p.phone))
+      .filter((d): d is string => !!d);
+    if (recipientDestinations.length === 0) {
+      notifyError(channel === "EMAIL" ? "Aucun parent avec une adresse e-mail connue." : "Aucun parent avec un numéro connu.");
       return;
     }
     if (!message.trim()) {
@@ -50,7 +57,12 @@ export function ParentReminderButton({ studentId, reason, subject, defaultMessag
     }
     setSending(true);
     try {
-      await sendCommunication({ channel, recipientType: "PARENT", reason, subject, content: message.trim(), recipientUserIds });
+      await sendCommunication({
+        tenantId: user?.tenantId ?? null,
+        senderId: user?.userId ?? null,
+        channel, recipientType: "PARENT", reason, subject, content: message.trim(),
+        recipientUserIds: [], recipientDestinations,
+      });
       notifySuccess("Relance envoyée au(x) parent(s)");
       setOpen(false);
     } catch (err) {

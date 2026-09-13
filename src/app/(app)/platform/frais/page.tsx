@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useQuery } from "@/hooks/use-query";
-import { getPlatformFeeAmount, setPlatformFeeAmount } from "@/lib/api/platform";
+import { getPlatformFeeAmount, setPlatformFeeAmount, listPlatformFeeBalancesByTenant } from "@/lib/api/platform";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
 
@@ -43,16 +44,62 @@ function PlatformFeeSettings() {
           )}
         </CardBody>
       </Card>
+
+      <PlatformFeeBalancesByTenant />
     </div>
   );
 }
 
-function PlatformFeeForm({ currentAmount, onSaved }: { currentAmount: string; onSaved: () => void }) {
-  const [amount, setAmount] = useState(currentAmount);
+/** Combien chaque école doit actuellement à la plateforme (encaissé auprès des parents − déjà réglé). */
+function PlatformFeeBalancesByTenant() {
+  const { data, loading } = useQuery(() => listPlatformFeeBalancesByTenant(), []);
+  const rows = data ?? [];
+  const dueRows = rows.filter((r) => Number(r.balance) > 0);
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Solde dû par école</CardTitle></CardHeader>
+      <CardBody>
+        {loading ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-400">Aucune école.</p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-gray-400">
+              {dueRows.length} école(s) avec un solde à verser, sur {rows.length}.
+            </p>
+            <Table>
+              <THead><tr><TH>École</TH><TH className="text-right">Encaissé</TH><TH className="text-right">Déjà réglé</TH><TH className="text-right">Solde dû</TH></tr></THead>
+              <TBody>
+                {rows.map((r) => (
+                  <TR key={r.tenantId}>
+                    <TD className="text-gray-900">{r.tenantName ?? `#${r.tenantId}`}</TD>
+                    <TD className="text-right">{formatGNF(r.collected)}</TD>
+                    <TD className="text-right">{formatGNF(r.settled)}</TD>
+                    <TD className={`text-right font-semibold ${Number(r.balance) > 0 ? "text-amber-600" : "text-gray-400"}`}>
+                      {formatGNF(r.balance)}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function PlatformFeeForm({ currentAmount, onSaved }: { currentAmount: string | number; onSaved: () => void }) {
+  // BigDecimal côté backend : arrive parfois en nombre JSON brut plutôt qu'en chaîne (selon
+  // l'endpoint) — String(...) normalise avant .trim(), sinon "amount.trim is not a function" plantait
+  // la page dès l'ouverture (le SUPER_ADMIN ne pouvait donc jamais configurer/enregistrer de tarif).
+  const [amount, setAmount] = useState(String(currentAmount));
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    const value = amount.trim();
+    const value = String(amount).trim();
     if (!value || Number(value) < 0) {
       notifyError("Montant invalide.");
       return;

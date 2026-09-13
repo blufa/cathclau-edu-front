@@ -1,4 +1,12 @@
 import type { NextConfig } from "next";
+import withSerwistInit from "@serwist/next";
+
+const withSerwist = withSerwistInit({
+  swSrc: "src/sw.ts",
+  swDest: "public/sw.js",
+  exclude: [/\.map$/],
+  disable: process.env.NODE_ENV !== "production",
+});
 
 const nextConfig: NextConfig = {
   // Sortie autonome pour une image Docker légère (server.js + assets nécessaires uniquement).
@@ -35,4 +43,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// @serwist/next attache toujours une clé `webpack()` à la config, même avec `disable: true` — or
+// Turbopack (utilisé par défaut par `next dev`) refuse de démarrer dès qu'une config webpack est
+// présente, qu'elle soit active ou non. On n'applique donc le plugin Serwist qu'en production
+// (`next build --webpack` / `next start`), jamais en dev, où le service worker est de toute façon
+// désactivé et inutile.
+export default process.env.NODE_ENV === "production" ? withSerwist(nextConfig) : nextConfig;

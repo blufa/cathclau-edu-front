@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BookOpen, CalendarCheck, CalendarDays, Download, FileText, FolderOpen, Wallet } from "lucide-react";
+import { BookOpen, CalendarCheck, CalendarDays, Clock, Download, FileText, FolderOpen, Wallet } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useNetworkStore } from "@/lib/offline/network-store";
 import { getReportCardPdfObjectUrl, getStudentReportCards } from "@/lib/api/grading";
 import { getChildDocuments, getParentReceiptPdfObjectUrl } from "@/lib/api/portal";
-import { getStudentAttendanceStats } from "@/lib/api/attendance";
+import { getStudentAttendanceStats, getStudentCheckins } from "@/lib/api/attendance";
 import { listStudentLessons } from "@/lib/api/lessons";
 import { getStudentSchedule } from "@/lib/api/students";
 import { listRooms, listSubjects } from "@/lib/api/academics";
@@ -21,12 +21,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError } from "@/lib/feedback";
-import { formatGNF } from "@/lib/format";
+import { formatGNF, formatMinutes, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-const INVOICE_TONE: Record<InvoiceStatus, "red" | "amber" | "green"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green" };
+const INVOICE_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
 export function StudentOverview({ student }: { student: Student }) {
   const reportsQuery = useQuery(() => getStudentReportCards(student.id), [student.id]);
@@ -49,6 +51,11 @@ export function StudentOverview({ student }: { student: Student }) {
   const documentsQuery = useQuery(() => getChildDocuments(student.id), [student.id]);
   const [openingDoc, setOpeningDoc] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
+
+  // Pointages du jour (entrée/sortie par cours) — à quelle heure l'enfant est rentré/sorti de chaque
+  // séance, par scan de badge ou saisie manuelle. Défaut : aujourd'hui, modifiable.
+  const [checkinsDate, setCheckinsDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const checkinsQuery = useQuery(() => getStudentCheckins(student.id, checkinsDate), [student.id, checkinsDate]);
 
   const published = useMemo(
     () => (reportsQuery.data ?? []).filter((r) => r.status === "PUBLISHED").sort((a, b) => (b.generatedAt ?? "").localeCompare(a.generatedAt ?? "")),
@@ -112,18 +119,57 @@ export function StudentOverview({ student }: { student: Student }) {
       </section>
 
       <section>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Clock className="h-4 w-4 text-brand-600" /> Présences du jour — entrée/sortie par cours
+          </h3>
+          <Input type="date" value={checkinsDate} onChange={(e) => setCheckinsDate(e.target.value)} className="w-40" />
+        </div>
+        {checkinsQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (checkinsQuery.data ?? []).length === 0 ? (
+          <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
+            Aucun pointage pour cette date.
+          </p>
+        ) : (
+          <Table>
+            <THead><tr><TH>Cours</TH><TH>Entrée</TH><TH>Retard</TH><TH className="hidden sm:table-cell">Sortie</TH><TH className="hidden sm:table-cell">Départ anticipé</TH></tr></THead>
+            <TBody>
+              {(checkinsQuery.data ?? [])
+                .sort((a, b) => a.checkInTime.localeCompare(b.checkInTime))
+                .map((c) => (
+                  <TR key={c.id}>
+                    <TD className="font-medium text-slate-900">
+                      {(scheduleQuery.data?.slots ?? []).find((s) => s.id === c.scheduleSlotId)?.subjectId != null
+                        ? subjectName((scheduleQuery.data?.slots ?? []).find((s) => s.id === c.scheduleSlotId)?.subjectId ?? null)
+                        : "Cours"}
+                    </TD>
+                    <TD>{formatTime(c.checkInTime)}</TD>
+                    <TD className={c.lateMinutes > 0 ? "text-warning-600" : undefined}>
+                      {c.lateMinutes > 0 ? formatMinutes(c.lateMinutes) : "—"}
+                    </TD>
+                    <TD className="hidden sm:table-cell">{formatTime(c.checkOutTime)}</TD>
+                    <TD className={cn("hidden sm:table-cell", c.earlyMinutes && c.earlyMinutes > 0 ? "text-warning-600" : undefined)}>
+                      {c.earlyMinutes && c.earlyMinutes > 0 ? formatMinutes(c.earlyMinutes) : "—"}
+                    </TD>
+                  </TR>
+                ))}
+            </TBody>
+          </Table>
+        )}
+      </section>
+
+      <section>
         <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700"><FileText className="h-4 w-4 text-brand-600" /> Bulletins publiés</h3>
         {reportsQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : published.length === 0 ? (
           <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">Aucun bulletin publié.</p>
         ) : (
           <Table>
-            <THead><tr><TH>Moyenne</TH><TH>Rang</TH><TH>Mention</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
+            <THead><tr><TH>Moyenne</TH><TH className="hidden sm:table-cell">Rang</TH><TH className="hidden sm:table-cell">Mention</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
             <TBody>
               {published.map((c) => (
                 <TR key={c.id}>
                   <TD className="font-medium text-slate-900">{c.overallAverage ?? "—"}</TD>
-                  <TD>{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
-                  <TD>{c.honor ?? "—"}</TD>
+                  <TD className="hidden sm:table-cell">{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
+                  <TD className="hidden sm:table-cell">{c.honor ?? "—"}</TD>
                   <TD><Badge tone="green">{REPORT_CARD_STATUS_LABEL[c.status]}</Badge></TD>
                   <TD className="text-right"><Button size="sm" variant="ghost" onClick={() => pdf(c)}>PDF</Button></TD>
                 </TR>
@@ -163,14 +209,14 @@ export function StudentOverview({ student }: { student: Student }) {
           <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">Aucune facture.</p>
         ) : (
           <Table>
-            <THead><tr><TH>Objet</TH><TH>Référence</TH><TH>Total</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
+            <THead><tr><TH>Objet</TH><TH className="hidden sm:table-cell">Référence</TH><TH className="hidden sm:table-cell">Total</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right" /></tr></THead>
             <TBody>
               {invoices.map((i: Invoice) => (
                 <TR key={i.id}>
                   <TD className="text-sm text-slate-700">{i.periodLabel ?? "Frais / inscription"}</TD>
-                  <TD className="font-mono text-xs text-slate-600">{i.reference}</TD>
-                  <TD className="font-medium text-slate-900">{formatGNF(i.totalAmount)}</TD>
-                  <TD>{formatGNF(i.remainingBalance ?? i.totalAmount)}</TD>
+                  <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{i.reference}</TD>
+                  <TD className="hidden font-medium text-slate-900 sm:table-cell">{formatGNF(i.totalAmount)}</TD>
+                  <TD className="font-medium text-slate-900">{formatGNF(i.remainingBalance ?? i.totalAmount)}</TD>
                   <TD><Badge tone={INVOICE_TONE[i.status]}>{INVOICE_STATUS_LABEL[i.status]}</Badge></TD>
                   <TD className="text-right">{i.status !== "PAID" && <span className="text-xs text-slate-400">À régler à l&apos;école</span>}</TD>
                 </TR>

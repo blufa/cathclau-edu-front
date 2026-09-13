@@ -1,16 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
-import { CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/staff";
+import { listTeachers, listEmployees } from "@/lib/api/staff";
 import { getStudentParents } from "@/lib/api/parents";
-import { scanAttendance, markStudentAbsent, markTeacherAbsent, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
+import { justifyAttendance, markEmployeeAbsent, markStudentAbsent, markTeacherAbsent, notifyParentNow, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
 import { ATTENDANCE_OUTCOME_LABEL, SCAN_DIRECTION_LABEL, type AttendanceOutcome, type ScanDirection } from "@/lib/types/attendance";
+import { submitScanOfflineAware } from "@/lib/offline/submit-attendance-offline-aware";
+import { useAttendanceQueueStore } from "@/lib/offline/attendance-queue-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +22,17 @@ import { Field, Input, Label } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { IdBadge } from "@/components/cards/id-badge";
 import { Reveal } from "@/components/public/reveal";
-import { matriculeFromQr } from "@/lib/identity-qr";
-import { notifyError } from "@/lib/feedback";
-import { formatMinutes } from "@/lib/format";
+import { matriculeFromQr, typeFromQr } from "@/lib/identity-qr";
+import { notifyError, notifySuccess } from "@/lib/feedback";
+import { vibrateError, vibrateSuccess, vibrateWarning } from "@/lib/haptics";
+import { formatMinutes, formatTime } from "@/lib/format";
+
+/** API native BarcodeDetector (absente des types DOM standards de TypeScript) : détection bien plus
+ * robuste que jsQR (QR incliné/flou/à distance), disponible sur Chrome/Edge desktop et Android — repli
+ * sur jsQR ailleurs (Firefox, la plupart des versions de Safari iOS). */
+interface BarcodeDetectorLike {
+  detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]>;
+}
 
 interface ScanFeedItem {
   id: string;
@@ -32,19 +43,27 @@ interface ScanFeedItem {
   checkOutTime?: string | null;
   realizedMinutes?: number | null;
   scheduledMinutes?: number | null;
+  earlyMinutes?: number | null;
+  /** Entrée élève en retard uniquement : permet d'afficher « Notifier »/« Justifier » directement. */
+  subjectType?: ScanSubjectType;
+  studentAttendanceId?: number | null;
   ok: boolean;
   at: string;
 }
 
 type ParseResult =
   | { subjectType: ScanSubjectType; subjectId: number }
-  | { matricule: string };
+  | { matricule: string; subjectType?: ScanSubjectType };
 
 /**
  * Décode un QR scanné :
- *  - QR d'identité lisible (« … Matricule : GSC-ELV-… ») → on retrouve l'élève par matricule ;
+ *  - QR d'identité lisible avec type (« Élève\nNom\nMatricule : GSC-ELV-… ») → matricule cherché
+ *    directement dans la bonne liste, aucune ambiguïté possible ;
+ *  - QR d'identité lisible SANS type (badge imprimé avant ce correctif) → matricule cherché tour à
+ *    tour élève puis enseignant puis personnel (comportement historique, risque de collision de
+ *    matricule entre types conservé uniquement pour ces badges déjà imprimés) ;
  *  - ancien format carte « LACA|tenant|studentId|… » (rétro-compat) → élève par id ;
- *  - badge biométrique « BADGE|tenant|TYPE|id » → élève ou enseignant par id.
+ *  - badge biométrique « BADGE|tenant|TYPE|id » → élève, enseignant ou personnel par id.
  */
 function parseScan(raw: string): ParseResult | null {
   const parts = raw.split("|");
@@ -55,15 +74,18 @@ function parseScan(raw: string): ParseResult | null {
   if (parts[0] === "BADGE" && parts.length >= 4) {
     const type = parts[2];
     const id = Number(parts[3]);
-    if ((type === "STUDENT" || type === "TEACHER") && Number.isFinite(id) && id > 0) {
+    if ((type === "STUDENT" || type === "TEACHER" || type === "EMPLOYEE") && Number.isFinite(id) && id > 0) {
       return { subjectType: type, subjectId: id };
     }
   }
   const matricule = matriculeFromQr(raw);
-  return matricule ? { matricule } : null;
+  if (!matricule) return null;
+  const type = typeFromQr(raw);
+  return type ? { matricule, subjectType: type } : { matricule };
 }
 
 export default function AttendanceScanPage() {
+  const router = useRouter();
   const { user } = useAuth();
   // L'enseignant ne doit jamais pouvoir scanner (ni lui-même ni les élèves) — retiré volontairement.
   // TODO : ajouter le rôle SURVEILLANT une fois créé (rôle prévu pour la surveillance/scan).
@@ -73,29 +95,39 @@ export default function AttendanceScanPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  // Boucle de détection native (voir startCamera) : mise à false pour l'arrêter proprement.
+  const nativeDetectorActiveRef = useRef(false);
   const lastRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
   // Sujets dont un pointage est en cours : évite deux envois simultanés pour la même personne.
   const inFlightRef = useRef<Set<string>>(new Set());
 
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const queuedCount = useAttendanceQueueStore((s) => s.items.length);
   const [direction, setDirection] = useState<ScanDirection>("ENTRY");
   const [feed, setFeed] = useState<ScanFeedItem[]>([]);
   // Badge de retrait (maternelle/primaire) : ouvert automatiquement après une sortie qui le requiert.
   const [pickupPrompt, setPickupPrompt] = useState<{ studentId: number; name: string } | null>(null);
 
-  // Manual / teacher fallback
+  // Manual / teacher / employee fallback
   const [subjectType, setSubjectType] = useState<ScanSubjectType>("STUDENT");
   const [manualId, setManualId] = useState("");
   const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
   const teachersQuery = useQuery(listTeachers, []);
+  const employeesQuery = useQuery(() => listEmployees(), []);
   const manualOptions: SearchableOption[] = useMemo(() => {
+    if (subjectType === "EMPLOYEE") {
+      return (employeesQuery.data ?? []).map((p) => {
+        const label = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim();
+        return { value: String(p.id), trigger: label, label, searchText: label };
+      });
+    }
     const src = subjectType === "STUDENT" ? (studentsQuery.data ?? []) : (teachersQuery.data ?? []);
     return src.map((p) => {
       const label = `${p.firstName} ${p.lastName}`;
       return { value: String(p.id), trigger: label, label, searchText: label };
     });
-  }, [subjectType, studentsQuery.data, teachersQuery.data]);
+  }, [subjectType, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
 
   const pushFeed = useCallback((item: ScanFeedItem) => {
     setFeed((f) => [item, ...f].slice(0, 25));
@@ -106,19 +138,36 @@ export default function AttendanceScanPage() {
     if (inFlightRef.current.has(key)) return; // un pointage est déjà en cours pour ce sujet
     inFlightRef.current.add(key);
     try {
-      const res = await scanAttendance({ subjectType: type, subjectId, direction: dir });
+      const attempt = await submitScanOfflineAware(type, subjectId, dir);
+      if (attempt.outcome === "queued") {
+        // Hors-ligne : le retard/durée n'est calculé que côté serveur, donc pas de retour riche ici —
+        // seul le fait que le scan a bien été enregistré localement est garanti (synchro automatique).
+        pushFeed({
+          id: `${Date.now()}`, name: `#${subjectId}`, kind: dir,
+          ok: true, at: new Date().toLocaleTimeString(),
+        });
+        notifySuccess("Scan enregistré hors-ligne — sera synchronisé automatiquement.");
+        vibrateSuccess();
+        return;
+      }
+      const res = attempt.result;
       pushFeed({
         id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, kind: res.direction,
         outcome: res.outcome, lateMinutes: res.lateMinutes, checkOutTime: res.checkOutTime,
         realizedMinutes: res.realizedMinutes, scheduledMinutes: res.scheduledMinutes,
+        earlyMinutes: res.earlyMinutes,
+        subjectType: res.subjectType as ScanSubjectType, studentAttendanceId: res.studentAttendanceId,
         ok: true, at: new Date().toLocaleTimeString(),
       });
+      if (res.outcome === "LATE") vibrateWarning();
+      else vibrateSuccess();
       if (res.requiresPickupInfo) {
         setPickupPrompt({ studentId: subjectId, name: res.name ?? `#${subjectId}` });
       }
     } catch (err) {
       pushFeed({ id: `${Date.now()}`, name: `#${subjectId}`, kind: dir, ok: false, at: new Date().toLocaleTimeString() });
       notifyError(err);
+      vibrateError();
     } finally {
       inFlightRef.current.delete(key);
     }
@@ -127,6 +176,7 @@ export default function AttendanceScanPage() {
   const markAbsent = useCallback(async (type: ScanSubjectType, subjectId: number, name: string) => {
     try {
       if (type === "STUDENT") await markStudentAbsent(subjectId);
+      else if (type === "EMPLOYEE") await markEmployeeAbsent(subjectId);
       else await markTeacherAbsent(subjectId);
       pushFeed({ id: `${Date.now()}`, name, kind: "ABSENT", ok: true, at: new Date().toLocaleTimeString() });
     } catch (err) {
@@ -144,9 +194,29 @@ export default function AttendanceScanPage() {
     if (!parsed) return;
     lastRef.current = { key: debounceKey, at: now };
     if ("matricule" in parsed) {
-      // QR d'identité lisible : on retrouve la personne par son matricule (listes déjà chargées) —
-      // élève d'abord, sinon enseignant.
       const mat = parsed.matricule.toLowerCase();
+      // Type connu (badge réimprimé avec ce correctif) : on ne cherche QUE dans la bonne liste — plus
+      // aucun risque de confondre un enseignant et un élève partageant le même matricule.
+      if (parsed.subjectType === "STUDENT") {
+        const student = (studentsQuery.data ?? []).find((s) => (s.studentNumber ?? "").trim().toLowerCase() === mat);
+        if (student) { submit("STUDENT", student.id, direction); return; }
+        notifyError(`Matricule introuvable : ${parsed.matricule}`);
+        return;
+      }
+      if (parsed.subjectType === "TEACHER") {
+        const teacher = (teachersQuery.data ?? []).find((t) => (t.staffNumber ?? "").trim().toLowerCase() === mat);
+        if (teacher) { submit("TEACHER", teacher.id, direction); return; }
+        notifyError(`Matricule introuvable : ${parsed.matricule}`);
+        return;
+      }
+      if (parsed.subjectType === "EMPLOYEE") {
+        const employee = (employeesQuery.data ?? []).find((e) => (e.employeeNumber ?? "").trim().toLowerCase() === mat);
+        if (employee) { submit("EMPLOYEE", employee.id, direction); return; }
+        notifyError(`Matricule introuvable : ${parsed.matricule}`);
+        return;
+      }
+      // Type inconnu (badge imprimé avant ce correctif) : ancien comportement de repli — élève, puis
+      // enseignant, puis personnel non-enseignant.
       const student = (studentsQuery.data ?? []).find((s) => (s.studentNumber ?? "").trim().toLowerCase() === mat);
       if (student) {
         submit("STUDENT", student.id, direction);
@@ -157,17 +227,89 @@ export default function AttendanceScanPage() {
         submit("TEACHER", teacher.id, direction);
         return;
       }
+      const employee = (employeesQuery.data ?? []).find((e) => (e.employeeNumber ?? "").trim().toLowerCase() === mat);
+      if (employee) {
+        submit("EMPLOYEE", employee.id, direction);
+        return;
+      }
       notifyError(`Matricule introuvable : ${parsed.matricule}`);
       return;
     }
     submit(parsed.subjectType, parsed.subjectId, direction);
-  }, [direction, submit, studentsQuery.data, teachersQuery.data]);
+  }, [direction, submit, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
+
+  // La boucle de lecture caméra (tick, ci-dessous) est lancée UNE fois par startCamera() et se
+  // rappelle elle-même en boucle via requestAnimationFrame — sa closure sur handleRaw reste donc
+  // figée à sa valeur du moment où la caméra a démarré. Sans cette ref, basculer Entrée/Sortie (ou le
+  // profil élève/enseignant/personnel) après le démarrage de la caméra n'avait aucun effet sur les
+  // scans suivants : ils continuaient à utiliser l'ancien sens (« Entrée ») malgré le bouton « Sortie »
+  // sélectionné à l'écran — d'où un scan de sortie traité comme une nouvelle entrée (même retard
+  // affiché, calculé sur la même séance déjà pointée en entrée).
+  const handleRawRef = useRef(handleRaw);
+  useEffect(() => { handleRawRef.current = handleRaw; }, [handleRaw]);
 
   const stopCamera = useCallback(() => {
+    nativeDetectorActiveRef.current = false;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setStreaming(false);
+  }, []);
+
+  // Boucle de secours en JS pur (jsQR), via un canvas caché : utilisée quand l'API native
+  // BarcodeDetector est absente (Firefox, la plupart des versions de Safari iOS). Moins robuste que
+  // le détecteur natif sur un QR incliné/flou/à distance, mais fonctionne sur tous les navigateurs.
+  const startJsQrLoop = useCallback(() => {
+    const MAX_DIM = 1280; // détail suffisant pour décoder un QR petit/incliné dans l'image, sans
+    // traiter le flux en pleine résolution à chaque frame (coût CPU).
+    const tick = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      // HAVE_CURRENT_DATA (2) suffit pour dessiner l'image courante — HAVE_ENOUGH_DATA (4), utilisé
+      // avant, signifie "assez de données pour lire jusqu'au bout sans coupure", une notion qui ne
+      // s'applique pas franchement à un flux caméra en direct : plusieurs navigateurs mobiles
+      // (Chrome/WebView Android notamment) ne font jamais monter readyState jusqu'à 4 sur un
+      // MediaStream, alors que l'aperçu vidéo s'affiche normalement à l'écran — résultat : la boucle
+      // de lecture ne dessinait jamais rien sur le canvas, jsQR n'était donc jamais appelé, et aucun
+      // QR n'était détecté quoi qu'on présente à la caméra.
+      if (video && canvas && video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+        const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          // "attemptBoth" : essaie aussi les couleurs inversées (code clair sur fond sombre,
+          // reflets d'écran de téléphone…) — améliore la détection quelle que soit la position.
+          const code = jsQR(frame.data, frame.width, frame.height, { inversionAttempts: "attemptBoth" });
+          if (code?.data) handleRawRef.current(code.data);
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  // Détecteur natif du navigateur (Chrome/Edge desktop et Android notamment) : bien plus robuste que
+  // jsQR sur un QR incliné, flou ou pris à distance — c'est directement ce qui manquait pour scanner
+  // « dans toutes les positions ». Boucle asynchrone (detect() renvoie une Promise), indépendante du
+  // rythme de requestAnimationFrame utilisé par le repli jsQR.
+  const startNativeDetectorLoop = useCallback(async (detector: BarcodeDetectorLike) => {
+    nativeDetectorActiveRef.current = true;
+    while (nativeDetectorActiveRef.current) {
+      const video = videoRef.current;
+      if (video && video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+        try {
+          const codes = await detector.detect(video);
+          if (codes[0]?.rawValue) handleRawRef.current(codes[0].rawValue);
+        } catch {
+          // Frame pas encore prête ou détecteur transitoirement indisponible : on retente à la
+          // frame suivante plutôt que d'abandonner toute la boucle de scan.
+        }
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -184,35 +326,22 @@ export default function AttendanceScanPage() {
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play().catch(() => {}); }
       setStreaming(true);
-      // Décodage QR en JS pur (jsQR) via un canvas caché : fonctionne sur tous les navigateurs,
-      // contrairement à l'API native BarcodeDetector (absente de Firefox et de la plupart des
-      // versions de Safari iOS), qui laissait le scan tourner sans jamais rien détecter.
-      const MAX_DIM = 900; // détail suffisant pour décoder un QR petit/incliné dans l'image, sans
-      // traiter le flux en pleine résolution à chaque frame (coût CPU).
-      const tick = () => {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-          const scale = Math.min(1, MAX_DIM / Math.max(video.videoWidth, video.videoHeight));
-          canvas.width = Math.round(video.videoWidth * scale);
-          canvas.height = Math.round(video.videoHeight * scale);
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            // "attemptBoth" : essaie aussi les couleurs inversées (code clair sur fond sombre,
-            // reflets d'écran de téléphone…) — améliore la détection quelle que soit la position.
-            const code = jsQR(frame.data, frame.width, frame.height, { inversionAttempts: "attemptBoth" });
-            if (code?.data) handleRaw(code.data);
-          }
+
+      const BarcodeDetectorCtor = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => BarcodeDetectorLike }).BarcodeDetector;
+      if (BarcodeDetectorCtor) {
+        try {
+          const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] });
+          startNativeDetectorLoop(detector);
+          return;
+        } catch {
+          // Constructeur présent mais format "qr_code" non supporté par ce navigateur : repli jsQR.
         }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
+      }
+      startJsQrLoop();
     } catch {
       setError("Caméra inaccessible : autorisez l'accès à la caméra.");
     }
-  }, [handleRaw]);
+  }, [startJsQrLoop, startNativeDetectorLoop]);
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
@@ -220,6 +349,17 @@ export default function AttendanceScanPage() {
 
   return (
     <div className="space-y-6">
+      <button
+        type="button"
+        // router.back() plutôt qu'un lien fixe vers /attendance : ramène exactement sur l'onglet/la
+        // classe/la date où l'utilisateur se trouvait avant de venir scanner, au lieu de toujours
+        // atterrir sur l'état par défaut de la page Présences.
+        onClick={() => (typeof window !== "undefined" && window.history.length > 1 ? router.back() : router.push("/attendance"))}
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+      >
+        <ArrowLeft className="h-4 w-4" /> Retour aux présences
+      </button>
+
       <Reveal y={12}>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <ScanLine className="h-6 w-6 text-brand-600" /> Pointage par scan de carte
@@ -230,6 +370,14 @@ export default function AttendanceScanPage() {
           du temps — vous choisissez seulement le sens du scan.
         </p>
       </Reveal>
+
+      {queuedCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg bg-warning-50 px-4 py-2.5 text-sm text-warning-700">
+          <span className="font-semibold">{queuedCount}</span> scan{queuedCount > 1 ? "s" : ""} en attente de
+          synchronisation (hors-ligne) — rien n&apos;est perdu, l&apos;envoi reprendra automatiquement dès le
+          retour du réseau.
+        </div>
+      )}
 
       {/* Direction selector — applies to every scan */}
       <div className="flex flex-wrap items-center gap-2">
@@ -275,15 +423,15 @@ export default function AttendanceScanPage() {
             <div>
               <h3 className="mb-2 text-sm font-semibold text-gray-700">Pointage manuel</h3>
               <div className="mb-2 flex gap-2">
-                {(["STUDENT", "TEACHER"] as ScanSubjectType[]).map((t) => (
+                {(["STUDENT", "TEACHER", "EMPLOYEE"] as ScanSubjectType[]).map((t) => (
                   <button key={t} type="button" onClick={() => { setSubjectType(t); setManualId(""); }}
                     className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${subjectType === t ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                    {t === "STUDENT" ? "Élève" : "Enseignant / Direction"}
+                    {t === "STUDENT" ? "Élève" : t === "TEACHER" ? "Enseignant" : "Personnel"}
                   </button>
                 ))}
               </div>
               <SearchableSelect
-                noResultsLabel={subjectType === "STUDENT" ? "Aucun élève" : "Aucun enseignant"}
+                noResultsLabel={subjectType === "STUDENT" ? "Aucun élève" : subjectType === "TEACHER" ? "Aucun enseignant" : "Aucun membre du personnel"}
                 options={manualOptions} value={manualId} onChange={setManualId}
                 triggerClassName="w-full justify-between px-3" />
               <div className="mt-2 flex flex-wrap gap-2">
@@ -302,7 +450,7 @@ export default function AttendanceScanPage() {
                   Marquer absent
                 </Button>
               </div>
-              {subjectType === "TEACHER" && <p className="mt-1 text-xs text-gray-400">Le personnel de direction doit être enregistré comme membre du staff pour pouvoir pointer.</p>}
+              {subjectType === "EMPLOYEE" && <p className="mt-1 text-xs text-gray-400">Personnel administratif, direction et soutien — un seul pointage par jour (pas par cours).</p>}
             </div>
 
             <div>
@@ -431,6 +579,65 @@ function PickupModal({ studentId, studentName, onClose }: { studentId: number; s
   );
 }
 
+/** Actions immédiates pour un élève en retard, directement dans le fil de scan — le surveillant n'a
+ * pas besoin de naviguer vers /attendance. « Notifier » relance l'envoi SMS/email (déjà tenté
+ * automatiquement à l'instant du scan, utile si le premier essai a échoué) ; « Justifier »/« Non
+ * justifié » enregistrent la décision du surveillant sur le retard. */
+function LateActions({ attendanceId }: { attendanceId: number }) {
+  const [notifying, setNotifying] = useState(false);
+  const [notified, setNotified] = useState(false);
+  const [justifying, setJustifying] = useState<"yes" | "no" | null>(null);
+  const [justified, setJustified] = useState<boolean | null>(null);
+
+  async function notify() {
+    setNotifying(true);
+    try {
+      await notifyParentNow(attendanceId);
+      setNotified(true);
+      notifySuccess("Parent notifié.");
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setNotifying(false);
+    }
+  }
+
+  async function justify(value: boolean) {
+    setJustifying(value ? "yes" : "no");
+    try {
+      await justifyAttendance(attendanceId, { justified: value });
+      setJustified(value);
+      notifySuccess(value ? "Retard justifié." : "Retard marqué non justifié.");
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setJustifying(null);
+    }
+  }
+
+  return (
+    <span className="flex items-center gap-1.5">
+      {notified ? (
+        <span className="text-xs text-success-600">Parent notifié</span>
+      ) : (
+        <Button size="sm" variant="ghost" loading={notifying} onClick={notify}>Notifier parent</Button>
+      )}
+      {justified == null ? (
+        <>
+          <Button size="sm" variant="ghost" className="text-success-700" loading={justifying === "yes"} onClick={() => justify(true)}>
+            Justifier
+          </Button>
+          <Button size="sm" variant="ghost" className="text-error-600" loading={justifying === "no"} onClick={() => justify(false)}>
+            Non justifié
+          </Button>
+        </>
+      ) : (
+        <span className="text-xs text-gray-400">{justified ? "Justifié" : "Non justifié"}</span>
+      )}
+    </span>
+  );
+}
+
 function FeedOutcome({ item }: { item: ScanFeedItem }) {
   if (!item.ok) {
     return <span className="text-xs text-gray-400">{item.at}</span>;
@@ -446,24 +653,28 @@ function FeedOutcome({ item }: { item: ScanFeedItem }) {
   if (item.kind === "ENTRY") {
     const outcome = item.outcome ?? "PRESENT";
     return (
-      <span className="flex items-center gap-2">
+      <span className="flex flex-wrap items-center gap-2">
         <Badge tone={outcome === "LATE" ? "amber" : "green"}>
           {ATTENDANCE_OUTCOME_LABEL[outcome]}{outcome === "LATE" && item.lateMinutes ? ` (${formatMinutes(item.lateMinutes)})` : ""}
         </Badge>
         <span className="text-xs text-gray-400">{item.at}</span>
+        {outcome === "LATE" && item.subjectType === "STUDENT" && item.studentAttendanceId != null && (
+          <LateActions attendanceId={item.studentAttendanceId} />
+        )}
       </span>
     );
   }
-  // EXIT : compare la durée réalisée à la durée prévue par l'emploi du temps.
-  const hasBoth = item.realizedMinutes != null && item.scheduledMinutes != null;
-  const diff = hasBoth ? item.realizedMinutes! - item.scheduledMinutes! : null;
-  const label = hasBoth
-    ? `${formatMinutes(item.realizedMinutes)} réalisées / ${formatMinutes(item.scheduledMinutes)} prévues (${diff! >= 0 ? "+" : ""}${formatMinutes(diff)})`
-    : item.checkOutTime ? `Sortie ${item.checkOutTime}` : "Sortie enregistrée";
-  const tone = diff == null ? "gray" : diff < 0 ? "amber" : "green";
+  // EXIT : heure de sortie réelle toujours affichée, avec un badge « À l'heure »/« Anticipé X min »
+  // basé sur earlyMinutes (calculé et enregistré côté serveur) — pas une approximation recalculée ici
+  // à partir de réalisé/prévu, qui ne montrait ni l'heure ni un libellé clair de départ anticipé.
+  const early = item.earlyMinutes ?? 0;
+  const tone = early > 0 ? "amber" : "green";
+  const time = item.checkOutTime ? `Sortie ${formatTime(item.checkOutTime)}` : "Sortie enregistrée";
   return (
     <span className="flex items-center gap-2">
-      <Badge tone={tone}>{label}</Badge>
+      <Badge tone={tone}>
+        {time}{early > 0 ? ` — Anticipé ${formatMinutes(early)}` : ""}
+      </Badge>
       <span className="text-xs text-gray-400">{item.at}</span>
     </span>
   );

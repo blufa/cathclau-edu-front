@@ -43,6 +43,13 @@ export function PlatformFeeSettlementCard() {
             Part des frais d&apos;usage de la plateforme ajoutée à vos factures de mensualité et déjà
             encaissée auprès des parents.
           </p>
+          {!loading && balance <= 0 && (
+            <p className="mt-1 text-xs text-gray-400">
+              Le bouton s&apos;active dès qu&apos;un parent a réellement <strong>payé</strong> une
+              facture de mensualité incluant ce frais — le générer/émettre la facture ne suffit pas
+              tant qu&apos;elle n&apos;est pas encaissée.
+            </p>
+          )}
         </CardBody>
       </Card>
       <Modal open={open} onClose={() => setOpen(false)} title="Verser le solde à la plateforme">

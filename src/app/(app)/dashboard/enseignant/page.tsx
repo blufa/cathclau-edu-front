@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, CalendarDays, ClipboardPen, GraduationCap, Percent } from "lucide-react";
+import { Banknote, CalendarClock, CalendarDays, ClipboardPen, GraduationCap, Percent } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -11,6 +11,8 @@ import { getMyTeacher, getTeacherClasses, getTeacherSchedule } from "@/lib/api/s
 import { getClass, getClassStudents, getScheduleByTeacher, listRooms, listSubjects } from "@/lib/api/academics";
 import { WeeklyTimetable } from "@/components/timetable/weekly-timetable";
 import { getAssessmentGrades, listAssessmentsByClass } from "@/lib/api/grading";
+import { listMyPayslips } from "@/lib/api/payroll";
+import { PAYSLIP_STATUS_LABEL, type Payslip } from "@/lib/types/payroll";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
@@ -19,6 +21,11 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { MyAvailabilityManager } from "@/components/staff/my-availability";
+import { formatGNF } from "@/lib/format";
+
+const PAYSLIP_STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = {
+  DRAFT: "gray", VALIDATED: "indigo", PAID: "green",
+};
 
 const DAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
 const DAY_LABEL: Record<string, string> = {
@@ -90,6 +97,9 @@ export default function TeacherDashboardPage() {
 
     return { classCount: classIds.length, studentTotal, today: todayName, courses, toGrade, fillRate };
   }, []);
+
+  const payslipsQ = useQuery(() => listMyPayslips(), []);
+  const latestPayslip = [...(payslipsQ.data ?? [])].sort((a, b) => (b.periodStart ?? "").localeCompare(a.periodStart ?? ""))[0];
 
   // Consultation hors-ligne (§Phase 2) : affiche le dernier emploi du temps connu pendant qu'un
   // rafraîchissement réseau tourne en tâche de fond — clé par utilisateur (userId), pas par teacherId
@@ -204,6 +214,28 @@ export default function TeacherDashboardPage() {
                   classLabel={(id) => scheduleQ.data?.classLabels.get(id) ?? `Classe #${id}`}
                   emptyText="Aucun emploi du temps défini pour vos classes."
                 />
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardBody>
+              <div className="flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Banknote className="h-4 w-4 text-brand-600" /> Ma paie
+                </h2>
+                <Button component={Link} href="/my-payslips" size="sm" variant="outline">Voir l&apos;historique</Button>
+              </div>
+              {payslipsQ.loading ? (
+                <div className="flex justify-center py-4"><Spinner /></div>
+              ) : !latestPayslip ? (
+                <p className="mt-3 text-sm text-slate-400">Aucune fiche de paie pour le moment.</p>
+              ) : (
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                  <span className="font-medium text-slate-900">{latestPayslip.periodLabel}</span>
+                  <span className="text-slate-500">{formatGNF(latestPayslip.netSalary)} net</span>
+                  <Badge tone={PAYSLIP_STATUS_TONE[latestPayslip.status]}>{PAYSLIP_STATUS_LABEL[latestPayslip.status]}</Badge>
+                </div>
               )}
             </CardBody>
           </Card>

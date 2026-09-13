@@ -1,10 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { SerwistProvider } from "@serwist/next/react";
 import { QueryProvider } from "@/providers/query-provider";
 import { AuthProvider } from "@/providers/auth-provider";
 import { ConfirmDialogHost } from "@/lib/feedback";
+import { InstallPromptProvider } from "@/components/pwa/install-prompt-provider";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit-sans", display: "swap" });
@@ -21,6 +23,13 @@ export const metadata: Metadata = {
   // automatiquement par la convention de fichiers Next.js — les déclarer ici les remplacerait par
   // une seule icône moins nette.
   manifest: "/manifest.webmanifest",
+  // iOS Safari ne lit pas le manifest pour ces réglages : balises meta dédiées nécessaires pour
+  // un rendu correct en mode "Ajouter à l'écran d'accueil" (barre de statut, plein écran).
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: SITE_NAME,
+  },
   openGraph: {
     siteName: SITE_NAME,
     locale: "fr_GN",
@@ -39,6 +48,13 @@ export const metadata: Metadata = {
   },
 };
 
+// Next 15+ exige un export dédié pour le viewport (séparé de `metadata`).
+export const viewport: Viewport = {
+  themeColor: "#1e4fa8",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -49,9 +65,14 @@ export default function RootLayout({
       <body className="min-h-full font-outfit" suppressHydrationWarning>
         <Toaster position="top-right" richColors closeButton />
         <ConfirmDialogHost />
-        <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </QueryProvider>
+        <InstallPromptProvider />
+        {/* Enregistrement du service worker (cache de l'app-shell) : no-op si NODE_ENV !== production
+            (voir next.config.ts, `disable`) — n'interfère jamais avec le hot-reload en dev. */}
+        <SerwistProvider swUrl="/sw.js" disable={process.env.NODE_ENV !== "production"}>
+          <QueryProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryProvider>
+        </SerwistProvider>
       </body>
     </html>
   );

@@ -41,6 +41,10 @@ export function ClassAssistant({
   const [roomByLabel, setRoomByLabel] = useState<Record<string, string>>({});
   // Affecter automatiquement les matières du programme (selon le sous-cycle du grade).
   const [assignProgram, setAssignProgram] = useState(true);
+  // Grades marqués « classe d'examen » (ex. CM2, 10ème/BEPC, Terminale) — tarif horaire de paie
+  // dédié pour les enseignants qui y interviennent (§paie). S'applique à toutes les sections/séries
+  // générées pour ce grade (ex. « Terminale SM A » ET « Terminale SM B »).
+  const [examGrades, setExamGrades] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
   const cycle = levels.find((l) => String(l.id) === cycleId) ?? null;
@@ -124,6 +128,7 @@ export function ClassAssistant({
           roomId,
           // La capacité reprend celle de la salle affectée (le cas échéant).
           maxCapacity: room?.capacity ?? null,
+          classType: examGrades.has(c.grade) ? "EXAMEN" : "NORMALE",
         });
         // Programme : rattache les matières standard du sous-cycle (sans enseignant, coefficient défaut).
         if (assignProgram && created?.id) {
@@ -200,6 +205,28 @@ export function ClassAssistant({
               />
             </Field>
           </div>
+
+          {chosenGrades.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-sm font-semibold text-gray-700">Classes d&apos;examen</p>
+              <p className="mb-1.5 text-xs text-gray-400">
+                Cochez les grades concernés (ex. CM2, 10ème/BEPC, Terminale) — détermine le tarif
+                horaire de paie des enseignants qui y interviennent, s&apos;applique à toutes les
+                sections/séries générées pour ce grade.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {chosenGrades.map((g) => (
+                  <Checkbox
+                    key={g}
+                    label={g}
+                    checked={examGrades.has(g)}
+                    disabled={saving}
+                    onChange={() => toggle(examGrades, setExamGrades, g)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {anySeriesGrade && (
             <div>

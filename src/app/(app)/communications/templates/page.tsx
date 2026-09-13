@@ -27,8 +27,20 @@ import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { smsSegmentInfo } from "@/lib/format";
 
-const VARIABLES = ["{{nom_eleve}}", "{{montant}}", "{{moyenne}}", "{{classe}}", "{{date}}"];
+// Variables réellement substituées à l'envoi, par motif (voir CommunicationEventListener côté
+// backend) — {{ecole}} est toujours disponible, quel que soit le motif.
+const VARIABLES_BY_REASON: Record<CommunicationReason, string[]> = {
+  ABSENCE: ["{{nom_eleve}}", "{{classe}}", "{{date}}", "{{ecole}}"],
+  LATE: ["{{nom_eleve}}", "{{classe}}", "{{date}}", "{{ecole}}"],
+  RESULT: ["{{nom_eleve}}", "{{periode}}", "{{ecole}}"],
+  PAYMENT_DUE: ["{{montant}}", "{{date}}", "{{reference}}", "{{ecole}}"],
+  GENERAL: ["{{nom_eleve}}", "{{montant}}", "{{canal}}", "{{reference}}", "{{reste_a_payer}}", "{{ecole}}"],
+  EXAM: ["{{classe}}", "{{evaluation}}", "{{date}}", "{{ecole}}"],
+  MEETING: ["{{ecole}}"],
+  SALARY_PAID: ["{{nom}}", "{{montant}}", "{{periode}}", "{{ecole}}"],
+};
 
 export default function TemplatesPage() {
   const { user } = useAuth();
@@ -133,12 +145,22 @@ function TemplateForm({ tenantId, initial, onCancel, onSaved }: {
         <Label>Corps du message <span className="text-error-500">*</span></Label>
         <Textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
       </Field>
+      {channel === "SMS" && (() => {
+        const info = smsSegmentInfo(body);
+        return (
+          <p className={`text-xs ${info.segments > 1 ? "text-warning-600" : "text-gray-400"}`}>
+            {info.length} caractère{info.length > 1 ? "s" : ""} — {info.unicode ? "avec accents (70/SMS)" : "sans accent (160/SMS)"}
+            {info.segments > 1 && ` — sera envoyé en ${info.segments} SMS (facturés séparément)`}
+          </p>
+        );
+      })()}
       <div className="flex flex-wrap gap-1.5">
-        {VARIABLES.map((v) => (
+        {VARIABLES_BY_REASON[reason].map((v) => (
           <button key={v} type="button" onClick={() => setBody((b) => `${b}${v}`)}
             className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-600 hover:bg-brand-50 hover:text-brand-700">{v}</button>
         ))}
       </div>
+      <p className="text-xs text-gray-400">Variables disponibles pour ce motif — cliquez pour l&apos;insérer.</p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="button" onClick={submit} loading={loading}>Enregistrer</Button>

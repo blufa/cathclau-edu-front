@@ -138,14 +138,14 @@ function DpeAlertsContent() {
           ) : (
             <Table>
               <THead>
-                <TR><TH>Priorité</TH><TH>École</TH><TH>Type</TH><TH>Description</TH><TH>Statut</TH><TH>Actions</TH></TR>
+                <TR><TH>Priorité</TH><TH>École</TH><TH className="hidden sm:table-cell">Type</TH><TH>Description</TH><TH>Statut</TH><TH>Actions</TH></TR>
               </THead>
               <TBody>
                 {(alertsQuery.data ?? []).map((a) => (
                   <TR key={a.id}>
                     <TD><Badge tone={PRIORITY_TONE[a.priorite]}>{a.priorite}</Badge></TD>
                     <TD className="font-medium">{schoolName.get(a.tenantId) ?? `École #${a.tenantId}`}</TD>
-                    <TD>{DPE_ALERT_TYPE_LABEL[a.type]}</TD>
+                    <TD className="hidden sm:table-cell">{DPE_ALERT_TYPE_LABEL[a.type]}</TD>
                     <TD className="max-w-sm text-sm text-gray-600">{a.description}</TD>
                     <TD><Badge tone={STATUS_TONE[a.statut]}>{STATUS_LABEL[a.statut]}</Badge></TD>
                     <TD>

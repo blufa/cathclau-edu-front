@@ -28,7 +28,7 @@ import { useRecentInvoicesQuery, useStudentsCountQuery } from "../hooks/use-dash
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 
 const STATUS_COLOR: Record<string, string> = { PAID: "#10b981", PARTIAL: "#f59e0b", UNPAID: "#f43f5e", CANCELLED: "#cbd5e1" };
-const STATUS_TONE: Record<InvoiceStatus, "green" | "amber" | "red"> = { PAID: "green", PARTIAL: "amber", UNPAID: "red" };
+const STATUS_TONE: Record<InvoiceStatus, "green" | "amber" | "red" | "gray"> = { PAID: "green", PARTIAL: "amber", UNPAID: "red", CANCELLED: "gray" };
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
 

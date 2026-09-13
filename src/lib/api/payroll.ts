@@ -51,6 +51,9 @@ export function generatePayslip(input: {
   baseSalary: number; structureId?: number | null; notes?: string | null;
   absentDays?: number | null; workingDays?: number | null;
   overtimeHours?: number | null; overtimeRate?: number | null; overtimeMultiplier?: number | null;
+  /** Coordonnées de virement (téléphone Mobile Money prioritaire, sinon compte bancaire), figées sur
+   * la fiche pour le fichier bancaire (bouton « Fichier bancaire »). */
+  teacherPhone?: string | null; bankAccount?: string | null;
 }): Promise<Payslip> {
   return api.post<Payslip>("/payroll/payslips", input);
 }
@@ -61,12 +64,27 @@ export function getPayslipPdfObjectUrl(id: number): Promise<string> {
 }
 export function generateBatch(input: {
   periodLabel: string; periodStart?: string | null; periodEnd?: string | null; structureId?: number | null;
-  wages: { teacherId: number; baseSalary: number }[];
+  wages: { teacherId: number; baseSalary: number; teacherName?: string | null; teacherPhone?: string | null; bankAccount?: string | null }[];
 }): Promise<Payslip[]> {
   return api.post<Payslip[]>("/payroll/payslips/batch", input);
 }
 export function addPayslipLine(id: number, input: { label: string; lineType: PayslipLineType; amount: number }): Promise<Payslip> {
   return api.post<Payslip>(`/payroll/payslips/${id}/lines`, input);
+}
+
+/** Fiche de paie combinée pour un personnel direction/administratif qui enseigne aussi (§payroll) :
+ * une seule fiche, salaire de base fixe + une ligne d'heures d'enseignement calculée automatiquement
+ * depuis l'enseignant lié (`Employee.linkedTeacherId`). */
+export function generateCombinedPayslip(input: {
+  year: number; month: number; employeeId: number; employeeName?: string | null;
+  employeeType: EmployeeType; baseSalary: number; linkedTeacherId: number; structureId?: number | null;
+  employeePhone?: string | null; bankAccount?: string | null;
+}): Promise<Payslip> {
+  return api.post<Payslip>("/payroll/payslips/combined", {
+    employeeId: input.employeeId, employeeName: input.employeeName, employeeType: input.employeeType,
+    baseSalary: input.baseSalary, linkedTeacherId: input.linkedTeacherId, structureId: input.structureId,
+    employeePhone: input.employeePhone, bankAccount: input.bankAccount,
+  }, { query: { year: input.year, month: input.month } });
 }
 export function removePayslipLine(id: number, lineId: number): Promise<Payslip> {
   return api.delete<Payslip>(`/payroll/payslips/${id}/lines/${lineId}`);
@@ -84,6 +102,18 @@ export function bankFileUrl(): Promise<string> {
   return apiBlobUrl("/payroll/payslips/bank-file");
 }
 
+// ── Self-service enseignant (« Ma paie ») ────────────────────────────────────
+/** Mes propres fiches de paie (rôle TEACHER) — jamais celles d'un collègue, vérifié côté backend. */
+export function listMyPayslips(): Promise<Payslip[]> {
+  return api.get<Payslip[]>("/payroll/payslips/mine");
+}
+export function getMyPayslip(id: number): Promise<Payslip> {
+  return api.get<Payslip>(`/payroll/payslips/mine/${id}`);
+}
+export function getMyPayslipPdfObjectUrl(id: number): Promise<string> {
+  return apiBlobUrl(`/payroll/payslips/mine/${id}/pdf/download`);
+}
+
 /** Statistiques de présence d'un enseignant sur une période (pour pré-remplir les absences en paie). */
 export function getTeacherAttendanceStats(teacherId: number, from?: string | null, to?: string | null): Promise<{ teacherId: number; totalDays: number; presentDays: number; absentDays: number }> {
   return api.get(`/attendance/teachers/${teacherId}/stats`, { query: { from: from ?? undefined, to: to ?? undefined } });
@@ -97,13 +127,23 @@ export interface TeacherCompensation {
   /** Tarif horaire pour les classes normales / classes d'examen (§6). */
   hourlyRateNormal: string; hourlyRateExam: string;
   fixedSalary: string;
-  /** Avantage accordé par la direction : payé même pendant les jours fériés/vacances. */
-  paidDuringVacation: boolean;
 }
+/** Mois précis (année + mois) où l'enseignant est payé pendant les vacances — avantage accordé au
+ * cas par cas par la direction (§6), voir addVacationPayMonth/listVacationPayMonths. */
+export interface TeacherVacationPayMonth {
+  id: number; tenantId: number | null; teacherId: number; year: number; month: number;
+}
+/** Paie basée sur les heures réellement réalisées (cahier de textes — durée choisie séance par séance
+ * dans le modal « Réaliser », théorique ou pointée), répartie par typologie de classe (normal/examen,
+ * §6) pour appliquer le bon tarif à chacune. lateMinutes/earlyMinutes sont purement informatifs
+ * (affichés sur la fiche de paie) : ils ne réduisent plus effectiveMinutes, toujours égal à
+ * realizedMinutes. */
 export interface MonthlyPay {
   teacherId: number; year: number; month: number; payMode: string;
-  realizedMinutes: number; lateMinutes: number; effectiveMinutes: number;
-  hourlyRate: string; fixedSalary: string; teachingPay: string; grossPay: string;
+  realizedMinutes: number; lateMinutes: number; earlyMinutes: number; effectiveMinutes: number;
+  normalEffectiveMinutes: number; examEffectiveMinutes: number;
+  hourlyRateNormal: string; hourlyRateExam: string;
+  fixedSalary: string; teachingPay: string; grossPay: string;
 }
 /** Paie calculée automatiquement depuis l'emploi du temps validé, par typologie de classe (§6). */
 export interface TheoreticalMonthlyPay {
@@ -117,9 +157,18 @@ export function getCompensation(teacherId: number): Promise<TeacherCompensation 
 }
 export function setCompensation(
   teacherId: number,
-  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number; paidDuringVacation: boolean },
+  input: { payMode: PayMode; hourlyRateNormal: number; hourlyRateExam: number; fixedSalary: number },
 ): Promise<TeacherCompensation> {
   return api.put<TeacherCompensation>(`/payroll/compensation/${teacherId}`, input);
+}
+export function listVacationPayMonths(teacherId: number): Promise<TeacherVacationPayMonth[]> {
+  return api.get<TeacherVacationPayMonth[]>(`/payroll/compensation/${teacherId}/vacation-pay`);
+}
+export function addVacationPayMonth(teacherId: number, year: number, month: number): Promise<TeacherVacationPayMonth> {
+  return api.post<TeacherVacationPayMonth>(`/payroll/compensation/${teacherId}/vacation-pay`, undefined, { query: { year, month } });
+}
+export function removeVacationPayMonth(teacherId: number, id: number): Promise<void> {
+  return api.delete<void>(`/payroll/compensation/${teacherId}/vacation-pay/${id}`);
 }
 export function getMonthlyPay(teacherId: number, year: number, month: number): Promise<MonthlyPay> {
   return api.get<MonthlyPay>(`/payroll/teachers/${teacherId}/monthly-pay`, { query: { year, month } });
@@ -130,13 +179,21 @@ export function getTheoreticalPay(teacherId: number, year: number, month: number
 /** Génère automatiquement la fiche de paie du mois (brut basé sur les heures réalisées). */
 export function generatePayslipFromHours(
   teacherId: number, year: number, month: number, teacherName?: string | null, structureId?: number | null,
+  teacherPhone?: string | null, bankAccount?: string | null,
 ): Promise<Payslip> {
   return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip`,
-    { teacherName: teacherName ?? null, structureId: structureId ?? null }, { query: { year, month } });
+    { teacherName: teacherName ?? null, structureId: structureId ?? null,
+      teacherPhone: teacherPhone ?? null, bankAccount: bankAccount ?? null },
+    { query: { year, month } });
 }
 /** Génère automatiquement la fiche de paie du mois depuis l'emploi du temps validé (§6), sans saisie manuelle. */
-export function generatePayslipFromTimetable(teacherId: number, year: number, month: number, teacherName?: string | null): Promise<Payslip> {
-  return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip-timetable`, { teacherName: teacherName ?? null }, { query: { year, month } });
+export function generatePayslipFromTimetable(
+  teacherId: number, year: number, month: number, teacherName?: string | null,
+  teacherPhone?: string | null, bankAccount?: string | null,
+): Promise<Payslip> {
+  return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip-timetable`,
+    { teacherName: teacherName ?? null, teacherPhone: teacherPhone ?? null, bankAccount: bankAccount ?? null },
+    { query: { year, month } });
 }
 
 // ── Règles de déduction sur salaire (frais scolarité enfants du personnel) ───

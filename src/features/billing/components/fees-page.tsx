@@ -297,6 +297,8 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
     { monthValues: [], amount: 0 }, { monthValues: [], amount: 0 }, { monthValues: [], amount: 0 },
   ]);
   const [recap, setRecap] = useState<{ tranches: TrancheRecap[]; total: number } | null>(null);
+  // Mode simple : une mensualité fixe par mois plutôt que de composer les tranches à la main.
+  const [monthlyAmount, setMonthlyAmount] = useState(0);
 
   // Les 9 mois de l'année scolaire, calculés depuis le mois de départ — sert de liste de cases à
   // cocher, librement assignables à n'importe quelle tranche (une école peut vouloir répéter un mois
@@ -317,6 +319,13 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
   }
   function addTranche() { setTranches((prev) => [...prev, { monthValues: [], amount: 0 }]); }
   function removeTranche(i: number) { setTranches((prev) => prev.filter((_, idx) => idx !== i)); }
+
+  /** Compose automatiquement une tranche par mois de l'année scolaire (mensualités égales), au
+   * montant saisi — l'école n'a plus qu'à choisir le mois de départ et le montant mensuel. */
+  function proposeEqualMonthlyTranches() {
+    if (!genMonth) return;
+    setTranches(Array.from({ length: SCHOOL_YEAR_MONTHS }, (_, i) => ({ monthValues: [addMonths(genMonth, i)], amount: monthlyAmount })));
+  }
 
   const coveredMonths = new Set(tranches.flatMap((t) => t.monthValues));
   const totalMonths = coveredMonths.size;
@@ -538,6 +547,16 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
             <p className="mb-1.5 text-xs text-gray-400">Sert à lister les {SCHOOL_YEAR_MONTHS} mois de l&apos;année ci-dessous ; chaque tranche choisit librement les siens.</p>
             <Input type="month" className="sm:w-48" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
           </Field>
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-2">
+            <Field>
+              <Label>Montant mensuel (mode simple)</Label>
+              <MoneyInput className="w-36" value={monthlyAmount} onValueChange={setMonthlyAmount} />
+            </Field>
+            <Button type="button" variant="secondary" size="sm" disabled={!genMonth} onClick={proposeEqualMonthlyTranches}>
+              Proposer {SCHOOL_YEAR_MONTHS} mensualités égales
+            </Button>
+            <p className="text-xs text-gray-400">Génère une tranche par mois à ce montant — ajustable ensuite ci-dessous.</p>
+          </div>
           <div className="space-y-2">
             {tranches.map((t, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
@@ -634,6 +653,9 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
   const [genMonth, setGenMonth] = useState("");
   const [tranches, setTranches] = useState<string[][]>([[], [], []]);
   const [generating, setGenerating] = useState(false);
+  // Mode simple : une mensualité fixe par mois plutôt que de composer les tranches à la main — le
+  // montant par défaut vient du frais (déjà le prix mensuel de référence), modifiable avant génération.
+  const [monthlyAmount, setMonthlyAmount] = useState(Number(fee.amount) || 0);
   const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<InstallmentFormValues>({
     resolver: zodResolver(installmentSchema),
     defaultValues: { label: "", amount: 0, dueDate: "" },
@@ -651,6 +673,13 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
   }
   function addTranche() { setTranches((prev) => [...prev, []]); }
   function removeTranche(i: number) { setTranches((prev) => prev.filter((_, idx) => idx !== i)); }
+
+  /** Compose automatiquement une tranche par mois de l'année scolaire (mensualités égales) — l'école
+   * n'a plus qu'à choisir le mois de départ et le montant mensuel, sans cocher chaque mois à la main. */
+  function proposeEqualMonthlyTranches() {
+    if (!genMonth) { notifyError("Choisissez le mois de départ."); return; }
+    setTranches(Array.from({ length: SCHOOL_YEAR_MONTHS }, (_, i) => [addMonths(genMonth, i)]));
+  }
 
   const [manualMonth, setManualMonth] = useState("");
 
@@ -671,7 +700,7 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
         const label = months.length === 1
           ? monthToInstallment(months[0]).label
           : `Tranche ${i + 1} (${months.map(monthShortLabel).join(", ")})`;
-        await createInstallment(fee.id, { label, amount: Number(fee.amount) * months.length, dueDate, months });
+        await createInstallment(fee.id, { label, amount: (Number(monthlyAmount) || 0) * months.length, dueDate, months });
       }
       notifySuccess(`${tranches.length} tranche(s) générée(s)`);
       q.refetch();
@@ -691,15 +720,28 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
 
       {canWrite && isRecurring && (
         <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
-          <Field>
-            <Label>Mois de départ de l&apos;année scolaire</Label>
-            <Input type="month" className="sm:w-48" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
-          </Field>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field>
+              <Label>Mois de départ de l&apos;année scolaire</Label>
+              <Input type="month" className="sm:w-48" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+            </Field>
+            <Field>
+              <Label>Montant mensuel</Label>
+              <MoneyInput className="w-36" value={monthlyAmount} onValueChange={setMonthlyAmount} />
+            </Field>
+            <Button type="button" variant="secondary" size="sm" disabled={!genMonth} onClick={proposeEqualMonthlyTranches}>
+              Proposer {SCHOOL_YEAR_MONTHS} mensualités égales
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400">
+            Génère automatiquement une tranche par mois au montant ci-dessus — ajustez ensuite
+            librement (fusionner des mois, changer un montant) avant de générer.
+          </p>
           <div className="space-y-2">
             {tranches.map((months, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
                 <span className="w-16 shrink-0 text-sm text-gray-600">T{i + 1}</span>
-                <span className="w-28 shrink-0 text-xs text-gray-400">= {formatGNF(Number(fee.amount) * (months.length || 0))}</span>
+                <span className="w-28 shrink-0 text-xs text-gray-400">= {formatGNF((Number(monthlyAmount) || 0) * (months.length || 0))}</span>
                 <div className="flex flex-1 flex-wrap gap-x-2 gap-y-1">
                   {schoolYearMonths.map((m) => {
                     const usedElsewhere = tranches.some((other, idx) => idx !== i && other.includes(m));

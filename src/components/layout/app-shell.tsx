@@ -3,6 +3,7 @@
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { Backdrop } from "./backdrop";
+import { MobileTabBar } from "./mobile-tab-bar";
 import { useSidebarStore } from "@/lib/store/sidebar-store";
 import { SubscriptionProvider } from "@/providers/subscription-provider";
 import { BrandingProvider } from "@/providers/branding-provider";
@@ -43,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </aside>
 
           <main
-            className="ml-0 min-w-0 p-4 transition-[margin] duration-200 sm:ml-[var(--sidebar-w)] sm:p-6"
+            className="ml-0 min-w-0 p-4 pb-24 transition-[margin] duration-200 sm:ml-[var(--sidebar-w)] sm:p-6 sm:pb-6"
             style={{ paddingTop: HEADER_HEIGHT + 16 }}
           >
             <div className="mx-auto max-w-[1600px]">
@@ -52,6 +53,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           </main>
+
+          <MobileTabBar />
         </div>
       </BrandingProvider>
     </SubscriptionProvider>

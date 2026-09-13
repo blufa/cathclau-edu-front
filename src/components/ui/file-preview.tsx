@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { Modal } from "@/components/ui/modal";
-import { Download, ExternalLink, Printer } from "lucide-react";
+import { Download, ExternalLink, Printer, Share2 } from "lucide-react";
+import { canUseWebShare, shareFile } from "@/lib/share";
 
 function isPdf(url: string): boolean {
   // Les object URLs (blob:) que l'on crée ici sont toujours des PDF servis par le backend.
@@ -64,6 +65,15 @@ export function FilePreview({
             <a href={url} download className="inline-flex items-center gap-1 text-brand-700 hover:underline">
               <Download className="h-4 w-4" /> Télécharger
             </a>
+            {canUseWebShare() && (
+              <button
+                type="button"
+                onClick={() => shareFile(url, title ?? "document")}
+                className="inline-flex items-center gap-1 text-brand-700 hover:underline"
+              >
+                <Share2 className="h-4 w-4" /> Partager
+              </button>
+            )}
           </div>
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element

@@ -39,7 +39,6 @@ const schema = z
     bloodGroup: z.string(),
     neighborhood: z.string(),
     address: z.string(),
-    landmark: z.string(),
     phone: z.string(),
     email: z.string(),
     originSchool: z.string(),
@@ -105,7 +104,6 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
       bloodGroup: initial?.bloodGroup ?? "",
       neighborhood: initial?.neighborhood ?? "",
       address: initial?.address ?? "",
-      landmark: initial?.landmark ?? "",
       phone: initial?.phone ?? "",
       email: initial?.email ?? "",
       originSchool: initial?.originSchool ?? "",
@@ -156,7 +154,9 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
         birthCertificateNumber: values.birthCertificateNumber || null,
         bloodGroup: values.bloodGroup || null,
         neighborhood: values.neighborhood || null,
-        landmark: values.landmark || null,
+        // Champ retiré du formulaire : on préserve la valeur existante (édition) plutôt que de
+        // l'écraser silencieusement au prochain enregistrement.
+        landmark: initial?.landmark ?? null,
         previousClass: values.previousClass || null,
         repeating: values.repeating,
         transferReason: values.transferReason || null,
@@ -241,14 +241,10 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
         <div className="space-y-5 pt-2">
           <div className="space-y-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Coordonnées</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
                 <Label>Adresse</Label>
                 <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
-              </Field>
-              <Field>
-                <Label>Point de repère</Label>
-                <Input placeholder="Près de…" value={v.landmark} onChange={(e) => setValue("landmark", e.target.value)} />
               </Field>
               <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
             </div>

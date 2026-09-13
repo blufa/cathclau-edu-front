@@ -1,37 +1,44 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarCheck, ClipboardList, ScanLine, Settings, UserCheck } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { CalendarCheck, ChevronDown, ChevronRight, ClipboardList, ScanLine, Settings, UserCheck, Users } from "lucide-react";
 import { AttendanceSettingsPanel } from "@/components/attendance/attendance-settings-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
-import { listAcademicYears, listClasses } from "@/lib/api/academics";
+import { listAcademicYears, listClasses, getScheduleByClass, getScheduleByTeacher, listSubjects } from "@/lib/api/academics";
+import type { Classe, EmploiDuTemps, Matiere } from "@/lib/types/academics";
 import { searchStudents } from "@/lib/api/students";
-import { listTeachers } from "@/lib/api/staff";
+import { listEmployees, listTeachers } from "@/lib/api/staff";
 import {
   getAbsenteeListPdfObjectUrl,
   getClassAttendance,
+  getClassCheckins,
+  getEmployeeAttendance,
+  getEmployeeMonthlySummary,
   getLatenessReportPdfObjectUrl,
   getTeacherAttendance,
+  getTeacherCheckins,
   getTeacherMonthlySummary,
   getUnjustifiedAlerts,
   justifyAttendance,
-  markParentNotified,
+  markEmployeeAbsent,
+  notifyParentNow,
   recordBulkAttendance,
-  recordStudentManualEntry,
   recordTeacherAttendance,
-  recordTeacherManualEntry,
-  updateAttendance,
 } from "@/lib/api/attendance";
+import { submitManualEntryOfflineAware, submitManualExitOfflineAware } from "@/lib/offline/submit-attendance-offline-aware";
 import {
   ATTENDANCE_STATUS_LABEL,
   type AttendanceStatus,
   type StudentAttendance,
+  type StudentCheckin,
 } from "@/lib/types/attendance";
-import { formatMinutes } from "@/lib/format";
+import { formatMinutes, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Student } from "@/lib/types/student";
 import type { Teacher } from "@/lib/types/staff";
+import type { Employee } from "@/lib/api/staff";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Select } from "@/components/ui/select";
@@ -61,6 +68,105 @@ function nowHm() {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/** Résout le libellé d'un cours (nom de matière, ou libellé libre si pas de matière formelle) et de
+ * la classe concernée, à partir d'un emploi du temps, du catalogue des matières et de la liste des
+ * classes — pour afficher « pour quel cours, dans quelle classe » sur le détail des séances
+ * (entrée/retard/sortie/départ anticipé), pas juste des totaux journaliers. Un enseignant enseignant
+ * la même matière dans plusieurs classes, le nom du cours seul ne suffit pas à les distinguer. */
+function useSessionLabels(
+  slots: EmploiDuTemps[] | null | undefined,
+  subjects: Matiere[] | null | undefined,
+  classes: Classe[] | null | undefined,
+) {
+  return useMemo(() => {
+    const subjectById = new Map((subjects ?? []).map((s) => [s.id, s.label]));
+    const classById = new Map((classes ?? []).map((c) => [c.id, c.label]));
+    const slotById = new Map((slots ?? []).map((s) => [s.id, s]));
+    const courseLabel = (slotId: number) => {
+      const slot = slotById.get(slotId);
+      if (!slot) return "Cours";
+      if (slot.subjectId != null) return subjectById.get(slot.subjectId) ?? "Cours";
+      return slot.label ?? "Cours";
+    };
+    const classLabel = (slotId: number) => {
+      const slot = slotById.get(slotId);
+      if (!slot) return null;
+      return classById.get(slot.schoolClassId) ?? null;
+    };
+    return { courseLabel, classLabel };
+  }, [slots, subjects, classes]);
+}
+
+interface SessionCheckinLike {
+  scheduleSlotId: number;
+  checkInTime: string;
+  checkOutTime: string | null;
+  lateMinutes: number;
+  earlyMinutes: number | null;
+}
+
+/** Détail des séances d'une journée pour une personne (élève/enseignant) : pour chaque cours,
+ * l'heure d'entrée réelle (à l'heure/en retard) et de sortie réelle (à l'heure/départ anticipé) —
+ * un pointage global par jour ne dit pas POUR QUEL COURS la personne est arrivée à l'heure ou en
+ * retard, utile dès qu'il y a plusieurs séances (donc plusieurs entrées/sorties) le même jour. */
+function SessionsDetail({ checkins, courseLabel, classLabel }: {
+  checkins: SessionCheckinLike[];
+  courseLabel: (slotId: number) => string;
+  /** Optionnel : sur le tableau élèves, la classe est déjà fixée pour tout le tableau (redondant) —
+   * seul le tableau enseignants (qui peut couvrir plusieurs classes) le fournit. */
+  classLabel?: (slotId: number) => string | null;
+}) {
+  if (checkins.length === 0) {
+    return <p className="px-3 py-2 text-xs text-gray-400">Aucune séance pointée ce jour-là.</p>;
+  }
+  const sorted = [...checkins].sort((a, b) => a.checkInTime.localeCompare(b.checkInTime));
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
+      <Table>
+        <THead>
+          <tr>
+            <TH>Cours</TH>
+            {classLabel && <TH className="hidden sm:table-cell">Classe</TH>}
+            <TH>Entrée</TH><TH>Statut entrée</TH><TH>Sortie</TH><TH>Statut sortie</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {sorted.map((c, i) => (
+            <TR key={i}>
+              <TD className="text-xs font-medium text-gray-700">{courseLabel(c.scheduleSlotId)}</TD>
+              {classLabel && <TD className="hidden text-xs text-gray-600 sm:table-cell">{classLabel(c.scheduleSlotId) ?? "—"}</TD>}
+              <TD className="text-xs">{formatTime(c.checkInTime)}</TD>
+              <TD className="text-xs">
+                {c.lateMinutes > 0
+                  ? <Badge tone="amber">Retard {formatMinutes(c.lateMinutes)}</Badge>
+                  : <Badge tone="green">À l&apos;heure</Badge>}
+              </TD>
+              <TD className="text-xs">{formatTime(c.checkOutTime)}</TD>
+              <TD className="text-xs">
+                {!c.checkOutTime
+                  ? <Badge tone="gray">—</Badge>
+                  : c.earlyMinutes && c.earlyMinutes > 0
+                    ? <Badge tone="amber">Anticipé {formatMinutes(c.earlyMinutes)}</Badge>
+                    : <Badge tone="green">À l&apos;heure</Badge>}
+              </TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+    </div>
+  );
+}
+
+/** Bouton chevron pour déplier/replier le détail des séances d'une ligne. */
+function ExpandToggle({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={expanded ? "Masquer le détail" : "Voir le détail des séances"}
+      className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+      {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+    </button>
+  );
+}
+
 export default function AttendancePage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY") || hasAnyPermission(user, ["presence:create"]);
@@ -79,7 +185,10 @@ export default function AttendancePage() {
   );
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
-    () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    () => [
+      { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "toutes" },
+      ...classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+    ],
     [classes],
   );
 
@@ -121,11 +230,11 @@ export default function AttendancePage() {
       </Reveal>
 
       {/* Shared selectors */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="w-full sm:w-auto">
           <label className="mb-1 block text-xs text-gray-500">Année</label>
           <Select
-            className="max-w-[200px]"
+            className="w-full sm:max-w-[200px]"
             value={effectiveYearId ?? ""}
             onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}
           >
@@ -134,24 +243,24 @@ export default function AttendancePage() {
             ))}
           </Select>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="mb-1 block text-xs text-gray-500">Classe</label>
           <SearchableSelect
             value={classId != null ? String(classId) : ""}
             options={classOptions}
             onChange={(v) => setClassId(v ? Number(v) : null)}
-            triggerClassName="w-full max-w-[220px] justify-between px-3"
+            triggerClassName="w-full sm:max-w-[220px] justify-between px-3"
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="mb-1 block text-xs text-gray-500">Date</label>
-          <DatePicker value={date} onChange={(v) => setDate(v)} className="max-w-[180px]" />
+          <DatePicker value={date} onChange={(v) => setDate(v)} className="w-full sm:max-w-[180px]" maxDate={new Date()} />
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "absents"} onClick={openAbsentees}>
+        <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row">
+          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "absents"} onClick={openAbsentees} fullWidth className="sm:w-auto">
             Liste des absents (PDF)
           </Button>
-          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "retards"} onClick={openLateness}>
+          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "retards"} onClick={openLateness} fullWidth className="sm:w-auto">
             Retards du mois (PDF)
           </Button>
         </div>
@@ -160,9 +269,12 @@ export default function AttendancePage() {
       <Tabs defaultValue="appel">
         <TabsList>
           <TabsTrigger value="appel" icon={ClipboardList}>Appel de classe</TabsTrigger>
-          <TabsTrigger value="suivi" icon={CalendarCheck}>Suivi & corrections</TabsTrigger>
+          <TabsTrigger value="suivi" icon={CalendarCheck}>Présences élèves</TabsTrigger>
           {canManageStaff && (
             <TabsTrigger value="staff" icon={UserCheck}>Présences enseignants</TabsTrigger>
+          )}
+          {canManageStaff && (
+            <TabsTrigger value="personnel" icon={Users}>Présences personnel</TabsTrigger>
           )}
           {canManageSettings && (
             <TabsTrigger value="settings" icon={Settings}>Réglages</TabsTrigger>
@@ -181,15 +293,24 @@ export default function AttendancePage() {
           {classId ? (
             <AttendanceLog classId={classId} date={date} students={students} canWrite={canWrite} />
           ) : (
-            <SelectClassHint />
+            <AttendanceLogAllClasses classes={classes} date={date} onPickClass={setClassId} />
           )}
         </TabsPanel>
 
         {canManageStaff && (
           <TabsPanel value="staff">
             <div className="space-y-6">
-              <TeacherRollCall date={date} />
+              <TeacherRollCall date={date} classes={classes} />
               <TeacherMonthlyRecap />
+            </div>
+          </TabsPanel>
+        )}
+
+        {canManageStaff && (
+          <TabsPanel value="personnel">
+            <div className="space-y-6">
+              <EmployeeRollCall date={date} />
+              <EmployeeMonthlyRecap />
             </div>
           </TabsPanel>
         )}
@@ -309,17 +430,79 @@ function AttendanceLog({ classId, date, students, canWrite }: {
     () => getClassAttendance(classId, date),
     [classId, date],
   );
+  // Toujours afficher TOUS les élèves de la classe (comme TeacherRollCall/EmployeeRollCall listent
+  // tous les enseignants/personnel), pas seulement ceux ayant déjà un enregistrement — avant, cet
+  // onglet n'affichait qu'un enregistrement existant (créé via « Appel de classe »), donc restait
+  // vide tant que l'appel n'avait pas été fait, contrairement aux onglets enseignants/personnel qui
+  // partent toujours de la liste complète.
+  const recordByStudent = useMemo(
+    () => new Map((data ?? []).map((r) => [r.studentId, r])),
+    [data],
+  );
+  // Pointages par séance (entrée/sortie), séparés de l'enregistrement journalier ci-dessus : un élève
+  // peut avoir plusieurs séances (donc plusieurs sorties) le même jour. Sans ça, l'heure de sortie et
+  // le départ anticipé (déjà scannés/saisis) n'apparaissaient nulle part sur ce tableau, contrairement
+  // aux onglets enseignants/personnel qui les affichent.
+  const checkinsQuery = useQuery(() => getClassCheckins(classId, date), [classId, date]);
+  const checkinsByStudent = useMemo(() => {
+    const map = new Map<number, { lastCheckout: string | null; totalEarly: number }>();
+    for (const c of checkinsQuery.data ?? []) {
+      const prev = map.get(c.studentId) ?? { lastCheckout: null, totalEarly: 0 };
+      map.set(c.studentId, {
+        lastCheckout: c.checkOutTime ?? prev.lastCheckout,
+        totalEarly: prev.totalEarly + (c.earlyMinutes ?? 0),
+      });
+    }
+    return map;
+  }, [checkinsQuery.data]);
+  // Liste brute (pas l'agrégat ci-dessus) pour le détail dépliable par élève : pour quel cours il est
+  // entré à l'heure/en retard, reparti à l'heure/en avance — schedule + matières chargés une seule
+  // fois pour toute la classe (pas par élève).
+  const rawCheckinsByStudent = useMemo(() => {
+    const map = new Map<number, StudentCheckin[]>();
+    for (const c of checkinsQuery.data ?? []) {
+      const list = map.get(c.studentId) ?? [];
+      list.push(c);
+      map.set(c.studentId, list);
+    }
+    return map;
+  }, [checkinsQuery.data]);
+  const scheduleQuery = useQuery(() => getScheduleByClass(classId), [classId]);
+  const subjectsQuery = useQuery(listSubjects, []);
+  // Pas de classLabel ici : le tableau élèves est déjà scopé à une seule classe (redondant de l'afficher).
+  const { courseLabel } = useSessionLabels(scheduleQuery.data, subjectsQuery.data, null);
+  const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
+  function toggleExpanded(studentId: number) {
+    setExpandedStudents((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId); else next.add(studentId);
+      return next;
+    });
+  }
+  function refetchAll() { refetch(); checkinsQuery.refetch(); }
   const nameOf = useMemo(
     () => new Map(students.map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [students],
   );
   const monthStart = `${date.slice(0, 7)}-01`;
   const alertsQuery = useQuery(() => getUnjustifiedAlerts(classId, { from: monthStart, to: date, threshold: 2 }), [classId, date]);
+  const [search, setSearch] = useState("");
+  const filteredStudents = useMemo(
+    () => students.filter((s) => `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase())),
+    [students, search],
+  );
 
   // Corriger vers « Présent » demande l'heure d'entrée (le retard est calculé automatiquement vs
-  // l'emploi du temps, comme pour un scan) — un id présent ici affiche l'éditeur inline pour la ligne.
+  // l'emploi du temps, comme pour un scan) — clés par studentId (pas par id d'enregistrement, qui
+  // peut ne pas encore exister pour un élève sans pointage).
   const [pendingPresent, setPendingPresent] = useState<Record<number, string>>({});
   const [savingPresent, setSavingPresent] = useState<number | null>(null);
+  // Sortie manuelle (badge oublié) : même principe, sur la séance en cours à l'heure saisie.
+  const [pendingExit, setPendingExit] = useState<Record<number, string>>({});
+  const [savingExit, setSavingExit] = useState<number | null>(null);
+  // « Retard »/« Absent » directs : passent par le même endpoint que l'appel de classe (upsert par
+  // élève+date), donc fonctionnent même sans enregistrement préalable.
+  const [savingStatus, setSavingStatus] = useState<number | null>(null);
 
   async function justify(rec: StudentAttendance, justified: boolean) {
     try {
@@ -330,31 +513,36 @@ function AttendanceLog({ classId, date, students, canWrite }: {
     } catch (err) { notifyError(err); }
   }
 
-  async function correct(rec: StudentAttendance, status: AttendanceStatus) {
+  async function setStatus(studentId: number, status: AttendanceStatus) {
+    setSavingStatus(studentId);
     try {
-      await updateAttendance(rec.id, status, rec.reason ?? undefined);
-      notifySuccess("Présence corrigée");
+      await recordBulkAttendance(classId, date, [{ studentId, status }]);
+      notifySuccess("Présence enregistrée");
       refetch();
     } catch (err) {
       notifyError(err);
+    } finally {
+      setSavingStatus(null);
     }
   }
 
-  function askEntryTime(rec: StudentAttendance) {
-    setPendingPresent((p) => ({ ...p, [rec.id]: nowHm() }));
+  function askEntryTime(studentId: number) {
+    setPendingPresent((p) => ({ ...p, [studentId]: nowHm() }));
   }
-  function cancelEntryTime(rec: StudentAttendance) {
-    setPendingPresent((p) => { const next = { ...p }; delete next[rec.id]; return next; });
+  function cancelEntryTime(studentId: number) {
+    setPendingPresent((p) => { const next = { ...p }; delete next[studentId]; return next; });
   }
-  async function confirmPresent(rec: StudentAttendance) {
-    const time = pendingPresent[rec.id];
+  async function confirmPresent(studentId: number) {
+    const time = pendingPresent[studentId];
     if (!time) return;
-    setSavingPresent(rec.id);
+    setSavingPresent(studentId);
     try {
-      await recordStudentManualEntry(rec.studentId, date, time);
-      notifySuccess("Présence corrigée");
-      cancelEntryTime(rec);
-      refetch();
+      const attempt = await submitManualEntryOfflineAware("STUDENT", studentId, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Présence enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Présence enregistrée");
+      cancelEntryTime(studentId);
+      refetchAll();
     } catch (err) {
       notifyError(err);
     } finally {
@@ -362,9 +550,33 @@ function AttendanceLog({ classId, date, students, canWrite }: {
     }
   }
 
+  function askExitTime(studentId: number) {
+    setPendingExit((p) => ({ ...p, [studentId]: nowHm() }));
+  }
+  function cancelExitTime(studentId: number) {
+    setPendingExit((p) => { const next = { ...p }; delete next[studentId]; return next; });
+  }
+  async function confirmExit(studentId: number) {
+    const time = pendingExit[studentId];
+    if (!time) return;
+    setSavingExit(studentId);
+    try {
+      const attempt = await submitManualExitOfflineAware("STUDENT", studentId, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Sortie enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Sortie enregistrée");
+      cancelExitTime(studentId);
+      refetchAll();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSavingExit(null);
+    }
+  }
+
   async function notify(rec: StudentAttendance) {
     try {
-      await markParentNotified(rec.id);
+      await notifyParentNow(rec.id);
       notifySuccess("Parent marqué notifié");
       refetch();
     } catch (err) {
@@ -374,7 +586,6 @@ function AttendanceLog({ classId, date, students, canWrite }: {
 
   if (loading) return <div className="flex justify-center py-10"><Spinner /></div>;
   if (error) return <p className="rounded-xl bg-error-50 px-4 py-3 text-sm text-error-700">Impossible de charger les présences.</p>;
-  const rows = data ?? [];
   const alerts = alertsQuery.data ?? [];
 
   return (
@@ -385,25 +596,50 @@ function AttendanceLog({ classId, date, students, canWrite }: {
           {alerts.map((a) => `${nameOf.get(a.studentId) ?? `#${a.studentId}`} (${a.unjustifiedCount})`).join(", ")}.
         </div>
       )}
-      {rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">Aucune présence enregistrée pour cette date.</p>
+      {students.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-400">Aucun élève dans cette classe.</p>
       ) : (
+        <>
+        <Input placeholder="Rechercher un élève…" value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3 max-w-xs" />
         <Table>
           <THead>
-            <tr><TH>Élève</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH><TH>Motif</TH><TH>Justification</TH><TH>Parent</TH><TH className="text-right">Actions</TH></tr>
+            <tr>
+              <TH></TH><TH>Élève</TH><TH>Statut</TH>
+              <TH className="hidden sm:table-cell">Heure d&apos;entrée</TH>
+              <TH className="hidden sm:table-cell">Retard</TH>
+              <TH className="hidden sm:table-cell">Heure de sortie</TH>
+              <TH className="hidden sm:table-cell">Départ anticipé</TH>
+              <TH className="hidden sm:table-cell">Motif</TH>
+              <TH className="hidden sm:table-cell">Justification</TH>
+              <TH className="hidden sm:table-cell">Parent</TH>
+              <TH className="text-right">Actions</TH>
+            </tr>
           </THead>
           <TBody>
-            {rows.map((r) => (
-              <TR key={r.id}>
-                <TD className="font-medium text-gray-900">{nameOf.get(r.studentId) ?? `#${r.studentId}`}</TD>
-                <TD><Badge tone={STATUS_TONE[r.status]}>{ATTENDANCE_STATUS_LABEL[r.status]}</Badge></TD>
-                <TD>{r.checkInTime ?? "—"}</TD>
-                <TD className={r.lateMinutes && r.lateMinutes > 0 ? "text-warning-600" : undefined}>
-                  {r.lateMinutes && r.lateMinutes > 0 ? formatMinutes(r.lateMinutes) : "—"}
-                </TD>
-                <TD className="text-gray-600">{r.reason ?? "—"}</TD>
+            {filteredStudents.map((s) => {
+              const r = recordByStudent.get(s.id) ?? null;
+              const checkin = checkinsByStudent.get(s.id);
+              const rawCheckins = rawCheckinsByStudent.get(s.id) ?? [];
+              const isExpanded = expandedStudents.has(s.id);
+              return (
+              <Fragment key={s.id}>
+              <TR>
                 <TD>
-                  {r.status === "PRESENT" ? "—" : (
+                  {rawCheckins.length > 0 && <ExpandToggle expanded={isExpanded} onClick={() => toggleExpanded(s.id)} />}
+                </TD>
+                <TD className="font-medium text-gray-900">{nameOf.get(s.id) ?? `#${s.id}`}</TD>
+                <TD>{r ? <Badge tone={STATUS_TONE[r.status]}>{ATTENDANCE_STATUS_LABEL[r.status]}</Badge> : <Badge tone="gray">Aucun pointage</Badge>}</TD>
+                <TD className="hidden sm:table-cell">{formatTime(r?.checkInTime)}</TD>
+                <TD className={cn("hidden sm:table-cell", r?.lateMinutes && r.lateMinutes > 0 ? "text-warning-600" : undefined)}>
+                  {r?.lateMinutes && r.lateMinutes > 0 ? formatMinutes(r.lateMinutes) : "—"}
+                </TD>
+                <TD className="hidden sm:table-cell">{formatTime(checkin?.lastCheckout ?? null)}</TD>
+                <TD className={cn("hidden sm:table-cell", checkin?.totalEarly ? "text-warning-600" : undefined)}>
+                  {checkin?.totalEarly ? formatMinutes(checkin.totalEarly) : "—"}
+                </TD>
+                <TD className="hidden text-gray-600 sm:table-cell">{r?.reason ?? "—"}</TD>
+                <TD className="hidden sm:table-cell">
+                  {!r || r.status === "PRESENT" ? "—" : (
                     <div className="flex items-center gap-1">
                       <Badge tone={r.justified === true ? "green" : r.justified === false ? "red" : "gray"}>
                         {r.justified === true ? "Justifiée" : r.justified === false ? "Non justifiée" : "À traiter"}
@@ -417,37 +653,120 @@ function AttendanceLog({ classId, date, students, canWrite }: {
                     </div>
                   )}
                 </TD>
-                <TD>{r.parentNotified ? <Badge tone="green">Notifié</Badge> : <Badge tone="gray">—</Badge>}</TD>
+                <TD className="hidden sm:table-cell">{r?.parentNotified ? <Badge tone="green">Notifié</Badge> : <Badge tone="gray">—</Badge>}</TD>
                 <TD className="text-right">
                   {canWrite && (
-                    <div className="flex items-center justify-end gap-2">
-                      {pendingPresent[r.id] !== undefined ? (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {pendingPresent[s.id] !== undefined ? (
                         <>
-                          <Input type="time" value={pendingPresent[r.id]}
-                            onChange={(e) => setPendingPresent((p) => ({ ...p, [r.id]: e.target.value }))}
+                          <Input type="time" value={pendingPresent[s.id]}
+                            onChange={(e) => setPendingPresent((p) => ({ ...p, [s.id]: e.target.value }))}
                             className="w-24" />
-                          <Button size="sm" loading={savingPresent === r.id} onClick={() => confirmPresent(r)}>OK</Button>
-                          <Button size="sm" variant="ghost" onClick={() => cancelEntryTime(r)}>Annuler</Button>
+                          <Button size="sm" loading={savingPresent === s.id} onClick={() => confirmPresent(s.id)}>OK</Button>
+                          <Button size="sm" variant="ghost" onClick={() => cancelEntryTime(s.id)}>Annuler</Button>
+                        </>
+                      ) : pendingExit[s.id] !== undefined ? (
+                        <>
+                          <Input type="time" value={pendingExit[s.id]}
+                            onChange={(e) => setPendingExit((p) => ({ ...p, [s.id]: e.target.value }))}
+                            className="w-24" />
+                          <Button size="sm" loading={savingExit === s.id} onClick={() => confirmExit(s.id)}>OK</Button>
+                          <Button size="sm" variant="ghost" onClick={() => cancelExitTime(s.id)}>Annuler</Button>
                         </>
                       ) : (
-                        <Select
-                          value={r.status}
-                          onChange={(e) => {
-                            const v = e.target.value as AttendanceStatus;
-                            if (v === "PRESENT") askEntryTime(r); else correct(r, v);
-                          }}
-                          className="max-w-[130px]"
-                        >
-                          {(["PRESENT", "ABSENT", "LATE"] as AttendanceStatus[]).map((st) => (
-                            <option key={st} value={st}>{ATTENDANCE_STATUS_LABEL[st]}</option>
-                          ))}
-                        </Select>
+                        // Mêmes boutons directs que pour les enseignants/personnel (TeacherRollCallRow,
+                        // EmployeeRollCallRow) plutôt qu'un menu déroulant — même geste, même endroit
+                        // pour tout le monde. « Présent »/« Sortie » demandent l'heure (retard/départ
+                        // anticipé calculés automatiquement) ; « Retard »/« Absent » sont directs.
+                        <>
+                          <Button size="sm" variant="ghost" className="text-success-700" onClick={() => askEntryTime(s.id)}>Présent</Button>
+                          <Button size="sm" variant="ghost" className="text-warning-700" loading={savingStatus === s.id} onClick={() => setStatus(s.id, "LATE")}>Retard</Button>
+                          <Button size="sm" variant="ghost" className="text-brand-700" onClick={() => askExitTime(s.id)}>Sortie</Button>
+                          <Button size="sm" variant="ghost" className="text-error-600" loading={savingStatus === s.id} onClick={() => setStatus(s.id, "ABSENT")}>Absent</Button>
+                        </>
                       )}
-                      {r.status !== "PRESENT" && !r.parentNotified && (
+                      {r && r.status !== "PRESENT" && !r.parentNotified && (
                         <Button size="sm" variant="ghost" onClick={() => notify(r)}>Notifier parent</Button>
                       )}
                     </div>
                   )}
+                </TD>
+              </TR>
+              {isExpanded && (
+                <TR>
+                  {/* colSpan surdimensionné : le navigateur le limite automatiquement au nombre de
+                      colonnes réellement visibles, qui varie selon la largeur d'écran (colonnes
+                      masquées sur mobile ci-dessus) — évite de recalculer un compte exact. */}
+                  <TD colSpan={100} className="bg-gray-50 p-0">
+                    <SessionsDetail checkins={rawCheckins} courseLabel={courseLabel} />
+                  </TD>
+                </TR>
+              )}
+              </Fragment>
+              );
+            })}
+          </TBody>
+        </Table>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Hints ────────────────────────────────────────────────────────────────────
+function SelectClassHint() {
+  return (
+    <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
+      Sélectionnez une classe ci-dessus pour faire l&apos;appel — l&apos;appel se fait forcément classe
+      par classe.
+    </p>
+  );
+}
+
+/**
+ * Vue d'ensemble en lecture seule des présences élèves de TOUTES les classes pour une date, quand
+ * aucune classe n'est sélectionnée (§Correction-hier.md : plus de filtre obligatoire par défaut). Pas
+ * d'actions de correction ici (retard/sortie anticipée/justification) — celles-ci restent sur
+ * AttendanceLog, qui a besoin de l'emploi du temps d'UNE classe pour les calculer correctement ;
+ * sélectionner une classe précise bascule sur cette vue complète.
+ */
+function AttendanceLogAllClasses({ classes, date, onPickClass }: {
+  classes: Classe[]; date: string; onPickClass: (classId: number) => void;
+}) {
+  const rowsQuery = useQuery(
+    () => Promise.allSettled(classes.map((c) => getClassAttendance(c.id, date).then((rows) => ({ c, rows }))))
+      .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value.rows.map((row) => ({ row, classLabel: r.value.c.label, classId: r.value.c.id })) : []))),
+    [classes.map((c) => c.id).join(","), date],
+  );
+  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const nameOf = useMemo(
+    () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
+    [studentsQuery.data],
+  );
+  const [search, setSearch] = useState("");
+  const rows = useMemo(() => {
+    const all = rowsQuery.data ?? [];
+    const q = search.trim().toLowerCase();
+    return q ? all.filter((r) => (nameOf.get(r.row.studentId) ?? "").toLowerCase().includes(q) || r.classLabel.toLowerCase().includes(q)) : all;
+  }, [rowsQuery.data, search, nameOf]);
+
+  return (
+    <div className="space-y-3">
+      <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un élève ou une classe..." className="max-w-xs" />
+      {rowsQuery.loading ? (
+        <div className="flex justify-center py-12"><Spinner /></div>
+      ) : (
+        <Table>
+          <THead><TR><TH>Élève</TH><TH>Classe</TH><TH>Statut</TH><TH className="text-right">Action</TH></TR></THead>
+          <TBody>
+            {rows.length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucune présence enregistrée pour cette date.</TD></TR>}
+            {rows.map(({ row, classLabel, classId: cId }) => (
+              <TR key={row.id}>
+                <TD>{nameOf.get(row.studentId) ?? `#${row.studentId}`}</TD>
+                <TD>{classLabel}</TD>
+                <TD><Badge tone={STATUS_TONE[row.status]}>{ATTENDANCE_STATUS_LABEL[row.status]}</Badge></TD>
+                <TD className="text-right">
+                  <Button size="sm" variant="ghost" onClick={() => onPickClass(cId)}>Voir la classe</Button>
                 </TD>
               </TR>
             ))}
@@ -458,53 +777,97 @@ function AttendanceLog({ classId, date, students, canWrite }: {
   );
 }
 
-// ── Hints ────────────────────────────────────────────────────────────────────
-function SelectClassHint() {
-  return (
-    <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
-      Sélectionnez une classe pour faire l&apos;appel ou consulter les présences.
-    </p>
-  );
-}
-
 // ── Teacher roll call (separate table) ───────────────────────────────────────
-function TeacherRollCall({ date }: { date: string }) {
+function TeacherRollCall({ date, classes }: { date: string; classes: Classe[] }) {
   const teachersQuery = useQuery(() => listTeachers(), []);
   const teachers = useMemo<Teacher[]>(() => teachersQuery.data ?? [], [teachersQuery.data]);
+  // Catalogue des matières chargé une seule fois pour toute la liste (pas par ligne), pour afficher
+  // le nom du cours ET la classe dans le détail des séances de chaque enseignant — un enseignant
+  // pouvant donner la même matière dans plusieurs classes, le nom du cours seul ne suffit pas.
+  const subjectsQuery = useQuery(listSubjects, []);
+  const [search, setSearch] = useState("");
+  const filteredTeachers = useMemo(
+    () => teachers.filter((t) => `${t.firstName} ${t.lastName}`.toLowerCase().includes(search.toLowerCase())),
+    [teachers, search],
+  );
 
   if (teachersQuery.loading) return <div className="flex justify-center py-10"><Spinner /></div>;
   if (teachers.length === 0) return <p className="py-8 text-center text-sm text-gray-400">Aucun enseignant.</p>;
 
   return (
-    <Table>
-      <THead>
-        <tr><TH>Enseignant</TH><TH>Matricule</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH><TH className="text-right">Marquer ({date})</TH></tr>
-      </THead>
-      <TBody>
-        {teachers.map((t) => <TeacherRollCallRow key={t.id} teacher={t} date={date} />)}
-      </TBody>
-    </Table>
+    <div className="space-y-3">
+      <Input placeholder="Rechercher un enseignant…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+      <Table>
+        <THead>
+          <tr>
+            <TH></TH><TH>Enseignant</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Statut</TH>
+            <TH className="hidden sm:table-cell">Heure d&apos;entrée</TH><TH className="hidden sm:table-cell">Retard</TH>
+            <TH className="hidden sm:table-cell">Heure de sortie</TH><TH className="hidden sm:table-cell">Départ anticipé</TH>
+            <TH className="text-right">Marquer ({date})</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {filteredTeachers.map((t) => (
+            <TeacherRollCallRow key={t.id} teacher={t} date={date} subjects={subjectsQuery.data} classes={classes} />
+          ))}
+        </TBody>
+      </Table>
+    </div>
   );
 }
 
-/** Une ligne = un enseignant : affiche son pointage réel du jour (statut, heure d'entrée, retard —
- * qu'il vienne d'un scan de badge ou d'une saisie manuelle), avec les boutons pour la corriger. */
-function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: string }) {
+/** Une ligne = un enseignant : affiche son pointage réel du jour (statut, entrée/sortie, retard et
+ * départ anticipé cumulés — qu'il vienne d'un scan de badge ou d'une saisie manuelle en cas de badge
+ * oublié), avec les boutons pour le corriger. Le retard et le départ anticipé sont tous deux déduits
+ * des heures effectives sur la fiche de paie (§payroll). Le détail dépliable montre, séance par
+ * séance, pour quel cours ET quelle classe l'enseignant est arrivé à l'heure/en retard et reparti à
+ * l'heure/en avance — les totaux ci-dessus ne le disent pas dès qu'il y a plusieurs séances le même
+ * jour (potentiellement dans des classes différentes). */
+function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
+  teacher: Teacher; date: string; subjects: Matiere[] | null | undefined; classes: Classe[];
+}) {
   const { data, loading, refetch } = useQuery(() => getTeacherAttendance(t.id, date, date), [t.id, date]);
+  const checkinsQuery = useQuery(() => getTeacherCheckins(t.id, date), [t.id, date]);
+  const scheduleQuery = useQuery(() => getScheduleByTeacher(t.id), [t.id]);
+  const { courseLabel, classLabel } = useSessionLabels(scheduleQuery.data, subjects, classes);
   const record = (data ?? []).find((a) => a.date === date) ?? null;
+  const checkins = checkinsQuery.data ?? [];
+  const lastCheckout = [...checkins].reverse().find((c) => c.checkOutTime)?.checkOutTime ?? null;
+  const totalEarly = checkins.reduce((sum, c) => sum + (c.earlyMinutes ?? 0), 0);
+  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Marquer « Présent » demande l'heure d'entrée — le retard est calculé automatiquement vs l'emploi
-  // du temps, comme pour un scan (§attendance/scan).
+  // Marquer « Présent »/« Sortie » demande l'heure — le retard/départ anticipé est calculé
+  // automatiquement vs l'emploi du temps, comme pour un scan (§attendance/scan).
   const [enteringTime, setEnteringTime] = useState(false);
+  const [exitingTime, setExitingTime] = useState(false);
   const [time, setTime] = useState(nowHm());
+
+  function refetchAll() { refetch(); checkinsQuery.refetch(); }
 
   async function markPresent() {
     setBusy(true);
     try {
-      await recordTeacherManualEntry(t.id, date, time);
-      notifySuccess("Présence enregistrée");
+      const attempt = await submitManualEntryOfflineAware("TEACHER", t.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Présence enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Présence enregistrée");
       setEnteringTime(false);
-      refetch();
+      refetchAll();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function recordExit() {
+    setBusy(true);
+    try {
+      const attempt = await submitManualExitOfflineAware("TEACHER", t.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Sortie enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Sortie enregistrée");
+      setExitingTime(false);
+      refetchAll();
     } catch (err) {
       notifyError(err);
     } finally {
@@ -516,7 +879,7 @@ function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: stri
     try {
       await recordTeacherAttendance(t.id, date, "ABSENT");
       notifySuccess("Présence enregistrée");
-      refetch();
+      refetchAll();
     } catch (err) {
       notifyError(err);
     } finally {
@@ -525,43 +888,74 @@ function TeacherRollCallRow({ teacher: t, date }: { teacher: Teacher; date: stri
   }
 
   return (
-    <TR>
-      <TD className="font-medium text-gray-900">{t.firstName} {t.lastName}</TD>
-      <TD className="font-mono text-xs text-gray-500">{t.staffNumber}</TD>
-      <TD>
-        {loading ? <Spinner className="h-3.5 w-3.5" /> : record ? (
-          <Badge tone={record.status === "PRESENT" ? "green" : "red"}>
-            {record.status === "PRESENT" ? "Présent" : "Absent"}
-          </Badge>
-        ) : <Badge tone="gray">Aucun pointage</Badge>}
-      </TD>
-      <TD>{record?.checkInTime ?? "—"}</TD>
-      <TD className={record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined}>
-        {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
-      </TD>
-      <TD className="text-right">
-        {enteringTime ? (
-          <div className="inline-flex items-center gap-2">
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-24" />
-            <Button size="sm" loading={busy} onClick={markPresent}>OK</Button>
-            <Button size="sm" variant="ghost" onClick={() => setEnteringTime(false)}>Annuler</Button>
-          </div>
-        ) : (
-          <div className="inline-flex items-center gap-2">
-            <Button size="sm" variant="ghost" className="text-success-700" disabled={busy}
-              onClick={() => { setTime(nowHm()); setEnteringTime(true); }}>Présent</Button>
-            <Button size="sm" variant="ghost" className="text-error-600" disabled={busy} onClick={markAbsent}>Absent</Button>
-          </div>
-        )}
-      </TD>
-    </TR>
+    <>
+      <TR>
+        <TD>
+          {checkins.length > 0 && <ExpandToggle expanded={expanded} onClick={() => setExpanded((e) => !e)} />}
+        </TD>
+        <TD className="font-medium text-gray-900">{t.firstName} {t.lastName}</TD>
+        <TD className="hidden font-mono text-xs text-gray-500 sm:table-cell">{t.staffNumber}</TD>
+        <TD>
+          {loading ? <Spinner className="h-3.5 w-3.5" /> : record ? (
+            <Badge tone={record.status === "PRESENT" ? "green" : "red"}>
+              {record.status === "PRESENT" ? "Présent" : "Absent"}
+            </Badge>
+          ) : <Badge tone="gray">Aucun pointage</Badge>}
+        </TD>
+        <TD className="hidden sm:table-cell">{formatTime(record?.checkInTime)}</TD>
+        <TD className={cn("hidden sm:table-cell", record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined)}>
+          {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
+        </TD>
+        <TD className="hidden sm:table-cell">{formatTime(lastCheckout)}</TD>
+        <TD className={cn("hidden sm:table-cell", totalEarly > 0 ? "text-warning-600" : undefined)}>
+          {totalEarly > 0 ? formatMinutes(totalEarly) : "—"}
+        </TD>
+        <TD className="text-right">
+          {enteringTime ? (
+            <div className="inline-flex items-center gap-2">
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-24" />
+              <Button size="sm" loading={busy} onClick={markPresent}>OK</Button>
+              <Button size="sm" variant="ghost" onClick={() => setEnteringTime(false)}>Annuler</Button>
+            </div>
+          ) : exitingTime ? (
+            <div className="inline-flex items-center gap-2">
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-24" />
+              <Button size="sm" loading={busy} onClick={recordExit}>OK</Button>
+              <Button size="sm" variant="ghost" onClick={() => setExitingTime(false)}>Annuler</Button>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="text-success-700" disabled={busy}
+                onClick={() => { setTime(nowHm()); setEnteringTime(true); }}>Présent</Button>
+              <Button size="sm" variant="ghost" className="text-brand-700" disabled={busy}
+                onClick={() => { setTime(nowHm()); setExitingTime(true); }}>Sortie</Button>
+              <Button size="sm" variant="ghost" className="text-error-600" disabled={busy} onClick={markAbsent}>Absent</Button>
+            </div>
+          )}
+        </TD>
+      </TR>
+      {expanded && (
+        <TR>
+          <TD colSpan={100} className="bg-gray-50 p-0">
+            <SessionsDetail checkins={checkins} courseLabel={courseLabel} classLabel={classLabel} />
+          </TD>
+        </TR>
+      )}
+    </>
   );
 }
 
 // ── Récap mensuel pointage enseignant (heures + retard cumulé) ────────────────
 function TeacherMonthlyRecap() {
   const teachersQuery = useQuery(() => listTeachers(), []);
-  const teachers = teachersQuery.data ?? [];
+  const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachers],
+  );
   const now = new Date();
   const [teacherId, setTeacherId] = useState<string | null>(null);
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -588,10 +982,8 @@ function TeacherMonthlyRecap() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs text-gray-500">Enseignant</label>
-          <Select className="max-w-[240px]" value={teacherId ?? ""} onChange={(e) => setTeacherId(e.target.value || null)}>
-            <option value="">Choisir…</option>
-            {teachers.map((t) => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
-          </Select>
+          <SearchableSelect value={teacherId ?? ""} options={teacherOptions} onChange={(v) => setTeacherId(v || null)}
+            triggerClassName="w-full max-w-[240px] justify-between px-3" noResultsLabel="Aucun enseignant" />
         </div>
         <div>
           <label className="mb-1 block text-xs text-gray-500">Mois</label>
@@ -636,9 +1028,239 @@ function TeacherMonthlyRecap() {
                   <TR key={a.id}>
                     <TD>{a.date}</TD>
                     <TD><Badge tone={a.status === "PRESENT" ? "green" : "red"}>{a.status === "PRESENT" ? "Présent" : "Absent"}</Badge></TD>
-                    <TD>{a.checkInTime ?? "—"}</TD>
+                    <TD>{formatTime(a.checkInTime)}</TD>
                     <TD className={a.lateMinutes && a.lateMinutes > 0 ? "text-warning-600" : undefined}>
                       {a.lateMinutes && a.lateMinutes > 0 ? fmtH(a.lateMinutes) : "—"}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Personnel non-enseignant : présence (un seul pointage par jour) ───────────
+function EmployeeRollCall({ date }: { date: string }) {
+  const employeesQuery = useQuery(() => listEmployees(), []);
+  const employees = useMemo<Employee[]>(() => employeesQuery.data ?? [], [employeesQuery.data]);
+  const [search, setSearch] = useState("");
+  const filteredEmployees = useMemo(
+    () => employees.filter((e) => `${e.firstName ?? ""} ${e.lastName ?? ""}`.toLowerCase().includes(search.toLowerCase())),
+    [employees, search],
+  );
+
+  if (employeesQuery.loading) return <div className="flex justify-center py-10"><Spinner /></div>;
+  if (employees.length === 0) return <p className="py-8 text-center text-sm text-gray-400">Aucun membre du personnel.</p>;
+
+  return (
+    <div className="space-y-3">
+      <Input placeholder="Rechercher un membre du personnel…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+      <Table>
+        <THead>
+          <tr>
+            <TH>Personnel</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Statut</TH>
+            <TH className="hidden sm:table-cell">Heure d&apos;entrée</TH><TH className="hidden sm:table-cell">Retard</TH>
+            <TH className="hidden sm:table-cell">Heure de sortie</TH><TH className="hidden sm:table-cell">Départ anticipé</TH>
+            <TH className="text-right">Marquer ({date})</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {filteredEmployees.map((e) => <EmployeeRollCallRow key={e.id} employee={e} date={date} />)}
+        </TBody>
+      </Table>
+    </div>
+  );
+}
+
+/** Une ligne = un membre du personnel (administratif, direction, soutien) : un seul pointage par jour
+ * (pas de créneau de cours comme les enseignants), vs l'horaire de référence de l'école (réglages). */
+function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: string }) {
+  const { data, loading, refetch } = useQuery(() => getEmployeeAttendance(e.id, date, date), [e.id, date]);
+  const record = (data ?? []).find((a) => a.date === date) ?? null;
+  const [busy, setBusy] = useState(false);
+  const [enteringTime, setEnteringTime] = useState(false);
+  const [exitingTime, setExitingTime] = useState(false);
+  const [time, setTime] = useState(nowHm());
+
+  async function markPresent() {
+    setBusy(true);
+    try {
+      const attempt = await submitManualEntryOfflineAware("EMPLOYEE", e.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Présence enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Présence enregistrée");
+      setEnteringTime(false);
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function recordExit() {
+    setBusy(true);
+    try {
+      const attempt = await submitManualExitOfflineAware("EMPLOYEE", e.id, date, time);
+      notifySuccess(attempt.outcome === "queued"
+        ? "Sortie enregistrée hors-ligne — sera synchronisée automatiquement."
+        : "Sortie enregistrée");
+      setExitingTime(false);
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function markAbsent() {
+    setBusy(true);
+    try {
+      await markEmployeeAbsent(e.id);
+      notifySuccess("Présence enregistrée");
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <TR>
+      <TD className="font-medium text-gray-900">{e.firstName} {e.lastName}</TD>
+      <TD className="hidden font-mono text-xs text-gray-500 sm:table-cell">{e.employeeNumber}</TD>
+      <TD>
+        {loading ? <Spinner className="h-3.5 w-3.5" /> : record ? (
+          <Badge tone={record.status === "PRESENT" ? "green" : "red"}>
+            {record.status === "PRESENT" ? "Présent" : "Absent"}
+          </Badge>
+        ) : <Badge tone="gray">Aucun pointage</Badge>}
+      </TD>
+      <TD className="hidden sm:table-cell">{formatTime(record?.checkInTime)}</TD>
+      <TD className={cn("hidden sm:table-cell", record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined)}>
+        {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
+      </TD>
+      <TD className="hidden sm:table-cell">{formatTime(record?.checkOutTime)}</TD>
+      <TD className={cn("hidden sm:table-cell", record?.earlyMinutes && record.earlyMinutes > 0 ? "text-warning-600" : undefined)}>
+        {record?.earlyMinutes && record.earlyMinutes > 0 ? formatMinutes(record.earlyMinutes) : "—"}
+      </TD>
+      <TD className="text-right">
+        {enteringTime ? (
+          <div className="inline-flex items-center gap-2">
+            <Input type="time" value={time} onChange={(e2) => setTime(e2.target.value)} className="w-24" />
+            <Button size="sm" loading={busy} onClick={markPresent}>OK</Button>
+            <Button size="sm" variant="ghost" onClick={() => setEnteringTime(false)}>Annuler</Button>
+          </div>
+        ) : exitingTime ? (
+          <div className="inline-flex items-center gap-2">
+            <Input type="time" value={time} onChange={(e2) => setTime(e2.target.value)} className="w-24" />
+            <Button size="sm" loading={busy} onClick={recordExit}>OK</Button>
+            <Button size="sm" variant="ghost" onClick={() => setExitingTime(false)}>Annuler</Button>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-2">
+            <Button size="sm" variant="ghost" className="text-success-700" disabled={busy}
+              onClick={() => { setTime(nowHm()); setEnteringTime(true); }}>Présent</Button>
+            <Button size="sm" variant="ghost" className="text-brand-700" disabled={busy}
+              onClick={() => { setTime(nowHm()); setExitingTime(true); }}>Sortie</Button>
+            <Button size="sm" variant="ghost" className="text-error-600" disabled={busy} onClick={markAbsent}>Absent</Button>
+          </div>
+        )}
+      </TD>
+    </TR>
+  );
+}
+
+// ── Récap mensuel pointage personnel (retard/départ anticipé cumulés) ─────────
+function EmployeeMonthlyRecap() {
+  const employeesQuery = useQuery(() => listEmployees(), []);
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
+  const employeeOptions: SearchableOption[] = useMemo(
+    () => employees.map((e) => {
+      const label = `${e.firstName} ${e.lastName}`;
+      return { value: String(e.id), trigger: label, label, searchText: label };
+    }),
+    [employees],
+  );
+  const now = new Date();
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [y, m] = period.split("-").map(Number);
+  const sumQuery = useQuery(
+    () => (employeeId ? getEmployeeMonthlySummary(Number(employeeId), y, m) : Promise.resolve(null)),
+    [employeeId, period],
+  );
+  const s = sumQuery.data;
+  const fmtH = (mins: number) => `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, "0")}`;
+
+  const monthStart = `${period}-01`;
+  const monthEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+  const historyQuery = useQuery(
+    () => (employeeId ? getEmployeeAttendance(Number(employeeId), monthStart, monthEnd) : Promise.resolve([])),
+    [employeeId, period],
+  );
+  const history = [...(historyQuery.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-sm font-semibold text-gray-700">Récap mensuel — pointage personnel</h3>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Membre du personnel</label>
+          <SearchableSelect value={employeeId ?? ""} options={employeeOptions} onChange={(v) => setEmployeeId(v || null)}
+            triggerClassName="w-full max-w-[240px] justify-between px-3" noResultsLabel="Aucun membre du personnel" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Mois</label>
+          <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+        </div>
+      </div>
+      {!employeeId ? (
+        <p className="mt-4 text-sm text-gray-400">Sélectionnez un membre du personnel.</p>
+      ) : sumQuery.loading ? (
+        <div className="flex justify-center py-6"><Spinner /></div>
+      ) : s ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Jours présents", value: String(s.presentDays) },
+            { label: "Jours absents", value: String(s.absentDays) },
+            { label: "Retard cumulé", value: fmtH(s.totalLateMinutes), warn: s.totalLateMinutes > 0 },
+            { label: "Départ anticipé cumulé", value: fmtH(s.totalEarlyMinutes), warn: s.totalEarlyMinutes > 0 },
+          ].map((c) => (
+            <div key={c.label} className="rounded-xl bg-gray-50 px-3 py-3">
+              <p className="text-xs text-gray-500">{c.label}</p>
+              <p className={`mt-1 text-lg font-bold ${c.warn ? "text-error-600" : "text-gray-900"}`}>{c.value}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <p className="mt-3 text-xs text-gray-400">Retard/départ anticipé calculés vs l&apos;horaire de référence du personnel (réglages).</p>
+
+      {employeeId && (
+        <div className="mt-5 border-t border-gray-100 pt-4">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Détail jour par jour</h4>
+          {historyQuery.loading ? (
+            <div className="flex justify-center py-6"><Spinner /></div>
+          ) : (
+            <Table>
+              <THead><tr><TH>Date</TH><TH>Statut</TH><TH className="hidden sm:table-cell">Entrée</TH><TH>Retard</TH><TH className="hidden sm:table-cell">Sortie</TH><TH>Départ anticipé</TH></tr></THead>
+              <TBody>
+                {history.length === 0 && <TR><TD colSpan={100} className="py-6 text-center text-gray-400">Aucun pointage ce mois-ci.</TD></TR>}
+                {history.map((a) => (
+                  <TR key={a.id}>
+                    <TD>{a.date}</TD>
+                    <TD><Badge tone={a.status === "PRESENT" ? "green" : "red"}>{a.status === "PRESENT" ? "Présent" : "Absent"}</Badge></TD>
+                    <TD className="hidden sm:table-cell">{formatTime(a.checkInTime)}</TD>
+                    <TD className={a.lateMinutes && a.lateMinutes > 0 ? "text-warning-600" : undefined}>
+                      {a.lateMinutes && a.lateMinutes > 0 ? fmtH(a.lateMinutes) : "—"}
+                    </TD>
+                    <TD className="hidden sm:table-cell">{formatTime(a.checkOutTime)}</TD>
+                    <TD className={a.earlyMinutes && a.earlyMinutes > 0 ? "text-warning-600" : undefined}>
+                      {a.earlyMinutes && a.earlyMinutes > 0 ? fmtH(a.earlyMinutes) : "—"}
                     </TD>
                   </TR>
                 ))}

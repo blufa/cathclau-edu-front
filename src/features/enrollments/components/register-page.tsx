@@ -9,9 +9,11 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import {
+  abandonEnrollment,
   cancelEnrollment,
   deleteEnrollment,
   searchEnrollments,
+  updatePlatformAccess,
 } from "@/lib/api/enrollments";
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
@@ -25,15 +27,17 @@ import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal
 import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
-const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
+const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red" | "indigo"> = {
   PENDING: "amber",
   VALIDATED: "green",
   CANCELLED: "red",
+  ABANDONED: "indigo",
 };
 const STATUS_LABEL: Record<EnrollmentStatus, string> = {
   PENDING: "En attente",
   VALIDATED: "Validée",
   CANCELLED: "Annulée",
+  ABANDONED: "Abandon",
 };
 
 export default function EnrollmentsPage() {
@@ -42,6 +46,8 @@ export default function EnrollmentsPage() {
   const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["inscription:validate"]);
   const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["paiement:create"]);
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:create"]);
+  // Colonne de sélection partagée par les deux actions en masse (encaissement famille + accès plateforme).
+  const canBulkSelect = canCollect || canEdit;
 
   // Open the enrollment fee invoice for collection; full payment validates the enrollment server-side.
   const [collectFor, setCollectFor] = useState<{ studentId: number; classId: number } | null>(null);
@@ -50,6 +56,7 @@ export default function EnrollmentsPage() {
   const [picked, setPicked] = useState<number[]>([]);
   const [familyOpen, setFamilyOpen] = useState(false);
   const [passageOpen, setPassageOpen] = useState(false);
+  const [bulkPlatformLoading, setBulkPlatformLoading] = useState(false);
 
   // Mis en cache (IndexedDB) sous les mêmes clés que le formulaire d'inscription hors-ligne
   // (OfflineEnrollFields) : visiter cette page en ligne pré-charge la liste des classes qui sera
@@ -60,6 +67,7 @@ export default function EnrollmentsPage() {
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
   const [classId, setClassId] = useState("");
   const [status, setStatus] = useState<EnrollmentStatus | "">("PENDING");
+  const [platformAccess, setPlatformAccess] = useState<"" | "yes" | "no">("");
 
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const yearId = selectedYearId ?? defaultYearId;
@@ -95,7 +103,11 @@ export default function EnrollmentsPage() {
         : Promise.resolve([]),
     [yearId, classId, status],
   );
-  const enrollments = enrollmentsQuery.data ?? [];
+  const enrollments = useMemo(() => {
+    const all = enrollmentsQuery.data ?? [];
+    if (!platformAccess) return all;
+    return all.filter((e) => (platformAccess === "yes" ? e.platformAccessOptIn : !e.platformAccessOptIn));
+  }, [enrollmentsQuery.data, platformAccess]);
 
   function handleCancel(id: number) {
     confirmAction({
@@ -113,6 +125,47 @@ export default function EnrollmentsPage() {
       },
     });
   }
+  function handleAbandon(id: number) {
+    confirmAction({
+      title: "Marquer comme abandon",
+      message: "L'élève arrête les cours en cours d'année ? Il restera visible pour cette classe "
+        + "(facturation, recouvrement) mais disparaîtra des listes d'appel et de saisie de notes.",
+      confirmLabel: "Marquer comme abandon",
+      onConfirm: async () => {
+        try {
+          await abandonEnrollment(id);
+          notifySuccess("Inscription marquée comme abandon");
+          enrollmentsQuery.refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+  }
+  async function bulkSetPlatformAccess(optIn: boolean) {
+    // picked contient des studentId (partagé avec la sélection "Encaisser famille") — on retrouve
+    // l'inscription correspondante dans la liste déjà filtrée à l'écran pour récupérer son id.
+    const targets = picked
+      .map((studentId) => enrollments.find((e) => e.studentId === studentId))
+      .filter((e): e is Enrollment => !!e);
+    if (targets.length === 0) return;
+    setBulkPlatformLoading(true);
+    try {
+      const results = await Promise.allSettled(targets.map((e) => updatePlatformAccess(e.id, optIn)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const ok = results.length - failed;
+      if (failed === 0) {
+        notifySuccess(`Accès plateforme ${optIn ? "activé" : "désactivé"} pour ${ok} élève(s)`);
+      } else {
+        notifyError(`${ok} mis à jour, ${failed} échec(s) — réessayez pour les élèves restants`);
+      }
+      enrollmentsQuery.refetch();
+      setPicked([]);
+    } finally {
+      setBulkPlatformLoading(false);
+    }
+  }
+
   function handleDelete(id: number) {
     confirmAction({
       title: "Supprimer l'inscription",
@@ -181,10 +234,31 @@ export default function EnrollmentsPage() {
           <option value="CANCELLED">Annulée</option>
         </Select>
 
-        {canCollect && picked.length > 0 && (
-          <div className="ml-auto flex items-center gap-3">
+        <Select
+          className="max-w-[190px]"
+          value={platformAccess}
+          onChange={(e) => setPlatformAccess(e.target.value as "" | "yes" | "no")}
+          aria-label="Filtrer par accès plateforme"
+        >
+          <option value="">Accès plateforme : tous</option>
+          <option value="yes">Accès plateforme activé</option>
+          <option value="no">Accès plateforme non activé</option>
+        </Select>
+
+        {canBulkSelect && picked.length > 0 && (
+          <div className="ml-auto flex flex-wrap items-center gap-3">
             <span className="text-sm text-slate-500">{picked.length} élève(s) sélectionné(s)</span>
-            <Button size="sm" onClick={() => setFamilyOpen(true)}>Encaisser (famille)</Button>
+            {canCollect && <Button size="sm" onClick={() => setFamilyOpen(true)}>Encaisser (famille)</Button>}
+            {canEdit && (
+              <>
+                <Button size="sm" variant="secondary" loading={bulkPlatformLoading} onClick={() => bulkSetPlatformAccess(true)}>
+                  Activer l&apos;accès plateforme
+                </Button>
+                <Button size="sm" variant="ghost" loading={bulkPlatformLoading} onClick={() => bulkSetPlatformAccess(false)}>
+                  Désactiver
+                </Button>
+              </>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setPicked([])}>Effacer</Button>
           </div>
         )}
@@ -202,12 +276,12 @@ export default function EnrollmentsPage() {
         <Table>
           <THead>
             <tr>
-              {canCollect && <TH className="w-8"></TH>}
+              {canBulkSelect && <TH className="w-8"></TH>}
               <TH>Élève</TH>
               <TH>Classe</TH>
-              <TH>Type</TH>
-              <TH>Date</TH>
-              <TH>Plateforme</TH>
+              <TH className="hidden sm:table-cell">Type</TH>
+              <TH className="hidden sm:table-cell">Date</TH>
+              <TH className="hidden sm:table-cell">Plateforme</TH>
               <TH>Statut</TH>
               <TH className="text-right">Actions</TH>
             </tr>
@@ -215,14 +289,14 @@ export default function EnrollmentsPage() {
           <TBody>
             {enrollments.length === 0 && (
               <TR>
-                <TD colSpan={canCollect ? 8 : 7} className="py-10 text-center text-gray-400">
+                <TD colSpan={100} className="py-10 text-center text-gray-400">
                   Aucune inscription pour ces filtres.
                 </TD>
               </TR>
             )}
             {enrollments.map((e) => (
               <TR key={e.id}>
-                {canCollect && (
+                {canBulkSelect && (
                   <TD>
                     <input
                       type="checkbox"
@@ -231,7 +305,7 @@ export default function EnrollmentsPage() {
                       onChange={() =>
                         setPicked((p) => (p.includes(e.studentId) ? p.filter((x) => x !== e.studentId) : [...p, e.studentId]))
                       }
-                      aria-label="Sélectionner pour encaissement famille"
+                      aria-label="Sélectionner pour action en masse"
                     />
                   </TD>
                 )}
@@ -241,9 +315,9 @@ export default function EnrollmentsPage() {
                   </Link>
                 </TD>
                 <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
-                <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
-                <TD>{e.enrolledAt ?? "—"}</TD>
-                <TD>
+                <TD className="hidden sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
+                <TD className="hidden sm:table-cell">{e.enrolledAt ?? "—"}</TD>
+                <TD className="hidden sm:table-cell">
                   <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
                     {e.platformAccessOptIn ? "Activé" : "Non activé"}
                   </Badge>
@@ -263,7 +337,12 @@ export default function EnrollmentsPage() {
                         Modifier
                       </Button>
                     )}
-                    {canDecide && e.status !== "CANCELLED" && (
+                    {canDecide && e.status === "VALIDATED" && (
+                      <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => handleAbandon(e.id)}>
+                        Abandon
+                      </Button>
+                    )}
+                    {canDecide && e.status !== "CANCELLED" && e.status !== "ABANDONED" && (
                       <Button size="sm" variant="ghost" onClick={() => handleCancel(e.id)}>
                         Annuler
                       </Button>

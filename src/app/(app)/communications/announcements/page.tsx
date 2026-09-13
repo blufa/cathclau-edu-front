@@ -188,9 +188,9 @@ export default function AnnouncementsPage() {
               <TR>
                 <TH>Titre</TH>
                 <TH>Portée</TH>
-                <TH>Cible</TH>
-                <TH>Auteur</TH>
-                <TH>Publiée le</TH>
+                <TH className="hidden sm:table-cell">Cible</TH>
+                <TH className="hidden sm:table-cell">Auteur</TH>
+                <TH className="hidden sm:table-cell">Publiée le</TH>
                 {canWrite && <TH className="text-right">Actions</TH>}
               </TR>
             </THead>
@@ -202,9 +202,9 @@ export default function AnnouncementsPage() {
                     <p className="max-w-md truncate text-xs text-gray-500">{a.content}</p>
                   </TD>
                   <TD><Badge tone={SCOPE_TONE[a.scope]}>{ANNOUNCEMENT_SCOPE_LABEL[a.scope]}</Badge></TD>
-                  <TD className="text-sm text-gray-600">{targetLabel(a)}</TD>
-                  <TD className="text-sm text-gray-600">{a.authorName ?? "—"}</TD>
-                  <TD className="text-sm text-gray-500">{formatDateTime(a.publishedAt ?? a.createdAt)}</TD>
+                  <TD className="hidden text-sm text-gray-600 sm:table-cell">{targetLabel(a)}</TD>
+                  <TD className="hidden text-sm text-gray-600 sm:table-cell">{a.authorName ?? "—"}</TD>
+                  <TD className="hidden text-sm text-gray-500 sm:table-cell">{formatDateTime(a.publishedAt ?? a.createdAt)}</TD>
                   {canWrite && (
                     <TD className="text-right">
                       <div className="inline-flex gap-1">

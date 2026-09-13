@@ -43,3 +43,8 @@ next-env.d.ts
 
 # template de référence (Vankine) — utilisé uniquement pour extraire markup/CSS, jamais exécuté
 /Vankine-nextjs-v2.1.0-unzip-first/
+
+# service worker généré par @serwist/next (npm run build) — jamais du code source à committer
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js

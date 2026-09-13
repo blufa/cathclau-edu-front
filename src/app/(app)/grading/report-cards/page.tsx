@@ -177,14 +177,14 @@ function StudentRecord({ student, periodLabel, canPublish, onChangeStudent }: {
             </div>
           )}
           <Table>
-            <THead><tr><TH>Période</TH><TH>Moyenne</TH><TH>Rang</TH><TH>Mention</TH><TH>Appréciation</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+            <THead><tr><TH>Période</TH><TH>Moyenne</TH><TH className="hidden sm:table-cell">Rang</TH><TH className="hidden sm:table-cell">Mention</TH><TH>Appréciation</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
             <TBody>
               {cards.map((c) => (
                 <TR key={c.id}>
                   <TD className="font-medium text-slate-900">{periodLabel(c.periodId)}</TD>
                   <TD>{c.overallAverage ?? "—"}</TD>
-                  <TD>{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
-                  <TD>{c.honor ?? "—"}</TD>
+                  <TD className="hidden sm:table-cell">{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
+                  <TD className="hidden sm:table-cell">{c.honor ?? "—"}</TD>
                   <TD>
                     {canPublish && c.status !== "PUBLISHED" ? (
                       <Select className="max-w-[180px]" value={c.distinction ?? "NONE"} onChange={(e) => changeDistinction(c, e.target.value as Distinction)}>
@@ -248,20 +248,20 @@ function ReportCardLines({ card }: { card: ReportCard }) {
             <THead>
               <tr>
                 <TH>Matière</TH>
-                {showCoursCompo && <TH>Cours</TH>}
-                {showCoursCompo && <TH>Compo.</TH>}
-                <TH>Moy.</TH><TH>Coef.</TH><TH>Moy. pond.</TH><TH>Rang</TH>
+                {showCoursCompo && <TH className="hidden sm:table-cell">Cours</TH>}
+                {showCoursCompo && <TH className="hidden sm:table-cell">Compo.</TH>}
+                <TH>Moy.</TH><TH className="hidden sm:table-cell">Coef.</TH><TH className="hidden sm:table-cell">Moy. pond.</TH><TH>Rang</TH>
               </tr>
             </THead>
             <TBody>
               {lines.map((l) => (
                 <TR key={l.id}>
                   <TD className="font-medium text-slate-900">{subjectLabel.get(l.subjectId) ?? `#${l.subjectId}`}</TD>
-                  {showCoursCompo && <TD>{l.coursAverage ?? "—"}</TD>}
-                  {showCoursCompo && <TD>{l.compoAverage ?? "—"}</TD>}
+                  {showCoursCompo && <TD className="hidden sm:table-cell">{l.coursAverage ?? "—"}</TD>}
+                  {showCoursCompo && <TD className="hidden sm:table-cell">{l.compoAverage ?? "—"}</TD>}
                   <TD>{l.subjectAverage ?? "—"}</TD>
-                  <TD>{l.coefficient ?? "—"}</TD>
-                  <TD>{l.weightedAverage ?? "—"}</TD>
+                  <TD className="hidden sm:table-cell">{l.coefficient ?? "—"}</TD>
+                  <TD className="hidden sm:table-cell">{l.weightedAverage ?? "—"}</TD>
                   <TD>{l.subjectRank ?? "—"}</TD>
                 </TR>
               ))}
@@ -379,16 +379,16 @@ function AnnualReportCardsTable({ classId, academicYearId, onPreview }: {
   }
   return (
     <Table>
-      <THead><tr><TH>Élève</TH><TH>Moy. S1</TH><TH>Moy. S2</TH><TH>Moy. annuelle</TH><TH>Rang</TH><TH>Mention</TH><TH className="text-right">Actions</TH></tr></THead>
+      <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Moy. S1</TH><TH className="hidden sm:table-cell">Moy. S2</TH><TH>Moy. annuelle</TH><TH className="hidden sm:table-cell">Rang</TH><TH className="hidden sm:table-cell">Mention</TH><TH className="text-right">Actions</TH></tr></THead>
       <TBody>
         {cards.map((c) => (
           <TR key={c.studentId}>
             <TD className="font-medium text-slate-900">{studentName.get(c.studentId) ?? `Élève #${c.studentId}`}</TD>
-            <TD>{c.s1Average ?? "—"}</TD>
-            <TD>{c.s2Average ?? "—"}</TD>
+            <TD className="hidden sm:table-cell">{c.s1Average ?? "—"}</TD>
+            <TD className="hidden sm:table-cell">{c.s2Average ?? "—"}</TD>
             <TD className="font-semibold">{c.overallAverage ?? "—"}</TD>
-            <TD>{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
-            <TD>{c.honor ?? "—"}</TD>
+            <TD className="hidden sm:table-cell">{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
+            <TD className="hidden sm:table-cell">{c.honor ?? "—"}</TD>
             <TD className="text-right">
               <Button size="sm" variant="ghost" loading={busy === c.studentId} onClick={() => pdf(c)}>PDF</Button>
             </TD>

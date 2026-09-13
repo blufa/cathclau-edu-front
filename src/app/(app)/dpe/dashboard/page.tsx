@@ -67,7 +67,7 @@ function DpeDashboardContent() {
               ) : (
                 <Table>
                   <THead>
-                    <TR><TH>École</TH><TH>Ville</TH><TH>Statut</TH><TH>Élèves</TH><TH>Enseignants</TH><TH>Classes</TH></TR>
+                    <TR><TH>École</TH><TH className="hidden sm:table-cell">Ville</TH><TH>Statut</TH><TH>Élèves</TH><TH>Enseignants</TH><TH className="hidden sm:table-cell">Classes</TH></TR>
                   </THead>
                   <TBody>
                     {(data?.schools ?? []).map((s) => (
@@ -77,15 +77,15 @@ function DpeDashboardContent() {
                             {s.schoolName}
                           </Link>
                         </TD>
-                        <TD>{s.city ?? "—"}</TD>
+                        <TD className="hidden sm:table-cell">{s.city ?? "—"}</TD>
                         <TD><Badge tone={s.status === "ACTIVE" ? "green" : "gray"}>{s.status === "ACTIVE" ? "Active" : "Inactive"}</Badge></TD>
                         <TD>{s.studentCount}</TD>
                         <TD>{s.teacherCount} <span className="text-xs text-gray-400">({s.activeTeacherCount} actifs)</span></TD>
-                        <TD>{s.classCount}</TD>
+                        <TD className="hidden sm:table-cell">{s.classCount}</TD>
                       </TR>
                     ))}
                     {!loading && (data?.schools ?? []).length === 0 && (
-                      <TR><TD colSpan={6} className="text-gray-400">Aucune école rattachée à votre périmètre pour le moment.</TD></TR>
+                      <TR><TD colSpan={100} className="text-gray-400">Aucune école rattachée à votre périmètre pour le moment.</TD></TR>
                     )}
                   </TBody>
                 </Table>

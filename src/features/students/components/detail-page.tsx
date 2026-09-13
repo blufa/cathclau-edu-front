@@ -10,14 +10,20 @@ import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
+  abandonEnrollment,
   cancelEnrollment,
   deleteEnrollment,
+  transferEnrollmentClass,
 } from "@/lib/api/enrollments";
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
+import type { Classe } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { Modal } from "@/components/ui/modal";
+import { Field, Label } from "@/components/ui/input";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
 import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal";
@@ -29,15 +35,17 @@ import { CertificateAction } from "./certificate-action";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useStudentQuery } from "../hooks/use-students";
 
-const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red"> = {
+const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red" | "indigo"> = {
   PENDING: "amber",
   VALIDATED: "green",
   CANCELLED: "red",
+  ABANDONED: "indigo",
 };
 const STATUS_LABEL: Record<EnrollmentStatus, string> = {
   PENDING: "En attente",
   VALIDATED: "Validée",
   CANCELLED: "Annulée",
+  ABANDONED: "Abandon",
 };
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
@@ -62,15 +70,20 @@ export default function StudentDetailPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [editing, setEditing] = useState<Enrollment | null>(null);
   const [collecting, setCollecting] = useState<{ classId: number | null } | null>(null);
+  const [transferring, setTransferring] = useState<Enrollment | null>(null);
 
   const yearIds = useMemo(
-    () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId))],
+    () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId).filter((id): id is number => id != null))],
     [data?.enrollments],
   );
   const classesQuery = useQuery(
     () =>
       yearIds.length
-        ? Promise.all(yearIds.map((y) => listClasses(y))).then((lists) => lists.flat())
+        ? // allSettled : une année en échec (ex. année archivée/supprimée) ne doit pas faire perdre le
+          // nom de classe de TOUTES les inscriptions — c'était la cause du « #<id> » affiché à la place
+          // du nom de classe dès qu'une seule année posait problème (Promise.all rejette tout le lot).
+          Promise.allSettled(yearIds.map((y) => listClasses(y)))
+            .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value : [])))
         : Promise.resolve([]),
     [yearIds.join(",")],
   );
@@ -80,6 +93,11 @@ export default function StudentDetailPage() {
   const alreadyEnrolledThisYear = (data?.enrollments ?? []).some(
     (e) => e.academicYearId === currentYearId && e.status !== "CANCELLED",
   );
+  // Inscription à afficher dans l'en-tête pour le badge « Accès plateforme » : celle de l'année
+  // courante si validée, sinon la dernière inscription validée connue (élève d'une année antérieure).
+  const currentEnrollment = (data?.enrollments ?? []).find(
+    (e) => e.academicYearId === currentYearId && e.status === "VALIDATED",
+  ) ?? [...(data?.enrollments ?? [])].reverse().find((e) => e.status === "VALIDATED");
   const classLabel = useMemo(
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
     [classesQuery.data],
@@ -94,6 +112,23 @@ export default function StudentDetailPage() {
         try {
           await cancelEnrollment(enrollmentId);
           notifySuccess("Inscription annulée");
+          refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+  }
+  function handleAbandon(enrollmentId: number) {
+    confirmAction({
+      title: "Marquer comme abandon",
+      message: "L'élève arrête les cours en cours d'année ? Il restera visible pour cette classe "
+        + "(facturation, recouvrement) mais disparaîtra des listes d'appel et de saisie de notes.",
+      confirmLabel: "Marquer comme abandon",
+      onConfirm: async () => {
+        try {
+          await abandonEnrollment(enrollmentId);
+          notifySuccess("Inscription marquée comme abandon");
           refetch();
         } catch (err) {
           notifyError(err);
@@ -165,6 +200,11 @@ export default function StudentDetailPage() {
             {student.firstName} {student.lastName}
           </h1>
           <p className="font-mono text-sm text-slate-500">{student.studentNumber}</p>
+          {currentEnrollment && (
+            <Badge tone={currentEnrollment.platformAccessOptIn ? "green" : "gray"} className="mt-1.5">
+              {currentEnrollment.platformAccessOptIn ? "Accès plateforme activé" : "Accès plateforme non activé"}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -256,9 +296,10 @@ export default function StudentDetailPage() {
               <THead>
                 <tr>
                   <TH>Classe</TH>
-                  <TH>Année</TH>
-                  <TH>Type</TH>
+                  <TH className="hidden sm:table-cell">Année</TH>
+                  <TH className="hidden sm:table-cell">Type</TH>
                   <TH>Statut</TH>
+                  <TH className="hidden sm:table-cell">Plateforme</TH>
                   <TH className="text-right">Actions</TH>
                 </tr>
               </THead>
@@ -266,10 +307,15 @@ export default function StudentDetailPage() {
                 {enrollments.map((e) => (
                   <TR key={e.id}>
                     <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
-                    <TD>#{e.academicYearId}</TD>
-                    <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
+                    <TD className="hidden sm:table-cell">#{e.academicYearId}</TD>
+                    <TD className="hidden sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                    </TD>
+                    <TD className="hidden sm:table-cell">
+                      <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
+                        {e.platformAccessOptIn ? "Activé" : "Non activé"}
+                      </Badge>
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">
@@ -283,7 +329,17 @@ export default function StudentDetailPage() {
                             Modifier
                           </Button>
                         )}
-                        {canDecide && e.status !== "CANCELLED" && (
+                        {canDecide && e.status === "VALIDATED" && (
+                          <Button size="sm" variant="ghost" onClick={() => setTransferring(e)}>
+                            Transférer
+                          </Button>
+                        )}
+                        {canDecide && e.status === "VALIDATED" && (
+                          <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => handleAbandon(e.id)}>
+                            Marquer comme abandon
+                          </Button>
+                        )}
+                        {canDecide && e.status !== "CANCELLED" && e.status !== "ABANDONED" && (
                           <Button size="sm" variant="ghost" onClick={() => handleCancel(e.id)}>
                             Annuler
                           </Button>
@@ -382,6 +438,75 @@ export default function StudentDetailPage() {
           onCollected={refetch}
         />
       )}
+
+      {transferring && (
+        <TransferClassModal
+          enrollment={transferring}
+          classOptions={(classesQuery.data ?? []).filter(
+            (c) => c.academicYearId === transferring.academicYearId && c.id !== transferring.classId,
+          )}
+          onClose={() => setTransferring(null)}
+          onTransferred={() => {
+            setTransferring(null);
+            refetch();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Transfert d'une inscription validée vers une autre classe en cours d'année. Si les frais de
+ * scolarité diffèrent entre les deux classes, les mensualités impayées de l'ancienne classe sont
+ * annulées côté serveur et ce qui a déjà été payé est automatiquement reporté en crédit sur les
+ * nouvelles mensualités — rien à faire ici, juste choisir la nouvelle classe.
+ */
+function TransferClassModal({ enrollment, classOptions, onClose, onTransferred }: {
+  enrollment: Enrollment; classOptions: Classe[]; onClose: () => void; onTransferred: () => void;
+}) {
+  const [classId, setClassId] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+  const options: SearchableOption[] = classOptions.map((c) => ({
+    value: String(c.id), trigger: c.label, label: c.label, searchText: c.label,
+  }));
+
+  async function submit() {
+    if (!classId) return;
+    setSubmitting(true);
+    try {
+      await transferEnrollmentClass(enrollment.id, Number(classId));
+      notifySuccess("Élève transféré vers la nouvelle classe");
+      onTransferred();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Transférer vers une autre classe">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">
+          Si la scolarité de la nouvelle classe a un tarif différent, les mensualités impayées de
+          l&apos;ancienne classe seront annulées et ce qui a déjà été payé sera automatiquement
+          reporté en crédit sur les nouvelles mensualités.
+        </p>
+        <Field>
+          <Label>Nouvelle classe</Label>
+          {options.length === 0 ? (
+            <p className="text-sm text-slate-400">Aucune autre classe disponible pour cette année scolaire.</p>
+          ) : (
+            <SearchableSelect value={classId} options={options} onChange={setClassId}
+              triggerClassName="w-full justify-between px-3" />
+          )}
+        </Field>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} disabled={submitting}>Annuler</Button>
+          <Button onClick={submit} disabled={!classId} loading={submitting}>Transférer</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }

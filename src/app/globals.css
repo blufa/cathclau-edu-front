@@ -101,6 +101,25 @@
   --animate-meteor: meteor 5s linear infinite;
 }
 
+/* L'échelle de police ci-dessus a été volontairement agrandie pour le confort de lecture sur
+   ordinateur ; sur petit écran (téléphone), les mêmes tailles font déborder les titres et
+   surchargent l'interface. On la ramène ici, pour les écrans étroits uniquement, vers des tailles
+   proches du standard Tailwind — sans toucher au rendu desktop/tablette. */
+@media (max-width: 640px) {
+  :root {
+    --text-lg: 1.125rem;
+    --text-lg--line-height: 1.75rem;
+    --text-xl: 1.25rem;
+    --text-xl--line-height: 1.75rem;
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: 2rem;
+    --text-3xl: 1.75rem;
+    --text-3xl--line-height: 2.25rem;
+    --text-4xl: 2rem;
+    --text-4xl--line-height: 2.375rem;
+  }
+}
+
 @keyframes aurora {
   from {
     background-position: 50% 50%, 50% 50%;
@@ -176,6 +195,16 @@ button:disabled,
 [aria-disabled="true"],
 [data-disabled] {
   cursor: not-allowed;
+}
+
+/* Le header public "style 5" (Vankine, voir Header5) laisse son bandeau de coordonnées (logo + 3
+   blocs de contact) visible et empilé sur tablette/mobile — le thème masque déjà ce bandeau pour le
+   header "style 6" au même palier (voir theme.css, @media max-width: 1200px), on applique la même
+   règle ici pour le style 5 : sans elle, l'en-tête prend un tiers d'écran avant le contenu. */
+@media (max-width: 1200px) {
+  .vankine-scope .header-area.header-style-5 .top_bar {
+    display: none;
+  }
 }
 
 /* Par défaut, les navigateurs omettent les couleurs de fond/dégradés à l'impression (économie

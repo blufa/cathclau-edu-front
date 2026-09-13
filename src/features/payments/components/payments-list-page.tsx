@@ -20,12 +20,14 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
+import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 import {
   useCheckPaymentStatusMutation,
   useDownloadReceiptMutation,
   usePaymentsQuery,
   useRefundPaymentMutation,
 } from "../hooks/use-payments";
+import { getPaymentReceiptPdf } from "@/lib/api/payment";
 
 const STATUS_TONE: Record<PaymentStatus, "gray" | "amber" | "green" | "red" | "indigo"> = {
   INITIATED: "gray",
@@ -125,23 +127,33 @@ export default function PaymentsListPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Référence</TH><TH>Élève</TH><TH>Montant</TH><TH>Canal</TH><TH>Statut</TH><TH>Date</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH className="hidden sm:table-cell">Référence</TH><TH>Élève</TH><TH>Montant</TH><TH className="hidden sm:table-cell">Canal</TH><TH>Statut</TH><TH className="hidden sm:table-cell">Date</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {rows.length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucun paiement.</TD></TR>}
+            {rows.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun paiement.</TD></TR>}
             {rows.map((p) => (
               <TR key={p.id}>
-                <TD className="font-mono text-xs text-gray-600">{p.reference}</TD>
+                <TD className="hidden font-mono text-xs text-gray-600 sm:table-cell">{p.reference}</TD>
                 <TD className="text-gray-700">{studentName(p.studentId)}</TD>
                 <TD className="font-medium text-gray-900">{formatGNF(p.amount)}</TD>
-                <TD>{PAYMENT_CHANNEL_LABEL[p.channel]}</TD>
+                <TD className="hidden sm:table-cell">{PAYMENT_CHANNEL_LABEL[p.channel]}</TD>
                 <TD><Badge tone={STATUS_TONE[p.status]}>{PAYMENT_STATUS_LABEL[p.status]}</Badge></TD>
-                <TD className="text-gray-500">{p.paidAt?.slice(0, 10) ?? "—"}</TD>
+                <TD className="hidden text-gray-500 sm:table-cell">{p.paidAt?.slice(0, 10) ?? "—"}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     {(p.status === "INITIATED" || p.status === "PENDING") && (
                       <Button size="sm" variant="ghost" loading={checkStatusMutation.isPending && checkStatusMutation.variables === p.id} onClick={() => checkStatus(p)}>Vérifier</Button>
                     )}
                     {p.status === "SUCCEEDED" && <Button size="sm" variant="ghost" onClick={() => receipt(p)}>Reçu PDF</Button>}
+                    {p.status === "SUCCEEDED" && (
+                      <WhatsAppInvoiceButton
+                        studentId={p.studentId}
+                        buildMessage={async () => {
+                          const { url } = await getPaymentReceiptPdf(p.id);
+                          const name = studentName(p.studentId);
+                          return `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} pour ${name} (réf. ${p.reference}).${url ? ` ${url}` : ""}`;
+                        }}
+                      />
+                    )}
                     {canRefund && p.status === "SUCCEEDED" && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => refund(p)}>Rembourser</Button>}
                   </div>
                 </TD>

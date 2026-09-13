@@ -103,15 +103,15 @@ export default function AssignmentsPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Devoir</TH><TH>Matière</TH><TH>Échéance</TH><TH>Barème</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Devoir</TH><TH className="hidden sm:table-cell">Matière</TH><TH>Échéance</TH><TH className="hidden sm:table-cell">Barème</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun devoir pour cette classe.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun devoir pour cette classe.</TD></TR>}
             {(q.data ?? []).map((a) => (
               <TR key={a.id}>
                 <TD className="font-medium text-gray-900">{a.title}</TD>
-                <TD>{subjectName.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
+                <TD className="hidden sm:table-cell">{subjectName.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
                 <TD>{a.dueDate ?? "—"}</TD>
-                <TD>{a.maxScore != null ? `/${a.maxScore}` : "—"}</TD>
+                <TD className="hidden sm:table-cell">{a.maxScore != null ? `/${a.maxScore}` : "—"}</TD>
                 <TD><Badge tone={STATUS_TONE[a.status]}>{ASSIGNMENT_STATUS_LABEL[a.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">

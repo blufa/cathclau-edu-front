@@ -68,6 +68,29 @@ export default function ClassesListPage() {
     setEditing(null);
     notifySuccess("Classe mise à jour");
   }
+  // Bascule rapide depuis la liste (classes déjà créées) : pas besoin de rouvrir le formulaire
+  // complet juste pour cocher/décocher « classe d'examen ». Répercute immédiatement sur la paie des
+  // enseignants déjà affectés (le tarif horaire est résolu à la volée à partir de la classe).
+  async function toggleExamType(classe: Classe) {
+    const nextType = classe.classType === "EXAMEN" ? "NORMALE" : "EXAMEN";
+    try {
+      await updateMutation.mutateAsync({
+        id: classe.id,
+        input: {
+          levelId: classe.levelId,
+          academicYearId: classe.academicYearId,
+          headTeacherId: classe.headTeacherId,
+          roomId: classe.roomId,
+          label: classe.label,
+          maxCapacity: classe.maxCapacity,
+          classType: nextType,
+        },
+      });
+      notifySuccess(nextType === "EXAMEN" ? "Classe marquée « examen »" : "Classe remise en « normale »");
+    } catch (err) {
+      notifyError(err);
+    }
+  }
   function handleDelete(classe: Classe) {
     confirmAction({
       title: "Supprimer la classe",
@@ -117,6 +140,24 @@ export default function ClassesListPage() {
       header: "Salle",
       accessor: (c) => (c.roomId ? (roomLabel.get(c.roomId) ?? "") : ""),
       render: (c) => (c.roomId ? (roomLabel.get(c.roomId) ?? "—") : "—"),
+    },
+    {
+      key: "classType",
+      header: "Typologie",
+      accessor: (c) => (c.classType === "EXAMEN" ? "Examen" : "Normale"),
+      render: (c) => (
+        <button
+          type="button"
+          disabled={!canWrite}
+          onClick={() => toggleExamType(c)}
+          title={canWrite ? "Cliquer pour basculer" : undefined}
+          className={canWrite ? "cursor-pointer" : "cursor-default"}
+        >
+          {c.classType === "EXAMEN"
+            ? <Badge tone="amber">Classe d&apos;examen</Badge>
+            : <span className="text-xs text-gray-400 hover:text-gray-600">Normale</span>}
+        </button>
+      ),
     },
     {
       key: "headcount",
@@ -203,7 +244,7 @@ export default function ClassesListPage() {
 
       {yearId && (
         <>
-          <Modal open={assisting} onClose={() => setAssisting(false)} title="Assistant — création de classes">
+          <Modal open={assisting} onClose={() => setAssisting(false)} title="Assistant — création de classes" className="max-w-xl max-h-[85vh] overflow-y-auto">
             {assisting && (
               <ClassAssistant
                 academicYearId={yearId}

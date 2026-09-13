@@ -130,16 +130,16 @@ function FundDetail({ fund, canWrite, canManage, onDelete, onBalanceChange }: {
         <CardBody>
           {q.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
             <Table>
-              <THead><tr><TH>Date</TH><TH>Type</TH><TH>Bon</TH><TH>Objet</TH><TH>Bénéficiaire</TH><TH className="text-right">Montant</TH><TH /></tr></THead>
+              <THead><tr><TH>Date</TH><TH>Type</TH><TH className="hidden sm:table-cell">Bon</TH><TH>Objet</TH><TH className="hidden sm:table-cell">Bénéficiaire</TH><TH className="text-right">Montant</TH><TH /></tr></THead>
               <TBody>
-                {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-6 text-center text-gray-400">Aucune opération.</TD></TR>}
+                {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-6 text-center text-gray-400">Aucune opération.</TD></TR>}
                 {(q.data ?? []).map((t) => (
                   <TR key={t.id}>
                     <TD className="whitespace-nowrap text-sm">{t.txDate}</TD>
                     <TD><Badge tone={t.txType === "REPLENISHMENT" ? "green" : "amber"}>{PETTY_CASH_TX_TYPE_LABEL[t.txType]}</Badge></TD>
-                    <TD className="text-sm">{t.voucherNumber ?? "—"}</TD>
+                    <TD className="hidden text-sm sm:table-cell">{t.voucherNumber ?? "—"}</TD>
                     <TD className="max-w-[200px] truncate text-sm text-gray-600" title={t.description ?? ""}>{t.description ?? "—"}{t.category ? <span className="block text-xs text-gray-400">{t.category}</span> : null}</TD>
-                    <TD className="text-sm">{t.recipient ?? "—"}</TD>
+                    <TD className="hidden text-sm sm:table-cell">{t.recipient ?? "—"}</TD>
                     <TD className={`text-right font-medium ${t.txType === "REPLENISHMENT" ? "text-success-700" : "text-gray-900"}`}>{t.txType === "REPLENISHMENT" ? "+" : "−"}{formatGNF(t.amount)}</TD>
                     <TD className="text-right">{canManage && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => removeTx(t.id)}>Suppr.</Button>}</TD>
                   </TR>
@@ -222,7 +222,7 @@ function TxForm({ fundId, type, suggested, onCancel, onDone }: {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field><Label>Date</Label><DatePicker value={txDate} clearable onChange={setTxDate} /></Field>
+        <Field><Label>Date</Label><DatePicker value={txDate} clearable onChange={setTxDate} maxDate={new Date()} /></Field>
         <Field><Label>Montant (GNF)</Label><Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
       </div>
       {type === "DISBURSEMENT" && (

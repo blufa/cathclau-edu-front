@@ -27,6 +27,22 @@ export function getMyParent(): Promise<Parent> {
   return api.get<Parent>("/parents/me");
 }
 
+/** Un parent minimal (identité + contact), tel que renvoyé pour la présélection de destinataires. */
+export interface ParentWithAccess {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  email: string | null;
+}
+
+/** Parents dont au moins un enfant a accepté l'accès à la plateforme — utilisé pour présélectionner
+ * automatiquement les destinataires d'un nouveau message (type « Parent »), sans sélection manuelle
+ * obligatoire dans la barre de recherche. */
+export function listParentsWithPlatformAccess(): Promise<ParentWithAccess[]> {
+  return api.get<ParentWithAccess[]>("/parents/with-platform-access");
+}
+
 /** List parents of the current tenant (to reuse a parent across siblings). */
 export function listParents(search?: string, size = 20): Promise<Parent[]> {
   return api.get<Page<Parent>>("/parents", { query: { size } }).then((p) => {

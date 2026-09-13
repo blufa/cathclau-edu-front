@@ -72,6 +72,13 @@ export default function SettingsPage() {
 }
 
 function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
+  // Le logo/couleur ne sont pas édités sur ce formulaire (voir carte « Apparence » plus bas) : on
+  // resoumet systématiquement la valeur la plus fraîche connue via le contexte de branding partagé
+  // (tenu à jour par `BrandingForm.onSaved` → `refresh()`), jamais l'instantané chargé au montage de
+  // CE formulaire. Sans ça, enregistrer ce formulaire APRÈS avoir changé le logo dans « Apparence »
+  // réécrasait silencieusement le logo tout juste téléversé avec l'ancienne valeur (deux formulaires
+  // distincts, deux copies locales du même champ, la dernière sauvegarde gagne).
+  const { branding } = useBranding();
   const [profile, setProfile] = useState<SchoolProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -95,8 +102,8 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
     try {
       const updated = await updateSchoolProfile({
         schoolName: profile.schoolName,
-        logo: profile.logo,
-        brandColor: profile.brandColor,
+        logo: branding?.logo ?? profile.logo,
+        brandColor: branding?.brandColor ?? profile.brandColor,
         address: profile.address,
         city: profile.city,
         country: profile.country,
@@ -108,6 +115,9 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         openingAuthorization: profile.openingAuthorization,
         motto: profile.motto,
         slogan: profile.slogan,
+        ire: profile.ire,
+        dpeLabel: profile.dpeLabel,
+        sousPrefectureLabel: profile.sousPrefectureLabel,
         payoutMerchantNumber: profile.payoutMerchantNumber,
         payoutOperator: profile.payoutOperator,
         payoutAccountName: profile.payoutAccountName,
@@ -154,6 +164,18 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
           <p className="text-xs text-gray-400">Accroche de l&apos;école, imprimée au verso des cartes/badges.</p>
           <Input placeholder="Ex. Le savoir pour tous" value={profile.slogan ?? ""} disabled={ro} onChange={(e) => set("slogan", e.target.value)} />
         </Field>
+      </div>
+
+      <Field>
+        <Label>Rattachement administratif</Label>
+        <p className="text-xs text-gray-400">
+          Affiché en en-tête des documents pédagogiques officiels (bulletins, fiches de note...).
+        </p>
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Field><Label>Inspection régionale (IRE)</Label><Input placeholder="Ex. KINDIA" value={profile.ire ?? ""} disabled={ro} onChange={(e) => set("ire", e.target.value)} /></Field>
+        <Field><Label>Direction préfectorale / communale (DPE/DCE)</Label><Input placeholder="Ex. COYAH" value={profile.dpeLabel ?? ""} disabled={ro} onChange={(e) => set("dpeLabel", e.target.value)} /></Field>
+        <Field><Label>Sous-préfecture / commune (DSSEE)</Label><Input placeholder="Ex. MANGATA" value={profile.sousPrefectureLabel ?? ""} disabled={ro} onChange={(e) => set("sousPrefectureLabel", e.target.value)} /></Field>
       </div>
 
       <div className="pt-2">

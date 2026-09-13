@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@serwist/next": "^9.5.12",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/typography": "^0.5.20",
     "@tanstack/react-query": "^5.101.0",
@@ -36,6 +37,7 @@
     "react-flatpickr": "^4.0.11",
     "react-hook-form": "^7.82.0",
     "recharts": "^3.8.1",
+    "serwist": "^9.5.12",
     "sonner": "^2.0.7",
     "swiper": "^14.2.0",
     "tailwind-merge": "^3.6.0",
@@ -51,6 +53,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "postcss-prefix-selector": "^2.1.1",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

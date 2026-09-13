@@ -58,6 +58,12 @@ export function deleteInstallment(id: number): Promise<void> {
   return api.delete<void>(`/billing/installments/${id}`);
 }
 
+/** Déclenche immédiatement la vérification des échéances en retard (même traitement que le job
+ * planifié quotidien de 6h) — pour tester une relance sans attendre le lendemain matin. */
+export function checkOverdueInstallmentsNow(): Promise<void> {
+  return api.post<void>("/billing/installments/check-overdue-now");
+}
+
 /** Applique une remise / bourse (montant + motif) à une facture. */
 export function applyInvoiceDiscount(id: number, amount: number, reason: string): Promise<Invoice> {
   return api.patch<Invoice>(`/billing/invoices/${id}/discount`, { amount, reason });

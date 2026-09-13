@@ -4,6 +4,10 @@ import type {
   AttendanceOutcome,
   AttendanceStats,
   AttendanceStatus,
+  EmployeeAttendance,
+  EmployeeAttendanceStats,
+  EmployeeAttendanceStatus,
+  EmployeeMonthlySummary,
   ScanDirection,
   StudentAttendance,
   StudentCheckin,
@@ -25,6 +29,12 @@ export function recordBulkAttendance(
 /** Attendance records for a class on a given date. */
 export function getClassAttendance(classId: number, date: string): Promise<StudentAttendance[]> {
   return api.get<StudentAttendance[]>(`/attendance/students/class/${classId}`, { query: { date } });
+}
+
+/** Pointages (par séance, tous élèves) d'une classe à une date donnée — heure de sortie/départ
+ * anticipé par élève, un élève pouvant avoir plusieurs séances (donc plusieurs sorties) par jour. */
+export function getClassCheckins(classId: number, date: string): Promise<StudentCheckin[]> {
+  return api.get<StudentCheckin[]>(`/attendance/students/class/${classId}/checkins`, { query: { date } });
 }
 
 /** Historique de présence d'un élève sur une période (from/to inclus). */
@@ -55,7 +65,9 @@ export function updateAttendance(
   return api.put<StudentAttendance>(`/attendance/students/${id}`, undefined, { query: { status, reason } });
 }
 
-export function markParentNotified(id: number): Promise<void> {
+/** Redéclenche réellement l'envoi (SMS + email) au parent puis marque la ligne comme traitée — pas
+ * un simple « cocher la case » malgré le nom trompeur de l'ancienne version. */
+export function notifyParentNow(id: number): Promise<void> {
   return api.put<void>(`/attendance/students/${id}/notify-parent`);
 }
 
@@ -78,7 +90,7 @@ export function getStudentAttendanceStats(
 }
 
 // ── Pointage par scan de carte (élève + enseignant) : entrée/sortie de séance ──
-export type ScanSubjectType = "STUDENT" | "TEACHER";
+export type ScanSubjectType = "STUDENT" | "TEACHER" | "EMPLOYEE";
 export interface ScanResult {
   subjectType: string;
   subjectId: number;
@@ -95,9 +107,15 @@ export interface ScanResult {
   realizedMinutes: number | null;
   /** Sortie uniquement : durée prévue par l'emploi du temps, en minutes. */
   scheduledMinutes: number | null;
+  /** Sortie uniquement : minutes de départ anticipé (sortie pointée avant la fin prévue de la
+   * séance) — 0 si parti à l'heure ou après. */
+  earlyMinutes: number | null;
   /** Sortie élève uniquement : classe de cycle maternelle/primaire — le badge de retrait doit être
    * renseigné avant de considérer la sortie terminée. */
   requiresPickupInfo: boolean | null;
+  /** Entrée élève uniquement : id de la fiche de présence quotidienne — permet de notifier le parent
+   * ou de justifier le retard directement depuis le fil de scan. */
+  studentAttendanceId: number | null;
   date: string;
 }
 export function scanAttendance(input: { subjectType: ScanSubjectType; subjectId: number; direction: ScanDirection }): Promise<ScanResult> {
@@ -123,6 +141,24 @@ export function recordStudentManualEntry(studentId: number, date: string, checkI
 /** Correction manuelle : saisir l'heure d'entrée d'un enseignant pour une date donnée. */
 export function recordTeacherManualEntry(teacherId: number, date: string, checkInTime: string): Promise<TeacherCheckin> {
   return api.post<TeacherCheckin>(`/attendance/teachers/${teacherId}/manual-entry`, undefined, { query: { date, checkInTime } });
+}
+
+/** Correction manuelle : saisir l'heure de sortie d'un enseignant pour une date donnée — utile quand
+ * le badge a été oublié pour toute la séance. Crée le pointage s'il n'existait pas encore. */
+export function recordTeacherManualExit(teacherId: number, date: string, checkOutTime: string): Promise<TeacherCheckin> {
+  return api.post<TeacherCheckin>(`/attendance/teachers/${teacherId}/manual-exit`, undefined, { query: { date, checkOutTime } });
+}
+
+/** Correction manuelle : saisir l'heure de sortie d'un élève pour une date donnée — utile quand le
+ * badge a été oublié pour toute la séance. Crée le pointage s'il n'existait pas encore. */
+export function recordStudentManualExit(studentId: number, date: string, checkOutTime: string): Promise<StudentCheckin> {
+  return api.post<StudentCheckin>(`/attendance/students/${studentId}/manual-exit`, undefined, { query: { date, checkOutTime } });
+}
+
+/** Pointages (par séance) d'un élève à une date donnée — heure d'entrée/sortie par créneau (ex.
+ * dashboard parent : à quelle heure l'enfant est rentré/sorti de chaque cours). */
+export function getStudentCheckins(studentId: number, date: string): Promise<StudentCheckin[]> {
+  return api.get<StudentCheckin[]>(`/attendance/students/${studentId}/checkins`, { query: { date } });
 }
 
 // ── Badge de retrait (maternelle/primaire) ──────────────────────────────────
@@ -165,11 +201,17 @@ export function getTeacherMonthlySummary(teacherId: number, year: number, month:
   return api.get<TeacherMonthlySummary>(`/attendance/teachers/${teacherId}/monthly-summary`, { query: { year, month } });
 }
 
-// ── Réglages : marge de transition entre salles et fenêtres de récréation ───
+// ── Réglages : marge de transition entre salles, horaire du personnel, récréation ───
 export interface AttendanceSettings {
   id: number | null;
   tenantId: number;
+  /** Marge de tolérance enseignants + personnel non-enseignant. */
   transitionMarginMinutes: number;
+  /** Marge de tolérance distincte pour les élèves — voir `updateStudentAttendanceMargin`. */
+  studentTransitionMarginMinutes: number;
+  /** Horaire de référence du personnel non-enseignant (un seul horaire pour tout le personnel). */
+  employeeCheckInTime: string;
+  employeeCheckOutTime: string;
 }
 export interface RecessWindow {
   id: number;
@@ -183,6 +225,12 @@ export function getAttendanceSettings(): Promise<AttendanceSettings> {
 }
 export function updateAttendanceSettings(transitionMarginMinutes: number): Promise<AttendanceSettings> {
   return api.put<AttendanceSettings>("/attendance/settings", { transitionMarginMinutes });
+}
+export function updateStudentAttendanceMargin(studentTransitionMarginMinutes: number): Promise<AttendanceSettings> {
+  return api.put<AttendanceSettings>("/attendance/settings/student-margin", { studentTransitionMarginMinutes });
+}
+export function updateEmployeeAttendanceHours(checkInTime: string, checkOutTime: string): Promise<AttendanceSettings> {
+  return api.put<AttendanceSettings>("/attendance/settings/employee-hours", { checkInTime, checkOutTime });
 }
 export function listRecessWindows(): Promise<RecessWindow[]> {
   return api.get<RecessWindow[]>("/attendance/settings/recess-windows");
@@ -212,5 +260,43 @@ export function getTeacherAttendance(teacherId: number, from: string, to: string
  * pointé pour une séance précise (ex. cahier de textes → durée réalisée depuis le pointage). */
 export function getTeacherCheckins(teacherId: number, date: string): Promise<TeacherCheckin[]> {
   return api.get<TeacherCheckin[]>(`/attendance/teachers/${teacherId}/checkins`, { query: { date } });
+}
+
+// ── Employee attendance (personnel non-enseignant — un seul pointage par jour) ──
+export function recordEmployeeAttendance(
+  employeeId: number,
+  date: string,
+  status: EmployeeAttendanceStatus,
+  reason?: string | null,
+): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>("/attendance/employees", { employeeId, date, status, reason });
+}
+
+/** Marquer manuellement un membre du personnel absent aujourd'hui. */
+export function markEmployeeAbsent(employeeId: number, reason?: string): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>(`/attendance/employees/${employeeId}/mark-absent`, undefined, { query: { reason } });
+}
+
+/** Correction manuelle : saisir l'heure d'entrée d'un membre du personnel pour une date donnée. */
+export function recordEmployeeManualEntry(employeeId: number, date: string, checkInTime: string): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>(`/attendance/employees/${employeeId}/manual-entry`, undefined, { query: { date, checkInTime } });
+}
+
+/** Correction manuelle : saisir l'heure de sortie d'un membre du personnel pour une date donnée —
+ * utile quand le badge a été oublié pour toute la journée. Crée le pointage s'il n'existait pas encore. */
+export function recordEmployeeManualExit(employeeId: number, date: string, checkOutTime: string): Promise<EmployeeAttendance> {
+  return api.post<EmployeeAttendance>(`/attendance/employees/${employeeId}/manual-exit`, undefined, { query: { date, checkOutTime } });
+}
+
+export function getEmployeeAttendance(employeeId: number, from: string, to: string): Promise<EmployeeAttendance[]> {
+  return api.get<EmployeeAttendance[]>(`/attendance/employees/employee/${employeeId}`, { query: { from, to } });
+}
+
+export function getEmployeeAttendanceStats(employeeId: number, from?: string, to?: string): Promise<EmployeeAttendanceStats> {
+  return api.get<EmployeeAttendanceStats>(`/attendance/employees/${employeeId}/stats`, { query: { from, to } });
+}
+
+export function getEmployeeMonthlySummary(employeeId: number, year: number, month: number): Promise<EmployeeMonthlySummary> {
+  return api.get<EmployeeMonthlySummary>(`/attendance/employees/${employeeId}/monthly-summary`, { query: { year, month } });
 }
 

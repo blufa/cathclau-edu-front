@@ -3,7 +3,6 @@
 import { Modal } from "@/components/ui/modal";
 import { CARD_STATUS_LABEL, type StudentCard } from "@/lib/types/student-card";
 import { IdBadge, type IdBadgeField } from "@/components/cards/id-badge";
-import { useBranding } from "@/providers/branding-provider";
 import { buildIdentityQr } from "@/lib/identity-qr";
 import { formatDate } from "@/lib/format";
 
@@ -27,11 +26,11 @@ export function StudentCardPreview({
       ]
     : [];
 
-  // QR lisible : école + nom + matricule. Le scanner de présence en extrait le matricule pour
-  // retrouver l'élève (plus de format technique « LACA|tenant|… »).
-  const schoolName = useBranding().branding?.schoolName ?? null;
+  // QR lisible : type + nom + matricule. Le scanner de présence lit directement le type pour
+  // chercher dans la bonne liste (plus de format technique « LACA|tenant|… », ni de risque de
+  // confondre un élève et un enseignant/employé partageant le même matricule).
   const qrData = card
-    ? buildIdentityQr({ schoolName, fullName: studentName, matricule: card.studentNumber })
+    ? buildIdentityQr({ type: "STUDENT", fullName: studentName, matricule: card.studentNumber })
     : null;
 
   return (
