@@ -296,10 +296,10 @@ export default function StudentDetailPage() {
               <THead>
                 <tr>
                   <TH>Classe</TH>
-                  <TH>Année</TH>
-                  <TH>Type</TH>
+                  <TH className="hidden sm:table-cell">Année</TH>
+                  <TH className="hidden sm:table-cell">Type</TH>
                   <TH>Statut</TH>
-                  <TH>Plateforme</TH>
+                  <TH className="hidden sm:table-cell">Plateforme</TH>
                   <TH className="text-right">Actions</TH>
                 </tr>
               </THead>
@@ -307,12 +307,12 @@ export default function StudentDetailPage() {
                 {enrollments.map((e) => (
                   <TR key={e.id}>
                     <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
-                    <TD>#{e.academicYearId}</TD>
-                    <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
+                    <TD className="hidden sm:table-cell">#{e.academicYearId}</TD>
+                    <TD className="hidden sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
                     </TD>
-                    <TD>
+                    <TD className="hidden sm:table-cell">
                       <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
                         {e.platformAccessOptIn ? "Activé" : "Non activé"}
                       </Badge>

@@ -81,9 +81,9 @@ export default function EnrollmentMovementsPage() {
 
           <TabsPanel value="waiting">
             <Table>
-              <THead><tr><TH>Position</TH><TH>Élève</TH><TH>Matricule</TH><TH>Classe demandée</TH><TH>Type</TH></tr></THead>
+              <THead><tr><TH>Position</TH><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Classe demandée</TH><TH className="hidden sm:table-cell">Type</TH></tr></THead>
               <TBody>
-                {waiting.length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucun élève en attente.</TD></TR>}
+                {waiting.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucun élève en attente.</TD></TR>}
                 {waiting.map((e) => {
                   const pos = (positionByClass.get(e.classId) ?? 0) + 1;
                   positionByClass.set(e.classId, pos);
@@ -91,9 +91,9 @@ export default function EnrollmentMovementsPage() {
                     <TR key={e.id}>
                       <TD><Badge tone="amber">#{pos}</Badge></TD>
                       <TD className="font-medium text-slate-900">{sName(e.studentId)}</TD>
-                      <TD className="font-mono text-xs text-slate-600">{sNum(e.studentId)}</TD>
+                      <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{sNum(e.studentId)}</TD>
                       <TD>{cName(e.classId)}</TD>
-                      <TD className="text-slate-500">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
+                      <TD className="hidden text-slate-500 sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     </TR>
                   );
                 })}
@@ -103,16 +103,16 @@ export default function EnrollmentMovementsPage() {
 
           <TabsPanel value="arrivals">
             <Table>
-              <THead><tr><TH>Élève</TH><TH>Matricule</TH><TH>Classe</TH><TH>Type</TH><TH>Date</TH></tr></THead>
+              <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Classe</TH><TH>Type</TH><TH className="hidden sm:table-cell">Date</TH></tr></THead>
               <TBody>
-                {arrivals.length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucune arrivée.</TD></TR>}
+                {arrivals.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucune arrivée.</TD></TR>}
                 {arrivals.map((e) => (
                   <TR key={e.id}>
                     <TD className="font-medium text-slate-900">{sName(e.studentId)}</TD>
-                    <TD className="font-mono text-xs text-slate-600">{sNum(e.studentId)}</TD>
+                    <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{sNum(e.studentId)}</TD>
                     <TD>{cName(e.classId)}</TD>
                     <TD>{e.type === "RE_ENROLLMENT" ? <Badge tone="indigo">Réinscription</Badge> : <Badge tone="green">Nouvelle</Badge>}</TD>
-                    <TD className="text-slate-500">{e.enrolledAt?.slice(0, 10) ?? "—"}</TD>
+                    <TD className="hidden text-slate-500 sm:table-cell">{e.enrolledAt?.slice(0, 10) ?? "—"}</TD>
                   </TR>
                 ))}
               </TBody>

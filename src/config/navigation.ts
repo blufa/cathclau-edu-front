@@ -186,6 +186,7 @@ export const NAVIGATION: NavSection[] = [
     items: [
       { label: "Mon tableau de bord", href: "/dashboard/enseignant", icon: Gauge, roles: ["TEACHER"] },
       { label: "Mes classes", href: "/my-classes", icon: GraduationCap, roles: ["TEACHER"] },
+      { label: "Ma paie", href: "/my-payslips", icon: Banknote, roles: ["TEACHER"] },
       { label: "Mes enfants", href: "/children", icon: Users, roles: ["PARENT"] },
       { label: "Mes résultats", href: "/my-results", icon: Award, roles: ["STUDENT"] },
       { label: "Cours en ligne", href: "/courses", icon: BookOpen, roles: ["PARENT", "STUDENT"] },

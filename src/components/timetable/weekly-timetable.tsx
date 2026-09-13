@@ -1,6 +1,7 @@
 "use client";
 
 import type { EmploiDuTemps, JourSemaine } from "@/lib/types/academics";
+import { cn } from "@/lib/utils";
 
 const DAYS: { key: JourSemaine; label: string }[] = [
   { key: "LUNDI", label: "Lundi" },
@@ -36,13 +37,29 @@ export function WeeklyTimetable({
   for (const s of slots) byDay.get(s.day)?.push(s);
   for (const list of byDay.values()) list.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
+  // Met en avant la journée courante — utile en priorité sur téléphone (« qu'est-ce que j'ai
+  // aujourd'hui ? »), où la grille s'affiche en une carte par jour empilée verticalement.
+  const todayKey = DAYS[new Date().getDay() - 1]?.key;
+
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {DAYS.map((d) => {
         const list = byDay.get(d.key) ?? [];
+        const isToday = d.key === todayKey;
         return (
-          <div key={d.key} className="rounded-xl border border-slate-200 bg-white p-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{d.label}</p>
+          <div
+            key={d.key}
+            className={cn(
+              "rounded-xl border bg-white p-3",
+              isToday ? "border-brand-300 ring-1 ring-brand-200" : "border-slate-200",
+            )}
+          >
+            <p className={cn(
+              "mb-2 text-xs font-semibold uppercase tracking-wide",
+              isToday ? "text-brand-700" : "text-slate-500",
+            )}>
+              {d.label}{isToday && " · Aujourd'hui"}
+            </p>
             {list.length === 0 ? (
               <p className="text-xs text-slate-300">—</p>
             ) : (
@@ -53,14 +70,14 @@ export function WeeklyTimetable({
                   return (
                     <li key={s.id} className="rounded-lg bg-brand-50/70 p-2 text-xs">
                       <p className="font-semibold text-brand-800">{s.startTime.slice(0, 5)} – {s.endTime.slice(0, 5)}</p>
-                      <p className="font-medium text-slate-800">
+                      <p className="line-clamp-2 font-medium text-slate-800">
                         {s.subjectId != null
                           ? (subjectName ? (subjectName(s.subjectId) ?? `Matière #${s.subjectId}`) : `Matière #${s.subjectId}`)
                           : (s.label ?? "Heure creuse")}
                       </p>
-                      {classLabel && <p className="text-slate-500">{classLabel(s.schoolClassId)}</p>}
-                      {teacher && <p className="text-slate-500">{teacher}</p>}
-                      {room && <p className="text-slate-400">Salle : {room}</p>}
+                      {classLabel && <p className="truncate text-slate-500">{classLabel(s.schoolClassId)}</p>}
+                      {teacher && <p className="truncate text-slate-500">{teacher}</p>}
+                      {room && <p className="truncate text-slate-400">Salle : {room}</p>}
                     </li>
                   );
                 })}

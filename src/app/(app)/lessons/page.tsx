@@ -121,14 +121,14 @@ export default function LessonsPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr>{!effectiveClassId && <TH>Classe</TH>}<TH>Date</TH><TH>Matière</TH><TH>Thème</TH><TH>Devoirs</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr>{!effectiveClassId && <TH className="hidden sm:table-cell">Classe</TH>}<TH>Date</TH><TH className="hidden sm:table-cell">Matière</TH><TH>Thème</TH><TH>Devoirs</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {lessons.length === 0 && <TR><TD colSpan={effectiveClassId ? 6 : 7} className="py-10 text-center text-gray-400">Aucune séance.</TD></TR>}
+            {lessons.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune séance.</TD></TR>}
             {lessons.map((l) => (
               <TR key={l.id}>
-                {!effectiveClassId && <TD>{classNameById.get(l.classId) ?? `#${l.classId}`}</TD>}
+                {!effectiveClassId && <TD className="hidden sm:table-cell">{classNameById.get(l.classId) ?? `#${l.classId}`}</TD>}
                 <TD>{l.lessonDate}</TD>
-                <TD>{l.subjectId != null ? (subjectName.get(l.subjectId) ?? `#${l.subjectId}`) : "Journée complète"}</TD>
+                <TD className="hidden sm:table-cell">{l.subjectId != null ? (subjectName.get(l.subjectId) ?? `#${l.subjectId}`) : "Journée complète"}</TD>
                 <TD className="max-w-[220px]">
                   <p className="font-medium text-gray-900">{l.title}</p>
                   {l.content && <p className="truncate text-xs text-gray-500" title={l.content}>{l.content}</p>}
@@ -382,7 +382,7 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
 
       {rows.map((row, idx) => (
         <div key={idx} className="space-y-2 rounded-xl border border-gray-200 p-3">
-          <div className="grid grid-cols-[1fr_1fr_100px_auto] items-end gap-2">
+          <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_100px_auto]">
             <Field>
               <Label>Classe <span className="text-error-500">*</span></Label>
               <SearchableSelect value={row.classId} options={classOptions} onChange={(v) => updateRow(idx, "classId", v)} triggerClassName="w-full justify-between px-3" />

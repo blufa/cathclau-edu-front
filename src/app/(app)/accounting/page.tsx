@@ -162,18 +162,18 @@ function TreasuryTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
         </div>
         {movementsQuery.loading ? <div className="flex justify-center py-8"><Spinner /></div> : (
           <Table>
-            <THead><tr><TH>Date</TH><TH>Compte</TH><TH>Sens</TH><TH>Catégorie</TH><TH>Libellé</TH><TH>Montant</TH><TH>Rappr.</TH><TH className="text-right" /></tr></THead>
+            <THead><tr><TH>Date</TH><TH className="hidden sm:table-cell">Compte</TH><TH>Sens</TH><TH className="hidden sm:table-cell">Catégorie</TH><TH>Libellé</TH><TH>Montant</TH><TH className="hidden sm:table-cell">Rappr.</TH><TH className="text-right" /></tr></THead>
             <TBody>
-              {(movementsQuery.data ?? []).length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucun mouvement.</TD></TR>}
+              {(movementsQuery.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun mouvement.</TD></TR>}
               {(movementsQuery.data ?? []).map((m) => (
                 <TR key={m.id}>
                   <TD className="text-gray-500">{m.date ?? "—"}</TD>
-                  <TD>{accountName.get(m.accountId) ?? `#${m.accountId}`}</TD>
+                  <TD className="hidden sm:table-cell">{accountName.get(m.accountId) ?? `#${m.accountId}`}</TD>
                   <TD><Badge tone={m.direction === "IN" ? "green" : "red"}>{DIRECTION_LABEL[m.direction]}</Badge></TD>
-                  <TD>{m.category ? CATEGORY_LABEL[m.category] : "—"}</TD>
+                  <TD className="hidden sm:table-cell">{m.category ? CATEGORY_LABEL[m.category] : "—"}</TD>
                   <TD className="text-gray-700">{m.label ?? (m.referenceType !== "MANUAL" ? `Auto (${m.referenceType})` : "—")}</TD>
                   <TD className="font-medium text-gray-900">{formatGNF(m.amount)}</TD>
-                  <TD>{m.reconciled ? "✓" : "—"}</TD>
+                  <TD className="hidden sm:table-cell">{m.reconciled ? "✓" : "—"}</TD>
                   <TD className="text-right">
                     {canEdit && (
                       <div className="flex justify-end gap-1">
@@ -527,12 +527,12 @@ function EntriesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
       <div className="flex justify-end">{canEdit && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle écriture</Button>}</div>
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Pièce</TH><TH>Date</TH><TH>Libellé</TH><TH>Débit</TH><TH>Crédit</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH className="hidden sm:table-cell">Pièce</TH><TH>Date</TH><TH>Libellé</TH><TH>Débit</TH><TH>Crédit</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucune écriture.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune écriture.</TD></TR>}
             {(q.data ?? []).map((e) => (
               <TR key={e.id}>
-                <TD className="font-mono text-xs text-gray-600">{e.pieceNumber}</TD>
+                <TD className="hidden font-mono text-xs text-gray-600 sm:table-cell">{e.pieceNumber}</TD>
                 <TD className="text-gray-500">{e.date ?? "—"}</TD>
                 <TD className="font-medium text-gray-900">{e.label ?? "—"}</TD>
                 <TD>{formatGNF(e.totalDebit ?? 0)}</TD>

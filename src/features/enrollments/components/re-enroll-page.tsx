@@ -160,10 +160,10 @@ export default function ReEnrollmentPage() {
         <>
           <Table>
             <THead><tr>
-              <TH>Inclure</TH><TH>Élève</TH><TH>Matricule</TH><TH>Redoublant</TH><TH>Classe cible ({years.find((y) => String(y.id) === effectiveTarget)?.label ?? ""})</TH><TH>Résultat</TH>
+              <TH>Inclure</TH><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Redoublant</TH><TH>Classe cible ({years.find((y) => String(y.id) === effectiveTarget)?.label ?? ""})</TH><TH>Résultat</TH>
             </tr></THead>
             <TBody>
-              {students.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-slate-400">Aucun élève dans cette classe.</TD></TR>}
+              {students.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucun élève dans cette classe.</TD></TR>}
               {students.map((s) => {
                 const r = rowOf(s);
                 return (
@@ -173,7 +173,7 @@ export default function ReEnrollmentPage() {
                         onChange={(e) => setRow(s.id, { include: e.target.checked })} />
                     </TD>
                     <TD className="font-medium text-slate-900">{s.firstName} {s.lastName}</TD>
-                    <TD className="font-mono text-xs text-slate-600">{s.studentNumber}</TD>
+                    <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{s.studentNumber}</TD>
                     <TD>
                       <Switch checked={r.redoublant} ariaLabel="Redoublant"
                         onChange={(checked) => setRow(s.id, { redoublant: checked, targetClassId: undefined })} />

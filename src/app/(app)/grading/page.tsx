@@ -345,34 +345,49 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
       ) : (
         <Table>
           <THead>
-            <tr><TH>Évaluation</TH><TH>Matière</TH><TH>Enseignant</TH><TH>Type</TH><TH>Barème</TH><TH>Coef.</TH><TH>Date</TH><TH className="text-right">Actions</TH></tr>
+            <tr>
+              <TH>Évaluation</TH>
+              <TH className="hidden sm:table-cell">Matière</TH>
+              <TH className="hidden sm:table-cell">Enseignant</TH>
+              <TH>Type</TH>
+              <TH className="hidden sm:table-cell">Barème</TH>
+              <TH className="hidden sm:table-cell">Coef.</TH>
+              <TH className="hidden sm:table-cell">Date</TH>
+              <TH className="text-right">Actions</TH>
+            </tr>
           </THead>
           <TBody>
             {groups.length === 0 && (
-              <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucune évaluation.</TD></TR>
+              <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune évaluation.</TD></TR>
             )}
             {groups.map((g) => (
               <Fragment key={`${g.subjectId}|${g.monthKey}`}>
                 <TR>
-                  <TD colSpan={7} className="bg-gray-50 font-semibold text-gray-700">
-                    {subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`} · {monthLabelOf(g.monthKey)}
-                    <span className="ml-2 font-normal text-gray-400">
-                      {g.evals.length} évaluation{g.evals.length > 1 ? "s" : ""}
-                    </span>
-                  </TD>
-                  <TD className="bg-gray-50 text-right">
-                    <Button size="sm" variant="secondary" onClick={() => printMonthly(g)}>Relevé du mois</Button>
+                  {/* Une seule cellule sur toute la largeur (colSpan surdimensionné, clampé par le
+                      navigateur au nombre réel de colonnes) : le nombre de colonnes visibles varie
+                      selon l'écran (colonnes masquées sur mobile ci-dessus), une seconde cellule à
+                      côté casserait l'alignement. */}
+                  <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`} · {monthLabelOf(g.monthKey)}
+                        <span className="ml-2 font-normal text-gray-400">
+                          {g.evals.length} évaluation{g.evals.length > 1 ? "s" : ""}
+                        </span>
+                      </span>
+                      <Button size="sm" variant="secondary" onClick={() => printMonthly(g)}>Relevé du mois</Button>
+                    </div>
                   </TD>
                 </TR>
                 {g.evals.map((a) => (
                   <TR key={a.id}>
                     <TD className="pl-6 font-medium text-gray-900">{a.label}</TD>
-                    <TD>{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
-                    <TD>{a.teacherId ? (teacherLabel.get(a.teacherId) ?? `#${a.teacherId}`) : "—"}</TD>
+                    <TD className="hidden sm:table-cell">{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
+                    <TD className="hidden sm:table-cell">{a.teacherId ? (teacherLabel.get(a.teacherId) ?? `#${a.teacherId}`) : "—"}</TD>
                     <TD><Badge tone="indigo">{ASSESSMENT_TYPE_LABEL[a.type]}</Badge></TD>
-                    <TD>/ {a.maxScore}</TD>
-                    <TD>{a.coefficient}</TD>
-                    <TD>{a.date ?? "—"}</TD>
+                    <TD className="hidden sm:table-cell">/ {a.maxScore}</TD>
+                    <TD className="hidden sm:table-cell">{a.coefficient}</TD>
+                    <TD className="hidden sm:table-cell">{a.date ?? "—"}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
@@ -667,17 +682,17 @@ function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearI
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Élève</TH><TH>Moyenne</TH><TH>Rang</TH><TH>Mention</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Élève</TH><TH>Moyenne</TH><TH className="hidden sm:table-cell">Rang</TH><TH className="hidden sm:table-cell">Mention</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
             {(cardsQuery.data ?? []).length === 0 && (
-              <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun bulletin pour cette période.</TD></TR>
+              <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun bulletin pour cette période.</TD></TR>
             )}
             {(cardsQuery.data ?? []).map((c) => (
               <TR key={c.id}>
                 <TD className="font-medium text-gray-900">#{c.studentId}</TD>
                 <TD>{c.overallAverage ?? "—"}</TD>
-                <TD>{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
-                <TD>{c.honor ?? "—"}</TD>
+                <TD className="hidden sm:table-cell">{c.rank != null ? `${c.rank}/${c.classSize ?? "?"}` : "—"}</TD>
+                <TD className="hidden sm:table-cell">{c.honor ?? "—"}</TD>
                 <TD><Badge tone={c.status === "PUBLISHED" ? "green" : c.status === "GENERATED" ? "indigo" : "gray"}>{REPORT_CARD_STATUS_LABEL[c.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">

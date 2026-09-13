@@ -194,15 +194,15 @@ function PayslipsTab() {
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Enseignant</TH><TH>Période</TH><TH>Base</TH><TH>Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Enseignant</TH><TH>Période</TH><TH className="hidden sm:table-cell">Base</TH><TH className="hidden sm:table-cell">Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={7} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
+            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
             {(q.data ?? []).map((p) => (
               <TR key={p.id}>
                 <TD className="font-medium text-gray-900">{teacherName.get(p.teacherId) ?? `#${p.teacherId}`}</TD>
                 <TD>{p.periodLabel}</TD>
-                <TD>{formatGNF(p.baseSalary)}</TD>
-                <TD>{formatGNF(p.grossSalary)}</TD>
+                <TD className="hidden sm:table-cell">{formatGNF(p.baseSalary)}</TD>
+                <TD className="hidden sm:table-cell">{formatGNF(p.grossSalary)}</TD>
                 <TD className="font-semibold text-gray-900">{formatGNF(p.netSalary)}</TD>
                 <TD><Badge tone={STATUS_TONE[p.status]}>{PAYSLIP_STATUS_LABEL[p.status]}</Badge></TD>
                 <TD className="text-right">

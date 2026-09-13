@@ -74,18 +74,18 @@ export default function GrantsPage() {
         <Card>
           <CardBody>
             <Table>
-              <THead><tr><TH>Source</TH><TH>Objet</TH><TH>Année</TH><TH className="text-right">Total</TH><TH className="text-right">Reçu</TH><TH className="text-right">Reste</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+              <THead><tr><TH>Source</TH><TH className="hidden sm:table-cell">Objet</TH><TH className="hidden sm:table-cell">Année</TH><TH className="hidden text-right sm:table-cell">Total</TH><TH className="hidden text-right sm:table-cell">Reçu</TH><TH className="text-right">Reste</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
               <TBody>
                 {(q.data ?? []).map((g) => {
                   const remaining = Number(g.totalAmount) - Number(g.receivedAmount);
                   return (
                     <TR key={g.id}>
                       <TD className="font-medium text-gray-900">{g.source}{g.reference ? <span className="block text-xs text-gray-400">{g.reference}</span> : null}</TD>
-                      <TD className="max-w-[200px] truncate text-sm text-gray-600" title={g.purpose ?? ""}>{g.purpose ?? "—"}</TD>
-                      <TD className="text-sm">{g.academicYear ?? "—"}</TD>
-                      <TD className="text-right">{formatGNF(g.totalAmount)}</TD>
-                      <TD className="text-right text-success-700">{formatGNF(g.receivedAmount)}</TD>
-                      <TD className="text-right">{formatGNF(String(remaining))}</TD>
+                      <TD className="hidden max-w-[200px] truncate text-sm text-gray-600 sm:table-cell" title={g.purpose ?? ""}>{g.purpose ?? "—"}</TD>
+                      <TD className="hidden text-sm sm:table-cell">{g.academicYear ?? "—"}</TD>
+                      <TD className="hidden text-right sm:table-cell">{formatGNF(g.totalAmount)}</TD>
+                      <TD className="hidden text-right text-success-700 sm:table-cell">{formatGNF(g.receivedAmount)}</TD>
+                      <TD className="text-right font-medium">{formatGNF(String(remaining))}</TD>
                       <TD><Badge tone={STATUS_TONE[g.status]}>{GRANT_STATUS_LABEL[g.status]}</Badge></TD>
                       <TD className="text-right">
                         <div className="flex justify-end gap-1">

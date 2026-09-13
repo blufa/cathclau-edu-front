@@ -86,9 +86,9 @@ export default function RentreeDashboardPage() {
         <div className="rounded-2xl border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-700">Remplissage par classe</div>
           <Table>
-            <THead><tr><TH>Classe</TH><TH>Niveau</TH><TH>Effectif</TH><TH className="w-1/3">Remplissage</TH><TH>Places restantes</TH></tr></THead>
+            <THead><tr><TH>Classe</TH><TH className="hidden sm:table-cell">Niveau</TH><TH>Effectif</TH><TH className="w-1/3">Remplissage</TH><TH className="hidden sm:table-cell">Places restantes</TH></tr></THead>
             <TBody>
-              {classes.length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-slate-400">Aucune classe pour cette année.</TD></TR>}
+              {classes.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucune classe pour cette année.</TD></TR>}
               {classes.map((c) => {
                 const cap = c.maxCapacity ?? 0;
                 const head = c.headcount ?? 0;
@@ -97,7 +97,7 @@ export default function RentreeDashboardPage() {
                 return (
                   <TR key={c.id}>
                     <TD className="font-medium text-slate-900">{c.label}</TD>
-                    <TD className="text-slate-500">{c.levelId != null ? (levelLabel.get(c.levelId) ?? "—") : "—"}</TD>
+                    <TD className="hidden text-slate-500 sm:table-cell">{c.levelId != null ? (levelLabel.get(c.levelId) ?? "—") : "—"}</TD>
                     <TD className="text-slate-600">{head} / {cap || "—"}</TD>
                     <TD>
                       <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ export default function RentreeDashboardPage() {
                         <span className="w-9 text-right text-xs text-slate-500">{pct}%</span>
                       </div>
                     </TD>
-                    <TD className={left === 0 ? "text-red-600" : "text-slate-600"}>{left}</TD>
+                    <TD className={cn("hidden sm:table-cell", left === 0 ? "text-red-600" : "text-slate-600")}>{left}</TD>
                   </TR>
                 );
               })}

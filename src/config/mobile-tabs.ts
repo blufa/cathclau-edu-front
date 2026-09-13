@@ -42,7 +42,7 @@ export const MOBILE_TABS: MobileTabItem[] = [
 
   // Parent
   { key: "parent-courses", label: "Cours en ligne", icon: BookOpen, href: "/courses", roles: ["PARENT", "STUDENT"] },
-  { key: "parent-payments", label: "Paiement en ligne", icon: CreditCard, roles: ["PARENT"], comingSoon: true },
+  { key: "parent-payments", label: "Paiement", icon: CreditCard, roles: ["PARENT"], comingSoon: true },
   { key: "parent-messages", label: "Messages", icon: MessagesSquare, roles: ["PARENT"], comingSoon: true },
 
   // Élève
@@ -50,7 +50,7 @@ export const MOBILE_TABS: MobileTabItem[] = [
 
   // Enseignant
   { key: "teacher-classes", label: "Mes classes", icon: GraduationCap, href: "/my-classes", roles: ["TEACHER"] },
-  { key: "teacher-timetable", label: "Emploi du temps", icon: CalendarDays, href: "/timetable", roles: ["TEACHER"] },
+  { key: "teacher-timetable", label: "Horaire", icon: CalendarDays, href: "/timetable", roles: ["TEACHER"] },
   { key: "teacher-attendance", label: "Présences", icon: CalendarCheck, href: "/attendance", roles: ["TEACHER"] },
 
   // Staff (direction, secrétariat, comptabilité)
@@ -63,7 +63,7 @@ export const MOBILE_TABS: MobileTabItem[] = [
   },
   {
     key: "staff-scan",
-    label: "Scan présence",
+    label: "Scan",
     icon: ScanLine,
     href: "/attendance/scan",
     roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"],

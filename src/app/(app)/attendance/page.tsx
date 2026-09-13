@@ -35,6 +35,7 @@ import {
   type StudentCheckin,
 } from "@/lib/types/attendance";
 import { formatMinutes, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { Student } from "@/lib/types/student";
 import type { Teacher } from "@/lib/types/staff";
 import type { Employee } from "@/lib/api/staff";
@@ -125,7 +126,7 @@ function SessionsDetail({ checkins, courseLabel, classLabel }: {
         <THead>
           <tr>
             <TH>Cours</TH>
-            {classLabel && <TH>Classe</TH>}
+            {classLabel && <TH className="hidden sm:table-cell">Classe</TH>}
             <TH>Entrée</TH><TH>Statut entrée</TH><TH>Sortie</TH><TH>Statut sortie</TH>
           </tr>
         </THead>
@@ -133,7 +134,7 @@ function SessionsDetail({ checkins, courseLabel, classLabel }: {
           {sorted.map((c, i) => (
             <TR key={i}>
               <TD className="text-xs font-medium text-gray-700">{courseLabel(c.scheduleSlotId)}</TD>
-              {classLabel && <TD className="text-xs text-gray-600">{classLabel(c.scheduleSlotId) ?? "—"}</TD>}
+              {classLabel && <TD className="hidden text-xs text-gray-600 sm:table-cell">{classLabel(c.scheduleSlotId) ?? "—"}</TD>}
               <TD className="text-xs">{formatTime(c.checkInTime)}</TD>
               <TD className="text-xs">
                 {c.lateMinutes > 0
@@ -229,11 +230,11 @@ export default function AttendancePage() {
       </Reveal>
 
       {/* Shared selectors */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="w-full sm:w-auto">
           <label className="mb-1 block text-xs text-gray-500">Année</label>
           <Select
-            className="max-w-[200px]"
+            className="w-full sm:max-w-[200px]"
             value={effectiveYearId ?? ""}
             onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}
           >
@@ -242,24 +243,24 @@ export default function AttendancePage() {
             ))}
           </Select>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="mb-1 block text-xs text-gray-500">Classe</label>
           <SearchableSelect
             value={classId != null ? String(classId) : ""}
             options={classOptions}
             onChange={(v) => setClassId(v ? Number(v) : null)}
-            triggerClassName="w-full max-w-[220px] justify-between px-3"
+            triggerClassName="w-full sm:max-w-[220px] justify-between px-3"
           />
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="mb-1 block text-xs text-gray-500">Date</label>
-          <DatePicker value={date} onChange={(v) => setDate(v)} className="max-w-[180px]" maxDate={new Date()} />
+          <DatePicker value={date} onChange={(v) => setDate(v)} className="w-full sm:max-w-[180px]" maxDate={new Date()} />
         </div>
-        <div className="ml-auto flex gap-2">
-          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "absents"} onClick={openAbsentees}>
+        <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row">
+          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "absents"} onClick={openAbsentees} fullWidth className="sm:w-auto">
             Liste des absents (PDF)
           </Button>
-          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "retards"} onClick={openLateness}>
+          <Button variant="secondary" disabled={!classId || !date} loading={pdfLoading === "retards"} onClick={openLateness} fullWidth className="sm:w-auto">
             Retards du mois (PDF)
           </Button>
         </div>
@@ -602,7 +603,17 @@ function AttendanceLog({ classId, date, students, canWrite }: {
         <Input placeholder="Rechercher un élève…" value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3 max-w-xs" />
         <Table>
           <THead>
-            <tr><TH></TH><TH>Élève</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH><TH>Heure de sortie</TH><TH>Départ anticipé</TH><TH>Motif</TH><TH>Justification</TH><TH>Parent</TH><TH className="text-right">Actions</TH></tr>
+            <tr>
+              <TH></TH><TH>Élève</TH><TH>Statut</TH>
+              <TH className="hidden sm:table-cell">Heure d&apos;entrée</TH>
+              <TH className="hidden sm:table-cell">Retard</TH>
+              <TH className="hidden sm:table-cell">Heure de sortie</TH>
+              <TH className="hidden sm:table-cell">Départ anticipé</TH>
+              <TH className="hidden sm:table-cell">Motif</TH>
+              <TH className="hidden sm:table-cell">Justification</TH>
+              <TH className="hidden sm:table-cell">Parent</TH>
+              <TH className="text-right">Actions</TH>
+            </tr>
           </THead>
           <TBody>
             {filteredStudents.map((s) => {
@@ -618,16 +629,16 @@ function AttendanceLog({ classId, date, students, canWrite }: {
                 </TD>
                 <TD className="font-medium text-gray-900">{nameOf.get(s.id) ?? `#${s.id}`}</TD>
                 <TD>{r ? <Badge tone={STATUS_TONE[r.status]}>{ATTENDANCE_STATUS_LABEL[r.status]}</Badge> : <Badge tone="gray">Aucun pointage</Badge>}</TD>
-                <TD>{formatTime(r?.checkInTime)}</TD>
-                <TD className={r?.lateMinutes && r.lateMinutes > 0 ? "text-warning-600" : undefined}>
+                <TD className="hidden sm:table-cell">{formatTime(r?.checkInTime)}</TD>
+                <TD className={cn("hidden sm:table-cell", r?.lateMinutes && r.lateMinutes > 0 ? "text-warning-600" : undefined)}>
                   {r?.lateMinutes && r.lateMinutes > 0 ? formatMinutes(r.lateMinutes) : "—"}
                 </TD>
-                <TD>{formatTime(checkin?.lastCheckout ?? null)}</TD>
-                <TD className={checkin?.totalEarly ? "text-warning-600" : undefined}>
+                <TD className="hidden sm:table-cell">{formatTime(checkin?.lastCheckout ?? null)}</TD>
+                <TD className={cn("hidden sm:table-cell", checkin?.totalEarly ? "text-warning-600" : undefined)}>
                   {checkin?.totalEarly ? formatMinutes(checkin.totalEarly) : "—"}
                 </TD>
-                <TD className="text-gray-600">{r?.reason ?? "—"}</TD>
-                <TD>
+                <TD className="hidden text-gray-600 sm:table-cell">{r?.reason ?? "—"}</TD>
+                <TD className="hidden sm:table-cell">
                   {!r || r.status === "PRESENT" ? "—" : (
                     <div className="flex items-center gap-1">
                       <Badge tone={r.justified === true ? "green" : r.justified === false ? "red" : "gray"}>
@@ -642,7 +653,7 @@ function AttendanceLog({ classId, date, students, canWrite }: {
                     </div>
                   )}
                 </TD>
-                <TD>{r?.parentNotified ? <Badge tone="green">Notifié</Badge> : <Badge tone="gray">—</Badge>}</TD>
+                <TD className="hidden sm:table-cell">{r?.parentNotified ? <Badge tone="green">Notifié</Badge> : <Badge tone="gray">—</Badge>}</TD>
                 <TD className="text-right">
                   {canWrite && (
                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -683,7 +694,10 @@ function AttendanceLog({ classId, date, students, canWrite }: {
               </TR>
               {isExpanded && (
                 <TR>
-                  <TD colSpan={10} className="bg-gray-50 p-0">
+                  {/* colSpan surdimensionné : le navigateur le limite automatiquement au nombre de
+                      colonnes réellement visibles, qui varie selon la largeur d'écran (colonnes
+                      masquées sur mobile ci-dessus) — évite de recalculer un compte exact. */}
+                  <TD colSpan={100} className="bg-gray-50 p-0">
                     <SessionsDetail checkins={rawCheckins} courseLabel={courseLabel} />
                   </TD>
                 </TR>
@@ -786,8 +800,10 @@ function TeacherRollCall({ date, classes }: { date: string; classes: Classe[] })
       <Table>
         <THead>
           <tr>
-            <TH></TH><TH>Enseignant</TH><TH>Matricule</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH>
-            <TH>Heure de sortie</TH><TH>Départ anticipé</TH><TH className="text-right">Marquer ({date})</TH>
+            <TH></TH><TH>Enseignant</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Statut</TH>
+            <TH className="hidden sm:table-cell">Heure d&apos;entrée</TH><TH className="hidden sm:table-cell">Retard</TH>
+            <TH className="hidden sm:table-cell">Heure de sortie</TH><TH className="hidden sm:table-cell">Départ anticipé</TH>
+            <TH className="text-right">Marquer ({date})</TH>
           </tr>
         </THead>
         <TBody>
@@ -878,7 +894,7 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
           {checkins.length > 0 && <ExpandToggle expanded={expanded} onClick={() => setExpanded((e) => !e)} />}
         </TD>
         <TD className="font-medium text-gray-900">{t.firstName} {t.lastName}</TD>
-        <TD className="font-mono text-xs text-gray-500">{t.staffNumber}</TD>
+        <TD className="hidden font-mono text-xs text-gray-500 sm:table-cell">{t.staffNumber}</TD>
         <TD>
           {loading ? <Spinner className="h-3.5 w-3.5" /> : record ? (
             <Badge tone={record.status === "PRESENT" ? "green" : "red"}>
@@ -886,12 +902,12 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
             </Badge>
           ) : <Badge tone="gray">Aucun pointage</Badge>}
         </TD>
-        <TD>{formatTime(record?.checkInTime)}</TD>
-        <TD className={record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined}>
+        <TD className="hidden sm:table-cell">{formatTime(record?.checkInTime)}</TD>
+        <TD className={cn("hidden sm:table-cell", record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined)}>
           {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
         </TD>
-        <TD>{formatTime(lastCheckout)}</TD>
-        <TD className={totalEarly > 0 ? "text-warning-600" : undefined}>
+        <TD className="hidden sm:table-cell">{formatTime(lastCheckout)}</TD>
+        <TD className={cn("hidden sm:table-cell", totalEarly > 0 ? "text-warning-600" : undefined)}>
           {totalEarly > 0 ? formatMinutes(totalEarly) : "—"}
         </TD>
         <TD className="text-right">
@@ -920,7 +936,7 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
       </TR>
       {expanded && (
         <TR>
-          <TD colSpan={8} className="bg-gray-50 p-0">
+          <TD colSpan={100} className="bg-gray-50 p-0">
             <SessionsDetail checkins={checkins} courseLabel={courseLabel} classLabel={classLabel} />
           </TD>
         </TR>
@@ -1046,8 +1062,10 @@ function EmployeeRollCall({ date }: { date: string }) {
       <Table>
         <THead>
           <tr>
-            <TH>Personnel</TH><TH>Matricule</TH><TH>Statut</TH><TH>Heure d&apos;entrée</TH><TH>Retard</TH>
-            <TH>Heure de sortie</TH><TH>Départ anticipé</TH><TH className="text-right">Marquer ({date})</TH>
+            <TH>Personnel</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Statut</TH>
+            <TH className="hidden sm:table-cell">Heure d&apos;entrée</TH><TH className="hidden sm:table-cell">Retard</TH>
+            <TH className="hidden sm:table-cell">Heure de sortie</TH><TH className="hidden sm:table-cell">Départ anticipé</TH>
+            <TH className="text-right">Marquer ({date})</TH>
           </tr>
         </THead>
         <TBody>
@@ -1114,7 +1132,7 @@ function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: 
   return (
     <TR>
       <TD className="font-medium text-gray-900">{e.firstName} {e.lastName}</TD>
-      <TD className="font-mono text-xs text-gray-500">{e.employeeNumber}</TD>
+      <TD className="hidden font-mono text-xs text-gray-500 sm:table-cell">{e.employeeNumber}</TD>
       <TD>
         {loading ? <Spinner className="h-3.5 w-3.5" /> : record ? (
           <Badge tone={record.status === "PRESENT" ? "green" : "red"}>
@@ -1122,12 +1140,12 @@ function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: 
           </Badge>
         ) : <Badge tone="gray">Aucun pointage</Badge>}
       </TD>
-      <TD>{formatTime(record?.checkInTime)}</TD>
-      <TD className={record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined}>
+      <TD className="hidden sm:table-cell">{formatTime(record?.checkInTime)}</TD>
+      <TD className={cn("hidden sm:table-cell", record?.lateMinutes && record.lateMinutes > 0 ? "text-warning-600" : undefined)}>
         {record?.lateMinutes && record.lateMinutes > 0 ? formatMinutes(record.lateMinutes) : "—"}
       </TD>
-      <TD>{formatTime(record?.checkOutTime)}</TD>
-      <TD className={record?.earlyMinutes && record.earlyMinutes > 0 ? "text-warning-600" : undefined}>
+      <TD className="hidden sm:table-cell">{formatTime(record?.checkOutTime)}</TD>
+      <TD className={cn("hidden sm:table-cell", record?.earlyMinutes && record.earlyMinutes > 0 ? "text-warning-600" : undefined)}>
         {record?.earlyMinutes && record.earlyMinutes > 0 ? formatMinutes(record.earlyMinutes) : "—"}
       </TD>
       <TD className="text-right">
@@ -1229,18 +1247,18 @@ function EmployeeMonthlyRecap() {
             <div className="flex justify-center py-6"><Spinner /></div>
           ) : (
             <Table>
-              <THead><tr><TH>Date</TH><TH>Statut</TH><TH>Entrée</TH><TH>Retard</TH><TH>Sortie</TH><TH>Départ anticipé</TH></tr></THead>
+              <THead><tr><TH>Date</TH><TH>Statut</TH><TH className="hidden sm:table-cell">Entrée</TH><TH>Retard</TH><TH className="hidden sm:table-cell">Sortie</TH><TH>Départ anticipé</TH></tr></THead>
               <TBody>
-                {history.length === 0 && <TR><TD colSpan={6} className="py-6 text-center text-gray-400">Aucun pointage ce mois-ci.</TD></TR>}
+                {history.length === 0 && <TR><TD colSpan={100} className="py-6 text-center text-gray-400">Aucun pointage ce mois-ci.</TD></TR>}
                 {history.map((a) => (
                   <TR key={a.id}>
                     <TD>{a.date}</TD>
                     <TD><Badge tone={a.status === "PRESENT" ? "green" : "red"}>{a.status === "PRESENT" ? "Présent" : "Absent"}</Badge></TD>
-                    <TD>{formatTime(a.checkInTime)}</TD>
+                    <TD className="hidden sm:table-cell">{formatTime(a.checkInTime)}</TD>
                     <TD className={a.lateMinutes && a.lateMinutes > 0 ? "text-warning-600" : undefined}>
                       {a.lateMinutes && a.lateMinutes > 0 ? fmtH(a.lateMinutes) : "—"}
                     </TD>
-                    <TD>{formatTime(a.checkOutTime)}</TD>
+                    <TD className="hidden sm:table-cell">{formatTime(a.checkOutTime)}</TD>
                     <TD className={a.earlyMinutes && a.earlyMinutes > 0 ? "text-warning-600" : undefined}>
                       {a.earlyMinutes && a.earlyMinutes > 0 ? fmtH(a.earlyMinutes) : "—"}
                     </TD>

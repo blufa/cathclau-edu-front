@@ -17,9 +17,11 @@ import {
   cancelInvoice,
   createInvoice,
   generateInvoicesBulk,
+  getInvoicePdf,
   getInvoicePdfObjectUrl,
   listInstallments,
 } from "@/lib/api/billing";
+import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 import { useFeesQuery, useInvoicesQuery } from "../hooks/use-invoices";
 import { FEE_TYPE_LABEL, INVOICE_STATUS_LABEL, RECOVERY_STAGE_LABEL, type Invoice, type InvoiceStatus, type SchoolFee } from "@/lib/types/billing";
 import { PayInvoiceForm } from "@/features/billing/components/pay-invoice-form";
@@ -174,13 +176,13 @@ export default function InvoicesPage() {
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Élève</TH><TH>Objet</TH><TH>Référence</TH><TH>Total</TH><TH>Payé</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Objet</TH><TH className="hidden sm:table-cell">Référence</TH><TH className="hidden sm:table-cell">Total</TH><TH className="hidden sm:table-cell">Payé</TH><TH>Reste</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {invoices.length === 0 && <TR><TD colSpan={8} className="py-10 text-center text-gray-400">Aucune facture.</TD></TR>}
+            {invoices.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune facture.</TD></TR>}
             {invoices.map((inv) => (
               <TR key={inv.id}>
                 <TD className="text-gray-900">{studentName.get(inv.studentId) ?? `#${inv.studentId}`}</TD>
-                <TD className="text-sm text-gray-700">
+                <TD className="hidden text-sm text-gray-700 sm:table-cell">
                   {inv.periodLabel ?? "Inscription / frais"}
                   {(() => {
                     const covered = inv.installmentId != null ? installmentMonths.get(inv.installmentId) ?? [] : [];
@@ -196,8 +198,8 @@ export default function InvoicesPage() {
                     );
                   })()}
                 </TD>
-                <TD className="font-mono text-xs text-gray-600">{inv.reference}</TD>
-                <TD className="font-medium text-gray-900">
+                <TD className="hidden font-mono text-xs text-gray-600 sm:table-cell">{inv.reference}</TD>
+                <TD className="hidden font-medium text-gray-900 sm:table-cell">
                   {formatGNF(inv.totalAmount)}
                   {inv.discountAmount != null && Number(inv.discountAmount) > 0 && (
                     <span className="mt-1 block">
@@ -212,8 +214,8 @@ export default function InvoicesPage() {
                     </p>
                   )}
                 </TD>
-                <TD>{formatGNF(inv.paidAmount ?? 0)}</TD>
-                <TD>{formatGNF(inv.remainingBalance ?? inv.totalAmount)}</TD>
+                <TD className="hidden sm:table-cell">{formatGNF(inv.paidAmount ?? 0)}</TD>
+                <TD className="font-medium text-gray-900">{formatGNF(inv.remainingBalance ?? inv.totalAmount)}</TD>
                 <TD>
                   <Badge tone={STATUS_TONE[inv.status]}>{INVOICE_STATUS_LABEL[inv.status]}</Badge>
                   {inv.recoveryStage && inv.recoveryStage !== "NONE" && (
@@ -225,6 +227,15 @@ export default function InvoicesPage() {
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" leftSection={<FileText className="h-4 w-4" />} onClick={() => showInvoicePdf(inv)}>Aperçu</Button>
+                    <WhatsAppInvoiceButton
+                      studentId={inv.studentId}
+                      buildMessage={async () => {
+                        const { url } = await getInvoicePdf(inv.id);
+                        const name = studentName.get(inv.studentId) ?? "";
+                        const solde = inv.status === "PAID" ? "soldée" : `reste à payer : ${formatGNF(inv.remainingBalance ?? inv.totalAmount)}`;
+                        return `Bonjour, voici la facture ${inv.reference} de ${name} (${solde}).${url ? ` ${url}` : ""}`;
+                      }}
+                    />
                     {canWrite && inv.status !== "PAID" && <Button size="sm" onClick={() => setPaying(inv)}>Payer</Button>}
                     {canWrite && inv.status !== "PAID" && inv.recoveryStage !== "EXCLUDED" && <Button size="sm" variant="ghost" onClick={() => advance(inv)}>{inv.recoveryStage === "REMINDER_2" ? "Exclure" : "Relancer"}</Button>}
                     {canWrite && inv.status !== "PAID" && <Button size="sm" variant="ghost" onClick={() => setDiscountFor(inv)}>Remise</Button>}

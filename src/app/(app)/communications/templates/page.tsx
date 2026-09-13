@@ -39,6 +39,7 @@ const VARIABLES_BY_REASON: Record<CommunicationReason, string[]> = {
   GENERAL: ["{{nom_eleve}}", "{{montant}}", "{{canal}}", "{{reference}}", "{{reste_a_payer}}", "{{ecole}}"],
   EXAM: ["{{classe}}", "{{evaluation}}", "{{date}}", "{{ecole}}"],
   MEETING: ["{{ecole}}"],
+  SALARY_PAID: ["{{nom}}", "{{montant}}", "{{periode}}", "{{ecole}}"],
 };
 
 export default function TemplatesPage() {

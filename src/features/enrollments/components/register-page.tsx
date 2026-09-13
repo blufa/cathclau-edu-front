@@ -279,9 +279,9 @@ export default function EnrollmentsPage() {
               {canBulkSelect && <TH className="w-8"></TH>}
               <TH>Élève</TH>
               <TH>Classe</TH>
-              <TH>Type</TH>
-              <TH>Date</TH>
-              <TH>Plateforme</TH>
+              <TH className="hidden sm:table-cell">Type</TH>
+              <TH className="hidden sm:table-cell">Date</TH>
+              <TH className="hidden sm:table-cell">Plateforme</TH>
               <TH>Statut</TH>
               <TH className="text-right">Actions</TH>
             </tr>
@@ -289,7 +289,7 @@ export default function EnrollmentsPage() {
           <TBody>
             {enrollments.length === 0 && (
               <TR>
-                <TD colSpan={canBulkSelect ? 8 : 7} className="py-10 text-center text-gray-400">
+                <TD colSpan={100} className="py-10 text-center text-gray-400">
                   Aucune inscription pour ces filtres.
                 </TD>
               </TR>
@@ -315,9 +315,9 @@ export default function EnrollmentsPage() {
                   </Link>
                 </TD>
                 <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
-                <TD>{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
-                <TD>{e.enrolledAt ?? "—"}</TD>
-                <TD>
+                <TD className="hidden sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
+                <TD className="hidden sm:table-cell">{e.enrolledAt ?? "—"}</TD>
+                <TD className="hidden sm:table-cell">
                   <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
                     {e.platformAccessOptIn ? "Activé" : "Non activé"}
                   </Badge>

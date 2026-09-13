@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
-import { confirmSchoolPaymentViaDjomy, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
+import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
@@ -22,6 +22,7 @@ import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
+import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 
 /** Modes d'encaissement : guichet (immédiat) + en ligne via Djomy (une seule transaction). */
 const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
@@ -377,11 +378,20 @@ export function CollectFeeModal({
                     <span className="text-slate-600">
                       <span className="font-mono text-xs">{p.reference}</span> · {formatGNF(p.amount)}
                     </span>
-                    <button type="button"
-                      onClick={() => showPdf(`Reçu ${p.reference}`, () => getReceiptPdfObjectUrl(p.id))}
-                      className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
-                      <ReceiptIcon className="h-4 w-4" /> Reçu PDF
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button type="button"
+                        onClick={() => showPdf(`Reçu ${p.reference}`, () => getReceiptPdfObjectUrl(p.id))}
+                        className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
+                        <ReceiptIcon className="h-4 w-4" /> Reçu PDF
+                      </button>
+                      <WhatsAppInvoiceButton
+                        studentId={studentId}
+                        buildMessage={async () => {
+                          const { url } = await getPaymentReceiptPdf(p.id);
+                          return `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} (réf. ${p.reference}).${url ? ` ${url}` : ""}`;
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

@@ -5,9 +5,10 @@ import {
   AlertTriangle,
   Award,
   Banknote,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Clock,
+  ChevronUp,
   GraduationCap,
   MessageSquare,
   TrendingDown,
@@ -86,6 +87,9 @@ export default function FounderDashboard() {
   // ce bouton permet de le déclencher tout de suite (utile en test, ou si le serveur n'a pas tourné en
   // continu depuis le dernier passage), plutôt que d'attendre le lendemain matin pour voir un résultat.
   const [checkingOverdue, setCheckingOverdue] = useState(false);
+  // Détails/projections repliés par défaut : chiffres utiles mais moins urgents au quotidien que le
+  // reste de la page (heures réalisées par enseignant, projection sur toute l'année scolaire).
+  const [showPayrollDetails, setShowPayrollDetails] = useState(false);
   async function runOverdueCheckNow() {
     setCheckingOverdue(true);
     try {
@@ -233,10 +237,10 @@ export default function FounderDashboard() {
             <StatCard title="Dépenses totales" value={formatGNF(totalExpenses)} icon={TrendingDown} accent="rose"
               hint="Dépenses payées, toutes catégories" />
             <StatCard title="Balance globale" value={formatGNF(balance)} icon={balance >= 0 ? Wallet : Banknote}
-              accent={balance >= 0 ? "indigo" : "rose"} hint="Recettes − dépenses, sans la masse salariale" />
+              accent={balance >= 0 ? "indigo" : "rose"} hint="Recettes − dépenses courantes, hors salaires (toutes périodes confondues)" />
             <StatCard title="Bénéfice du mois" value={formatGNF(monthlyProfit)} icon={monthlyProfit >= 0 ? Award : Banknote}
               accent={monthlyProfit >= 0 ? "emerald" : "rose"}
-              hint="Recettes − dépenses (encaissées/payées ce mois) − salaires réellement payés dus à ce mois de travail" />
+              hint="Le vrai bénéfice de ce mois : recettes − dépenses − salaires versés (mois de travail, pas de virement)" />
           </div>
         </Reveal>
       )}
@@ -262,24 +266,25 @@ export default function FounderDashboard() {
           Recouvrement — {currentYear?.label ?? "année scolaire courante"}
         </h2>
         {founderQuery.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Facturé" value={formatGNF(founder?.recovery.overall.invoiced)} icon={Wallet} accent="indigo" />
             <StatCard title="Encaissé" value={formatGNF(founder?.recovery.overall.collected)} icon={TrendingUp} accent="emerald" />
             <StatCard title="Impayés" value={formatGNF(founder?.recovery.overall.outstanding)} icon={AlertTriangle} accent="rose"
               hint={`${founder?.recovery.overall.unpaidInvoices ?? 0} facture(s)`} />
             <StatCard title="Taux de recouvrement" value={pct(founder?.recovery.overall.recoveryRate)} icon={Award} accent="teal" />
-            <StatCard title="SMS de relance (ce mois)" value={smsRecoveryThisMonth} icon={MessageSquare} accent="indigo"
-              hint="Envoyés pour échéances impayées" />
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" loading={checkingOverdue} onClick={runOverdueCheckNow}>
             Vérifier les échéances en retard maintenant
           </Button>
-          <p className="text-xs text-gray-400">
+          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+            <MessageSquare className="h-3.5 w-3.5" /> {smsRecoveryThisMonth} SMS de relance envoyé(s) ce mois
+          </span>
+          <p className="w-full text-xs text-gray-400 sm:w-auto">
             La relance automatique ne tourne qu&apos;une fois par jour à 6h — utile pour tester sans
             attendre le lendemain.
           </p>
@@ -348,15 +353,11 @@ export default function FounderDashboard() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Masse salariale du mois</h2>
         {founderQuery.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+          <div className="grid gap-4 sm:grid-cols-3"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard title="Enseignants" value={formatGNF(founder?.payroll.teacherMonthlyPayroll)} icon={Users} accent="indigo"
-              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s)`} />
-            <StatCard title="Personnel administratif" value={formatGNF(founder?.payroll.staffMonthlyPayroll)} icon={Users} accent="teal"
-              hint={`${founder?.payroll.staffCount ?? 0} membre(s)`} />
-            <StatCard title="Total masse salariale" value={formatGNF(founder?.payroll.totalMonthlyPayroll)} icon={Wallet} accent="rose"
-              hint="Estimation (emploi du temps + tarifs) — pas forcément déjà versée, voir « Bénéfice du mois »" />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard title="Masse salariale théorique" value={formatGNF(founder?.payroll.totalMonthlyPayroll)} icon={Wallet} accent="rose"
+              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s) (${formatGNF(founder?.payroll.teacherMonthlyPayroll)}) + ${founder?.payroll.staffCount ?? 0} personnel (${formatGNF(founder?.payroll.staffMonthlyPayroll)}) — estimation, pas forcément déjà versée`} />
             <StatCard title="Enseignants payés ce mois" value={`${teachersPaidCount} / ${teacherIds.size}`} icon={Award}
               accent={teachersUnpaidCount === 0 ? "emerald" : "amber"}
               hint={teachersUnpaidCount > 0 ? `${teachersUnpaidCount} pas encore payé(s)` : "Tous payés"} />
@@ -365,29 +366,6 @@ export default function FounderDashboard() {
               hint={employeesUnpaidCount > 0 ? `${employeesUnpaidCount} pas encore payé(s)` : "Tous payés"} />
           </div>
         )}
-
-        <h3 className="text-sm font-semibold text-gray-600">
-          Masse salariale réelle (sur heures réalisées) — enseignants
-        </h3>
-        {founderQuery.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2"><StatCardSkeleton /><StatCardSkeleton /></div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard title="Masse salariale réelle" value={formatGNF(founder?.realPayroll.teacherMonthlyPayroll)} icon={Wallet} accent="indigo"
-              hint={`Sur ${formatMinutes(founder?.realPayroll.totalRealizedMinutes)} réalisées (cahier de textes)`} />
-            <StatCard title="Retards & départs anticipés cumulés"
-              value={formatMinutes((founder?.realPayroll.totalLateMinutes ?? 0) + (founder?.realPayroll.totalEarlyMinutes ?? 0))}
-              icon={Clock} accent="amber"
-              hint={
-                <>
-                  Retards {formatMinutes(founder?.realPayroll.totalLateMinutes)} · Départs anticipés {formatMinutes(founder?.realPayroll.totalEarlyMinutes)}
-                  <br />
-                  Coût estimé (déjà déduit du salaire) : <span className="font-semibold text-gray-600">{formatGNF(teacherPayrollGap)}</span>
-                </>
-              } />
-          </div>
-        )}
-
       </section>
 
       {/* ── Salaire par enseignant ────────────────────────────────────────── */}
@@ -443,7 +421,18 @@ export default function FounderDashboard() {
         )}
       </section>
 
-      {/* ── Projection de la masse salariale sur l'année scolaire ────────── */}
+      {/* ── Détails & projections (repliés par défaut) ───────────────────── */}
+      <button
+        type="button"
+        onClick={() => setShowPayrollDetails((v) => !v)}
+        className="flex items-center gap-2 text-sm font-medium text-brand-700 hover:text-brand-800"
+      >
+        {showPayrollDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        Détails & projections (heures réalisées, estimation sur l&apos;année)
+      </button>
+
+      {showPayrollDetails && (
+      <>
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Estimation de la masse salariale sur l&apos;année scolaire</h2>
         <p className="-mt-2 text-sm text-gray-500">
@@ -500,6 +489,12 @@ export default function FounderDashboard() {
       {/* ── Heures enseignants (cahier de textes) ────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Heures réalisées vs heures dues du mois</h2>
+        <p className="-mt-2 text-sm text-gray-500">
+          Masse salariale sur heures réellement réalisées (cahier de textes) : {formatGNF(founder?.realPayroll.teacherMonthlyPayroll)}
+          {" "}sur {formatMinutes(founder?.realPayroll.totalRealizedMinutes)} — écart de {formatGNF(teacherPayrollGap)} avec
+          {" "}l&apos;estimation théorique ci-dessus, principalement dû aux séances non réalisées (annulées ou non
+          {" "}encore consignées), pas aux simples retards/départs anticipés (informatifs, jamais déduits du salaire).
+        </p>
         {founderQuery.loading ? <CardSkeleton lines={4} /> : (
           <Card>
             <CardBody className="space-y-3">
@@ -529,6 +524,8 @@ export default function FounderDashboard() {
           </Card>
         )}
       </section>
+      </>
+      )}
 
       {/* ── Élèves pris en charge ────────────────────────────────────────── */}
       <section className="space-y-4">

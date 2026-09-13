@@ -113,15 +113,15 @@ export default function CommunicationsPage() {
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Date</TH><TH>Canal</TH><TH>Motif</TH><TH>Destinataires</TH><TH>Sujet</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Date</TH><TH className="hidden sm:table-cell">Canal</TH><TH>Motif</TH><TH className="hidden sm:table-cell">Destinataires</TH><TH>Sujet</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {rows.length === 0 && <TR><TD colSpan={6} className="py-10 text-center text-gray-400">Aucun message.</TD></TR>}
+            {rows.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun message.</TD></TR>}
             {rows.map((c) => (
               <TR key={c.id}>
                 <TD className="text-gray-500">{c.sentAt?.slice(0, 16).replace("T", " ") ?? "—"}</TD>
-                <TD><Badge tone="indigo">{CHANNEL_LABEL[c.channel]}</Badge></TD>
+                <TD className="hidden sm:table-cell"><Badge tone="indigo">{CHANNEL_LABEL[c.channel]}</Badge></TD>
                 <TD>{REASON_LABEL[c.reason]}</TD>
-                <TD>{RECIPIENT_TYPE_LABEL[c.recipientType]}</TD>
+                <TD className="hidden sm:table-cell">{RECIPIENT_TYPE_LABEL[c.recipientType]}</TD>
                 <TD className="text-gray-700">{c.subject ?? "—"}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">

@@ -322,7 +322,7 @@ export default function TeacherDetailPage() {
                   <TH>Horaire</TH>
                   <TH>Matière</TH>
                   <TH>Classe</TH>
-                  <TH>Salle</TH>
+                  <TH className="hidden sm:table-cell">Salle</TH>
                 </tr>
               </THead>
               <TBody>
@@ -338,7 +338,7 @@ export default function TeacherDetailPage() {
                         {classLabel.get(slot.classId) ?? `#${slot.classId}`}
                       </Link>
                     </TD>
-                    <TD>{slot.roomId ? (roomLabel.get(slot.roomId) ?? `#${slot.roomId}`) : "—"}</TD>
+                    <TD className="hidden sm:table-cell">{slot.roomId ? (roomLabel.get(slot.roomId) ?? `#${slot.roomId}`) : "—"}</TD>
                   </TR>
                 ))}
               </TBody>

@@ -61,7 +61,7 @@ export function MobileTabBar() {
                   </span>
                 )}
               </span>
-              <span className={cn("text-[11px] font-medium", active ? "text-brand-600" : "text-gray-500")}>
+              <span className={cn("max-w-full truncate px-0.5 text-[11px] font-medium", active ? "text-brand-600" : "text-gray-500")}>
                 {item.label}
               </span>
             </>

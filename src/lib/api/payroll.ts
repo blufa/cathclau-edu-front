@@ -102,6 +102,18 @@ export function bankFileUrl(): Promise<string> {
   return apiBlobUrl("/payroll/payslips/bank-file");
 }
 
+// ── Self-service enseignant (« Ma paie ») ────────────────────────────────────
+/** Mes propres fiches de paie (rôle TEACHER) — jamais celles d'un collègue, vérifié côté backend. */
+export function listMyPayslips(): Promise<Payslip[]> {
+  return api.get<Payslip[]>("/payroll/payslips/mine");
+}
+export function getMyPayslip(id: number): Promise<Payslip> {
+  return api.get<Payslip>(`/payroll/payslips/mine/${id}`);
+}
+export function getMyPayslipPdfObjectUrl(id: number): Promise<string> {
+  return apiBlobUrl(`/payroll/payslips/mine/${id}/pdf/download`);
+}
+
 /** Statistiques de présence d'un enseignant sur une période (pour pré-remplir les absences en paie). */
 export function getTeacherAttendanceStats(teacherId: number, from?: string | null, to?: string | null): Promise<{ teacherId: number; totalDays: number; presentDays: number; absentDays: number }> {
   return api.get(`/attendance/teachers/${teacherId}/stats`, { query: { from: from ?? undefined, to: to ?? undefined } });
