@@ -24,6 +24,7 @@ import { IdBadge } from "@/components/cards/id-badge";
 import { Reveal } from "@/components/public/reveal";
 import { matriculeFromQr, typeFromQr } from "@/lib/identity-qr";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { vibrateError, vibrateSuccess, vibrateWarning } from "@/lib/haptics";
 import { formatMinutes, formatTime } from "@/lib/format";
 
 /** API native BarcodeDetector (absente des types DOM standards de TypeScript) : détection bien plus
@@ -146,6 +147,7 @@ export default function AttendanceScanPage() {
           ok: true, at: new Date().toLocaleTimeString(),
         });
         notifySuccess("Scan enregistré hors-ligne — sera synchronisé automatiquement.");
+        vibrateSuccess();
         return;
       }
       const res = attempt.result;
@@ -157,12 +159,15 @@ export default function AttendanceScanPage() {
         subjectType: res.subjectType as ScanSubjectType, studentAttendanceId: res.studentAttendanceId,
         ok: true, at: new Date().toLocaleTimeString(),
       });
+      if (res.outcome === "LATE") vibrateWarning();
+      else vibrateSuccess();
       if (res.requiresPickupInfo) {
         setPickupPrompt({ studentId: subjectId, name: res.name ?? `#${subjectId}` });
       }
     } catch (err) {
       pushFeed({ id: `${Date.now()}`, name: `#${subjectId}`, kind: dir, ok: false, at: new Date().toLocaleTimeString() });
       notifyError(err);
+      vibrateError();
     } finally {
       inFlightRef.current.delete(key);
     }
