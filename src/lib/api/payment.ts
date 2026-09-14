@@ -1,5 +1,9 @@
 import { api } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
 import type {
+  CashierCollectionsSummary,
+  CashierSession,
+  CashierSessionStatus,
   DjomyStatusResponse,
   InitiatePaymentInput,
   InitiatePaymentResponse,
@@ -22,6 +26,33 @@ export function listPaymentsByInvoice(invoiceId: number): Promise<Payment[]> {
 
 export function listPaymentsByStudent(studentId: number): Promise<Payment[]> {
   return api.get<Payment[]>(`/payments/student/${studentId}`);
+}
+
+/** Rapport « encaissements par comptable » (CASH uniquement) sur une plage de dates — rapport dédié et
+ * rapprochement de caisse. `from`/`to` au format ISO (`2026-09-01T00:00:00`). */
+export function getCashierCollectionsSummary(cashierId: number, from: string, to: string): Promise<CashierCollectionsSummary> {
+  return api.get<CashierCollectionsSummary>("/payments/reports/by-cashier", { query: { cashierId, from, to } });
+}
+
+// ── Sessions de caisse (rapprochement) ───────────────────────────────────────
+export function openCashierSession(): Promise<CashierSession> {
+  return api.post<CashierSession>("/payments/cashier-sessions", {});
+}
+
+export function closeCashierSession(id: number, physicalCount: number, notes?: string): Promise<CashierSession> {
+  return api.patch<CashierSession>(`/payments/cashier-sessions/${id}/close`, { physicalCount, notes });
+}
+
+export function getCurrentCashierSession(): Promise<{ session: CashierSession; runningTotal: string } | null> {
+  return api.get<{ session: CashierSession; runningTotal: string }>("/payments/cashier-sessions/current")
+    .catch((err: unknown) => {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    });
+}
+
+export function listCashierSessions(cashierId?: number, status?: CashierSessionStatus): Promise<CashierSession[]> {
+  return api.get<CashierSession[]>("/payments/cashier-sessions", { query: { cashierId, status } });
 }
 
 export function initiatePayment(input: InitiatePaymentInput): Promise<InitiatePaymentResponse> {

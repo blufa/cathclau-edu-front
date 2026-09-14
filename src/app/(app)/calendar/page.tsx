@@ -21,7 +21,7 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE");
   const yearsQuery = useQuery(listAcademicYears, []);
   const years = yearsQuery.data ?? [];
   const cy = years.find((y) => y.current) ?? years[0];

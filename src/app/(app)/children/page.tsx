@@ -1,21 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { Megaphone, Phone } from "lucide-react";
+import { CalendarClock, Megaphone, Phone } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { getMyChildren, getParentAnnouncements, getParentContacts, getParentDashboard } from "@/lib/api/portal";
+import { listEvents } from "@/lib/api/calendar";
+import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE } from "@/lib/types/calendar";
 import type { Student } from "@/lib/types/student";
+import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StudentOverview } from "@/components/portal/student-overview";
-import { formatGNF, formatDateTime } from "@/lib/format";
+import { formatDate, formatGNF, formatDateTime } from "@/lib/format";
 
 export default function ChildrenPage() {
   const q = useQuery(() => getMyChildren(), []);
   const dashboardQuery = useQuery(() => getParentDashboard(), []);
   const announcementsQuery = useQuery(() => getParentAnnouncements(), []);
   const contactsQuery = useQuery(() => getParentContacts(), []);
+  const eventsQuery = useQuery(() => listEvents(), []);
+  const today = new Date().toISOString().slice(0, 10);
+  const upcomingEvents = (eventsQuery.data ?? [])
+    .filter((e) => e.startDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    .slice(0, 5);
   const [selected, setSelected] = useState<number | null>(null);
 
   const children = q.data ?? [];
@@ -50,6 +59,25 @@ export default function ChildrenPage() {
             ))}
           </ul>
         </section>
+      )}
+
+      {upcomingEvents.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle><span className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-brand-600" /> Prochains événements</span></CardTitle></CardHeader>
+          <CardBody>
+            <ul className="divide-y divide-slate-100">
+              {upcomingEvents.map((e) => (
+                <li key={e.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{e.title}</p>
+                    <Badge tone={EVENT_TYPE_TONE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</Badge>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-400">{formatDate(e.startDate)}</span>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
       )}
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : children.length === 0 ? (

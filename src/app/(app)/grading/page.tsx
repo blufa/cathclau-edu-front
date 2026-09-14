@@ -34,6 +34,7 @@ import {
   enterBulkGrades,
   generateReportCardsBulk,
   getAssessmentGrades,
+  getAssessmentGradeSheetPdfObjectUrl,
   getExamConvocationObjectUrl,
   getSubjectGradeReportPdfObjectUrl,
   getReportCardLines,
@@ -193,43 +194,38 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
     }
   }
 
-  async function printGradeSheet(a: Assessment) {
+  // PDF téléchargeable d'une évaluation précise (ex. l'épreuve orale d'octobre) — notes déjà saisies
+  // incluses. Remplace l'ancien aperçu window.print() qui ne produisait rien de partageable.
+  const [gradeSheetUrl, setGradeSheetUrl] = useState<string | null>(null);
+  const [gradeSheetLoadingId, setGradeSheetLoadingId] = useState<number | null>(null);
+  async function openGradeSheet(a: Assessment) {
+    setGradeSheetLoadingId(a.id);
     try {
-      const [grades, students] = await Promise.all([getAssessmentGrades(a.id), getClassStudents(a.classId)]);
-      const gradeOf = new Map(grades.map((g) => [g.studentId, g.value]));
-      const scored = students.map((s) => gradeOf.get(s.id)).filter((v): v is string => v != null && v !== "").map(Number);
-      const avg = scored.length ? (scored.reduce((x, y) => x + y, 0) / scored.length).toFixed(2) : "—";
-      const mn = scored.length ? Math.min(...scored) : "—";
-      const mx = scored.length ? Math.max(...scored) : "—";
-      const rows = students.map((s, i) => {
-        const v = gradeOf.get(s.id);
-        return `<tr><td>${i + 1}</td><td>${s.studentNumber ?? ""}</td><td>${s.lastName ?? ""} ${s.firstName ?? ""}</td>`
-          + `<td style="text-align:center">${v != null && v !== "" ? v : "—"} / ${a.maxScore}</td></tr>`;
-      }).join("");
-      const teacher = a.teacherId ? (teacherLabel.get(a.teacherId) ?? "") : "";
-      const w = window.open("", "_blank", "width=820,height=900");
-      if (!w) { notifyError("Autorisez les pop-ups pour imprimer."); return; }
-      w.document.write(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Fiche de notes — ${a.label}</title>`
-        + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
-        + `h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#475569;font-size:13px;margin-bottom:16px}`
-        + `table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #cbd5e1;padding:6px 8px}`
-        + `th{background:#f1f5f9;text-align:left}.meta{display:flex;flex-wrap:wrap;gap:6px 24px;font-size:13px;margin-bottom:14px}`
-        + `.stats{margin-top:12px;display:flex;gap:24px;font-size:13px;font-weight:600}@media print{body{padding:0}}</style></head><body>`
-        + `<h1>FICHE DE NOTES</h1><div class="sub">${ASSESSMENT_TYPE_LABEL[a.type]} — ${a.label}</div>`
-        + `<div class="meta"><span><strong>Classe :</strong> ${className || "—"}</span>`
-        + `<span><strong>Matière :</strong> ${subjectLabel.get(a.subjectId) ?? "—"}</span>`
-        + `<span><strong>Enseignant :</strong> ${teacher || "—"}</span>`
-        + `<span><strong>Date :</strong> ${a.date ?? "—"}</span>`
-        + `<span><strong>Barème :</strong> /${a.maxScore}</span><span><strong>Coef. :</strong> ${a.coefficient}</span></div>`
-        + `<table><thead><tr><th>N°</th><th>Matricule</th><th>Nom & prénom</th><th style="text-align:center">Note</th></tr></thead><tbody>${rows}</tbody></table>`
-        + `<div class="stats"><span>Moyenne : ${avg}</span><span>Note min : ${mn}</span><span>Note max : ${mx}</span><span>Notés : ${scored.length}/${students.length}</span></div>`
-        + `<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`
-      );
-      w.document.close();
-    } catch (err) { notifyError(err); }
+      setGradeSheetUrl(await getAssessmentGradeSheetPdfObjectUrl(a.id));
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setGradeSheetLoadingId(null);
+    }
   }
 
+  // PDF réel (téléchargeable) du relevé du mois — en plus de l'aperçu imprimable printMonthly().
+  const [monthlyPdfUrl, setMonthlyPdfUrl] = useState<string | null>(null);
+  const [monthlyPdfLoadingKey, setMonthlyPdfLoadingKey] = useState<string | null>(null);
+  async function openMonthlyPdf(group: { subjectId: number; monthKey: string; evals: Assessment[] }) {
+    const periodId = group.evals[0]?.periodId;
+    if (!periodId || group.monthKey === "sans-date") return;
+    const key = `${group.subjectId}|${group.monthKey}`;
+    setMonthlyPdfLoadingKey(key);
+    try {
+      const month = Number(group.monthKey.split("-")[1]);
+      setMonthlyPdfUrl(await getSubjectGradeReportPdfObjectUrl(classId, group.subjectId, periodId, month));
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setMonthlyPdfLoadingKey(null);
+    }
+  }
 
   const distinctSubjects = useMemo(
     () => [...new Set((assessmentsQuery.data ?? []).map((a) => a.subjectId))],
@@ -376,6 +372,9 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
                         </span>
                       </span>
                       <Button size="sm" variant="secondary" onClick={() => printMonthly(g)}>Relevé du mois</Button>
+                      <Button size="sm" variant="secondary"
+                        loading={monthlyPdfLoadingKey === `${g.subjectId}|${g.monthKey}`}
+                        onClick={() => openMonthlyPdf(g)}>Relevé du mois (PDF)</Button>
                     </div>
                   </TD>
                 </TR>
@@ -391,7 +390,7 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
-                        <Button size="sm" variant="ghost" onClick={() => printGradeSheet(a)}>Fiche de notes</Button>
+                        <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                         {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
                         {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
                       </div>
@@ -418,6 +417,8 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
         {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
       </Modal>
       <FilePreview url={releveUrl} title="Relevé de notes" open={releveUrl != null} onClose={() => setReleveUrl(null)} />
+      <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} />
+      <FilePreview url={monthlyPdfUrl} title="Relevé du mois" open={monthlyPdfUrl != null} onClose={() => setMonthlyPdfUrl(null)} />
     </div>
   );
 }

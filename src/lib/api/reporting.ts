@@ -31,6 +31,21 @@ export function getAcademicDashboard(periodId: number, top = 10): Promise<Academ
   return api.get<AcademicDashboard>("/dashboard/academic", { query: { periodId, top } });
 }
 
+// ── Présences élèves du jour ──────────────────────────────────────────────
+export interface TodayAttendanceStats {
+  expectedCount: number;
+  presentCount: number;
+  absentCount: number;
+  lateCount: number;
+  presentPercentage: string;
+}
+
+/** Taux de présence élèves du jour, toutes classes confondues. Le pourcentage se stabilise en
+ * cours de journée (un job planifié marque automatiquement absents les élèves non pointés à 14h). */
+export function getTodayAttendanceStats(): Promise<TodayAttendanceStats> {
+  return api.get<TodayAttendanceStats>("/dashboard/attendance/today");
+}
+
 // ── 10.2 Financier ─────────────────────────────────────────────────────────
 export interface FinanceDashboard {
   invoiced: string;
@@ -42,6 +57,19 @@ export interface FinanceDashboard {
 
 export function getFinanceDashboard(): Promise<FinanceDashboard> {
   return api.get<FinanceDashboard>("/dashboard/finance");
+}
+
+export interface UpcomingInstallment {
+  installmentId: number;
+  feeId: number;
+  label: string;
+  dueDate: string;
+  amount: string;
+}
+
+/** Prochaines échéances de paiement des frais (statut en attente), triées par date limite croissante. */
+export function getUpcomingInstallments(daysAhead = 30, limit = 5): Promise<UpcomingInstallment[]> {
+  return api.get<UpcomingInstallment[]>("/dashboard/finance/upcoming-installments", { query: { daysAhead, limit } });
 }
 
 export interface ProjectionMonth {

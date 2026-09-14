@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import {
   type BeforeInstallPromptEvent,
+  isIosDevice,
   isIosSafariDevice,
   isRunningStandalone,
   usePwaInstallStore,
@@ -16,10 +17,12 @@ import { InstallBanner } from "@/components/pwa/install-banner";
 export function InstallPromptProvider() {
   const setDeferredPrompt = usePwaInstallStore((s) => s.setDeferredPrompt);
   const setInstalled = usePwaInstallStore((s) => s.setInstalled);
+  const setIos = usePwaInstallStore((s) => s.setIos);
   const setIosSafari = usePwaInstallStore((s) => s.setIosSafari);
 
   useEffect(() => {
     setInstalled(isRunningStandalone());
+    setIos(isIosDevice());
     setIosSafari(isIosSafariDevice());
 
     function onBeforeInstallPrompt(event: Event) {
@@ -39,7 +42,7 @@ export function InstallPromptProvider() {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onAppInstalled);
     };
-  }, [setDeferredPrompt, setInstalled, setIosSafari]);
+  }, [setDeferredPrompt, setInstalled, setIos, setIosSafari]);
 
   return <InstallBanner />;
 }

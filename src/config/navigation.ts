@@ -96,6 +96,10 @@ export const NAVIGATION: NavSection[] = [
       // exclut Secrétaire, classe:read inclut Enseignant) — laissé en rôles fixes pour l'instant.
       { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "ACADEMICS" },
       { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["emploi:read"], excludeRoles: ["STUDENT"], module: "ACADEMICS" },
+      // Page dédiée aux événements du calendrier (pas de gestion d'année scolaire, contrairement à
+      // « Année scolaire & calendrier ») — seul écran auquel le responsable pédagogique a accès pour
+      // programmer réunions/sorties, sans les droits plus larges de gestion des années scolaires.
+      { label: "Calendrier des événements", href: "/calendar", icon: CalendarRange, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE"], module: "ACADEMICS" },
       {
         label: "Personnel", icon: Briefcase, module: "STAFF",
         children: [
@@ -150,6 +154,9 @@ export const NAVIGATION: NavSection[] = [
         children: [
           { label: "Paiements", href: "/payments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], excludeRoles: ["PARENT"], module: "PAYMENTS" },
           { label: "Transactions & reçus", href: "/payments/transactions", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["transaction:read"], module: "PAYMENTS" },
+          // Rapprochement de caisse (§angles morts comptables) : usage quotidien au guichet, contrairement
+          // au reste de la section « Comptabilité » (masquée du menu, cf. plus bas) — reste visible ici.
+          { label: "Session de caisse", href: "/accounting/cashier-session", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
         ],
       },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
