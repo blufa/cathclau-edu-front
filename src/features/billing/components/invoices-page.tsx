@@ -9,6 +9,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import {
@@ -69,7 +70,7 @@ export default function InvoicesPage() {
   const q = useInvoicesQuery(tenantId, status, studentFilter, yearId);
   const feesQuery = useFeesQuery(tenantId);
   // Résolution des noms d'élèves (la facture ne porte que l'ID).
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],

@@ -6,6 +6,7 @@ import { AttendanceSettingsPanel } from "@/components/attendance/attendance-sett
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, getScheduleByClass, getScheduleByTeacher, listSubjects } from "@/lib/api/academics";
 import type { Classe, EmploiDuTemps, Matiere } from "@/lib/types/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -733,12 +734,14 @@ function SelectClassHint() {
 function AttendanceLogAllClasses({ classes, date, onPickClass }: {
   classes: Classe[]; date: string; onPickClass: (classId: number) => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const rowsQuery = useQuery(
     () => Promise.allSettled(classes.map((c) => getClassAttendance(c.id, date).then((rows) => ({ c, rows }))))
       .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value.rows.map((row) => ({ row, classLabel: r.value.c.label, classId: r.value.c.id })) : []))),
     [classes.map((c) => c.id).join(","), date],
   );
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const nameOf = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],

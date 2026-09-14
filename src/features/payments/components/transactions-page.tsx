@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
-import { useQuery as useLegacyQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getReceiptPdfObjectUrlById } from "@/lib/api/payment";
 import { searchStudents } from "@/lib/api/students";
 import type { PaymentProvider, PaymentTransaction, Receipt } from "@/lib/types/payment";
@@ -134,8 +134,10 @@ function TransactionsTab() {
 
 // ── Reçus ─────────────────────────────────────────────────────────────────────
 function ReceiptsTab() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const [studentId, setStudentId] = useState<number | undefined>(undefined);
-  const studentsQuery = useLegacyQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }), [tenantId]);
   const students = useMemo(() => studentsQuery.data?.content ?? [], [studentsQuery.data]);
   const q = useReceiptsQuery(studentId);
 

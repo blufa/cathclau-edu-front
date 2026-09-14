@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
 import { ArrowLeft, CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
@@ -87,6 +88,7 @@ function parseScan(raw: string): ParseResult | null {
 export default function AttendanceScanPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   // L'enseignant ne doit jamais pouvoir scanner (ni lui-même ni les élèves) — retiré volontairement.
   // TODO : ajouter le rôle SURVEILLANT une fois créé (rôle prévu pour la surveillance/scan).
   const canScan = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "STUDENT");
@@ -112,9 +114,11 @@ export default function AttendanceScanPage() {
   // Manual / teacher / employee fallback
   const [subjectType, setSubjectType] = useState<ScanSubjectType>("STUDENT");
   const [manualId, setManualId] = useState("");
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
-  const teachersQuery = useQuery(listTeachers, []);
-  const employeesQuery = useQuery(() => listEmployees(), []);
+  // Mis en cache (IndexedDB) : le repli manuel (QR illisible) doit rester utilisable hors-ligne, comme
+  // le scan lui-même (submitScanOfflineAware) — sans ça, une coupure réseau viderait ces listes.
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const manualOptions: SearchableOption[] = useMemo(() => {
     if (subjectType === "EMPLOYEE") {
       return (employeesQuery.data ?? []).map((p) => {

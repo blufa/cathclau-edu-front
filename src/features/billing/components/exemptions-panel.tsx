@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { Plus, Ban } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { grantExemption, listExemptions, revokeExemption } from "@/lib/api/billing";
 import { searchStudents } from "@/lib/api/students";
 import {
@@ -30,8 +32,10 @@ const EMPTY: ExemptionInput = {
 };
 
 export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(listExemptions, []);
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }), [tenantId]);
   const students = useMemo(() => studentsQuery.data?.content ?? [], [studentsQuery.data]);
   const studentName = (id: number) => {
     const s = students.find((st) => st.id === id);

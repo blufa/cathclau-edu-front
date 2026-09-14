@@ -4,6 +4,7 @@ import type {
   CashierCollectionsSummary,
   CashierSession,
   CashierSessionStatus,
+  DailyCollectionsReport,
   DjomyStatusResponse,
   InitiatePaymentInput,
   InitiatePaymentResponse,
@@ -32,6 +33,12 @@ export function listPaymentsByStudent(studentId: number): Promise<Payment[]> {
  * rapprochement de caisse. `from`/`to` au format ISO (`2026-09-01T00:00:00`). */
 export function getCashierCollectionsSummary(cashierId: number, from: string, to: string): Promise<CashierCollectionsSummary> {
   return api.get<CashierCollectionsSummary>("/payments/reports/by-cashier", { query: { cashierId, from, to } });
+}
+
+/** Rapport « encaissements par jour » (tous canaux) — contrôle mensuel du fondateur. `from`/`to` au
+ * format ISO (`2026-09-01T00:00:00`). */
+export function getDailyCollectionsReport(from: string, to: string): Promise<DailyCollectionsReport> {
+  return api.get<DailyCollectionsReport>("/payments/reports/daily", { query: { from, to } });
 }
 
 // ── Sessions de caisse (rapprochement) ───────────────────────────────────────

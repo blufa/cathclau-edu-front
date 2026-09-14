@@ -8,6 +8,7 @@ import { IdCard, Plus, Search, Tags } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getStudent, searchStudents } from "@/lib/api/students";
 import { getClass, listAcademicYears } from "@/lib/api/academics";
 import {
@@ -73,9 +74,10 @@ export default function StudentCardsPage() {
 
 function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["carte:manage"]);
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => listCards(), []);
   const templatesQuery = useQuery(() => listCardTemplates(), []);
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }), [tenantId]);
   const studentName = useMemo(() => {
     const m = new Map((studentsQuery.data?.content ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
     return (id: number) => m.get(id) ?? `Élève #${id}`;

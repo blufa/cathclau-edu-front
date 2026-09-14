@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { searchStudents } from "@/lib/api/students";
 import {
   createIncident,
@@ -55,6 +56,7 @@ const SEV_TONE: Record<DisciplineSeverity, "gray" | "amber" | "red"> = { MINOR: 
 
 export default function DisciplinePage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["discipline:manage"]);
   // Résoudre/classer un signalement relève des rôles administratifs — un enseignant peut modifier
   // sa saisie mais pas trancher lui-même l'issue de l'incident qu'il a signalé.
@@ -66,7 +68,7 @@ export default function DisciplinePage() {
     () => listIncidents({ studentId: studentFilter ? Number(studentFilter) : undefined, status: status || undefined }),
     [status, studentFilter],
   );
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],

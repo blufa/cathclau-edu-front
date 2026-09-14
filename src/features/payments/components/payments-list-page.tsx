@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
-import { useQuery as useLegacyQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import { listUsers } from "@/lib/api/iam";
@@ -43,7 +43,7 @@ export default function PaymentsListPage() {
   const tenantId = user?.tenantId ?? null;
   const canRefund = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paiement:refund"]);
 
-  const yearsQuery = useLegacyQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(
     () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
     [yearsQuery.data],
@@ -53,7 +53,11 @@ export default function PaymentsListPage() {
   const yearId = selectedYearId ?? defaultYearId;
   const q = usePaymentsQuery(tenantId, yearId);
   const [status, setStatus] = useState<PaymentStatus | "">("");
-  const studentsQuery = useLegacyQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(
+    tenantId ? `students-all:${tenantId}` : null,
+    () => searchStudents({ size: 1000 }),
+    [tenantId],
+  );
   const studentName = useMemo(() => {
     const map = new Map<number, string>();
     (studentsQuery.data?.content ?? []).forEach((s) => map.set(s.id, `${s.firstName} ${s.lastName}`));
@@ -63,7 +67,11 @@ export default function PaymentsListPage() {
   // Filtre « Comptable » (rapprochement) — visible seulement pour les rôles qui supervisent les
   // encaissements des autres (pas un comptable qui ne verrait que les siens, ça reste une liste globale).
   const canSeeCashierFilter = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
-  const usersQuery = useLegacyQuery(() => (canSeeCashierFilter ? listUsers(0, 100) : Promise.resolve(null)), [canSeeCashierFilter]);
+  const usersQuery = useCachedQuery(
+    canSeeCashierFilter && tenantId ? `users-page1:${tenantId}` : null,
+    () => listUsers(0, 100),
+    [canSeeCashierFilter, tenantId],
+  );
   const cashierName = useMemo(() => {
     const map = new Map<number, string>();
     (usersQuery.data?.content ?? []).forEach((u) => map.set(u.id, `${u.firstName} ${u.lastName}`));

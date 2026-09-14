@@ -7,6 +7,7 @@ export default function PaymentsLayout({ children }: { children: ReactNode }) {
       <RouteTabs
         tabs={[
           { label: "Paiements", href: "/payments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "PAYMENTS" },
+          { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "PAYMENTS" },
           { label: "Transactions & reçus", href: "/payments/transactions", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "PAYMENTS" },
         ]}
       />

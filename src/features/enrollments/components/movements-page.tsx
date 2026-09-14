@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { searchStudents } from "@/lib/api/students";
@@ -18,6 +19,7 @@ import { Reveal } from "@/components/public/reveal";
 
 export default function EnrollmentMovementsPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const allowed = hasRole(user, "SUPER_ADMIN", "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:read"]);
 
   const yearsQuery = useQuery(() => listAcademicYears(), []);
@@ -31,7 +33,7 @@ export default function EnrollmentMovementsPage() {
     [effectiveYear],
   );
   const classesQuery = useQuery(() => (effectiveYear ? listClasses(Number(effectiveYear)) : Promise.resolve([])), [effectiveYear]);
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
 
   const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
   const studentLabel = useMemo(

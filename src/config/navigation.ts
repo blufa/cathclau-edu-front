@@ -153,6 +153,9 @@ export const NAVIGATION: NavSection[] = [
         label: "Encaissements", icon: CreditCard, module: "PAYMENTS",
         children: [
           { label: "Paiements", href: "/payments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], excludeRoles: ["PARENT"], module: "PAYMENTS" },
+          // Vue jour par jour, tous canaux confondus, pour le contrôle mensuel du fondateur
+          // (§angles morts comptables) — indépendante du fait que les frais soient réglés par tranche.
+          { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], module: "PAYMENTS" },
           { label: "Transactions & reçus", href: "/payments/transactions", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["transaction:read"], module: "PAYMENTS" },
           // Rapprochement de caisse (§angles morts comptables) : usage quotidien au guichet, contrairement
           // au reste de la section « Comptabilité » (masquée du menu, cf. plus bas) — reste visible ici.

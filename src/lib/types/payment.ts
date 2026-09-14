@@ -46,6 +46,19 @@ export interface CashierCollectionsSummary {
   payments: Payment[];
 }
 
+/** Ligne du rapport « encaissements par jour » (tous canaux). */
+export interface DailyCollectionsLine {
+  date: string;
+  total: string;
+  count: number;
+}
+
+/** Rapport « encaissements par jour » — vue du fondateur pour son contrôle mensuel. */
+export interface DailyCollectionsReport {
+  grandTotal: string;
+  days: DailyCollectionsLine[];
+}
+
 export type CashierSessionStatus = "OPEN" | "CLOSED";
 
 export interface CashierSession {
