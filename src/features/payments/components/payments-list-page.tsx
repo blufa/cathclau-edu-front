@@ -55,12 +55,12 @@ export default function PaymentsListPage() {
   const [status, setStatus] = useState<PaymentStatus | "">("");
   const studentsQuery = useCachedQuery(
     tenantId ? `students-all:${tenantId}` : null,
-    () => searchStudents({ size: 1000 }),
+    () => searchStudents({ size: 1000 }).then((p) => p.content),
     [tenantId],
   );
   const studentName = useMemo(() => {
     const map = new Map<number, string>();
-    (studentsQuery.data?.content ?? []).forEach((s) => map.set(s.id, `${s.firstName} ${s.lastName}`));
+    (studentsQuery.data ?? []).forEach((s) => map.set(s.id, `${s.firstName} ${s.lastName}`));
     return (id: number) => map.get(id) ?? `Élève #${id}`;
   }, [studentsQuery.data]);
 

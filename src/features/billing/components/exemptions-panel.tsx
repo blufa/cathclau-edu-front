@@ -35,8 +35,8 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const q = useQuery(listExemptions, []);
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }), [tenantId]);
-  const students = useMemo(() => studentsQuery.data?.content ?? [], [studentsQuery.data]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
   const studentName = (id: number) => {
     const s = students.find((st) => st.id === id);
     return s ? `${s.firstName} ${s.lastName}` : `Élève #${id}`;

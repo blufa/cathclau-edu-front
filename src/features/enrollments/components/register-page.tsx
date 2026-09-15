@@ -83,11 +83,11 @@ export default function EnrollmentsPage() {
   );
 
   // Resolve student names in bulk (single large page) for display in the queue.
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(
     () =>
       new Map(
-        (studentsQuery.data?.content ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]),
+        (studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]),
       ),
     [studentsQuery.data],
   );

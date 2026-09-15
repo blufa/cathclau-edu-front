@@ -49,10 +49,10 @@ export default function AnnouncementsPage() {
     () => (yearId ? listClasses(yearId) : Promise.resolve([])),
     [yearId],
   );
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
 
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
-  const students = useMemo(() => studentsQuery.data?.content ?? [], [studentsQuery.data]);
+  const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],
