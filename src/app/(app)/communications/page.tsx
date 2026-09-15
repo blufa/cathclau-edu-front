@@ -352,7 +352,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
 }) {
   const [loading, setLoading] = useState(false);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const classesQuery = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);

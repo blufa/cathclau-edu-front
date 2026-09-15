@@ -1,8 +1,9 @@
 /**
- * Catalogue des grades (classes) par niveau/cycle, avec les deux nomenclatures (guinéenne et
- * française). Le « niveau » = le cycle (Maternelle, Primaire, Secondaire, Supérieur) ; la « classe »
- * = un grade + une section (ex. « 7ème A »). Partagé entre le formulaire de classe et l'assistant.
- * Les clés « college »/« lycee » sont conservées pour les écoles qui ont créé ces niveaux séparément.
+ * Catalogue des grades (classes) par cycle, avec les deux nomenclatures (guinéenne et française).
+ * Ici, les clés (maternelle, primaire, secondaire…) désignent le cycle d'enseignement ; chaque grade
+ * listé (PS, 7ème, Terminale…) correspond à un niveau précis ; la « classe » = un grade + une section
+ * (ex. « 7ème A »). Partagé entre le formulaire de classe et l'assistant. Les clés « college »/« lycee »
+ * sont conservées pour les écoles qui ont créé ces niveaux séparément.
  */
 /**
  * Grades groupés par sous-cycle (utile pour l'affichage à sous-titres : Collège / Lycée).

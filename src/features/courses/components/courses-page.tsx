@@ -8,6 +8,7 @@ import { Plus, ShoppingCart } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { getMyChildren, getMyStudent } from "@/lib/api/portal";
 import {
@@ -58,7 +59,7 @@ export default function CoursesPage() {
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
   const activeStudentId = isStudent ? (myselfQuery.data?.id ?? null) : (selectedChildId ?? childrenQuery.data?.[0]?.id ?? null);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const currentYear = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
   const classesQuery = useQuery(() => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])), [currentYear?.id]);
   const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);

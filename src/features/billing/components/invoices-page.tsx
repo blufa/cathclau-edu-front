@@ -59,7 +59,7 @@ export default function InvoicesPage() {
   const initialStudentId = useSearchParams().get("student");
   const [status, setStatus] = useState<InvoiceStatus | "">("");
   const [studentFilter, setStudentFilter] = useState<string>(initialStudentId ?? "");
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(
     () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
     [yearsQuery.data],

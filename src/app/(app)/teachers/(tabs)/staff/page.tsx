@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   createEmployee,
   createTeacher,
@@ -15,6 +16,7 @@ import {
   type EmployeeCategory,
   type EmployeeInput,
 } from "@/lib/api/staff";
+import { listCardTemplates } from "@/lib/api/student-card";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +28,7 @@ import { EMPLOYEE_CATEGORY_LABEL, EmployeeForm } from "@/components/staff/employ
 import { TeacherForm } from "@/components/staff/teacher-form";
 import { IdBadge } from "@/components/cards/id-badge";
 import { buildIdentityQr } from "@/lib/identity-qr";
+import { resolveBadgeColors } from "@/lib/badge-colors";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
 
@@ -212,21 +215,35 @@ export default function PersonnelPage() {
         )}
       </Modal>
       <Modal open={!!badgeFor} onClose={() => setBadgeFor(null)} title="Badge personnel">
-        {badgeFor && (
-          <IdBadge
-            kind="Badge personnel"
-            fullName={`${badgeFor.firstName ?? ""} ${badgeFor.lastName ?? ""}`.trim()}
-            subtitle={badgeFor.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[badgeFor.category]}
-            fields={[
-              { label: "Matricule", value: badgeFor.employeeNumber ?? "—", mono: true },
-              { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[badgeFor.category] },
-              { label: "Statut", value: badgeFor.active ? "Actif" : "Inactif" },
-            ]}
-            qrData={buildIdentityQr({ type: "EMPLOYEE", fullName: `${badgeFor.firstName ?? ""} ${badgeFor.lastName ?? ""}`, matricule: badgeFor.employeeNumber })}
-            footerNote="Personnel de l'établissement."
-          />
-        )}
+        {badgeFor && <StaffBadgeContent employee={badgeFor} />}
       </Modal>
     </div>
+  );
+}
+
+/** Contenu du badge personnel : photo, téléphone, couleurs du modèle « Personnel » par défaut — extrait
+ * pour ne charger le modèle de badge que quand la modale est ouverte. */
+function StaffBadgeContent({ employee }: { employee: Employee }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
+  const colors = resolveBadgeColors(templatesQuery.data, "STAFF");
+
+  return (
+    <IdBadge
+      kind="Badge personnel"
+      fullName={`${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim()}
+      subtitle={employee.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[employee.category]}
+      photoUrl={employee.photo}
+      fields={[
+        { label: "Matricule", value: employee.employeeNumber ?? "—", mono: true },
+        { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[employee.category] },
+        { label: "Téléphone", value: employee.phone ?? "—" },
+      ]}
+      qrData={buildIdentityQr({ type: "EMPLOYEE", fullName: `${employee.firstName ?? ""} ${employee.lastName ?? ""}`, matricule: employee.employeeNumber })}
+      footerNote="Personnel de l'établissement."
+      primaryColor={colors.primaryColor}
+      secondaryColor={colors.secondaryColor}
+    />
   );
 }

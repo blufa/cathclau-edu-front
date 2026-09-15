@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
-import { useQuery as useLegacyQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listLevels, listRooms, listSubjects } from "@/lib/api/academics";
 import type { Classe, CreateClassInput } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,13 @@ import {
 
 export default function ClassesListPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["classe:manage"]);
 
-  const yearsQuery = useLegacyQuery(listAcademicYears, []);
-  const levelsQuery = useLegacyQuery(listLevels, []);
-  const roomsQuery = useLegacyQuery(listRooms, []);
-  const subjectsQuery = useLegacyQuery(listSubjects, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
+  const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
 
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);

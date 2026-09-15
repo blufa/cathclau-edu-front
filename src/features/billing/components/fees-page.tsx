@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { listRoutes } from "@/lib/api/transport";
 import {
@@ -49,7 +50,7 @@ export default function FeesPage() {
   const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["frais:manage"]);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYear = years.find((y) => y.current) ?? years[0];
   const classesQuery = useQuery(
@@ -60,8 +61,8 @@ export default function FeesPage() {
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
     [classesQuery.data],
   );
-  const levelsQuery = useQuery(listLevels, []);
-  const routesQuery = useQuery(listRoutes, []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
+  const routesQuery = useCachedQuery(tenantId ? `routes:${tenantId}` : null, listRoutes, [tenantId]);
   const routeLabel = useMemo(
     () => new Map((routesQuery.data ?? []).map((r) => [r.id, r.name])),
     [routesQuery.data],

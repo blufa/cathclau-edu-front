@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ApiError } from "@/lib/api/errors";
 import { createUserWithRole } from "@/lib/api/iam";
+import { updateTeacherPhoto } from "@/lib/api/staff";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Stepper } from "@/components/ui/stepper";
+import { FileUpload } from "@/components/ui/file-upload";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 
 interface TeacherFormProps {
   /** En édition : la fiche enseignant existante. En pré-remplissage (ex. création d'un profil
@@ -64,6 +67,16 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [active, setActive] = useState(0);
+  const [photo, setPhoto] = useState(initial?.photo ?? "");
+
+  async function onPhotoChange(url: string | null) {
+    setPhoto(url ?? "");
+    if (initial?.id == null) return; // pas encore d'id : la photo sera ajoutable après création
+    try {
+      await updateTeacherPhoto(initial.id, url ?? "");
+      notifySuccess("Photo mise à jour");
+    } catch (e) { notifyError(e); }
+  }
 
   const {
     handleSubmit, watch, setValue, setError: setFieldError, trigger,
@@ -161,6 +174,12 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
 
       {active === 0 && (
         <div className="space-y-4 pt-2">
+          {initial?.id != null && (
+            <Field>
+              <Label>Photo (badge enseignant)</Label>
+              <FileUpload variant="image" folder="staff/photos" value={photo} onChange={onPhotoChange} />
+            </Field>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field>
               <Label>Prénom <span className="text-error-500">*</span></Label>

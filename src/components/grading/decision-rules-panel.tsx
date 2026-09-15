@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import {
   createDecisionRule,
   deleteDecisionRule,
@@ -37,8 +39,10 @@ const NEEDS_SUBJECT: DecisionConditionType[] = ["SUBJECT_BELOW"];
 const NEEDS_COUNT: DecisionConditionType[] = ["SUBJECTS_BELOW_COUNT"];
 
 export function DecisionRulesPanel({ canWrite }: { canWrite: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(listDecisionRules, []);
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjects = useMemo(() => subjectsQuery.data ?? [], [subjectsQuery.data]);
   const subjectOptions: SearchableOption[] = useMemo(
     () => subjects.map((s) => ({ value: String(s.id), trigger: s.label, label: s.label, searchText: s.label })),

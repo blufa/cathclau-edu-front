@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import {
   createEliminatoryRule,
   deleteEliminatoryRule,
@@ -24,8 +26,10 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 const EMPTY: EliminatoryRuleInput = { subjectId: 0, threshold: 8, decisionLabel: "", active: true };
 
 export function EliminatoryRulesPanel({ canWrite }: { canWrite: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(listEliminatoryRules, []);
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjects = useMemo(() => subjectsQuery.data ?? [], [subjectsQuery.data]);
   const subjectName = (id: number) => subjects.find((s) => s.id === id)?.label ?? `Matière #${id}`;
   const subjectOptions: SearchableOption[] = useMemo(

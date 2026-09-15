@@ -198,7 +198,8 @@ export interface EnrollmentCountInfo {
   classId: number;
   currentCount: number;
   maxCapacity: number | null;
-  available: number;
+  /** null quand la classe n'a pas de capacité maximale définie (pas de limite). */
+  available: number | null;
 }
 
 /** Body for POST/PUT class — tenantId resolved server-side. */

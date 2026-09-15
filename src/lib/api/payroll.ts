@@ -98,10 +98,6 @@ export function payPayslip(id: number, paymentMethod = "BANK_TRANSFER"): Promise
 export function deletePayslip(id: number): Promise<void> {
   return api.delete<void>(`/payroll/payslips/${id}`);
 }
-export function bankFileUrl(): Promise<string> {
-  return apiBlobUrl("/payroll/payslips/bank-file");
-}
-
 // ── Self-service enseignant (« Ma paie ») ────────────────────────────────────
 /** Mes propres fiches de paie (rôle TEACHER) — jamais celles d'un collègue, vérifié côté backend. */
 export function listMyPayslips(): Promise<Payslip[]> {

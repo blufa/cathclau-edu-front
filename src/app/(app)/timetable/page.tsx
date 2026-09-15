@@ -6,6 +6,7 @@ import { CalendarClock } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   cancelScheduleWeekException,
   createSchedule,
@@ -73,6 +74,7 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
 
 export default function TimetablePage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["emploi:manage"]);
 
   const [mode, setMode] = useState<"class" | "teacher">("class");
@@ -86,10 +88,10 @@ export default function TimetablePage() {
   const [fixedOpen, setFixedOpen] = useState(false);
   const [printingAll, setPrintingAll] = useState(false);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
-  const teachersQuery = useQuery(listTeachers, []);
-  const subjectsQuery = useQuery(listSubjects, []);
-  const roomsQuery = useQuery(listRooms, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
+  const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
 
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);

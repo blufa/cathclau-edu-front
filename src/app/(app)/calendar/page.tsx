@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears } from "@/lib/api/academics";
 import { createEvent, updateEvent, deleteEvent, listEvents } from "@/lib/api/calendar";
 import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE, type AcademicEvent, type AcademicEventType } from "@/lib/types/calendar";
@@ -22,7 +23,7 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 export default function CalendarPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE");
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = yearsQuery.data ?? [];
   const cy = years.find((y) => y.current) ?? years[0];
   const [yearId, setYearId] = useState<number | null>(null);

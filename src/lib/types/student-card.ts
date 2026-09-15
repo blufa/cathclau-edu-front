@@ -2,9 +2,14 @@
 
 export type CardStatus = "ACTIVE" | "EXPIRED" | "LOST" | "REPLACED";
 export type CardOrientation = "LANDSCAPE" | "PORTRAIT";
+export type BadgeKind = "STUDENT" | "TEACHER" | "STAFF";
 
 export const CARD_STATUS_LABEL: Record<CardStatus, string> = {
   ACTIVE: "Active", EXPIRED: "Expirée", LOST: "Perdue", REPLACED: "Remplacée",
+};
+
+export const BADGE_KIND_LABEL: Record<BadgeKind, string> = {
+  STUDENT: "Élève", TEACHER: "Enseignant", STAFF: "Personnel",
 };
 
 export interface CardTemplate {
@@ -20,6 +25,7 @@ export interface CardTemplate {
   versoConfig: string | null;
   isDefault: boolean | null;
   active: boolean | null;
+  badgeKind: BadgeKind;
 }
 
 export interface StudentCard {

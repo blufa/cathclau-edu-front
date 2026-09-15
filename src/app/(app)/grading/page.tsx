@@ -10,6 +10,7 @@ import { BookOpen, FileText, GraduationCap, Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   getClassStudents,
   listAcademicYears,
@@ -80,7 +81,7 @@ export default function GradingPage() {
   // Only admins/directors may modify an already-entered grade; teachers can only enter new ones.
   const canEditExisting = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const [yearId, setYearId] = useState<number | null>(null);
@@ -168,9 +169,11 @@ function monthLabelOf(key: string): string {
 
 // ── Évaluations tab ──────────────────────────────────────────────────────────
 function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting }: { classId: number; className: string; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const assessmentsQuery = useQuery(() => listAssessmentsByClass(classId), [classId]);
-  const subjectsQuery = useQuery(() => listSubjects(), []);
-  const teachersQuery = useQuery(listTeachers, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
   const teacherLabel = useMemo(() => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachersQuery.data]);
   const [creating, setCreating] = useState(false);
@@ -551,9 +554,11 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
 
 // ── Surveillance d'examen (surveillants par salle) ─────────────────────────────
 function SupervisionPane({ exam }: { exam: Exam }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => listExamSupervisions(exam.id), [exam.id]);
-  const roomsQuery = useQuery(listRooms, []);
-  const teachersQuery = useQuery(listTeachers, []);
+  const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const roomLabel = useMemo(() => new Map(rooms.map((r) => [r.id, r.label])), [rooms]);
@@ -716,8 +721,10 @@ function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearI
 }
 
 function ReportCardDetail({ card }: { card: ReportCard }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const linesQuery = useQuery(() => getReportCardLines(card.id), [card.id]);
-  const subjectsQuery = useQuery(() => listSubjects(), []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
 
   if (linesQuery.loading) return <div className="flex justify-center py-8"><Spinner /></div>;
@@ -759,13 +766,15 @@ function ReportCardDetail({ card }: { card: ReportCard }) {
 function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   classId: number; yearId: number | null; initial?: Assessment; onCancel: () => void; onCreated: () => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const isEdit = !!initial;
   const subjectsQuery = useQuery(() => listClassSubjects(classId), [classId]);
-  const allSubjects = useQuery(() => listSubjects(), []);
+  const allSubjects = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
-  const teachersQuery = useQuery(listTeachers, []);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   // Paramètres de notation configurés par l'établissement (Notes → Paramètres).
-  const typeConfigsQuery = useQuery(listAssessmentTypes, []);
+  const typeConfigsQuery = useCachedQuery(tenantId ? `assessment-types:${tenantId}` : null, listAssessmentTypes, [tenantId]);
   const typeConfigs = (typeConfigsQuery.data ?? []).filter((c) => c.active);
   const [loading, setLoading] = useState(false);
 

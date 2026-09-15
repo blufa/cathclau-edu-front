@@ -1,14 +1,14 @@
 import { api } from "@/lib/api/client";
-import type { CardOrientation, CardTemplate, StudentCard } from "@/lib/types/student-card";
+import type { BadgeKind, CardOrientation, CardTemplate, StudentCard } from "@/lib/types/student-card";
 
 // ── Templates ────────────────────────────────────────────────────────────────
-export function listCardTemplates(): Promise<CardTemplate[]> {
-  return api.get<CardTemplate[]>("/cartes/modeles");
+export function listCardTemplates(badgeKind?: BadgeKind): Promise<CardTemplate[]> {
+  return api.get<CardTemplate[]>("/cartes/modeles", { query: { badgeKind } });
 }
 export function createCardTemplate(input: {
   name: string; logoUrl?: string | null; primaryColor?: string | null; secondaryColor?: string | null;
   backgroundUrl?: string | null; orientation?: CardOrientation | null; rectoConfig?: string | null;
-  versoConfig?: string | null; active?: boolean;
+  versoConfig?: string | null; active?: boolean; badgeKind?: BadgeKind;
 }): Promise<CardTemplate> {
   return api.post<CardTemplate>("/cartes/modeles", input);
 }

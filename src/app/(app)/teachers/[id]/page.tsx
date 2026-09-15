@@ -92,7 +92,7 @@ export default function TeacherDetailPage() {
 
   // Résolution des classes (libellés) de la grille hebdomadaire — l'emploi du temps réfère toujours
   // à l'année scolaire courante en pratique.
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const currentYearId = (yearsQuery.data ?? []).find((y) => y.current)?.id ?? (yearsQuery.data ?? [])[0]?.id ?? null;
   const yearClassesQuery = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
   const classLabel = useMemo(

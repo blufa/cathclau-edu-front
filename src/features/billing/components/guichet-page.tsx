@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Printer, Search, User } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { searchStudentsSummary } from "@/lib/api/students";
 import { listInvoicesByStudent } from "@/lib/api/billing";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
@@ -46,7 +47,7 @@ export default function GuichetPage() {
   );
   const rows = listQuery.data?.content ?? [];
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYear = years.find((y) => y.current) ?? years[0];
   const classesQuery = useQuery(

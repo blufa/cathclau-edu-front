@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClassStudents, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import {
   closeAssignment,
@@ -41,9 +42,10 @@ const SUB_TONE = { SUBMITTED: "indigo", LATE: "amber", GRADED: "green" } as cons
 
 export default function AssignmentsPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["devoir:manage"]);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
   const classesQuery = useQuery(() => (cy ? listClasses(cy.id) : Promise.resolve([])), [cy?.id]);
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
@@ -54,7 +56,7 @@ export default function AssignmentsPage() {
     [classes],
   );
 
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectName = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
 
   const q = useQuery(

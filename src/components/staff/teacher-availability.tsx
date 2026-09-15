@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { addTeacherAvailability, deleteTeacherAvailability, getTeacherAvailability, getTeacherSubjects } from "@/lib/api/staff";
 import { listAcademicYears, listClasses, listSubjects } from "@/lib/api/academics";
 import { Button } from "@/components/ui/button";
@@ -28,12 +30,14 @@ const hhmm = (t: string) => t?.slice(0, 5) ?? "";
  * d'emploi du temps sans ambiguïté sur ce qui doit y être planifié.
  */
 export function TeacherAvailabilitySection({ teacherId, canWrite }: { teacherId: number; canWrite: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => getTeacherAvailability(teacherId), [teacherId]);
   const assignmentsQuery = useQuery(() => getTeacherSubjects(teacherId), [teacherId]);
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const currentYearId = (yearsQuery.data ?? []).find((y) => y.current)?.id ?? (yearsQuery.data ?? [])[0]?.id ?? null;
   const classesQuery = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
 
   const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);

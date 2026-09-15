@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import {
   assignClassSubject,
   listClassSubjects,
@@ -31,9 +33,11 @@ export function ClassSubjectsSection({
   headTeacherId: number | null;
   onHeadTeacherChange: () => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => listClassSubjects(classId), [classId]);
-  const subjectsQuery = useQuery(listSubjects, []);
-  const teachersQuery = useQuery(listTeachers, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const [assigning, setAssigning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [rows, setRows] = useState<Row[]>([EMPTY_ROW]);

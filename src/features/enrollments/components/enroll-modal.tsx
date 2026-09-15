@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { enroll, reenroll, searchEnrollments, updateEnrollment, updateMonthlyPayment, updatePlatformAccess } from "@/lib/api/enrollments";
 import { listFeesByClass, subscribeAnnexFee } from "@/lib/api/billing";
@@ -32,7 +33,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const editing = !!enrollment;
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
 
   // Seeded from the edited enrollment; the edit modal is mounted fresh per enrollment (keyed by render),

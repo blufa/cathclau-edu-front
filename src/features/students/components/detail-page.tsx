@@ -8,6 +8,7 @@ import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Users } from "luc
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
   abandonEnrollment,
@@ -88,7 +89,7 @@ export default function StudentDetailPage() {
     [yearIds.join(",")],
   );
   // Une seule inscription (non annulée) par année : sert à griser le bouton « Inscrire ».
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const currentYearId = (yearsQuery.data ?? []).find((y) => y.current)?.id ?? null;
   const alreadyEnrolledThisYear = (data?.enrollments ?? []).some(
     (e) => e.academicYearId === currentYearId && e.status !== "CANCELLED",

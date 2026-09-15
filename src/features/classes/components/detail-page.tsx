@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClassStudents, getEnrollmentCount, listLevels, listRooms, setClassRepresentative } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { useAuth } from "@/providers/auth-provider";
@@ -20,14 +21,15 @@ export default function ClassDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["classe:manage"]);
 
   const classQuery = useClassQuery(id);
   const countQuery = useLegacyQuery(() => getEnrollmentCount(id), [id]);
   const studentsQuery = useLegacyQuery(() => getClassStudents(id), [id]);
-  const levelsQuery = useLegacyQuery(listLevels, []);
-  const roomsQuery = useLegacyQuery(listRooms, []);
-  const teachersQuery = useLegacyQuery(listTeachers, []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
+  const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
 
   if (classQuery.isLoading) {
     return (
@@ -115,7 +117,7 @@ export default function ClassDetailPage() {
           </CardHeader>
           <CardBody>
             <p className="text-2xl font-semibold text-gray-900">
-              {count ? count.available : capacity != null ? capacity - current : "—"}
+              {count?.available != null ? count.available : capacity != null ? capacity - current : "—"}
             </p>
           </CardBody>
         </Card>

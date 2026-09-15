@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listClassSubjects, listPeriods, listSubjects } from "@/lib/api/academics";
 import { getStudent, searchStudents } from "@/lib/api/students";
 import {
@@ -70,7 +71,7 @@ export default function ReportCardsPage() {
   const current = student ?? (manual ? null : paramStudentQuery.data ?? null);
 
   // Period labels (pluriannuel): map periodId → "Période — Année".
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const periodMapQuery = useQuery(async () => {
     const years = yearsQuery.data ?? [];
     const entries: [number, string][] = [];
@@ -219,8 +220,10 @@ function StudentRecord({ student, periodLabel, canPublish, onChangeStudent }: {
 }
 
 function ReportCardLines({ card }: { card: ReportCard }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const linesQuery = useQuery(() => getReportCardLines(card.id), [card.id]);
-  const subjectsQuery = useQuery(() => listSubjects(), []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
 
   if (linesQuery.loading) return <div className="flex justify-center py-8"><Spinner /></div>;
@@ -275,7 +278,9 @@ function ReportCardLines({ card }: { card: ReportCard }) {
 
 // ── Documents de classe (centralisateur, fiche de notes, bulletin annuel) ───
 function ClassDocumentsPanel() {
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const [academicYearId, setAcademicYearId] = useState<number | null>(null);
   const [classId, setClassId] = useState<number | null>(null);
   const [periodId, setPeriodId] = useState<number | null>(null);
@@ -290,7 +295,7 @@ function ClassDocumentsPanel() {
   const classesQuery = useQuery(() => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])), [effectiveYearId]);
   const periodsQuery = useQuery(() => (effectiveYearId ? listPeriods(effectiveYearId) : Promise.resolve([])), [effectiveYearId]);
   const subjectsQuery = useQuery(() => (classId ? listClassSubjects(classId) : Promise.resolve([])), [classId]);
-  const allSubjectsQuery = useQuery(listSubjects, []);
+  const allSubjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectLabel = useMemo(() => new Map((allSubjectsQuery.data ?? []).map((s) => [s.id, s.label])), [allSubjectsQuery.data]);
 
   async function download(key: string, fn: () => Promise<string>, title: string) {

@@ -38,6 +38,11 @@ export function updateTeacher(id: number, input: UpdateTeacherInput): Promise<Te
   return api.put<Teacher>(`/staff/teachers/${id}`, input);
 }
 
+/** Définit la photo d'un enseignant par un admin (badge) — distinct du self-service `updateMyTeacherPhoto`. */
+export function updateTeacherPhoto(id: number, photoUrl: string): Promise<Teacher> {
+  return api.patch<Teacher>(`/staff/teachers/${id}/photo`, undefined, { query: { photoUrl } });
+}
+
 export function deleteTeacher(id: number): Promise<void> {
   return api.delete<void>(`/staff/teachers/${id}`);
 }
@@ -155,13 +160,14 @@ export interface Employee {
   hireDate: string | null;
   baseSalary: string | null;
   cnssNumber: string | null;
-  /** Compte bancaire (RIB/IBAN) optionnel — pour le fichier bancaire de paie. Le téléphone reste
-   * prioritaire pour le virement Mobile Money. */
+  /** Compte bancaire (RIB/IBAN) optionnel. Le téléphone reste prioritaire pour le virement Mobile Money. */
   bankAccount: string | null;
   active: boolean;
   /** Fiche Teacher de la même personne si elle enseigne aussi, en plus de son poste — lien manuel,
    * utilisé pour générer une fiche de paie combinée (salaire fixe + heures d'enseignement). */
   linkedTeacherId: number | null;
+  /** Photo pour le badge personnel — optionnelle, définie par un admin. */
+  photo: string | null;
 }
 
 export interface EmployeeInput {
@@ -191,6 +197,9 @@ export function createEmployee(input: EmployeeInput): Promise<Employee> {
 }
 export function updateEmployee(id: number, input: EmployeeInput): Promise<Employee> {
   return api.put<Employee>(`/staff/employees/${id}`, input);
+}
+export function updateEmployeePhoto(id: number, photoUrl: string): Promise<Employee> {
+  return api.patch<Employee>(`/staff/employees/${id}/photo`, undefined, { query: { photoUrl } });
 }
 export function setEmployeeActive(id: number, active: boolean): Promise<Employee> {
   return api.patch<Employee>(`/staff/employees/${id}/${active ? "activate" : "deactivate"}`);

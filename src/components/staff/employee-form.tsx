@@ -6,8 +6,11 @@ import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { useQuery } from "@/hooks/use-query";
-import { listTeachers, type Employee, type EmployeeCategory, type EmployeeInput } from "@/lib/api/staff";
+import { FileUpload } from "@/components/ui/file-upload";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
+import { listTeachers, updateEmployeePhoto, type Employee, type EmployeeCategory, type EmployeeInput } from "@/lib/api/staff";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export const EMPLOYEE_CATEGORY_LABEL: Record<EmployeeCategory, string> = {
   ADMINISTRATIVE: "Administratif",
@@ -39,8 +42,11 @@ export function EmployeeForm({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [photo, setPhoto] = useState(initial?.photo ?? "");
 
-  const teachersQuery = useQuery(listTeachers, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const teachers = teachersQuery.data ?? [];
 
   async function submit() {
@@ -70,9 +76,24 @@ export function EmployeeForm({
     }
   }
 
+  async function onPhotoChange(url: string | null) {
+    setPhoto(url ?? "");
+    if (!initial) return; // pas encore d'id : la photo sera ajoutable après création
+    try {
+      await updateEmployeePhoto(initial.id, url ?? "");
+      notifySuccess("Photo mise à jour");
+    } catch (e) { notifyError(e); }
+  }
+
   return (
     <div className="space-y-4">
       {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-600">{error}</p>}
+      {initial && (
+        <Field>
+          <Label>Photo (badge personnel)</Label>
+          <FileUpload variant="image" folder="staff/photos" value={photo} onChange={onPhotoChange} />
+        </Field>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Prénom <span className="text-error-500">*</span></Label>
@@ -124,7 +145,7 @@ export function EmployeeForm({
       </div>
       <Field>
         <Label>Compte bancaire (optionnel)</Label>
-        <p className="text-xs text-gray-400">RIB/IBAN — pour le fichier bancaire de paie. Le téléphone reste prioritaire (Mobile Money).</p>
+        <p className="text-xs text-gray-400">RIB/IBAN. Le téléphone reste prioritaire pour le virement (Mobile Money).</p>
         <Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
       </Field>
       <div className="rounded-xl border border-gray-200 p-3">

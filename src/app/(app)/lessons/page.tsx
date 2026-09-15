@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getScheduleByClass, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { getTeacherCheckins } from "@/lib/api/attendance";
@@ -28,12 +29,13 @@ const STATUS_TONE = { PLANNED: "amber", DONE: "green" } as const;
 
 export default function LessonsPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["cahier:manage"]);
   // Valider qu'une séance a été réalisée relève de l'administration — l'enseignant saisit la séance
   // (et peut corriger sa saisie) mais ne valide pas lui-même sa réalisation.
   const isAdmin = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
   const classesQuery = useQuery(() => (cy ? listClasses(cy.id) : Promise.resolve([])), [cy?.id]);
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
@@ -52,7 +54,7 @@ export default function LessonsPage() {
 
   const classNameById = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
 
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectName = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
   const subjectFilterOptions: SearchableOption[] = useMemo(
     () => [
@@ -253,7 +255,9 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
   /** Ids (dédupliqués, dans l'ordre des lignes) des classes pour lesquelles une séance vient d'être créée. */
   onCreated: (classIds: number[]) => void;
 }) {
-  const teachersQuery = useQuery(listTeachers, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const teacherName = useMemo(
     () => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
     [teachersQuery.data]);
@@ -463,8 +467,10 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
 function EditLessonForm({ lesson, classes, subjectName, canSetStatus, onCancel, onSaved }: {
   lesson: LessonEntry; classes: Classe[]; subjectName: Map<number, string>; canSetStatus: boolean; onCancel: () => void; onSaved: () => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const classSubjectsQuery = useQuery(() => listClassSubjects(lesson.classId), [lesson.classId]);
-  const teachersQuery = useQuery(listTeachers, []);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const classSubjects = useMemo(() => classSubjectsQuery.data ?? [], [classSubjectsQuery.data]);
   const teacherName = useMemo(
     () => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])),

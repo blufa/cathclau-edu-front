@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listPaymentsByTenant } from "@/lib/api/payment";
 import { listExpenses } from "@/lib/api/expense";
 import { getCurrentAcademicYear, listAcademicYears } from "@/lib/api/academics";
@@ -69,8 +70,8 @@ export default function FounderDashboard() {
   // qui devrait être « la même chose ». `paymentsQuery` reste utilisé, mais uniquement pour la courbe
   // mensuelle « Recettes vs dépenses » ci-dessous (vue de tendance, pas de total).
   const financeQuery = useQuery(() => getFinanceDashboard(), []);
-  const teachersQuery = useQuery(() => listTeachers(), []);
-  const employeesQuery = useQuery(() => listEmployees(), []);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, () => listTeachers(), [tenantId]);
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const now0 = new Date();
   const hrQuery = useQuery(() => getHrDashboard(now0.getFullYear(), now0.getMonth() + 1), []);
   // Nombre d'élèves de l'école — un seul élève réellement transféré (size=1), seul totalElements compte.
@@ -155,7 +156,7 @@ export default function FounderDashboard() {
 
   // ── Année scolaire courante + précédente (comparatif automatique, §V3) ────
   const { data: currentYear } = useQuery(() => getCurrentAcademicYear(), []);
-  const { data: allYears } = useQuery(() => listAcademicYears(), []);
+  const { data: allYears } = useCachedQuery("academic-years", () => listAcademicYears(), []);
   const previousYearId = useMemo(() => {
     if (!currentYear || !allYears) return null;
     const sorted = [...allYears].sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""));
