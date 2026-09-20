@@ -12,6 +12,7 @@ import { getMyParent, updateMyParentProfile, updateMyParentPhoto } from "@/lib/a
 import { getMyStudent, updateMyStudentProfile, updateMyStudentPhoto } from "@/lib/api/students";
 import { updateMyTeacherProfile, updateMyTeacherPhoto } from "@/lib/api/staff";
 import { updateMyUserProfile, updateMyUserPhoto } from "@/lib/api/iam";
+import { roleLabel } from "@/lib/auth/role-labels";
 import { ApiError } from "@/lib/api/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,18 +23,6 @@ import { Reveal } from "@/components/public/reveal";
 import { InstallAppCard } from "@/components/pwa/install-app-card";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
-const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: "Super administrateur",
-  SCHOOL_ADMIN: "Administrateur école",
-  DIRECTOR: "Directeur",
-  ACCOUNTANT: "Comptable",
-  SECRETARY: "Secrétaire",
-  TEACHER: "Enseignant",
-  PARENT: "Parent",
-  STUDENT: "Élève",
-  REDACTEUR: "Rédacteur",
-};
-const roleLabel = (r: string) => ROLE_LABEL[r.replace(/^ROLE_/, "")] ?? r;
 const bareRoles = (roles: string[]) => roles.map((r) => r.replace(/^ROLE_/, ""));
 
 const RULES: { label: string; test: (v: string) => boolean }[] = [

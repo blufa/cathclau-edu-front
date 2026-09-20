@@ -50,8 +50,9 @@ export default function GuichetPage() {
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYear = years.find((y) => y.current) ?? years[0];
-  const classesQuery = useQuery(
-    () => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])),
+  const classesQuery = useCachedQuery(
+    currentYear ? `classes:${currentYear.id}` : null,
+    () => listClasses(currentYear!.id),
     [currentYear?.id],
   );
   const classLabel = useMemo(
@@ -59,8 +60,9 @@ export default function GuichetPage() {
     [classesQuery.data],
   );
 
-  const invoicesQuery = useQuery(
-    () => (selected ? listInvoicesByStudent(selected.id) : Promise.resolve([])),
+  const invoicesQuery = useCachedQuery(
+    selected ? `student-invoices:${selected.id}` : null,
+    () => listInvoicesByStudent(selected!.id),
     [selected?.id],
   );
   const invoices = invoicesQuery.data ?? [];

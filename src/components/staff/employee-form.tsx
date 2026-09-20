@@ -4,12 +4,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
 import { listTeachers, updateEmployeePhoto, type Employee, type EmployeeCategory, type EmployeeInput } from "@/lib/api/staff";
+import { createUser } from "@/lib/api/iam";
+import { ApiError } from "@/lib/api/errors";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export const EMPLOYEE_CATEGORY_LABEL: Record<EmployeeCategory, string> = {
@@ -43,6 +46,11 @@ export function EmployeeForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photo, setPhoto] = useState(initial?.photo ?? "");
+  // Sans compte de connexion lié, cette personne n'apparaît jamais dans « Utilisateurs » et on ne
+  // peut donc jamais lui attribuer de rôle — uniquement proposé à la création (une fiche existante
+  // ne peut pas encore être liée après coup, voir EmployeeUseCase.UpdateEmployeeCommand).
+  const [createLogin, setCreateLogin] = useState(false);
+  const [password, setPassword] = useState("");
 
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
@@ -54,10 +62,39 @@ export function EmployeeForm({
       setError("Le prénom et le nom sont obligatoires.");
       return;
     }
+    // La connexion se fait par numéro de téléphone — l'email n'est qu'un canal optionnel
+    // supplémentaire. Au moins l'un des deux reste exigé pour créer un accès.
+    if (createLogin && !phone.trim() && !email.trim()) {
+      setError("Téléphone ou email requis pour créer un accès.");
+      return;
+    }
+    if (createLogin && email.trim() && !/^\S+@\S+$/.test(email)) {
+      setError("Email invalide.");
+      return;
+    }
+    if (createLogin && password.length < 6) {
+      setError("Mot de passe (6 caractères min.) requis pour créer un accès.");
+      return;
+    }
     setError(null);
     setSaving(true);
     try {
+      let userId: number | null = null;
+      if (createLogin) {
+        try {
+          const created = await createUser({
+            firstName: firstName.trim(), lastName: lastName.trim(),
+            email: email.trim() || null, password, phone: phone.trim() || null,
+          });
+          userId = created.id;
+        } catch (err) {
+          setError(err instanceof ApiError ? err.userMessage : "Impossible de créer le compte de connexion.");
+          setSaving(false);
+          return;
+        }
+      }
       await onSubmit({
+        userId,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         category,
@@ -163,6 +200,27 @@ export function EmployeeForm({
           alors générer une fiche combinée (salaire de base + heures d&apos;enseignement).
         </p>
       </div>
+      {!initial && (
+        <div className="rounded-xl border border-gray-200 p-3">
+          <div className="flex items-center gap-3">
+            <Switch checked={createLogin} onChange={setCreateLogin} ariaLabel="Créer un accès" />
+            <span className="text-sm text-gray-700">Créer un compte de connexion</span>
+          </div>
+          <p className="mt-1.5 text-xs text-gray-400">
+            Indispensable pour lui attribuer un rôle ensuite (ex. Comptable) — sans compte, cette
+            personne n&apos;apparaît jamais dans « Utilisateurs ».
+          </p>
+          {createLogin && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-gray-400">Cette personne se connectera avec son <strong>numéro de téléphone</strong> et ce mot de passe.</p>
+              <Field>
+                <Label>Mot de passe</Label>
+                <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </Field>
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="button" onClick={submit} loading={saving}>{submitLabel}</Button>

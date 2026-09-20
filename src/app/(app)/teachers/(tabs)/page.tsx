@@ -15,7 +15,7 @@ import {
   updateTeacher,
 } from "@/lib/api/staff";
 import { listCardTemplates } from "@/lib/api/student-card";
-import { listSubjects } from "@/lib/api/academics";
+import { getCurrentAcademicYear, listClasses, listSubjects } from "@/lib/api/academics";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -258,12 +258,22 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
   const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const teacherSubjectsQuery = useQuery(() => getTeacherSubjects(teacher.id), [teacher.id]);
+  const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const classesQuery = useQuery(
+    () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
+    [currentYearQuery.data?.id],
+  );
 
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
+  const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
   const taughtSubjects = useMemo(() => {
     const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.subjectId))];
     return ids.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
   }, [teacherSubjectsQuery.data, subjectLabel]);
+  const taughtClasses = useMemo(() => {
+    const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.classId))];
+    return ids.map((id) => classLabel.get(id)).filter((l): l is string => !!l).join(", ");
+  }, [teacherSubjectsQuery.data, classLabel]);
 
   const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
 
@@ -271,11 +281,15 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
     <IdBadge
       kind="Badge enseignant"
       fullName={`${teacher.firstName} ${teacher.lastName}`.trim()}
-      subtitle={taughtSubjects || "Enseignant"}
+      firstName={teacher.firstName}
+      lastName={teacher.lastName}
       photoUrl={teacher.photo}
+      idNumber={teacher.staffNumber}
+      academicYearLabel={currentYearQuery.data?.label}
       fields={[
-        { label: "Matricule", value: teacher.staffNumber ?? "—", mono: true },
         { label: "Téléphone", value: teacher.phone ?? "—" },
+        { label: "Matières", value: taughtSubjects || "—" },
+        { label: "Classes", value: taughtClasses || "—" },
       ]}
       qrData={buildIdentityQr({ type: "TEACHER", fullName: `${teacher.firstName} ${teacher.lastName}`, matricule: teacher.staffNumber })}
       footerNote={enrolled ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}

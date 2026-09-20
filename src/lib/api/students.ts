@@ -2,6 +2,8 @@ import { api } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
 import type {
   CreateStudentInput,
+  EnrollmentStatus,
+  Gender,
   Student,
   StudentDetail,
   StudentDocument,
@@ -47,10 +49,18 @@ export function searchStudents(params: StudentSearchParams): Promise<Page<Studen
   });
 }
 
-/** Liste des élèves avec classe courante + parent principal (guichet d'accueil), triée alphabétiquement. */
-export function searchStudentsSummary(params: { search?: string; page?: number; size?: number }): Promise<Page<StudentSummary>> {
+/** Liste des élèves avec classe courante + parent principal (guichet d'accueil, liste élèves), triée
+ * alphabétiquement (nom, ascendant). */
+export function searchStudentsSummary(params: {
+  search?: string; gender?: Gender; enrollmentStatus?: EnrollmentStatus; notEnrolled?: boolean;
+  page?: number; size?: number;
+}): Promise<Page<StudentSummary>> {
   return api.get<Page<StudentSummary>>("/students/summary", {
-    query: { search: params.search || undefined, page: params.page, size: params.size, sort: "lastName,asc" },
+    query: {
+      search: params.search || undefined, gender: params.gender,
+      enrollmentStatus: params.enrollmentStatus, notEnrolled: params.notEnrolled || undefined,
+      page: params.page, size: params.size, sort: "lastName,asc",
+    },
   });
 }
 

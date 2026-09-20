@@ -34,6 +34,17 @@ export function resetPassword(token: string, newPassword: string): Promise<void>
   return api.post<void>("/auth/password/reset", { token, newPassword }, { auth: false });
 }
 
+/** Demande un code OTP par SMS pour réinitialiser le mot de passe — identifier : username, email ou
+ * numéro de téléphone (mêmes formats que la connexion). */
+export function requestPasswordResetOtp(identifier: string): Promise<{ message: string }> {
+  return api.post<{ message: string }>("/auth/password/otp/request", { identifier }, { auth: false });
+}
+
+/** Réinitialise le mot de passe avec le code OTP reçu par SMS. */
+export function resetPasswordWithOtp(identifier: string, code: string, newPassword: string): Promise<void> {
+  return api.post<void>("/auth/password/otp/reset", { identifier, code, newPassword }, { auth: false });
+}
+
 export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   return api.post<void>("/auth/password/change", { currentPassword, newPassword });
 }

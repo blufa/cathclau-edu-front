@@ -39,7 +39,7 @@ const FEE_CATEGORIES: { key: string; label: string; types: FeeType[] }[] = [
   { key: "monthly", label: "Mensualité", types: ["MONTHLY"] },
   { key: "enrollment", label: "Inscription", types: ["ENROLLMENT"] },
   { key: "reenrollment", label: "Réinscription", types: ["RE_ENROLLMENT"] },
-  { key: "other", label: "Frais annexes", types: ["TRANSPORT", "CANTEEN", "EXAM", "OTHER"] },
+  { key: "other", label: "Frais annexes", types: ["TRANSPORT", "CANTEEN", "EXAM", "OTHER", "PLATFORM"] },
 ];
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -68,8 +68,9 @@ export default function FeesPage() {
     [routesQuery.data],
   );
 
-  const feesQuery = useQuery(
-    () => (tenantId ? listFeesByTenant(tenantId) : Promise.resolve([])),
+  const feesQuery = useCachedQuery(
+    tenantId ? `fees:${tenantId}` : null,
+    () => listFeesByTenant(tenantId as number),
     [tenantId],
   );
 
@@ -209,8 +210,8 @@ const feeSchema = z.object({
   academicYear: z.string(),
   label: z.string(),
 }).superRefine((v, ctx) => {
-  if (v.type === "OTHER" && !v.label.trim()) {
-    ctx.addIssue({ code: "custom", path: ["label"], message: "Nom du frais requis (ex. Tenue scolaire)" });
+  if ((v.type === "OTHER" || v.type === "PLATFORM") && !v.label.trim()) {
+    ctx.addIssue({ code: "custom", path: ["label"], message: "Nom du frais requis (ex. Tenue scolaire, Frais plateforme)" });
   }
   // Le montant est saisi tranche par tranche pour les frais récurrents créés (voir TrancheBuilder) ;
   // pour les autres cas (frais ponctuel, ou modification), il reste requis ici.
@@ -267,6 +268,10 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
     }
     return m;
   }, [classes]);
+  // Affiché entre parenthèses à côté de chaque classe (ex. « A (CP2) ») dans la liste « Par classes
+  // précises » : sans le niveau, deux classes de niveaux différents partageant la même lettre de
+  // section (ex. « A ») sont impossibles à distinguer dans une longue liste.
+  const levelLabelById = useMemo(() => new Map(levels.map((l) => [l.id, l.label])), [levels]);
   function toggleLevel(id: string) {
     const sectionIds = (classesByLevel.get(id) ?? []).map((c) => String(c.id));
     const checked = selectedLevelIds.includes(id);
@@ -354,7 +359,7 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
       else setError("classIds", { message: scopeMode === "level" ? "Choisissez au moins un niveau" : "Choisissez au moins une classe" });
       return;
     }
-    const label = values.type === "OTHER" ? values.label.trim() : null;
+    const label = values.type === "OTHER" || values.type === "PLATFORM" ? values.label.trim() : null;
     setLoading(true);
     try {
       if (initial) {
@@ -516,10 +521,21 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
           ) : (
             <>
               <p className="mb-1.5 text-xs text-gray-400">Le même frais sera créé pour chaque classe cochée.</p>
-              <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
-                {classes.map((c) => (
-                  <Checkbox key={c.id} label={c.label} checked={v.classIds.includes(String(c.id))} onChange={() => toggleClass(String(c.id))} />
-                ))}
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
+                  {classes.map((c) => {
+                    const levelLabel = c.levelId != null ? levelLabelById.get(c.levelId) : null;
+                    return (
+                      <div key={c.id} className="min-w-0">
+                        <Checkbox
+                          label={levelLabel ? `${c.label} (${levelLabel})` : c.label}
+                          checked={v.classIds.includes(String(c.id))}
+                          onChange={() => toggleClass(String(c.id))}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -532,10 +548,14 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
           {(Object.keys(FEE_TYPE_LABEL) as FeeType[]).map((t) => (<option key={t} value={t}>{FEE_TYPE_LABEL[t]}</option>))}
         </Select>
       </Field>
-      {v.type === "OTHER" && (
+      {(v.type === "OTHER" || v.type === "PLATFORM") && (
         <Field>
           <Label>Nom du frais <span className="text-error-500">*</span></Label>
-          <p className="mb-1.5 text-xs text-gray-400">Ex. Tenue scolaire, Rames de papier, Bus de transport…</p>
+          <p className="mb-1.5 text-xs text-gray-400">
+            {v.type === "PLATFORM"
+              ? "Ex. Frais plateforme, Frais numérique… — le montant que vous choisissez ici sera compté dans votre solde dû à la plateforme."
+              : "Ex. Tenue scolaire, Rames de papier, Bus de transport…"}
+          </p>
           <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
           {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
         </Field>

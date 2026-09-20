@@ -323,9 +323,14 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
         <div className="flex items-center gap-3">
           {active > 0 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
           {active < STEPS.length - 1 ? (
-            <Button type="button" onClick={() => void nextStep()}>Suivant</Button>
+            // `key` distinct du bouton de soumission ci-dessous : sans ça, React réutilise le MÊME
+            // nœud DOM <button> en changeant juste son attribut `type` ("button" → "submit") au clic
+            // suivant — un bouton qui devient "submit" sur son propre nœud pendant le traitement du
+            // clic peut déclencher la soumission native du formulaire, créant l'élève au lieu de
+            // passer à l'étape suivante. Un `key` différent force un vrai démontage/remontage.
+            <Button key="next" type="button" onClick={(e) => { e.preventDefault(); void nextStep(); }}>Suivant</Button>
           ) : (
-            <Button type="submit" loading={submitting}>{submitLabel}</Button>
+            <Button key="submit" type="submit" loading={submitting}>{submitLabel}</Button>
           )}
         </div>
       </div>

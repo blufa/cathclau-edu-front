@@ -79,7 +79,7 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => listCards(), []);
   const templatesQuery = useQuery(() => listCardTemplates(), []);
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(() => {
     const m = new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
     return (id: number) => m.get(id) ?? `Élève #${id}`;

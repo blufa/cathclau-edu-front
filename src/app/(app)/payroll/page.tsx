@@ -1,18 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { Banknote, Clock, Megaphone, Plus, Settings as SettingsIcon, HandCoins } from "lucide-react";
+import { ArrowLeft, Banknote, Clock, Megaphone, Plus, Settings as SettingsIcon, HandCoins, Wallet } from "lucide-react";
 import { FeeDeductionPanel } from "@/components/payroll/fee-deduction-panel";
+import { SalaryAdvancePanel } from "@/components/payroll/salary-advance-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getAssignedClasses, listEmployees, listTeachers, type Employee } from "@/lib/api/staff";
-import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
+import { getCurrentAcademicYear, listClasses, listLevels } from "@/lib/api/academics";
 import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
 import { sendDiffusion } from "@/lib/api/communication";
 import {
@@ -62,9 +64,9 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -111,11 +113,13 @@ export default function PayrollPage() {
           <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>
           <TabsTrigger value="structures" icon={SettingsIcon}>Structures salariales</TabsTrigger>
           <TabsTrigger value="deductions" icon={HandCoins}>Déductions scolarité</TabsTrigger>
+          <TabsTrigger value="advances" icon={Wallet}>Avances sur salaire</TabsTrigger>
         </TabsList>
         <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
         <TabsPanel value="compensation"><CompensationTab /></TabsPanel>
         <TabsPanel value="structures"><StructuresTab /></TabsPanel>
         <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"])} /></TabsPanel>
+        <TabsPanel value="advances"><SalaryAdvancePanel /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -756,23 +760,27 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
 }
 
 // ── Rémunération (horaire/fixe) & paie mensuelle (heures réalisées − retards) ──────
+type CompPerson = { kind: "TEACHER" | "EMPLOYEE"; id: number };
+
 function CompensationTab() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
-  const [teacherId, setTeacherId] = useState<string>("");
-  const tid = teacherId ? Number(teacherId) : null;
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, listEmployees, [tenantId]);
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
 
-  // Classes de chaque enseignant — pour que le sélecteur affiche « Nom (Classe A, Classe B) » au lieu
-  // du seul nom : avec plusieurs enseignants homonymes ou peu connus, impossible de savoir dans quelle
-  // classe chacun évolue avant de le sélectionner.
+  // Classes de chaque enseignant — affichées dans le tableau (colonne « Classes ») pour distinguer les
+  // homonymes ou les enseignants peu connus avant de cliquer sur leur ligne.
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
   const classesQuery = useQuery(
     () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
     [currentYearQuery.data?.id],
   );
   const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
+  const classLevelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.levelId]) ?? []), [classesQuery.data]);
+  const levelsQuery = useCachedQuery("levels-all", listLevels, []);
+  const levels = useMemo(() => (levelsQuery.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder), [levelsQuery.data]);
   const assignedClassesQuery = useQuery(
     () => Promise.all(teachers.map((t) => getAssignedClasses(t.id).then((ids) => [t.id, ids] as const)))
       .then((entries) => new Map(entries)),
@@ -787,14 +795,158 @@ function CompensationTab() {
     }
     return map;
   }, [teachers, assignedClassesQuery.data, classLabelById]);
+  // Niveaux couverts par chaque enseignant (via ses classes affectées) — pour le filtre « Niveau ».
+  const levelIdsByTeacher = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    for (const t of teachers) {
+      const ids = assignedClassesQuery.data?.get(t.id) ?? [];
+      const levelIds = new Set<number>();
+      for (const cid of ids) {
+        const lvl = classLevelById.get(cid);
+        if (lvl != null) levelIds.add(lvl);
+      }
+      map.set(t.id, levelIds);
+    }
+    return map;
+  }, [teachers, assignedClassesQuery.data, classLevelById]);
 
-  const compQuery = useQuery(() => (tid ? getCompensation(tid) : Promise.resolve(null)), [teacherId]);
+  const [selected, setSelected] = useState<CompPerson | null>(null);
+  const [levelFilter, setLevelFilter] = useState("");
+
+  type TeacherRow = { id: number; name: string; classesLabel: string };
+  const teacherRows: TeacherRow[] = useMemo(() => {
+    return teachers
+      .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}`, classesLabel: classesLabelByTeacher.get(t.id) || "—" }))
+      .filter((r) => !levelFilter || levelIdsByTeacher.get(r.id)?.has(Number(levelFilter)))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [teachers, classesLabelByTeacher, levelFilter, levelIdsByTeacher]);
+
+  type PersonnelRow = { id: number; name: string; poste: string };
+  const personnelRows: PersonnelRow[] = useMemo(() => {
+    return employees
+      .map((e) => ({
+        id: e.id, name: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim(),
+        poste: EMPLOYEE_CATEGORY_LABEL[e.category] + (e.jobTitle ? ` — ${e.jobTitle}` : ""),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [employees]);
+
+  const teacherColumns: Column<TeacherRow>[] = [
+    {
+      key: "name", header: "Nom", accessor: (r) => r.name, sortable: true,
+      render: (r) => (
+        <button type="button" onClick={() => setSelected({ kind: "TEACHER", id: r.id })}
+          className="text-left font-medium text-brand-600 hover:underline">
+          {r.name || "—"}
+        </button>
+      ),
+    },
+    { key: "classes", header: "Classe(s)", accessor: (r) => r.classesLabel, sortable: true, render: (r) => r.classesLabel },
+  ];
+  const personnelColumns: Column<PersonnelRow>[] = [
+    {
+      key: "name", header: "Nom", accessor: (r) => r.name, sortable: true,
+      render: (r) => (
+        <button type="button" onClick={() => setSelected({ kind: "EMPLOYEE", id: r.id })}
+          className="text-left font-medium text-brand-600 hover:underline">
+          {r.name || "—"}
+        </button>
+      ),
+    },
+    { key: "poste", header: "Poste", accessor: (r) => r.poste, sortable: true, render: (r) => r.poste },
+  ];
+
+  if (!selected) {
+    return (
+      <Tabs defaultValue="teachers">
+        <TabsList>
+          <TabsTrigger value="teachers">Enseignants</TabsTrigger>
+          <TabsTrigger value="personnel">Personnel</TabsTrigger>
+        </TabsList>
+        <TabsPanel value="teachers">
+          <DataTable
+            columns={teacherColumns}
+            rows={teacherRows}
+            loading={teachersQuery.loading}
+            getRowKey={(r) => r.id}
+            searchable
+            searchPlaceholder="Rechercher un enseignant…"
+            emptyLabel="Aucun enseignant."
+            toolbar={
+              <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="max-w-[200px]">
+                <option value="">Tous les niveaux</option>
+                {levels.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
+              </Select>
+            }
+          />
+        </TabsPanel>
+        <TabsPanel value="personnel">
+          <DataTable
+            columns={personnelColumns}
+            rows={personnelRows}
+            loading={employeesQuery.loading}
+            getRowKey={(r) => r.id}
+            searchable
+            searchPlaceholder="Rechercher un membre du personnel…"
+            emptyLabel="Aucun personnel."
+          />
+        </TabsPanel>
+      </Tabs>
+    );
+  }
+
+  return selected.kind === "TEACHER"
+    ? <TeacherCompensationPanel teacherId={selected.id} teachers={teachers} onBack={() => setSelected(null)} />
+    : <EmployeeCompensationPanel employeeId={selected.id} employees={employees} onBack={() => setSelected(null)} />;
+}
+
+/** Salaire fixe du personnel non-enseignant : pas d'heures de cours, donc pas de config horaire/fixe
+ * ici — le montant se règle sur la fiche Personnel, affiché ici en lecture seule pour cohérence avec
+ * le tableau ci-dessus. */
+function EmployeeCompensationPanel({ employeeId, employees, onBack }: {
+  employeeId: number; employees: Employee[]; onBack: () => void;
+}) {
+  const emp = employees.find((e) => e.id === employeeId);
+  return (
+    <div className="space-y-4">
+      <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+        <ArrowLeft className="h-4 w-4" /> Retour à la liste
+      </button>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">{emp ? `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim() : "Personnel"}</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          {emp ? `${EMPLOYEE_CATEGORY_LABEL[emp.category]}${emp.jobTitle ? ` — ${emp.jobTitle}` : ""}` : ""}
+        </p>
+        <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <p className="text-xs text-gray-500">Salaire de base (fixe)</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{formatGNF(emp?.baseSalary ?? 0)}</p>
+        </div>
+        <p className="mt-3 text-xs text-gray-400">
+          Le personnel non-enseignant n&apos;a pas d&apos;heures de cours : son salaire est un montant fixe
+          réglé directement sur sa fiche Personnel, pas ici.
+        </p>
+        <div className="mt-3">
+          <Link href="/teachers/staff" className="text-sm font-medium text-brand-600 hover:underline">
+            Modifier depuis la fiche Personnel →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeacherCompensationPanel({ teacherId, teachers, onBack }: {
+  teacherId: number; teachers: Array<{ id: number; firstName: string; lastName: string; phone: string | null; bankAccount: string | null; remunerationType?: string | null; remunerationRate?: string | number | null }>;
+  onBack: () => void;
+}) {
+  const tid = teacherId;
+  const compQuery = useQuery(() => getCompensation(tid), [tid]);
 
   const now = new Date();
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [y, m] = period.split("-").map(Number);
-  const payQuery = useQuery(() => (tid ? getMonthlyPay(tid, y, m) : Promise.resolve(null)), [teacherId, period]);
-  const theoreticalQuery = useQuery(() => (tid ? getTheoreticalPay(tid, y, m) : Promise.resolve(null)), [teacherId, period]);
+  const payQuery = useQuery(() => getMonthlyPay(tid, y, m), [tid, period]);
+  const theoreticalQuery = useQuery(() => getTheoreticalPay(tid, y, m), [tid, period]);
 
   const fmtH = (min: number) => `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
   const p: MonthlyPay | null | undefined = payQuery.data;
@@ -803,18 +955,7 @@ function CompensationTab() {
   const [genLoading, setGenLoading] = useState(false);
   const [genTimetableLoading, setGenTimetableLoading] = useState(false);
 
-  const teacherOptions: SearchableOption[] = useMemo(
-    () => teachers.map((t) => {
-      const classesLabel = classesLabelByTeacher.get(t.id);
-      const name = `${t.firstName} ${t.lastName}`;
-      const label = classesLabel ? `${name} — ${classesLabel}` : name;
-      return { value: String(t.id), trigger: label, label, searchText: label };
-    }),
-    [teachers, classesLabelByTeacher],
-  );
-
   async function genPayslip() {
-    if (!tid) return;
     setGenLoading(true);
     try {
       await ensureTeacherCompensation(tid, teacherName);
@@ -826,7 +967,6 @@ function CompensationTab() {
   }
 
   async function genPayslipFromTimetable() {
-    if (!tid) return;
     setGenTimetableLoading(true);
     try {
       await ensureTeacherCompensation(tid, teacherName);
@@ -839,19 +979,18 @@ function CompensationTab() {
 
   return (
     <div className="space-y-5">
-      <div className="max-w-md">
-        <Label>Enseignant / personnel</Label>
-        <SearchableSelect value={teacherId} options={teacherOptions} onChange={setTeacherId} triggerClassName="w-full justify-between px-3" />
-      </div>
+      <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+        <ArrowLeft className="h-4 w-4" /> Retour à la liste
+      </button>
+      <h2 className="text-lg font-bold text-gray-900">
+        {teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : "Enseignant"}
+      </h2>
 
-      {!tid ? (
-        <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">Sélectionnez une personne pour paramétrer sa rémunération.</p>
-      ) : (
-        <>
+      <>
           {compQuery.loading ? (
             <div className="flex justify-center py-6"><Spinner /></div>
           ) : (
-            <CompForm key={teacherId} teacherId={tid} initial={compQuery.data ?? null} teacher={teacherName ?? null}
+            <CompForm key={tid} teacherId={tid} initial={compQuery.data ?? null} teacher={teacherName ?? null}
               onSaved={() => { compQuery.refetch(); payQuery.refetch(); theoreticalQuery.refetch(); }} />
           )}
 
@@ -936,8 +1075,7 @@ function CompensationTab() {
               </div>
             )}
           </div>
-        </>
-      )}
+      </>
     </div>
   );
 }
@@ -1017,8 +1155,9 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
 function VacationPayMonths({ teacherId }: { teacherId: number }) {
   const q = useQuery(() => listVacationPayMonths(teacherId), [teacherId]);
   const months = q.data ?? [];
-  const now = new Date();
-  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  // Aucun mois pré-sélectionné par défaut : cet avantage est accordé au cas par cas, jamais par défaut
+  // sur le mois courant — mieux vaut forcer un choix explicite que risquer un ajout sur le mauvais mois.
+  const [period, setPeriod] = useState("");
   const [adding, setAdding] = useState(false);
 
   async function add() {

@@ -54,7 +54,7 @@ export default function PaymentsListPage() {
   const q = usePaymentsQuery(tenantId, yearId);
   const [status, setStatus] = useState<PaymentStatus | "">("");
   const studentsQuery = useCachedQuery(
-    tenantId ? `students-all:${tenantId}` : null,
+    tenantId ? `students-all-v2:${tenantId}` : null,
     () => searchStudents({ size: 1000 }).then((p) => p.content),
     [tenantId],
   );

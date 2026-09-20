@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import { Clock, LogIn, LogOut, RotateCcw } from "lucide-react";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
@@ -33,7 +33,7 @@ export default function EnrollmentMovementsPage() {
     [effectiveYear],
   );
   const classesQuery = useQuery(() => (effectiveYear ? listClasses(Number(effectiveYear)) : Promise.resolve([])), [effectiveYear]);
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
 
   const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
   const studentLabel = useMemo(
@@ -48,7 +48,10 @@ export default function EnrollmentMovementsPage() {
   const all = enrollmentsQuery.data ?? [];
   const byDate = (a: Enrollment, b: Enrollment) => (a.enrolledAt ?? "").localeCompare(b.enrolledAt ?? "") || a.id - b.id;
   const waiting = all.filter((e) => e.status === "PENDING").sort(byDate);
-  const arrivals = all.filter((e) => e.status === "VALIDATED").sort(byDate);
+  // Arrivées = nouvelles inscriptions uniquement ; les réinscriptions (élèves déjà connus de
+  // l'établissement, qui montent de classe) ont leur propre onglet « Anciens ».
+  const arrivals = all.filter((e) => e.status === "VALIDATED" && e.type !== "RE_ENROLLMENT").sort(byDate);
+  const returning = all.filter((e) => e.status === "VALIDATED" && e.type === "RE_ENROLLMENT").sort(byDate);
   const departures = all.filter((e) => e.status === "CANCELLED").sort(byDate);
 
   // Waitlist position per class (order of arrival among pending).
@@ -78,6 +81,7 @@ export default function EnrollmentMovementsPage() {
           <TabsList>
             <TabsTrigger value="waiting" icon={Clock}>Liste d&apos;attente ({waiting.length})</TabsTrigger>
             <TabsTrigger value="arrivals" icon={LogIn}>Arrivées ({arrivals.length})</TabsTrigger>
+            <TabsTrigger value="returning" icon={RotateCcw}>Anciens ({returning.length})</TabsTrigger>
             <TabsTrigger value="departures" icon={LogOut}>Départs ({departures.length})</TabsTrigger>
           </TabsList>
 
@@ -105,7 +109,7 @@ export default function EnrollmentMovementsPage() {
 
           <TabsPanel value="arrivals">
             <Table>
-              <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Classe</TH><TH>Type</TH><TH className="hidden sm:table-cell">Date</TH></tr></THead>
+              <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Classe</TH><TH className="hidden sm:table-cell">Date</TH></tr></THead>
               <TBody>
                 {arrivals.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucune arrivée.</TD></TR>}
                 {arrivals.map((e) => (
@@ -113,7 +117,23 @@ export default function EnrollmentMovementsPage() {
                     <TD className="font-medium text-slate-900">{sName(e.studentId)}</TD>
                     <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{sNum(e.studentId)}</TD>
                     <TD>{cName(e.classId)}</TD>
-                    <TD>{e.type === "RE_ENROLLMENT" ? <Badge tone="indigo">Réinscription</Badge> : <Badge tone="green">Nouvelle</Badge>}</TD>
+                    <TD className="hidden text-slate-500 sm:table-cell">{e.enrolledAt?.slice(0, 10) ?? "—"}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </TabsPanel>
+
+          <TabsPanel value="returning">
+            <Table>
+              <THead><tr><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Classe</TH><TH className="hidden sm:table-cell">Date</TH></tr></THead>
+              <TBody>
+                {returning.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucun ancien élève réinscrit.</TD></TR>}
+                {returning.map((e) => (
+                  <TR key={e.id}>
+                    <TD className="font-medium text-slate-900">{sName(e.studentId)}</TD>
+                    <TD className="hidden font-mono text-xs text-slate-600 sm:table-cell">{sNum(e.studentId)}</TD>
+                    <TD>{cName(e.classId)}</TD>
                     <TD className="hidden text-slate-500 sm:table-cell">{e.enrolledAt?.slice(0, 10) ?? "—"}</TD>
                   </TR>
                 ))}

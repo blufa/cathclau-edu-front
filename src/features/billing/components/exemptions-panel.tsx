@@ -13,8 +13,8 @@ import {
   type Exemption,
   type ExemptionInput,
   type ExemptionType,
-  type FeeType,
 } from "@/lib/types/billing";
+import { FeeTypeMultiSelect } from "@/components/billing/fee-type-multi-select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -28,14 +28,14 @@ import { formatDate, formatGNF } from "@/lib/format";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const EMPTY: ExemptionInput = {
-  studentId: 0, type: "PARTIAL", percentage: null, amount: null, feeType: null, reason: "", startDate: null, endDate: null,
+  studentId: 0, type: "PARTIAL", percentage: null, amount: null, feeTypes: [], reason: "", startDate: null, endDate: null,
 };
 
 export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const q = useQuery(listExemptions, []);
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
   const studentName = (id: number) => {
     const s = students.find((st) => st.id === id);
@@ -99,7 +99,9 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
                 <TD className="font-medium text-slate-900">{studentName(e.studentId)}</TD>
                 <TD><Badge tone="blue">{EXEMPTION_TYPE_LABEL[e.type]}</Badge></TD>
                 <TD>{e.percentage != null ? `${e.percentage} %` : e.amount != null ? formatGNF(e.amount) : "—"}</TD>
-                <TD className="text-sm text-slate-600">{e.feeType ? FEE_TYPE_LABEL[e.feeType] : "Tous"}</TD>
+                <TD className="text-sm text-slate-600">
+                  {e.feeTypes && e.feeTypes.length > 0 ? e.feeTypes.map((t) => FEE_TYPE_LABEL[t]).join(", ") : "Tous"}
+                </TD>
                 <TD className="text-sm text-slate-500">{formatDate(e.startDate)}{e.endDate ? ` → ${formatDate(e.endDate)}` : ""}</TD>
                 <TD><Badge tone={e.active ? "green" : "gray"}>{e.active ? "Active" : "Révoquée"}</Badge></TD>
                 {canWrite && (
@@ -141,13 +143,7 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
             <Label>Montant fixe (GNF)</Label>
             <Input type="number" min={0} value={form.amount ?? ""} onChange={(e) => setForm({ ...form, amount: e.target.value === "" ? null : Number(e.target.value) })} />
           </Field>
-          <Field>
-            <Label>Type de frais concerné</Label>
-            <Select value={form.feeType ?? ""} onChange={(e) => setForm({ ...form, feeType: (e.target.value as FeeType) || null })}>
-              <option value="">Tous les frais</option>
-              {Object.entries(FEE_TYPE_LABEL).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-            </Select>
-          </Field>
+          <FeeTypeMultiSelect value={form.feeTypes} onChange={(v) => setForm({ ...form, feeTypes: v })} />
           <Field>
             <Label>Motif</Label>
             <Textarea rows={2} value={form.reason ?? ""} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Raison de l'exonération…" />

@@ -11,6 +11,8 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { submitGradesOfflineAware } from "@/lib/offline/submit-grades-offline-aware";
+import { useGradeQueueStore } from "@/lib/offline/grade-queue-store";
 import {
   getClassStudents,
   listAcademicYears,
@@ -32,7 +34,6 @@ import {
   deleteExam,
   listExamSupervisions,
   removeExamSupervision,
-  enterBulkGrades,
   generateReportCardsBulk,
   getAssessmentGrades,
   getAssessmentGradeSheetPdfObjectUrl,
@@ -79,7 +80,7 @@ export default function GradingPage() {
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["evaluation:create"]);
   const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
   // Only admins/directors may modify an already-entered grade; teachers can only enter new ones.
-  const canEditExisting = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canEditExisting = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["note:unlock"]);
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
@@ -87,8 +88,9 @@ export default function GradingPage() {
   const [yearId, setYearId] = useState<number | null>(null);
   const effectiveYearId = yearId ?? defaultYearId;
 
-  const classesQuery = useQuery(
-    () => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])),
+  const classesQuery = useCachedQuery(
+    effectiveYearId ? `classes:${effectiveYearId}` : null,
+    () => listClasses(effectiveYearId as number),
     [effectiveYearId],
   );
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
@@ -171,7 +173,7 @@ function monthLabelOf(key: string): string {
 function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting }: { classId: number; className: string; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const assessmentsQuery = useQuery(() => listAssessmentsByClass(classId), [classId]);
+  const assessmentsQuery = useCachedQuery(`assessments-class:${classId}`, () => listAssessmentsByClass(classId), [classId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
@@ -180,7 +182,7 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
   const [editing, setEditing] = useState<Assessment | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
   // Relevé de notes par matière (PDF backend, moyenne calculée selon le paramétrage de l'établissement).
-  const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
+  const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const [releveSubject, setReleveSubject] = useState<string>("");
   const [relevePeriod, setRelevePeriod] = useState<string>("");
   const [releveUrl, setReleveUrl] = useState<string | null>(null);
@@ -436,8 +438,8 @@ const examSchema = z.object({
 type ExamFormValues = z.infer<typeof examSchema>;
 
 function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: number | null; canManage: boolean }) {
-  const examsQuery = useQuery(() => listExamsByClass(classId), [classId]);
-  const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
+  const examsQuery = useCachedQuery(`exams-class:${classId}`, () => listExamsByClass(classId), [classId]);
+  const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const [creating, setCreating] = useState(false);
   const [supervisingFor, setSupervisingFor] = useState<Exam | null>(null);
 
@@ -638,13 +640,14 @@ function SupervisionPane({ exam }: { exam: Exam }) {
 
 // ── Bulletins tab ────────────────────────────────────────────────────────────
 function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearId: number | null; canManage: boolean }) {
-  const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
+  const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const periods = periodsQuery.data ?? [];
   const [periodId, setPeriodId] = useState<number | null>(null);
   const effectivePeriod = periodId ?? periods.find((p) => p.closed)?.id ?? periods[0]?.id ?? null;
 
-  const cardsQuery = useQuery(
-    () => (effectivePeriod ? listReportCards(classId, effectivePeriod) : Promise.resolve([])),
+  const cardsQuery = useCachedQuery(
+    effectivePeriod ? `report-cards:${classId}:${effectivePeriod}` : null,
+    () => listReportCards(classId, effectivePeriod as number),
     [classId, effectivePeriod],
   );
   const [detail, setDetail] = useState<ReportCard | null>(null);
@@ -723,7 +726,7 @@ function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearI
 function ReportCardDetail({ card }: { card: ReportCard }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const linesQuery = useQuery(() => getReportCardLines(card.id), [card.id]);
+  const linesQuery = useCachedQuery(`report-card-lines:${card.id}`, () => getReportCardLines(card.id), [card.id]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
 
@@ -769,9 +772,9 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const isEdit = !!initial;
-  const subjectsQuery = useQuery(() => listClassSubjects(classId), [classId]);
+  const subjectsQuery = useCachedQuery(`class-subjects:${classId}`, () => listClassSubjects(classId), [classId]);
   const allSubjects = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
-  const periodsQuery = useQuery(() => (yearId ? listPeriods(yearId) : Promise.resolve([])), [yearId]);
+  const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   // Paramètres de notation configurés par l'établissement (Notes → Paramètres).
   const typeConfigsQuery = useCachedQuery(tenantId ? `assessment-types:${tenantId}` : null, listAssessmentTypes, [tenantId]);
@@ -969,16 +972,28 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
 
 // ── Bulk grade grid ──────────────────────────────────────────────────────────
 function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessment: Assessment; canWrite: boolean; canEditExisting: boolean; onDone: () => void }) {
-  const studentsQuery = useQuery(() => getClassStudents(assessment.classId), [assessment.classId]);
-  const gradesQuery = useQuery(() => getAssessmentGrades(assessment.id), [assessment.id]);
+  const studentsQuery = useCachedQuery(`class-students:${assessment.classId}`, () => getClassStudents(assessment.classId), [assessment.classId]);
+  const gradesQuery = useCachedQuery(`assessment-grades:${assessment.id}`, () => getAssessmentGrades(assessment.id), [assessment.id]);
   const [values, setValues] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const max = Number(assessment.maxScore);
 
   const existing = useMemo(() => new Map((gradesQuery.data ?? []).map((g) => [g.studentId, g])), [gradesQuery.data]);
   const locked = (gradesQuery.data ?? []).some((g) => g.validated);
+  // Sauvegarde hors-ligne pas encore synchronisée pour CETTE évaluation (voir sync-engine.ts) — sert de
+  // base d'affichage prioritaire sur `existing` : c'est le dernier état saisi par l'enseignant, même si
+  // le serveur ne le connaît pas encore.
+  const queuedEntry = useGradeQueueStore((s) => s.items.find((i) => i.assessmentId === assessment.id));
+  const queuedByStudent = useMemo(
+    () => new Map((queuedEntry?.grades ?? []).map((g) => [g.studentId, g.value])),
+    [queuedEntry],
+  );
 
-  function valueOf(studentId: number): string { return values[studentId] ?? existing.get(studentId)?.value ?? ""; }
+  function valueOf(studentId: number): string {
+    if (values[studentId] !== undefined) return values[studentId];
+    if (queuedByStudent.has(studentId)) return String(queuedByStudent.get(studentId));
+    return existing.get(studentId)?.value ?? "";
+  }
   function invalid(v: string): boolean { if (v === "") return false; const n = Number(v); return Number.isNaN(n) || n < 0 || n > max; }
 
   async function save() {
@@ -988,9 +1003,13 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
         .map((s) => ({ studentId: s.id, raw: valueOf(s.id) }))
         .filter((e) => e.raw !== "" && !invalid(e.raw))
         .map((e) => ({ studentId: e.studentId, value: Number(e.raw) }));
-      await enterBulkGrades(assessment.id, entries);
-      notifySuccess("Notes enregistrées");
-      gradesQuery.refetch();
+      const attempt = await submitGradesOfflineAware(assessment.id, entries);
+      if (attempt.outcome === "online") {
+        notifySuccess("Notes enregistrées");
+        gradesQuery.refetch();
+      } else {
+        notifySuccess("Notes enregistrées hors-ligne — seront synchronisées à la reconnexion");
+      }
     } catch (err) { notifyError(err); } finally { setSaving(false); }
   }
   async function validate() {
@@ -1010,6 +1029,18 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
 
   return (
     <div className="space-y-4">
+      {queuedEntry && (
+        <div className={
+          "flex items-center gap-2 rounded-xl px-4 py-2 text-sm " +
+          (queuedEntry.status === "failed" ? "bg-error-50 text-error-800" : "bg-info-50 text-info-800")
+        }>
+          <span>
+            {queuedEntry.status === "failed"
+              ? `Notes enregistrées hors-ligne, échec de la synchronisation : ${queuedEntry.lastError ?? "erreur inconnue"}. Voir le bandeau hors-ligne pour réessayer.`
+              : "Notes enregistrées hors-ligne — en attente de synchronisation."}
+          </span>
+        </div>
+      )}
       {locked && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning-50 px-4 py-2 text-sm text-warning-800">
           <span>Notes validées et verrouillées.</span>

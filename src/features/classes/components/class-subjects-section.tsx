@@ -12,18 +12,20 @@ import {
   removeClassSubject,
   setClassHeadTeacher,
 } from "@/lib/api/academics";
+import type { ClasseMatiere } from "@/lib/types/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input, Label, Field } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
-type Row = { subjectId: string; teacherId: string; coefficient: string };
-const EMPTY_ROW: Row = { subjectId: "", teacherId: "", coefficient: "" };
+type Row = { subjectId: string; teacherId: string; coefficient: string; specialty: boolean };
+const EMPTY_ROW: Row = { subjectId: "", teacherId: "", coefficient: "", specialty: false };
 
 export function ClassSubjectsSection({
   classId, canWrite, headTeacherId, onHeadTeacherChange,
@@ -65,7 +67,7 @@ export function ClassSubjectsSection({
     [teachers],
   );
 
-  function updateRow(idx: number, key: keyof Row, value: string) {
+  function updateRow<K extends keyof Row>(idx: number, key: K, value: Row[K]) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
   }
   function addRow() { setRows((prev) => [...prev, EMPTY_ROW]); }
@@ -79,7 +81,7 @@ export function ClassSubjectsSection({
     try {
       for (const r of valid) {
         await assignClassSubject(classId, Number(r.subjectId), r.teacherId ? Number(r.teacherId) : undefined,
-          r.coefficient ? Number(r.coefficient) : undefined);
+          r.coefficient ? Number(r.coefficient) : undefined, undefined, r.specialty);
       }
       notifySuccess(`${valid.length} matière(s) affectée(s)`);
       setAssigning(false);
@@ -116,6 +118,18 @@ export function ClassSubjectsSection({
     }
   }
 
+  async function toggleSpecialty(a: ClasseMatiere, specialty: boolean) {
+    try {
+      // Le coefficient/enseignant/code sont renvoyés tels quels : seule la spécialité change ici.
+      await assignClassSubject(classId, a.subjectId, a.teacherId ?? undefined,
+        a.coefficient != null ? Number(a.coefficient) : undefined, a.code ?? undefined, specialty);
+      notifySuccess(specialty ? "Marquée matière de spécialité" : "Retirée des matières de spécialité");
+      q.refetch();
+    } catch (err) {
+      notifyError(err);
+    }
+  }
+
   async function designate(teacherId: number | null) {
     try {
       await setClassHeadTeacher(classId, teacherId);
@@ -141,6 +155,7 @@ export function ClassSubjectsSection({
               <tr>
                 <TH>Matière</TH>
                 <TH>Coef.</TH>
+                <TH>Spécialité</TH>
                 <TH>Enseignant</TH>
                 <TH>Prof. principal</TH>
                 <TH className="text-right">Actions</TH>
@@ -149,7 +164,7 @@ export function ClassSubjectsSection({
             <TBody>
               {assignments.length === 0 && (
                 <TR>
-                  <TD colSpan={5} className="py-8 text-center text-gray-400">Aucune matière affectée.</TD>
+                  <TD colSpan={6} className="py-8 text-center text-gray-400">Aucune matière affectée.</TD>
                 </TR>
               )}
               {assignments.map((a) => {
@@ -157,7 +172,23 @@ export function ClassSubjectsSection({
                 return (
                   <TR key={a.id}>
                     <TD className="font-medium">{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
-                    <TD>{a.coefficient ?? "—"}</TD>
+                    <TD>
+                      {canWrite ? (
+                        <CoefficientCell
+                          key={`${a.id}:${a.coefficient ?? ""}`}
+                          assignment={a} classId={classId} onSaved={() => q.refetch()}
+                        />
+                      ) : (
+                        a.coefficient ?? "—"
+                      )}
+                    </TD>
+                    <TD>
+                      <Checkbox
+                        checked={a.specialty}
+                        disabled={!canWrite}
+                        onChange={(e) => toggleSpecialty(a, e.target.checked)}
+                      />
+                    </TD>
                     <TD>
                       {canWrite ? (
                         <SearchableSelect
@@ -227,6 +258,12 @@ export function ClassSubjectsSection({
                   onChange={(e) => updateRow(idx, "coefficient", e.target.value)}
                 />
               </Field>
+              <Field>
+                {idx === 0 && <Label>Spécialité</Label>}
+                <div className="flex h-10 items-center">
+                  <Checkbox checked={row.specialty} onChange={(e) => updateRow(idx, "specialty", e.target.checked)} />
+                </div>
+              </Field>
               <Button type="button" variant="ghost" className="text-error-600" disabled={rows.length === 1} onClick={() => removeRow(idx)}>✕</Button>
             </div>
           ))}
@@ -240,5 +277,56 @@ export function ClassSubjectsSection({
         </div>
       </Modal>
     </Card>
+  );
+}
+
+/**
+ * Coefficient éditable pour une matière déjà affectée à la classe — jusqu'ici, une fois la matière
+ * affectée (modale "Affecter des matières"), il n'existait aucun moyen d'ajouter ou corriger son
+ * coefficient sans la retirer puis la réaffecter. Très utile au lycée : une matière de spécialité a
+ * souvent un coefficient différent selon la série, alors qu'elle garde le même coefficient générique
+ * dans les autres séries/classes du collège.
+ */
+function CoefficientCell({
+  assignment, classId, onSaved,
+}: {
+  assignment: ClasseMatiere;
+  classId: number;
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState(assignment.coefficient ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const trimmed = value.trim();
+    if (trimmed === (assignment.coefficient ?? "")) return;
+    setSaving(true);
+    try {
+      // Le coefficient est le seul champ modifié ici : on renvoie explicitement l'enseignant et le
+      // code déjà affectés, sans quoi le backend (upsert) les effacerait (voir assignClassSubject).
+      await assignClassSubject(
+        classId, assignment.subjectId,
+        assignment.teacherId ?? undefined,
+        trimmed === "" ? undefined : Number(trimmed),
+        assignment.code ?? undefined,
+      );
+      notifySuccess("Coefficient enregistré");
+      onSaved();
+    } catch (err) {
+      notifyError(err);
+      setValue(assignment.coefficient ?? "");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Input
+      type="number" min={0} step={0.5} placeholder="1" className="w-16"
+      value={value}
+      disabled={saving}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+    />
   );
 }

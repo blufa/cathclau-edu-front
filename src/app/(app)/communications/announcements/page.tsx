@@ -49,7 +49,7 @@ export default function AnnouncementsPage() {
     () => (yearId ? listClasses(yearId) : Promise.resolve([])),
     [yearId],
   );
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
 
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);

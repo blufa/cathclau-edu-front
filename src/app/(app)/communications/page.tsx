@@ -361,7 +361,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
     [classesQuery.data],
   );
 
-  const studentsQuery = useCachedQuery(`students-all:${tenantId}`, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(`students-all-v2:${tenantId}`, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentOptions: SearchableOption[] = useMemo(
     () => (studentsQuery.data ?? []).map((s) => {
       const label = `${s.firstName} ${s.lastName} (${s.studentNumber})`;

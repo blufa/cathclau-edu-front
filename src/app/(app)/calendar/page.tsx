@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, CalendarDays, PartyPopper } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears } from "@/lib/api/academics";
 import { createEvent, updateEvent, deleteEvent, listEvents } from "@/lib/api/calendar";
+import { listSchoolEvents } from "@/lib/api/academics";
 import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE, type AcademicEvent, type AcademicEventType } from "@/lib/types/calendar";
+import { SchoolEventsPanel } from "@/components/calendar/school-events-panel";
+import { ScheduledBroadcastPanel } from "@/components/calendar/scheduled-broadcast-panel";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -23,6 +27,7 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 export default function CalendarPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE");
+  const canWriteSchoolEvents = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = yearsQuery.data ?? [];
   const cy = years.find((y) => y.current) ?? years[0];
@@ -31,6 +36,7 @@ export default function CalendarPage() {
   const q = useQuery(() => (effectiveYear ? listEvents(effectiveYear) : Promise.resolve([])), [effectiveYear]);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AcademicEvent | null>(null);
+  const schoolEventsQuery = useQuery(listSchoolEvents, []);
 
   function remove(e: AcademicEvent) {
     confirmAction({ title: "Supprimer l'événement", message: e.title, confirmLabel: "Supprimer", danger: true,
@@ -39,42 +45,70 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
-      <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Calendrier académique</h1>
-          <p className="text-sm text-gray-500">Jours fériés, vacances, compositions, réunions et échéances</p>
-        </div>
-        {canWrite && effectiveYear && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvel événement</Button>}
+      <Reveal y={12}>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Calendrier</h1>
+        <p className="text-sm text-gray-500">Jours fériés, vacances, compositions, réunions, échéances et événements école</p>
       </Reveal>
 
-      <Field>
-        <Label>Année scolaire</Label>
-        <Select className="max-w-[260px]" value={effectiveYear ?? ""} onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}>
-          {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
-        </Select>
-      </Field>
+      <Tabs defaultValue="academic">
+        <TabsList>
+          <TabsTrigger value="academic" icon={CalendarDays}>Calendrier académique</TabsTrigger>
+          <TabsTrigger value="school-events" icon={PartyPopper}>Événements école</TabsTrigger>
+        </TabsList>
 
-      {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
-        <Table>
-          <THead><tr><TH>Date(s)</TH><TH>Type</TH><TH>Intitulé</TH><TH className="text-right">Actions</TH></tr></THead>
-          <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucun événement pour cette année.</TD></TR>}
-            {(q.data ?? []).map((e) => (
-              <TR key={e.id}>
-                <TD className="whitespace-nowrap">{e.startDate}{e.endDate ? ` → ${e.endDate}` : ""}</TD>
-                <TD><Badge tone={EVENT_TYPE_TONE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</Badge></TD>
-                <TD className="font-medium text-gray-900">{e.title}{e.description ? <span className="block text-xs text-gray-400">{e.description}</span> : null}</TD>
-                <TD className="text-right">{canWrite && (
-                  <div className="inline-flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>Modifier</Button>
-                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(e)}>Suppr.</Button>
-                  </div>
-                )}</TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      )}
+        <TabsPanel value="academic">
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <Field>
+                <Label>Année scolaire</Label>
+                <Select className="max-w-[260px]" value={effectiveYear ?? ""} onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}>
+                  {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
+                </Select>
+              </Field>
+              {canWrite && effectiveYear && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvel événement</Button>}
+            </div>
+
+            {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
+              <Table>
+                <THead><tr><TH>Date(s)</TH><TH>Type</TH><TH>Intitulé</TH><TH className="text-right">Actions</TH></tr></THead>
+                <TBody>
+                  {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucun événement pour cette année.</TD></TR>}
+                  {(q.data ?? []).map((e) => (
+                    <TR key={e.id}>
+                      <TD className="whitespace-nowrap">{e.startDate}{e.endDate ? ` → ${e.endDate}` : ""}</TD>
+                      <TD><Badge tone={EVENT_TYPE_TONE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</Badge></TD>
+                      <TD className="font-medium text-gray-900">{e.title}{e.description ? <span className="block text-xs text-gray-400">{e.description}</span> : null}</TD>
+                      <TD className="text-right">{canWrite && (
+                        <div className="inline-flex gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(e)}>Modifier</Button>
+                          <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(e)}>Suppr.</Button>
+                        </div>
+                      )}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+
+            {canWrite && (
+              <ScheduledBroadcastPanel
+                events={(q.data ?? []).map((e) => ({ id: e.id, label: e.title, startDate: e.startDate, startTime: null }))}
+              />
+            )}
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="school-events">
+          <div className="space-y-8">
+            <SchoolEventsPanel canWrite={canWriteSchoolEvents} />
+            {canWrite && (
+              <ScheduledBroadcastPanel
+                events={(schoolEventsQuery.data ?? []).map((e) => ({ id: e.id, label: e.label, startDate: e.startDate, startTime: e.startTime }))}
+              />
+            )}
+          </div>
+        </TabsPanel>
+      </Tabs>
 
       <Modal open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }} title={editing ? "Modifier l'événement" : "Nouvel événement"}>
         {(effectiveYear || editing) && (

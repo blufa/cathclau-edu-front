@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Landmark, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { listAccounts } from "@/lib/api/accounting";
 import {
   addReconciliationItem,
@@ -38,7 +38,9 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function BankReconciliationPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
+  // Suppression du rapprochement réservée à l'administration (backend: comptabilite:approve).
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["comptabilite:approve"]);
 
   const q = useQuery(listReconciliations, []);
   const accountsQuery = useQuery(listAccounts, []);
@@ -93,15 +95,15 @@ export default function BankReconciliationPage() {
       </Modal>
 
       <Modal open={!!selected} onClose={() => setSelected(null)} title={`Rapprochement — ${selected ? accountName.get(selected.treasuryAccountId) ?? "" : ""}`}>
-        {selected && <ReconciliationDetail recon={selected} canWrite={canWrite}
+        {selected && <ReconciliationDetail recon={selected} canWrite={canWrite} canApprove={canApprove}
           onChanged={() => q.refetch()} onClosePanel={() => setSelected(null)} />}
       </Modal>
     </div>
   );
 }
 
-function ReconciliationDetail({ recon, canWrite, onChanged, onClosePanel }: {
-  recon: BankReconciliation; canWrite: boolean; onChanged: () => void; onClosePanel: () => void;
+function ReconciliationDetail({ recon, canWrite, canApprove, onChanged, onClosePanel }: {
+  recon: BankReconciliation; canWrite: boolean; canApprove: boolean; onChanged: () => void; onClosePanel: () => void;
 }) {
   const itemsQuery = useQuery(() => getReconciliationItems(recon.id), [recon.id]);
   const summaryQuery = useQuery(() => getReconciliationSummary(recon.id), [recon.id]);
@@ -169,11 +171,11 @@ function ReconciliationDetail({ recon, canWrite, onChanged, onClosePanel }: {
         </Table>
       )}
 
-      {canWrite && (
+      {(canWrite || canApprove) && (
         <div className="flex flex-wrap justify-end gap-2">
-          {recon.status !== "COMPLETED" && <Button size="sm" onClick={complete} disabled={!s?.balanced}>Clôturer</Button>}
-          {recon.status === "COMPLETED" && <Button size="sm" variant="secondary" onClick={reopen}>Rouvrir</Button>}
-          <Button size="sm" variant="ghost" className="text-error-600" onClick={remove}>Supprimer</Button>
+          {canWrite && recon.status !== "COMPLETED" && <Button size="sm" onClick={complete} disabled={!s?.balanced}>Clôturer</Button>}
+          {canWrite && recon.status === "COMPLETED" && <Button size="sm" variant="secondary" onClick={reopen}>Rouvrir</Button>}
+          {canApprove && <Button size="sm" variant="ghost" className="text-error-600" onClick={remove}>Supprimer</Button>}
         </div>
       )}
 

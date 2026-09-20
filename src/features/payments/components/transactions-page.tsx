@@ -137,7 +137,7 @@ function ReceiptsTab() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const [studentId, setStudentId] = useState<number | undefined>(undefined);
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
   const q = useReceiptsQuery(studentId);
 

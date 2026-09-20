@@ -80,18 +80,27 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Scolarité",
     items: [
-      { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
-      { label: "Guichet d'accueil", href: "/guichet", icon: Receipt, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], excludeRoles: ["PARENT"] },
-      { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
       {
         label: "Inscriptions & rentrée", icon: ClipboardList, module: "STUDENTS",
         children: [
           { label: "Inscriptions", href: "/enrollments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
+          { label: "Inscription groupée (fratrie)", href: "/enrollments/bulk-family", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
           { label: "Réinscription (rentrée)", href: "/enrollments/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
           { label: "Mouvements & attente", href: "/enrollments/movements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
           { label: "Tableau de la rentrée", href: "/enrollments/overview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
         ],
       },
+      { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
+      { label: "Parents", href: "/parents", icon: Users, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["parent:manage"], excludeRoles: ["PARENT"], module: "STUDENTS" },
+      { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
+      {
+        label: "Personnel", icon: Briefcase, module: "STAFF",
+        children: [
+          { label: "Enseignants", href: "/teachers", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["enseignant:read"], module: "STAFF" },
+          { label: "Personnel administratif", href: "/teachers/staff", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["personnel:read"], module: "STAFF" },
+        ],
+      },
+      { label: "Guichet d'accueil", href: "/guichet", icon: Receipt, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], excludeRoles: ["PARENT"] },
       // Pas de permission classe:* qui corresponde exactement à l'accès actuel (classe:manage
       // exclut Secrétaire, classe:read inclut Enseignant) — laissé en rôles fixes pour l'instant.
       { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "ACADEMICS" },
@@ -99,14 +108,7 @@ export const NAVIGATION: NavSection[] = [
       // Page dédiée aux événements du calendrier (pas de gestion d'année scolaire, contrairement à
       // « Année scolaire & calendrier ») — seul écran auquel le responsable pédagogique a accès pour
       // programmer réunions/sorties, sans les droits plus larges de gestion des années scolaires.
-      { label: "Calendrier des événements", href: "/calendar", icon: CalendarRange, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE"], module: "ACADEMICS" },
-      {
-        label: "Personnel", icon: Briefcase, module: "STAFF",
-        children: [
-          { label: "Enseignants", href: "/teachers", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "STAFF" },
-          { label: "Personnel administratif", href: "/teachers/staff", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "STAFF" },
-        ],
-      },
+      { label: "Calendrier des événements", href: "/calendar", icon: CalendarRange, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE"], permissions: ["evenement:manage"], module: "ACADEMICS" },
       { label: "Transport", href: "/transport", icon: Bus, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["transport:manage"] },
       // Recherche cross-tenant volontairement restreinte aux rôles système (données d'autres écoles).
       { label: "Annuaire inter-écoles", href: "/directory", icon: UserSearch, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"] },
@@ -115,20 +117,18 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Pédagogie",
     items: [
+      { label: "Présences", href: "/attendance", icon: CalendarCheck, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["presence:read"], excludeRoles: ["PARENT", "STUDENT"], module: "ATTENDANCE" },
+      { label: "Cahier de textes", href: "/lessons", icon: NotebookPen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["cahier:manage"] },
       {
         label: "Notes & bulletins", icon: BookOpen,
         children: [
           { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
           { label: "Bulletins", href: "/grading/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
           { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-          // Pas de permission dédiée à ce réglage (hasAnyRole non migré) — laissé en rôles fixes.
-          { label: "Paramètres de notation", href: "/grading/settings", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "GRADING" },
+          { label: "Paramètres de notation", href: "/grading/settings", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["parametrage_notes:manage"], module: "GRADING" },
         ],
       },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
-      { label: "Cahier de textes", href: "/lessons", icon: NotebookPen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["cahier:manage"] },
-      { label: "Cours en ligne", href: "/courses", icon: BookOpen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["cours:manage"], excludeRoles: ["PARENT", "STUDENT"] },
-      { label: "Présences", href: "/attendance", icon: CalendarCheck, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["presence:read"], excludeRoles: ["PARENT", "STUDENT"], module: "ATTENDANCE" },
       {
         label: "Vie scolaire", icon: ShieldAlert,
         children: [
@@ -136,6 +136,7 @@ export const NAVIGATION: NavSection[] = [
           { label: "Santé / Infirmerie", href: "/student-life/health", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["sante:read", "sante:manage"] },
         ],
       },
+      { label: "Cours en ligne", href: "/courses", icon: BookOpen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["cours:manage"], excludeRoles: ["PARENT", "STUDENT"] },
     ],
   },
   {
@@ -182,9 +183,7 @@ export const NAVIGATION: NavSection[] = [
       {
         label: "Messagerie & annonces", icon: MessagesSquare,
         children: [
-          // Messages : pas encore couvert par le catalogue de permissions (communication:send
-          // n'inclut pas TEACHER par défaut, contrairement au rôle codé en dur ici — §écart à trancher).
-          { label: "Messages", href: "/communications", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], module: "COMMUNICATION" },
+          { label: "Messages", href: "/communications", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["communication:send"], module: "COMMUNICATION" },
           { label: "Annonces", href: "/communications/announcements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["annonce:manage"] },
           { label: "Modèles", href: "/communications/templates", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["modele:manage"], module: "COMMUNICATION" },
         ],

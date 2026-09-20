@@ -70,7 +70,7 @@ export default function InvoicesPage() {
   const q = useInvoicesQuery(tenantId, status, studentFilter, yearId);
   const feesQuery = useFeesQuery(tenantId);
   // Résolution des noms d'élèves (la facture ne porte que l'ID).
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],
@@ -103,6 +103,31 @@ export default function InvoicesPage() {
     () => new Map((installmentsQuery.data ?? []).map((i) => [i.id, i.months ?? []])),
     [installmentsQuery.data],
   );
+  // Mois couverts PAR CETTE FACTURE précisément (pas par toute la tranche) — avec « paiement par mois »
+  // (§billing), plusieurs factures distinctes partagent le même installmentId (une par mois) ; sans
+  // cette correction chacune affichait à tort tous les mois de la tranche au lieu du sien seulement.
+  const coveredMonthsByInvoiceId = useMemo(() => {
+    const map = new Map<number, string[]>();
+    const byInstallmentId = new Map<number, Invoice[]>();
+    for (const inv of invoices) {
+      if (inv.installmentId == null) continue;
+      const list = byInstallmentId.get(inv.installmentId) ?? [];
+      list.push(inv);
+      byInstallmentId.set(inv.installmentId, list);
+    }
+    for (const [instId, invs] of byInstallmentId) {
+      const monthsOfInstallment = installmentMonths.get(instId) ?? [];
+      if (invs.length <= 1 || monthsOfInstallment.length <= 1) {
+        for (const inv of invs) map.set(inv.id, monthsOfInstallment);
+        continue;
+      }
+      [...invs].sort((a, b) => a.id - b.id).forEach((inv, idx) => {
+        const single = monthsOfInstallment[idx];
+        map.set(inv.id, single != null ? [single] : monthsOfInstallment);
+      });
+    }
+    return map;
+  }, [invoices, installmentMonths]);
 
   const [creating, setCreating] = useState(false);
   const [bulk, setBulk] = useState(false);
@@ -186,7 +211,7 @@ export default function InvoicesPage() {
                 <TD className="hidden text-sm text-gray-700 sm:table-cell">
                   {inv.periodLabel ?? "Inscription / frais"}
                   {(() => {
-                    const covered = inv.installmentId != null ? installmentMonths.get(inv.installmentId) ?? [] : [];
+                    const covered = coveredMonthsByInvoiceId.get(inv.id) ?? [];
                     if (covered.length <= 1) return null;
                     const paid = inv.paidMonths ?? [];
                     const remaining = covered.filter((m) => !paid.includes(m));
@@ -208,11 +233,6 @@ export default function InvoicesPage() {
                         Remise −{formatGNF(inv.discountAmount)}
                       </Badge>
                     </span>
-                  )}
-                  {inv.platformFeeAmount != null && Number(inv.platformFeeAmount) > 0 && (
-                    <p className="mt-0.5 text-xs text-gray-400">
-                      dont frais plateforme : {formatGNF(inv.platformFeeAmount)}
-                    </p>
                   )}
                 </TD>
                 <TD className="hidden sm:table-cell">{formatGNF(inv.paidAmount ?? 0)}</TD>

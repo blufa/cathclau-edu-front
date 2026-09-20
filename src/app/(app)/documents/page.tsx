@@ -266,7 +266,7 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
   const [filling, setFilling] = useState(false);
 
   const studentsQuery = useCachedQuery(
-    !isTeacherDoc && tenantId ? `students-all:${tenantId}` : null,
+    !isTeacherDoc && tenantId ? `students-all-v2:${tenantId}` : null,
     () => (isTeacherDoc ? Promise.resolve([]) : searchStudents({ size: 1000 }).then((p) => p.content)),
     [isTeacherDoc, tenantId],
   );
@@ -278,8 +278,16 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
     return src.map((o) => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label }));
   }, [isTeacherDoc, teachersQuery.data, studentsQuery.data]);
 
-  const invoicesQuery = useQuery(() => (isInvoiceDoc && subjectId ? listInvoicesByStudent(Number(subjectId)) : Promise.resolve([])), [subjectId, isInvoiceDoc]);
-  const paymentsQuery = useQuery(() => (isPaymentDoc && subjectId ? listPaymentsByStudent(Number(subjectId)) : Promise.resolve([])), [subjectId, isPaymentDoc]);
+  const invoicesQuery = useCachedQuery(
+    isInvoiceDoc && subjectId ? `student-invoices:${subjectId}` : null,
+    () => listInvoicesByStudent(Number(subjectId)),
+    [subjectId, isInvoiceDoc],
+  );
+  const paymentsQuery = useCachedQuery(
+    isPaymentDoc && subjectId ? `student-payments:${subjectId}` : null,
+    () => listPaymentsByStudent(Number(subjectId)),
+    [subjectId, isPaymentDoc],
+  );
   const financeOptions: SearchableOption[] = useMemo(() => {
     const src = isInvoiceDoc
       ? (invoicesQuery.data ?? []).map((i) => ({ value: String(i.id), label: `${i.reference} · ${i.periodLabel ?? ""} · reste ${formatGNF(i.remainingBalance ?? i.totalAmount)}` }))

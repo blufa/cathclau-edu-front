@@ -22,7 +22,7 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listPaymentsByTenant } from "@/lib/api/payment";
 import { listExpenses } from "@/lib/api/expense";
 import { getCurrentAcademicYear, listAcademicYears } from "@/lib/api/academics";
-import { getFinanceDashboard, getFounderDashboard, getHrDashboard } from "@/lib/api/reporting";
+import { getAbandonedStudents, getFinanceDashboard, getFounderDashboard, getHrDashboard } from "@/lib/api/reporting";
 import { listEmployees, listTeachers } from "@/lib/api/staff";
 import { listPayslips } from "@/lib/api/payroll";
 import { listCommunicationsByTenant } from "@/lib/api/communication";
@@ -178,6 +178,16 @@ export default function FounderDashboard() {
   );
   const founder = founderQuery.data;
 
+  // Élèves partis en cours d'année (abandon) : leurs anciennes factures impayées ont été annulées
+  // automatiquement (voir EnrollmentAbandonedInvoiceListener côté billing) — cette liste permet au
+  // comptable de justifier pourquoi ces montants ont disparu des statistiques de recouvrement,
+  // plutôt que de sembler oubliés ou effacés sans explication.
+  const abandonedQuery = useQuery(
+    () => (currentYear ? getAbandonedStudents(currentYear.id) : Promise.resolve([])),
+    [currentYear?.id],
+  );
+  const abandonedStudents = abandonedQuery.data ?? [];
+
   // Masse salariale RÉELLEMENT payée (fiches au statut PAID, jamais une projection théorique comme
   // founder.payroll) — mais comptée sur le mois de la PÉRIODE TRAVAILLÉE (`periodStart`), pas sur le
   // mois où l'argent est physiquement sorti (`paidAt`) : la paie se fait traditionnellement entre le
@@ -271,9 +281,10 @@ export default function FounderDashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Facturé" value={formatGNF(founder?.recovery.overall.invoiced)} icon={Wallet} accent="indigo" />
-            <StatCard title="Encaissé" value={formatGNF(founder?.recovery.overall.collected)} icon={TrendingUp} accent="emerald" />
+            <StatCard title="Encaissé" value={formatGNF(founder?.recovery.overall.collected)} icon={TrendingUp} accent="emerald"
+              hint={`${founder?.recovery.overall.paidCount ?? 0} facture(s)`} />
             <StatCard title="Impayés" value={formatGNF(founder?.recovery.overall.outstanding)} icon={AlertTriangle} accent="rose"
-              hint={`${founder?.recovery.overall.unpaidInvoices ?? 0} facture(s)`} />
+              hint={`${founder?.recovery.overall.unpaidCount ?? 0} facture(s)`} />
             <StatCard title="Taux de recouvrement" value={pct(founder?.recovery.overall.recoveryRate)} icon={Award} accent="teal" />
           </div>
         )}
@@ -349,6 +360,34 @@ export default function FounderDashboard() {
           </CardBody>
         </Card>
       </section>
+
+      {/* ── Élèves partis en cours d'année (abandon) ─────────────────────── */}
+      {!abandonedQuery.loading && abandonedStudents.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800">Élèves partis en cours d&apos;année (abandon)</h2>
+            <p className="text-sm text-gray-500">
+              Leurs anciennes factures impayées ont été annulées automatiquement à l&apos;abandon — ne
+              comptent plus dans les impayés ci-dessus. Ce qui avait déjà été encaissé n&apos;est jamais
+              touché.
+            </p>
+          </div>
+          <Table>
+            <THead>
+              <tr><TH>Élève</TH><TH>Classe</TH><TH className="text-right">Factures annulées</TH></tr>
+            </THead>
+            <TBody>
+              {abandonedStudents.map((a) => (
+                <TR key={a.studentId}>
+                  <TD className="font-medium text-gray-900">{a.studentName}</TD>
+                  <TD className="text-gray-600">{a.className ?? "—"}</TD>
+                  <TD className="text-right text-gray-600">{formatGNF(a.writtenOffAmount)}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </section>
+      )}
 
       {/* ── Masse salariale ──────────────────────────────────────────────── */}
       <section className="space-y-4">
@@ -537,7 +576,8 @@ export default function FounderDashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Exonérations actives" value={founder?.subsidy.activeExemptionsCount ?? 0} icon={Users} accent="indigo"
               hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s), ${founder?.subsidy.partialExemptions ?? 0} partielle(s)`} />
-            <StatCard title="Remises fratrie appliquées" value={formatGNF(founder?.subsidy.familyDiscountAmount)} icon={Wallet} accent="teal" />
+            <StatCard title="Remises fratrie appliquées" value={formatGNF(founder?.subsidy.familyDiscountAmount)} icon={Wallet} accent="teal"
+              hint={`${founder?.subsidy.familyDiscountInvoiceCount ?? 0} facture(s), dont ${founder?.subsidy.familyDiscountInvoicePaidCount ?? 0} encaissée(s)`} />
             <StatCard title="Élèves à jour sur l'année" value={founder?.subsidy.studentsFullySettledMonthlyFees ?? 0} icon={Award} accent="emerald"
               hint="Toutes les mensualités payées" />
             <StatCard title="Économie estimée (paiement anticipé)" value={formatGNF(founder?.subsidy.estimatedEarlyPaymentSavings)} icon={Banknote} accent="rose"

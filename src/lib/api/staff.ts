@@ -43,6 +43,12 @@ export function updateTeacherPhoto(id: number, photoUrl: string): Promise<Teache
   return api.patch<Teacher>(`/staff/teachers/${id}/photo`, undefined, { query: { photoUrl } });
 }
 
+/** Marque (ou retire) un enseignant comme pouvant couvrir plusieurs classes en même temps (ex. EPS) —
+ * désactive la détection de conflit d'emploi du temps sur lui précisément. */
+export function updateTeacherAllowsConcurrentClasses(id: number, allowsConcurrentClasses: boolean): Promise<Teacher> {
+  return api.patch<Teacher>(`/staff/teachers/${id}/allows-concurrent-classes`, undefined, { query: { allowsConcurrentClasses } });
+}
+
 export function deleteTeacher(id: number): Promise<void> {
   return api.delete<void>(`/staff/teachers/${id}`);
 }

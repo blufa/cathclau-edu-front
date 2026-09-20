@@ -30,7 +30,7 @@ const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
 ];
 
 const GROUP_ORDER: Record<FeeType, number> = {
-  ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1, TRANSPORT: 2, CANTEEN: 2, EXAM: 2, OTHER: 2,
+  ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1, TRANSPORT: 2, CANTEEN: 2, EXAM: 2, OTHER: 2, PLATFORM: 2,
 };
 
 
@@ -59,6 +59,30 @@ async function fetchChildRows(studentId: number, studentName: string, classId: n
     const months = [...(i.months ?? [])].sort();
     return [i.id, months[0] ?? i.dueDate ?? "9999-12"];
   }));
+  // Mois couverts PAR CETTE FACTURE précisément (pas par toute la tranche) — voir la même correction
+  // dans CollectFeeModal : avec « paiement par mois », plusieurs factures partagent le même
+  // installmentId (une par mois) ; sans ça chacune affichait à tort tous les mois de la tranche.
+  const coveredMonthsByInvoiceId = new Map<number, string[]>();
+  {
+    const byInstallmentId = new Map<number, Invoice[]>();
+    for (const inv of unpaid) {
+      if (inv.installmentId == null) continue;
+      const list = byInstallmentId.get(inv.installmentId) ?? [];
+      list.push(inv);
+      byInstallmentId.set(inv.installmentId, list);
+    }
+    for (const [instId, invs] of byInstallmentId) {
+      const monthsOfInstallment = installmentMonths.get(instId) ?? [];
+      if (invs.length <= 1 || monthsOfInstallment.length <= 1) {
+        for (const inv of invs) coveredMonthsByInvoiceId.set(inv.id, monthsOfInstallment);
+        continue;
+      }
+      [...invs].sort((a, b) => a.id - b.id).forEach((inv, idx) => {
+        const single = monthsOfInstallment[idx];
+        coveredMonthsByInvoiceId.set(inv.id, single != null ? [single] : monthsOfInstallment);
+      });
+    }
+  }
   const feeById = new Map(fees.map((f) => [f.id, f]));
   function groupOf(inv: Invoice): number {
     const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
@@ -74,7 +98,7 @@ async function fetchChildRows(studentId: number, studentName: string, classId: n
   return sorted.map((inv) => {
     const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
     const label = inv.periodLabel ?? (fee ? (fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type]) : inv.reference);
-    return { studentId, studentName, invoice: inv, label, coveredMonths: installmentMonths.get(inv.installmentId ?? -1) ?? [] };
+    return { studentId, studentName, invoice: inv, label, coveredMonths: coveredMonthsByInvoiceId.get(inv.id) ?? [] };
   });
 }
 
@@ -260,11 +284,6 @@ export function MultiChildCollectModal({
                                     {row.invoice.discountAmount != null && Number(row.invoice.discountAmount) > 0 && (
                                       <span className="ml-1.5 text-xs font-medium text-success-600" title={row.invoice.discountReason ?? undefined}>
                                         (remise −{formatGNF(row.invoice.discountAmount)})
-                                      </span>
-                                    )}
-                                    {row.invoice.platformFeeAmount != null && Number(row.invoice.platformFeeAmount) > 0 && (
-                                      <span className="ml-1.5 text-xs text-slate-400">
-                                        (dont frais plateforme {formatGNF(row.invoice.platformFeeAmount)})
                                       </span>
                                     )}
                                   </span>

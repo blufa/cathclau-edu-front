@@ -180,8 +180,9 @@ export default function AttendancePage() {
   const [yearId, setYearId] = useState<number | null>(null);
   const effectiveYearId = yearId ?? defaultYearId;
 
-  const classesQuery = useQuery(
-    () => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])),
+  const classesQuery = useCachedQuery(
+    effectiveYearId ? `classes:${effectiveYearId}` : null,
+    () => listClasses(effectiveYearId as number),
     [effectiveYearId],
   );
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
@@ -212,8 +213,9 @@ export default function AttendancePage() {
     catch (err) { notifyError(err); } finally { setPdfLoading(null); }
   }
 
-  const studentsQuery = useQuery(
-    () => (classId ? searchStudents({ classId, size: 300 }).then((p) => p.content) : Promise.resolve([])),
+  const studentsQuery = useCachedQuery(
+    classId ? `attendance-class-students:${classId}` : null,
+    () => searchStudents({ classId: classId as number, size: 300 }).then((p) => p.content),
     [classId],
   );
   const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
@@ -470,7 +472,7 @@ function AttendanceLog({ classId, date, students, canWrite }: {
     }
     return map;
   }, [checkinsQuery.data]);
-  const scheduleQuery = useQuery(() => getScheduleByClass(classId), [classId]);
+  const scheduleQuery = useCachedQuery(`schedule-class:${classId}`, () => getScheduleByClass(classId), [classId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   // Pas de classLabel ici : le tableau élèves est déjà scopé à une seule classe (redondant de l'afficher).
   const { courseLabel } = useSessionLabels(scheduleQuery.data, subjectsQuery.data, null);
@@ -743,7 +745,7 @@ function AttendanceLogAllClasses({ classes, date, onPickClass }: {
       .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value.rows.map((row) => ({ row, classLabel: r.value.c.label, classId: r.value.c.id })) : []))),
     [classes.map((c) => c.id).join(","), date],
   );
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const nameOf = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],
@@ -835,7 +837,7 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
 }) {
   const { data, loading, refetch } = useQuery(() => getTeacherAttendance(t.id, date, date), [t.id, date]);
   const checkinsQuery = useQuery(() => getTeacherCheckins(t.id, date), [t.id, date]);
-  const scheduleQuery = useQuery(() => getScheduleByTeacher(t.id), [t.id]);
+  const scheduleQuery = useCachedQuery(`schedule-teacher:${t.id}`, () => getScheduleByTeacher(t.id), [t.id]);
   const { courseLabel, classLabel } = useSessionLabels(scheduleQuery.data, subjects, classes);
   const record = (data ?? []).find((a) => a.date === date) ?? null;
   const checkins = checkinsQuery.data ?? [];

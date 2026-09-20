@@ -6,8 +6,8 @@ export default function BiometricLayout({ children }: { children: ReactNode }) {
     <div>
       <RouteTabs
         tabs={[
-          { label: "Biométrie", href: "/biometric", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
-          { label: "Webhooks", href: "/biometric/webhooks", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "WEBHOOKS" },
+          { label: "Biométrie", href: "/biometric", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["biometrique:manage"] },
+          { label: "Webhooks", href: "/biometric/webhooks", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["webhook:manage"], module: "WEBHOOKS" },
         ]}
       />
       {children}

@@ -17,6 +17,7 @@ import {
   type EmployeeInput,
 } from "@/lib/api/staff";
 import { listCardTemplates } from "@/lib/api/student-card";
+import { getCurrentAcademicYear } from "@/lib/api/academics";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -227,16 +228,20 @@ function StaffBadgeContent({ employee }: { employee: Employee }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
+  const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
   const colors = resolveBadgeColors(templatesQuery.data, "STAFF");
 
   return (
     <IdBadge
       kind="Badge personnel"
       fullName={`${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim()}
-      subtitle={employee.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[employee.category]}
+      firstName={employee.firstName}
+      lastName={employee.lastName}
       photoUrl={employee.photo}
+      idNumber={employee.employeeNumber}
+      academicYearLabel={currentYearQuery.data?.label}
       fields={[
-        { label: "Matricule", value: employee.employeeNumber ?? "—", mono: true },
+        { label: "Poste", value: employee.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[employee.category] },
         { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[employee.category] },
         { label: "Téléphone", value: employee.phone ?? "—" },
       ]}

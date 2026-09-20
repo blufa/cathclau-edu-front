@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Upload, UserPlus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,10 @@ import { useSubscription } from "@/providers/subscription-provider";
 import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions";
 import { ApiError } from "@/lib/api/errors";
 import { qk } from "@/lib/query";
-import type { CreateStudentInput, Enrollment, EnrollmentStatus, Gender, Student } from "@/lib/types/student";
+import type { CreateStudentInput, Enrollment, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
+import { useQuery } from "@/hooks/use-query";
+import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
+import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch } from "@/lib/api/billing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -30,7 +33,7 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { submitStudentOfflineAware } from "@/lib/offline/submit-student-enrollment";
 import { useEnrollmentQueueStore } from "@/lib/offline/enrollment-queue-store";
 import { discardFailedEnrollmentEntry, retryFailedEnrollmentEntry } from "@/lib/offline/sync-engine";
-import { useDeleteStudentMutation, useStudentsQuery, useUpdateStudentMutation } from "../hooks/use-students";
+import { useDeleteStudentMutation, useStudentsSummaryQuery, useUpdateStudentMutation } from "../hooks/use-students";
 
 const PAGE_SIZE = 20;
 
@@ -69,18 +72,47 @@ export default function StudentsPage() {
   const [offlineEnrollingEntryId, setOfflineEnrollingEntryId] = useState<string | null>(null);
   const enrollmentQueueItems = useEnrollmentQueueStore((s) => s.items);
 
-  const { data, isLoading: loading, error } = useStudentsQuery({
+  // Résumé (élève + classe courante + parent principal) en un seul appel, déjà trié alphabétiquement
+  // (nom, ascendant) côté serveur — voir searchStudentsSummary.
+  const { data, isLoading: loading, error } = useStudentsSummaryQuery({
     search: search || undefined,
     gender: gender || undefined,
     enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
     notEnrolled: status === "NOT_ENROLLED" || undefined,
     page,
     size: PAGE_SIZE,
-    sort: "lastName,asc",
   });
   const updateMutation = useUpdateStudentMutation();
   const deleteMutation = useDeleteStudentMutation();
   const queryClient = useQueryClient();
+
+  // Libellés de classe (colonne « Classe ») — résolus depuis l'année scolaire courante.
+  const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const classesQuery = useQuery(
+    () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
+    [currentYearQuery.data?.id],
+  );
+  const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
+
+  // Badge « Cadet exonéré » : parmi les élèves affichés sur la page, ceux qui bénéficient de la
+  // remise fratrie nombreuse (cf. Facturation → Règles de facturation → Réduction fratrie).
+  const pageStudentIds = useMemo(() => (data?.content ?? []).map((row) => row.student.id), [data]);
+  const eligibleYoungestQuery = useQuery(
+    () => getEligibleYoungestStudentIds(pageStudentIds),
+    [pageStudentIds.join(",")],
+  );
+  const eligibleYoungestIds = useMemo(() => new Set(eligibleYoungestQuery.data ?? []), [eligibleYoungestQuery.data]);
+
+  // Badge « Enfant de personnel » : parmi les élèves affichés, ceux pris en charge (partiellement ou
+  // totalement) via la politique de prise en charge des enfants du personnel (§6, frais MENSUALITE).
+  const staffCoverageQuery = useQuery(
+    () => getStaffChildCoverageBatch(pageStudentIds, "MONTHLY"),
+    [pageStudentIds.join(",")],
+  );
+  const staffCoverageByStudentId = useMemo(
+    () => new Map((staffCoverageQuery.data ?? []).map((c) => [c.studentId, c])),
+    [staffCoverageQuery.data],
+  );
 
   // Quota: limit from the current plan, consumed approximated by the total student count.
   const studentLimit = plan?.studentLimit ?? null;
@@ -138,7 +170,7 @@ export default function StudentsPage() {
     notifySuccess("Élève mis à jour");
   }
 
-  function handleDelete(student: Student) {
+  function handleDelete(student: StudentSummary["student"]) {
     confirmAction({
       title: "Archiver l'élève",
       message: `Archiver l'élève ${student.firstName} ${student.lastName} ?`,
@@ -161,62 +193,94 @@ export default function StudentsPage() {
     setCreating(true);
   }
 
-  const columns: Column<Student>[] = [
+  const columns: Column<StudentSummary>[] = [
+    {
+      key: "studentNumber",
+      header: "Matricule",
+      accessor: (row) => row.student.studentNumber ?? "",
+      render: (row) => <span className="font-mono text-xs text-slate-500">{row.student.studentNumber}</span>,
+    },
     {
       key: "name",
       header: "Élève",
-      accessor: (s) => `${s.firstName} ${s.lastName}`,
-      render: (s) => (
-        <Link href={`/students/${s.id}`} className="group flex items-center gap-3">
-          {s.photo ? (
+      accessor: (row) => `${row.student.firstName} ${row.student.lastName}`,
+      render: (row) => (
+        <Link href={`/students/${row.student.id}`} className="group flex items-center gap-3">
+          {row.student.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={s.photo} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+            <img src={row.student.photo} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
           ) : (
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
-              {initials(s)}
+              {initials(row.student)}
             </span>
           )}
           <span className="font-medium text-slate-900 group-hover:text-brand-700">
-            {s.firstName} {s.lastName}
+            {row.student.firstName} {row.student.lastName}
           </span>
+          {eligibleYoungestIds.has(row.student.id) && (
+            <Badge tone="green" title="Bénéficie de la remise fratrie nombreuse (cadet)">
+              Cadet exonéré
+            </Badge>
+          )}
+          {staffCoverageByStudentId.has(row.student.id) && (
+            <Badge
+              tone="indigo"
+              title={staffCoverageByStudentId.get(row.student.id)?.policyLabel ?? "Enfant de personnel pris en charge par l'école"}
+            >
+              Enfant de personnel −{staffCoverageByStudentId.get(row.student.id)?.coveragePercent}%
+            </Badge>
+          )}
         </Link>
       ),
     },
     {
-      key: "studentNumber",
-      header: "Matricule",
-      accessor: (s) => s.studentNumber ?? "",
-      render: (s) => <span className="font-mono text-xs text-slate-500">{s.studentNumber}</span>,
-    },
-    {
       key: "gender",
       header: "Sexe",
-      accessor: (s) => (s.gender === "FEMALE" ? "F" : "M"),
-      render: (s) => (
-        <Badge tone={s.gender === "FEMALE" ? "indigo" : "blue"}>{s.gender === "FEMALE" ? "F" : "M"}</Badge>
+      accessor: (row) => (row.student.gender === "FEMALE" ? "F" : "M"),
+      render: (row) => (
+        <Badge tone={row.student.gender === "FEMALE" ? "indigo" : "blue"}>{row.student.gender === "FEMALE" ? "F" : "M"}</Badge>
       ),
     },
-    { key: "birthDate", header: "Naissance", accessor: (s) => s.birthDate ?? "", render: (s) => s.birthDate ?? "—" },
-    { key: "phone", header: "Téléphone", accessor: (s) => s.phone ?? "", render: (s) => s.phone ?? "—" },
+    {
+      key: "class",
+      header: "Classe",
+      accessor: (row) => (row.classId != null ? (classLabelById.get(row.classId) ?? "") : ""),
+      render: (row) => (row.classId != null ? (classLabelById.get(row.classId) ?? `#${row.classId}`) : "—"),
+    },
+    {
+      key: "parent",
+      header: "Parent",
+      accessor: (row) => row.principalParentName ?? "",
+      render: (row) => row.principalParentName ?? "—",
+    },
+    {
+      key: "parentPhone",
+      header: "Numéro parent",
+      accessor: (row) => row.principalParentPhone ?? "",
+      render: (row) => row.principalParentPhone ?? "—",
+    },
     {
       key: "actions",
       header: "Actions",
       align: "right",
-      render: (s) => (
-        <div className="flex justify-end gap-2">
-          <QuickBadgeButton studentId={s.id} studentName={`${s.firstName} ${s.lastName}`} studentNumber={s.studentNumber} photoUrl={s.photo} />
-          {canWrite && (
-            <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
-              Modifier
-            </Button>
-          )}
-          {canDelete && (
-            <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(s)}>
-              Archiver
-            </Button>
-          )}
-        </div>
-      ),
+      render: (row) => {
+        const s = row.student;
+        return (
+          <div className="flex justify-end gap-2">
+            <QuickBadgeButton studentId={s.id} studentName={`${s.firstName} ${s.lastName}`} studentNumber={s.studentNumber} photoUrl={s.photo} classId={row.classId} />
+            {canWrite && (
+              <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
+                Modifier
+              </Button>
+            )}
+            {canDelete && (
+              <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(s)}>
+                Archiver
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -307,7 +371,7 @@ export default function StudentsPage() {
         page={data}
         loading={loading}
         error={!!error}
-        getRowKey={(s) => s.id}
+        getRowKey={(row) => row.student.id}
         onPageChange={setPage}
         emptyLabel="Aucun élève trouvé."
         columnToggle
@@ -394,6 +458,9 @@ export default function StudentsPage() {
                 setAttachingParentFor(null);
               }}
               onDone={() => {
+                // Le parent rattaché (téléphone) fait partie des colonnes de la liste — sans cette
+                // invalidation, il fallait recharger la page pour le voir apparaître.
+                void queryClient.invalidateQueries({ queryKey: qk.students.all });
                 setEnrollingNew(attachingParentFor);
                 setAttachingParentFor(null);
               }}
@@ -420,6 +487,9 @@ export default function StudentsPage() {
           open={!!enrollingNew}
           onClose={() => setEnrollingNew(null)}
           onEnrolled={(enrollment) => {
+            // La classe (et le statut d'inscription) affichées dans la liste viennent de cette
+            // inscription — sans cette invalidation, il fallait recharger la page pour la voir.
+            void queryClient.invalidateQueries({ queryKey: qk.students.all });
             setEnrollingNew(null);
             setCollectingFor(enrollment);
           }}

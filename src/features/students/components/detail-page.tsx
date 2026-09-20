@@ -15,6 +15,7 @@ import {
   cancelEnrollment,
   deleteEnrollment,
   transferEnrollmentClass,
+  updatePlatformAccess,
 } from "@/lib/api/enrollments";
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import type { Classe } from "@/lib/types/academics";
@@ -103,6 +104,10 @@ export default function StudentDetailPage() {
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
     [classesQuery.data],
   );
+  const yearLabel = useMemo(
+    () => new Map((yearsQuery.data ?? []).map((y) => [y.id, y.label])),
+    [yearsQuery.data],
+  );
 
   function handleCancel(enrollmentId: number) {
     confirmAction({
@@ -137,6 +142,28 @@ export default function StudentDetailPage() {
       },
     });
   }
+  function handleTogglePlatformAccess(enrollment: Enrollment) {
+    const activating = !enrollment.platformAccessOptIn;
+    confirmAction({
+      title: activating ? "Activer l'accès plateforme" : "Désactiver l'accès plateforme",
+      message: activating
+        ? "Le parent pourra accéder au portail pour cette inscription, et le frais d'usage plateforme "
+          + "sera ajouté à ses prochaines mensualités."
+        : "Le parent perdra l'accès au portail pour cette inscription, et le frais d'usage plateforme "
+          + "ne sera plus ajouté à ses prochaines mensualités.",
+      confirmLabel: activating ? "Activer" : "Désactiver",
+      onConfirm: async () => {
+        try {
+          await updatePlatformAccess(enrollment.id, activating);
+          notifySuccess(activating ? "Accès plateforme activé" : "Accès plateforme désactivé");
+          refetch();
+        } catch (err) {
+          notifyError(err);
+        }
+      },
+    });
+  }
+
   function handleDelete(enrollmentId: number) {
     confirmAction({
       title: "Supprimer l'inscription",
@@ -308,15 +335,29 @@ export default function StudentDetailPage() {
                 {enrollments.map((e) => (
                   <TR key={e.id}>
                     <TD>{classLabel.get(e.classId) ?? `#${e.classId}`}</TD>
-                    <TD className="hidden sm:table-cell">#{e.academicYearId}</TD>
+                    <TD className="hidden sm:table-cell">
+                      {e.academicYearId != null ? (yearLabel.get(e.academicYearId) ?? `#${e.academicYearId}`) : "—"}
+                    </TD>
                     <TD className="hidden sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
                     </TD>
                     <TD className="hidden sm:table-cell">
-                      <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
-                        {e.platformAccessOptIn ? "Activé" : "Non activé"}
-                      </Badge>
+                      {canEnroll && e.status !== "CANCELLED" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePlatformAccess(e)}
+                          title={e.platformAccessOptIn ? "Cliquer pour désactiver" : "Cliquer pour activer"}
+                        >
+                          <Badge tone={e.platformAccessOptIn ? "green" : "gray"} className="cursor-pointer hover:opacity-80">
+                            {e.platformAccessOptIn ? "Activé" : "Non activé"}
+                          </Badge>
+                        </button>
+                      ) : (
+                        <Badge tone={e.platformAccessOptIn ? "green" : "gray"}>
+                          {e.platformAccessOptIn ? "Activé" : "Non activé"}
+                        </Badge>
+                      )}
                     </TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-2">

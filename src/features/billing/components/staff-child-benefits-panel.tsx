@@ -11,22 +11,21 @@ import {
 } from "@/lib/api/billing";
 import {
   FEE_TYPE_LABEL,
-  type FeeType,
   type StaffChildBenefitPolicy,
   type StaffChildBenefitPolicyInput,
 } from "@/lib/types/billing";
+import { FeeTypeMultiSelect } from "@/components/billing/fee-type-multi-select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const EMPTY: StaffChildBenefitPolicyInput = {
-  label: "", coveredChildrenCount: 2, coveragePercent: 50, feeType: null, active: true,
+  label: "", coveredChildrenCount: 2, coveragePercent: 50, feeTypes: [], active: true,
 };
 
 export function StaffChildBenefitsPanel({ canWrite }: { canWrite: boolean }) {
@@ -42,7 +41,7 @@ export function StaffChildBenefitsPanel({ canWrite }: { canWrite: boolean }) {
     setForm({
       label: p.label, coveredChildrenCount: p.coveredChildrenCount,
       coveragePercent: p.coveragePercent != null ? Number(p.coveragePercent) : null,
-      feeType: p.feeType, active: p.active,
+      feeTypes: p.feeTypes ?? [], active: p.active,
     });
     setOpen(true);
   }
@@ -92,7 +91,9 @@ export function StaffChildBenefitsPanel({ canWrite }: { canWrite: boolean }) {
                 <TD className="font-medium text-slate-900">{p.label}</TD>
                 <TD>{p.coveredChildrenCount ?? "—"}</TD>
                 <TD>{p.coveragePercent ?? 0} %</TD>
-                <TD className="text-sm text-slate-600">{p.feeType ? FEE_TYPE_LABEL[p.feeType] : "Tous"}</TD>
+                <TD className="text-sm text-slate-600">
+                  {p.feeTypes && p.feeTypes.length > 0 ? p.feeTypes.map((t) => FEE_TYPE_LABEL[t]).join(", ") : "Tous"}
+                </TD>
                 <TD><Badge tone={p.active ? "green" : "gray"}>{p.active ? "Actif" : "Inactif"}</Badge></TD>
                 {canWrite && (
                   <TD className="text-right">
@@ -122,13 +123,7 @@ export function StaffChildBenefitsPanel({ canWrite }: { canWrite: boolean }) {
             <Label>Prise en charge (%)</Label>
             <Input type="number" min={0} max={100} value={form.coveragePercent ?? ""} onChange={(e) => setForm({ ...form, coveragePercent: e.target.value === "" ? null : Number(e.target.value) })} />
           </Field>
-          <Field>
-            <Label>Type de frais concerné</Label>
-            <Select value={form.feeType ?? ""} onChange={(e) => setForm({ ...form, feeType: (e.target.value as FeeType) || null })}>
-              <option value="">Tous les frais</option>
-              {Object.entries(FEE_TYPE_LABEL).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-            </Select>
-          </Field>
+          <FeeTypeMultiSelect value={form.feeTypes} onChange={(v) => setForm({ ...form, feeTypes: v })} />
           <div className="flex items-center gap-3">
             <Switch checked={form.active ?? true} onChange={(checked) => setForm({ ...form, active: checked })} ariaLabel="Actif" />
             <span className="text-sm text-gray-700">Actif</span>

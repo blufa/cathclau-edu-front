@@ -48,10 +48,13 @@ const schema = z
     password: z.string(),
   })
   .superRefine((v, ctx) => {
-    if (v.createLogin && !/^\S+@\S+$/.test(v.email)) {
-      ctx.addIssue({ code: "custom", path: ["email"], message: "Email requis pour l'accès" });
-    } else if (v.email && !/^\S+@\S+$/.test(v.email)) {
+    if (v.email && !/^\S+@\S+$/.test(v.email)) {
       ctx.addIssue({ code: "custom", path: ["email"], message: "Email invalide" });
+    }
+    // La connexion se fait par numéro de téléphone — l'email n'est qu'un canal optionnel
+    // supplémentaire. Au moins l'un des deux reste exigé pour créer un accès.
+    if (v.createLogin && !v.phone.trim() && !v.email.trim()) {
+      ctx.addIssue({ code: "custom", path: ["phone"], message: "Téléphone ou email requis pour l'accès" });
     }
     if (v.createLogin && v.password.length < 6) {
       ctx.addIssue({ code: "custom", path: ["password"], message: "Mot de passe (6 caractères min.)" });
@@ -120,7 +123,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
       let userId: number | null = null;
       if (values.createLogin) {
         const user = await createUserWithRole(
-          { firstName: values.firstName, lastName: values.lastName, email: values.email, password: values.password, phone: values.phone || null },
+          { firstName: values.firstName, lastName: values.lastName, email: values.email.trim() || null, password: values.password, phone: values.phone || null },
           "TEACHER",
         );
         userId = user.id;
@@ -280,7 +283,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
             </div>
             {v.createLogin && (
               <div className="mt-3 space-y-2">
-                <p className="text-xs text-gray-400">L&apos;enseignant se connectera avec son <strong>email</strong> et ce mot de passe.</p>
+                <p className="text-xs text-gray-400">L&apos;enseignant se connectera avec son <strong>numéro de téléphone</strong> et ce mot de passe.</p>
                 <Field>
                   <Label>Mot de passe</Label>
                   <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
@@ -302,9 +305,14 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
         <div className="flex items-center gap-3">
           {active > 0 && <Button type="button" variant="secondary" onClick={prevStep} disabled={submitting}>Précédent</Button>}
           {active < 2 ? (
-            <Button type="button" onClick={() => void nextStep()}>Suivant</Button>
+            // `key` distinct du bouton de soumission ci-dessous : sans ça, React réutilise le MÊME
+            // nœud DOM <button> en changeant juste son attribut `type` ("button" → "submit") au clic
+            // suivant — un bouton qui devient "submit" sur son propre nœud pendant le traitement du
+            // clic peut déclencher la soumission native du formulaire, créant l'enseignant au lieu de
+            // passer à l'étape suivante. Un `key` différent force un vrai démontage/remontage.
+            <Button key="next" type="button" onClick={(e) => { e.preventDefault(); void nextStep(); }}>Suivant</Button>
           ) : (
-            <Button type="submit" loading={submitting}>{submitLabel}</Button>
+            <Button key="submit" type="submit" loading={submitting}>{submitLabel}</Button>
           )}
         </div>
       </div>

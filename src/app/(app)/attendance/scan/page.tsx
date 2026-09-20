@@ -116,7 +116,7 @@ export default function AttendanceScanPage() {
   const [manualId, setManualId] = useState("");
   // Mis en cache (IndexedDB) : le repli manuel (QR illisible) doit rester utilisable hors-ligne, comme
   // le scan lui-même (submitScanOfflineAware) — sans ça, une coupure réseau viderait ces listes.
-  const studentsQuery = useCachedQuery(tenantId ? `students-all:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const manualOptions: SearchableOption[] = useMemo(() => {
@@ -369,9 +369,10 @@ export default function AttendanceScanPage() {
           <ScanLine className="h-6 w-6 text-brand-600" /> Pointage par scan de carte
         </h1>
         <p className="text-sm text-gray-500">
-          Scannez à l&apos;entrée et à la sortie de chaque cours (téléphone ou ordinateur). Le statut
-          (présent/retard) et la durée réalisée sont calculés automatiquement à partir de l&apos;emploi
-          du temps — vous choisissez seulement le sens du scan.
+          Un seul scan à l&apos;arrivée et un seul à la sortie pour toute la plage de cours continue de
+          la journée (téléphone ou ordinateur) — pas besoin de rescanner entre deux cours qui se
+          suivent. Le statut (présent/retard) et la durée réalisée sont calculés automatiquement à
+          partir de l&apos;emploi du temps — vous choisissez seulement le sens du scan.
         </p>
       </Reveal>
 
