@@ -307,18 +307,16 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
     () => getScheduleByTeacher(Number(pickerTeacherId)),
     [pickerTeacherId],
   );
-  function headTeacherIdForClassId(classId: number): number | null {
-    return classes.find((c) => c.id === classId)?.headTeacherId ?? null;
-  }
   const suggestedSlots = useMemo(() => {
     const day = dayOfWeek(lessonDate);
     if (!day || !pickerTeacherId) return [];
+    const headTeacherIdByClass = new Map(classes.map((c) => [c.id, c.headTeacherId ?? null]));
     return (teacherScheduleQuery.data ?? [])
       .filter((s) => s.day === day)
       // Un créneau sans matière (heure creuse/permanence) ne peut être suggéré que si cet enseignant
       // est bien le professeur principal de la classe — sinon le back ne peut pas résoudre à qui
       // rattacher la séance (voir resolveHeadTeacherId côté serveur).
-      .filter((s) => s.subjectId != null || headTeacherIdForClassId(s.schoolClassId) === Number(pickerTeacherId))
+      .filter((s) => s.subjectId != null || (headTeacherIdByClass.get(s.schoolClassId) ?? null) === Number(pickerTeacherId))
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }, [teacherScheduleQuery.data, lessonDate, pickerTeacherId, classes]);
 

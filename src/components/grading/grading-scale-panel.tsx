@@ -24,13 +24,18 @@ const FIELDS: { key: keyof GradingScaleInput; label: string; hint?: string }[] =
 export function GradingScalePanel({ canWrite }: { canWrite: boolean }) {
   const [cycleGroup, setCycleGroup] = useState<CycleGroup>("PRIMAIRE");
   const [form, setForm] = useState<GradingScaleInput | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Dérivé plutôt qu'un setState synchrone en tête d'effet (voir règle ESLint
+  // react-hooks/set-state-in-effect) : le chargement est en cours tant que la dernière réponse reçue
+  // ne correspond pas au cycle actuellement sélectionné.
+  const [loadedFor, setLoadedFor] = useState<CycleGroup | null>(null);
+  const loading = loadedFor !== cycleGroup;
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
+    let active = true;
     getGradingScale(cycleGroup)
-      .then((d) =>
+      .then((d) => {
+        if (!active) return;
         setForm({
           passThreshold: Number(d.passThreshold),
           passableMin: Number(d.passableMin),
@@ -40,10 +45,11 @@ export function GradingScalePanel({ canWrite }: { canWrite: boolean }) {
           felicitationsMin: Number(d.felicitationsMin),
           complimentsMin: Number(d.complimentsMin),
           distinctionNoFailingThreshold: Number(d.distinctionNoFailingThreshold),
-        }),
-      )
-      .catch(notifyError)
-      .finally(() => setLoading(false));
+        });
+      })
+      .catch((err) => { if (active) notifyError(err); })
+      .finally(() => { if (active) setLoadedFor(cycleGroup); });
+    return () => { active = false; };
   }, [cycleGroup]);
 
   async function save() {
