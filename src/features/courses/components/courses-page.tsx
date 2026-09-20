@@ -8,6 +8,7 @@ import { Plus, ShoppingCart } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { getMyChildren, getMyStudent } from "@/lib/api/portal";
 import {
@@ -58,7 +59,7 @@ export default function CoursesPage() {
   const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
   const activeStudentId = isStudent ? (myselfQuery.data?.id ?? null) : (selectedChildId ?? childrenQuery.data?.[0]?.id ?? null);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const currentYear = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
   const classesQuery = useQuery(() => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])), [currentYear?.id]);
   const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
@@ -278,6 +279,10 @@ function MyPurchases({ studentId, classLabel }: { studentId: number | null; clas
 function CourseManagement({ tenantId, classLabel, classes }: {
   tenantId: number; classLabel: Map<number, string>; classes: { id: number; label: string }[];
 }) {
+  const { user } = useAuth();
+  // Suppression réservée à l'administration (backend: cours:delete, plus strict que cours:manage —
+  // un enseignant qui peut créer/modifier ses cours ne peut pas les supprimer).
+  const canDelete = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE") || hasAnyPermission(user, ["cours:delete"]);
   const coursesQuery = useQuery(listManagedCourses.bind(null, null), []);
   const purchasesQuery = useQuery(listAllCoursePurchases, []);
   const paidCountByCourse = useMemo(() => {
@@ -333,7 +338,7 @@ function CourseManagement({ tenantId, classLabel, classes }: {
                     <Button size="sm" variant="ghost" onClick={() => setManagingResources(c)}>Contenu</Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(c)}>Modifier</Button>
                     <Button size="sm" variant="ghost" onClick={() => togglePublish(c)}>{c.published ? "Dépublier" : "Publier"}</Button>
-                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(c)}>Suppr.</Button>
+                    {canDelete && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(c)}>Suppr.</Button>}
                   </div>
                 </TD>
               </TR>

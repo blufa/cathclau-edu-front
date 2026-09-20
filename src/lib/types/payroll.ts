@@ -91,3 +91,26 @@ export interface FeeDeduction {
   label: string | null;
   childrenCount: number;
 }
+
+// ── Avances sur salaire (§payroll) ───────────────────────────────────────────
+export type SalaryAdvanceStatus = "ACTIVE" | "REPAID" | "CANCELLED";
+
+export const SALARY_ADVANCE_STATUS_LABEL: Record<SalaryAdvanceStatus, string> = {
+  ACTIVE: "En cours",
+  REPAID: "Soldée",
+  CANCELLED: "Annulée",
+};
+
+export interface SalaryAdvance {
+  id: number;
+  tenantId: number | null;
+  employeeType: PayslipEmployeeType;
+  teacherId: number;
+  teacherName: string | null;
+  amount: number;
+  remainingBalance: number;
+  reason: string | null;
+  status: SalaryAdvanceStatus;
+  grantedAt: string | null;
+  lastDeductedAt: string | null;
+}

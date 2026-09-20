@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { getMyTeacher, getTeacherSchedule } from "@/lib/api/staff";
 import { listAcademicYears, listClasses, listSubjects } from "@/lib/api/academics";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
@@ -19,15 +21,17 @@ const hhmm = (t: string) => t?.slice(0, 5) ?? "";
  * côté serveur ; les créneaux occupés sont affichés pour éviter de proposer une heure déjà prise.
  */
 export function MyAvailabilityManager() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const meQ = useQuery(getMyTeacher, []);
   const me = meQ.data;
   const scheduleQ = useQuery(() => (me ? getTeacherSchedule(me.id) : Promise.resolve([])), [me?.id]);
-  const subjectsQ = useQuery(listSubjects, []);
+  const subjectsQ = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectLabel = useMemo(
     () => new Map((subjectsQ.data ?? []).map((s) => [s.id, s.label])),
     [subjectsQ.data],
   );
-  const yearsQ = useQuery(listAcademicYears, []);
+  const yearsQ = useCachedQuery("academic-years", listAcademicYears, []);
   const currentYearId = (yearsQ.data ?? []).find((y) => y.current)?.id ?? (yearsQ.data ?? [])[0]?.id ?? null;
   const classesQ = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
   const classLabel = useMemo(

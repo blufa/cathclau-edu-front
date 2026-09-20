@@ -6,6 +6,7 @@ import type {
   PayslipLineType,
   PayslipStatus,
   RuleComputation,
+  SalaryAdvance,
   SalaryFeeDeductionRule,
   SalaryFeeDeductionRuleInput,
   SalaryRule,
@@ -98,10 +99,6 @@ export function payPayslip(id: number, paymentMethod = "BANK_TRANSFER"): Promise
 export function deletePayslip(id: number): Promise<void> {
   return api.delete<void>(`/payroll/payslips/${id}`);
 }
-export function bankFileUrl(): Promise<string> {
-  return apiBlobUrl("/payroll/payslips/bank-file");
-}
-
 // ── Self-service enseignant (« Ma paie ») ────────────────────────────────────
 /** Mes propres fiches de paie (rôle TEACHER) — jamais celles d'un collègue, vérifié côté backend. */
 export function listMyPayslips(): Promise<Payslip[]> {
@@ -211,4 +208,26 @@ export function deleteFeeDeductionRule(id: number): Promise<void> {
 }
 export function previewFeeDeduction(teacherId: number): Promise<FeeDeduction> {
   return api.get<FeeDeduction>("/payroll/fee-deduction-rules/preview", { query: { teacherId } });
+}
+
+// ── Avances sur salaire ───────────────────────────────────────────────────────
+/** Toutes les avances du tenant, ou celles d'un seul salarié si teacherId+employeeType sont fournis. */
+export function listSalaryAdvances(params?: { teacherId?: number; employeeType?: EmployeeType }): Promise<SalaryAdvance[]> {
+  return api.get<SalaryAdvance[]>("/payroll/salary-advances", {
+    query: { teacherId: params?.teacherId, employeeType: params?.employeeType },
+  });
+}
+/** Accorde une avance sur salaire — plafond (salaire de référence) vérifié côté backend, message clair
+ * renvoyé si dépassé ou si une avance est déjà en cours pour ce salarié. */
+export function grantSalaryAdvance(input: {
+  employeeType: EmployeeType; teacherId: number; teacherName?: string | null; amount: number; reason?: string | null;
+}): Promise<SalaryAdvance> {
+  return api.post<SalaryAdvance>("/payroll/salary-advances", input);
+}
+export function cancelSalaryAdvance(id: number): Promise<SalaryAdvance> {
+  return api.patch<SalaryAdvance>(`/payroll/salary-advances/${id}/annuler`);
+}
+/** Bon d'avance sur salaire (PDF A5, object URL local). */
+export function getSalaryAdvanceVoucherPdfObjectUrl(id: number): Promise<string> {
+  return apiBlobUrl(`/payroll/salary-advances/${id}/pdf/download`);
 }

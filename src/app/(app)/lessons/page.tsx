@@ -5,7 +5,8 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
-import { getScheduleByClass, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { getScheduleByClass, getScheduleByTeacher, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { getTeacherCheckins } from "@/lib/api/attendance";
 import { createLesson, deleteLesson, listLessons, markLessonDone, markLessonPlanned, updateLesson } from "@/lib/api/lessons";
@@ -28,14 +29,15 @@ const STATUS_TONE = { PLANNED: "amber", DONE: "green" } as const;
 
 export default function LessonsPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["cahier:manage"]);
   // Valider qu'une séance a été réalisée relève de l'administration — l'enseignant saisit la séance
   // (et peut corriger sa saisie) mais ne valide pas lui-même sa réalisation.
   const isAdmin = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const cy = (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0];
-  const classesQuery = useQuery(() => (cy ? listClasses(cy.id) : Promise.resolve([])), [cy?.id]);
+  const classesQuery = useCachedQuery(cy ? `classes:${cy.id}` : null, () => listClasses(cy!.id), [cy?.id]);
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   // Pas de classe présélectionnée par défaut : une classe sans séance planifiée donnait un tableau
   // vide à l'arrivée sur la page, laissant croire qu'aucune séance n'existe dans toute l'école.
@@ -52,7 +54,7 @@ export default function LessonsPage() {
 
   const classNameById = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
 
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectName = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
   const subjectFilterOptions: SearchableOption[] = useMemo(
     () => [
@@ -62,9 +64,22 @@ export default function LessonsPage() {
     [subjectsQuery.data],
   );
 
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  const [teacherId, setTeacherId] = useState<number | null>(null);
+  const teacherFilterOptions: SearchableOption[] = useMemo(
+    () => [
+      { value: "", trigger: "Tous", label: "Tous", searchText: "tous" },
+      ...(teachersQuery.data ?? []).map((t) => {
+        const label = `${t.firstName} ${t.lastName}`;
+        return { value: String(t.id), trigger: label, label, searchText: label };
+      }),
+    ],
+    [teachersQuery.data],
+  );
+
   const q = useQuery(
-    () => listLessons({ classId: effectiveClassId ?? undefined, subjectId: subjectId ?? undefined }),
-    [effectiveClassId, subjectId],
+    () => listLessons({ classId: effectiveClassId ?? undefined, subjectId: subjectId ?? undefined, teacherId: teacherId ?? undefined }),
+    [effectiveClassId, subjectId, teacherId],
   );
   const lessons = useMemo(
     () => [...(q.data ?? [])].sort((a, b) => (b.lessonDate ?? "").localeCompare(a.lessonDate ?? "")),
@@ -103,6 +118,11 @@ export default function LessonsPage() {
           <Label>Matière</Label>
           <SearchableSelect value={subjectId != null ? String(subjectId) : ""} options={subjectFilterOptions}
             onChange={(v) => setSubjectId(v ? Number(v) : null)} triggerClassName="w-full max-w-[240px] justify-between px-3" />
+        </Field>
+        <Field>
+          <Label>Enseignant</Label>
+          <SearchableSelect value={teacherId != null ? String(teacherId) : ""} options={teacherFilterOptions}
+            onChange={(v) => setTeacherId(v ? Number(v) : null)} triggerClassName="w-full max-w-[240px] justify-between px-3" />
         </Field>
       </div>
 
@@ -253,7 +273,9 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
   /** Ids (dédupliqués, dans l'ordre des lignes) des classes pour lesquelles une séance vient d'être créée. */
   onCreated: (classIds: number[]) => void;
 }) {
-  const teachersQuery = useQuery(listTeachers, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const teacherName = useMemo(
     () => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
     [teachersQuery.data]);
@@ -266,6 +288,60 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],
   );
+  const classLabelById = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
+  const teacherOptions: SearchableOption[] = useMemo(
+    () => (teachersQuery.data ?? []).map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+    [teachersQuery.data],
+  );
+
+  // Programmation par enseignant (§retour direction pédagogique) : au lieu de ressaisir classe/
+  // matière/horaire ligne par ligne, on choisit l'enseignant et la date — le système retrouve tout de
+  // suite les créneaux de SON emploi du temps ce jour-là (jour de semaine dérivé de la date choisie) ;
+  // il ne reste qu'à les ajouter en un clic, sans reconfigurer ce qui se répète chaque semaine.
+  const [pickerTeacherId, setPickerTeacherId] = useState("");
+  const teacherScheduleQuery = useCachedQuery(
+    pickerTeacherId ? `schedule-teacher:${pickerTeacherId}` : null,
+    () => getScheduleByTeacher(Number(pickerTeacherId)),
+    [pickerTeacherId],
+  );
+  const suggestedSlots = useMemo(() => {
+    const day = dayOfWeek(lessonDate);
+    if (!day || !pickerTeacherId) return [];
+    const headTeacherIdByClass = new Map(classes.map((c) => [c.id, c.headTeacherId ?? null]));
+    return (teacherScheduleQuery.data ?? [])
+      .filter((s) => s.day === day)
+      // Un créneau sans matière (heure creuse/permanence) ne peut être suggéré que si cet enseignant
+      // est bien le professeur principal de la classe — sinon le back ne peut pas résoudre à qui
+      // rattacher la séance (voir resolveHeadTeacherId côté serveur).
+      .filter((s) => s.subjectId != null || (headTeacherIdByClass.get(s.schoolClassId) ?? null) === Number(pickerTeacherId))
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [teacherScheduleQuery.data, lessonDate, pickerTeacherId, classes]);
+
+  function isRowEmpty(r: LessonRow): boolean {
+    return !r.classId && !r.subjectId && !r.title && !r.content && !r.homework && !r.noSubject;
+  }
+  function rowFromSlot(slot: EmploiDuTemps): LessonRow {
+    return {
+      classId: String(slot.schoolClassId),
+      subjectId: slot.subjectId != null ? String(slot.subjectId) : "",
+      title: "", content: "", homework: "",
+      durationMinutes: String(Math.max(0, timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime))),
+      noSubject: slot.subjectId == null,
+    };
+  }
+  function addSuggestedSlot(slot: EmploiDuTemps) {
+    setRows((prev) => (prev.length === 1 && isRowEmpty(prev[0]) ? [rowFromSlot(slot)] : [...prev, rowFromSlot(slot)]));
+  }
+  function addAllSuggestedSlots() {
+    if (suggestedSlots.length === 0) return;
+    setRows((prev) => {
+      const fresh = suggestedSlots.map(rowFromSlot);
+      return prev.length === 1 && isRowEmpty(prev[0]) ? fresh : [...prev, ...fresh];
+    });
+  }
 
   // Affectations matière→enseignant + emploi du temps de chaque classe utilisée par une ligne,
   // chargés à la demande (une école peut avoir des dizaines de classes, inutile de tout charger).
@@ -378,7 +454,40 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
 
   return (
     <div className="space-y-4">
-      <Field><Label>Date (commune)</Label><DatePicker value={lessonDate} clearable onChange={setLessonDate} /></Field>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Field><Label>Date (commune)</Label><DatePicker value={lessonDate} clearable onChange={setLessonDate} /></Field>
+        <Field>
+          <Label>Programmer depuis l&apos;emploi du temps</Label>
+          <SearchableSelect value={pickerTeacherId} options={teacherOptions} onChange={setPickerTeacherId} triggerClassName="w-full justify-between px-3" />
+        </Field>
+      </div>
+
+      {pickerTeacherId && (
+        !lessonDate ? (
+          <p className="text-xs text-gray-500">Choisissez une date pour voir les créneaux de cet enseignant ce jour-là.</p>
+        ) : suggestedSlots.length === 0 ? (
+          <p className="text-xs text-gray-500">Aucun créneau dans l&apos;emploi du temps de cet enseignant ce jour-là.</p>
+        ) : (
+          <div className="space-y-2 rounded-xl border border-brand-100 bg-brand-50/40 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-700">Créneaux trouvés ce jour-là</p>
+              <Button type="button" size="sm" variant="secondary" onClick={addAllSuggestedSlots}>Tout ajouter</Button>
+            </div>
+            <ul className="space-y-1">
+              {suggestedSlots.map((s) => (
+                <li key={s.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-1.5 text-xs">
+                  <span>
+                    <strong>{s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}</strong>{" "}
+                    {classLabelById.get(s.schoolClassId) ?? `#${s.schoolClassId}`}
+                    {s.subjectId != null && <> — {subjectName.get(s.subjectId) ?? `#${s.subjectId}`}</>}
+                  </span>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => addSuggestedSlot(s)}>Ajouter</Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      )}
 
       {rows.map((row, idx) => (
         <div key={idx} className="space-y-2 rounded-xl border border-gray-200 p-3">
@@ -463,8 +572,10 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
 function EditLessonForm({ lesson, classes, subjectName, canSetStatus, onCancel, onSaved }: {
   lesson: LessonEntry; classes: Classe[]; subjectName: Map<number, string>; canSetStatus: boolean; onCancel: () => void; onSaved: () => void;
 }) {
-  const classSubjectsQuery = useQuery(() => listClassSubjects(lesson.classId), [lesson.classId]);
-  const teachersQuery = useQuery(listTeachers, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const classSubjectsQuery = useCachedQuery(`class-subjects:${lesson.classId}`, () => listClassSubjects(lesson.classId), [lesson.classId]);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const classSubjects = useMemo(() => classSubjectsQuery.data ?? [], [classSubjectsQuery.data]);
   const teacherName = useMemo(
     () => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
@@ -596,7 +707,7 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
   // créneau programmé, ou la durée RÉELLE entre l'heure d'arrivée et de sortie pointées par
   // l'enseignant — choix explicite demandé à chaque validation plutôt qu'une simple suggestion
   // facultative, pour que la personne qui valide sache toujours laquelle des deux s'applique.
-  const scheduleQuery = useQuery(() => getScheduleByClass(lesson.classId), [lesson.classId]);
+  const scheduleQuery = useCachedQuery(`schedule-class:${lesson.classId}`, () => getScheduleByClass(lesson.classId), [lesson.classId]);
   const slot = resolveSlot(scheduleQuery.data ?? [], String(lesson.subjectId), lesson.lessonDate ?? "");
   const checkinsQuery = useQuery(
     () => (lesson.teacherId != null && lesson.lessonDate && lesson.lessonDate <= todayIso()

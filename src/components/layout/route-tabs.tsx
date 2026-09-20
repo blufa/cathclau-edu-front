@@ -30,11 +30,20 @@ export function RouteTabs({ tabs }: { tabs: RouteTab[] }) {
   const visible = tabs.filter((t) => isNavItemAllowed(user, t));
   if (visible.length <= 1) return null;
 
+  // Le tab actif est celui dont le href correspond le plus précisément à l'URL courante (le plus long
+  // qui matche) : sans ça, un onglet racine (ex. « /enrollments ») reste marqué actif sur toutes les
+  // sous-pages sœurs (ex. « /enrollments/movements ») puisque son href est un préfixe de celles-ci.
+  const activeHref = visible.reduce<string | null>((best, t) => {
+    const matches = pathname === t.href || pathname.startsWith(`${t.href}/`);
+    if (!matches) return best;
+    return best === null || t.href.length > best.length ? t.href : best;
+  }, null);
+
   return (
     <div className="mb-6 border-b border-gray-200">
       <nav className="-mb-px flex gap-1 overflow-x-auto">
         {visible.map((tab) => {
-          const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          const active = tab.href === activeHref;
           const disabled = tab.module ? isDisabled({ label: tab.label, module: tab.module }) : false;
 
           if (disabled) {

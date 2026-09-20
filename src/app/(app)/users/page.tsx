@@ -494,7 +494,10 @@ function PasswordResetForm({
 function UserRolesEditor({ user, roles }: { user: User; roles: Role[] }) {
   const rolesQuery = useQuery(() => getUserRoles(user.id), [user.id]);
   const [busy, setBusy] = useState<number | null>(null);
-  const assignedNames = new Set(rolesQuery.data ?? []);
+  // Comparé par id (pas par nom) : un rôle personnalisé peut porter le même libellé qu'un rôle
+  // système (ex. deux rôles nommés « Comptable ») — comparer par nom faisait apparaître le mauvais
+  // rôle comme attribué, rendant son retrait impossible en pratique.
+  const assignedIds = new Set((rolesQuery.data ?? []).map((r) => r.id));
 
   async function toggle(role: Role, assigned: boolean) {
     setBusy(role.id);
@@ -521,7 +524,7 @@ function UserRolesEditor({ user, roles }: { user: User; roles: Role[] }) {
   return (
     <div className="space-y-2">
       {roles.map((role) => {
-        const assigned = assignedNames.has(role.name);
+        const assigned = assignedIds.has(role.id);
         return (
           <div
             key={role.id}

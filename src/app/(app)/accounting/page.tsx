@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Banknote, BookText, CalendarRange, FileSpreadsheet, ListTree, NotebookPen, Plus, Settings as SettingsIcon } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import {
   adjustAccountBalance,
@@ -105,7 +105,10 @@ export default function AccountingPage() {
 }
 
 function TreasuryTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
+  // Suppression d'un compte réservée à l'administration (backend: comptabilite:approve, plus strict
+  // que comptabilite:manage — le comptable peut créer/ajuster un compte mais pas le supprimer).
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["comptabilite:approve"]);
   const accountsQuery = useQuery(() => listAccounts(), []);
   const movementsQuery = useQuery(() => listMovements(), []);
   const accounts = accountsQuery.data ?? [];
@@ -143,10 +146,10 @@ function TreasuryTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                   <Badge tone={a.type === "CASH" ? "amber" : "indigo"}>{ACCOUNT_TYPE_LABEL[a.type]}</Badge>
                 </div>
                 <p className="mt-2 text-xl font-bold text-gray-900">{formatGNF(a.currentBalance ?? 0)}</p>
-                {canEdit && (
+                {(canEdit || canApprove) && (
                   <div className="mt-2 flex gap-3 text-xs">
-                    <button className="text-brand-700 hover:underline" onClick={() => adjust(a)}>Ajuster</button>
-                    <button className="text-error-600 hover:underline" onClick={() => confirmAction({ title: "Supprimer le compte", message: a.label, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteAccount(a.id); notifySuccess("Supprimé"); accountsQuery.refetch(); } catch (e) { notifyError(e); } } })}>Supprimer</button>
+                    {canEdit && <button className="text-brand-700 hover:underline" onClick={() => adjust(a)}>Ajuster</button>}
+                    {canApprove && <button className="text-error-600 hover:underline" onClick={() => confirmAction({ title: "Supprimer le compte", message: a.label, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteAccount(a.id); notifySuccess("Supprimé"); accountsQuery.refetch(); } catch (e) { notifyError(e); } } })}>Supprimer</button>}
                   </div>
                 )}
               </div>
@@ -294,7 +297,9 @@ function MovementForm({ accounts, onCancel, onCreated }: { accounts: TreasuryAcc
 }
 
 function FiscalTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
+  // Clôture réservée à l'administration (backend: comptabilite:approve).
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["comptabilite:approve"]);
   const q = useQuery(() => listFiscalYears(), []);
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -338,7 +343,7 @@ function FiscalTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                   <TD className="font-medium text-gray-900">{f.label}</TD>
                   <TD>{f.startDate ?? "—"}</TD><TD>{f.endDate ?? "—"}</TD>
                   <TD><Badge tone={FISCAL_TONE[f.status]}>{FISCAL_STATUS_LABEL[f.status]}</Badge></TD>
-                  <TD className="text-right">{canEdit && f.status === "OPEN" && <Button size="sm" variant="ghost" onClick={() => close(f.id)}>Clôturer</Button>}</TD>
+                  <TD className="text-right">{canApprove && f.status === "OPEN" && <Button size="sm" variant="ghost" onClick={() => close(f.id)}>Clôturer</Button>}</TD>
                 </TR>
               ))}
             </TBody>
@@ -350,7 +355,7 @@ function FiscalTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 }
 
 function SettingsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
   const q = useQuery(() => getAccountingSettings(), []);
   const [loading, setLoading] = useState(false);
   const s = q.data;
@@ -405,7 +410,9 @@ function SettingsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 const ENTRY_STATUS_TONE: Record<JournalEntryStatus, "gray" | "green" | "indigo"> = { DRAFT: "gray", VALIDATED: "green", LETTERED: "indigo" };
 
 function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
+  // Suppression réservée à l'administration (backend: comptabilite:approve).
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["comptabilite:approve"]);
   const q = useQuery(() => listChartOfAccounts(), []);
   const [accountNumber, setAccountNumber] = useState("");
   const [label, setLabel] = useState("");
@@ -454,7 +461,7 @@ function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                   <TD className="font-medium text-gray-900">{a.label}</TD>
                   <TD>{a.accountClass ?? "—"}</TD>
                   <TD>{a.type ? ACCOUNT_TYPE_LABEL_SYS[a.type] : "—"}</TD>
-                  <TD className="text-right">{canEdit && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(a)}>Suppr.</Button>}</TD>
+                  <TD className="text-right">{canApprove && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(a)}>Suppr.</Button>}</TD>
                 </TR>
               ))}
             </TBody>
@@ -467,7 +474,9 @@ function ChartTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
 // ── Journals ─────────────────────────────────────────────────────────────────
 function JournalsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
+  // Suppression réservée à l'administration (backend: comptabilite:approve).
+  const canApprove = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["comptabilite:approve"]);
   const q = useQuery(() => listJournals(), []);
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
@@ -498,7 +507,7 @@ function JournalsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
                   <TD className="font-mono text-xs text-gray-600">{j.code}</TD>
                   <TD className="font-medium text-gray-900">{j.label ?? "—"}</TD>
                   <TD>{j.type ?? "—"}</TD>
-                  <TD className="text-right">{canEdit && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Supprimer le journal", message: j.code, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteJournal(j.id); notifySuccess("Supprimé"); q.refetch(); } catch (e) { notifyError(e); } } })}>Suppr.</Button>}</TD>
+                  <TD className="text-right">{canApprove && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Supprimer le journal", message: j.code, confirmLabel: "Supprimer", danger: true, onConfirm: async () => { try { await deleteJournal(j.id); notifySuccess("Supprimé"); q.refetch(); } catch (e) { notifyError(e); } } })}>Suppr.</Button>}</TD>
                 </TR>
               ))}
             </TBody>
@@ -511,7 +520,7 @@ function JournalsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
 // ── Journal entries (écritures) ──────────────────────────────────────────────
 function EntriesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["comptabilite:manage"]);
   const q = useQuery(() => listJournalEntries(), []);
   const journalsQuery = useQuery(() => listJournals(), []);
   const accountsQuery = useQuery(() => listChartOfAccounts(), []);

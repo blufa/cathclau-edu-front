@@ -12,12 +12,15 @@ import { notifyInfo } from "@/lib/feedback";
 export function InstallAppCard() {
   const deferredPrompt = usePwaInstallStore((s) => s.deferredPrompt);
   const isInstalled = usePwaInstallStore((s) => s.isInstalled);
+  const isIos = usePwaInstallStore((s) => s.isIos);
   const isIosSafari = usePwaInstallStore((s) => s.isIosSafari);
   const setDeferredPrompt = usePwaInstallStore((s) => s.setDeferredPrompt);
   const [showIosModal, setShowIosModal] = useState(false);
 
   async function handleInstall() {
-    if (isIosSafari) {
+    // Tout navigateur sur iPhone/iPad (Safari ou non) : `beforeinstallprompt` n'existe jamais là-bas,
+    // on montre toujours la marche à suivre manuelle plutôt que le message générique Android.
+    if (isIos) {
       setShowIosModal(true);
       return;
     }
@@ -49,12 +52,12 @@ export function InstallAppCard() {
               application mobile.
             </p>
             <Button onClick={handleInstall} leftSection={<Download className="h-4 w-4" />}>
-              {isIosSafari ? "Comment installer sur iPhone" : "Installer l'application"}
+              {isIos ? "Comment installer sur iPhone" : "Installer l'application"}
             </Button>
           </>
         )}
       </CardBody>
-      <IosInstallInstructionsModal open={showIosModal} onClose={() => setShowIosModal(false)} />
+      <IosInstallInstructionsModal open={showIosModal} onClose={() => setShowIosModal(false)} inSafari={isIosSafari} />
     </Card>
   );
 }

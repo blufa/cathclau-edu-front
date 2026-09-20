@@ -201,6 +201,23 @@ export function getTeacherMonthlySummary(teacherId: number, year: number, month:
   return api.get<TeacherMonthlySummary>(`/attendance/teachers/${teacherId}/monthly-summary`, { query: { year, month } });
 }
 
+// ── Récapitulatif retards/absences par matière (fiche enseignant, contestation de salaire) ──
+export interface TeacherLatenessDetailRow {
+  date: string;
+  classId: number | null;
+  subjectId: number | null;
+  lateMinutes: number;
+  earlyMinutes: number;
+}
+export function getTeacherLatenessDetail(teacherId: number, from: string, to: string): Promise<TeacherLatenessDetailRow[]> {
+  return api.get<TeacherLatenessDetailRow[]>(`/attendance/teachers/${teacherId}/lateness-detail`, { query: { from, to } });
+}
+
+/** Export PDF du récapitulatif retards/absences d'un enseignant sur une période — object URL local. */
+export function getTeacherLatenessReportPdfObjectUrl(teacherId: number, from: string, to: string): Promise<string> {
+  return api.blobUrl(`/attendance/teachers/${teacherId}/lateness/download`, { query: { from, to } });
+}
+
 // ── Réglages : marge de transition entre salles, horaire du personnel, récréation ───
 export interface AttendanceSettings {
   id: number | null;

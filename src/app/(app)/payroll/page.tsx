@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { Banknote, Clock, FileSpreadsheet, Megaphone, Plus, Settings as SettingsIcon, HandCoins } from "lucide-react";
+import { ArrowLeft, Banknote, Clock, Megaphone, Plus, Settings as SettingsIcon, HandCoins, Wallet } from "lucide-react";
 import { FeeDeductionPanel } from "@/components/payroll/fee-deduction-panel";
+import { SalaryAdvancePanel } from "@/components/payroll/salary-advance-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getAssignedClasses, listEmployees, listTeachers, type Employee } from "@/lib/api/staff";
-import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
+import { getCurrentAcademicYear, listClasses, listLevels } from "@/lib/api/academics";
 import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
 import { sendDiffusion } from "@/lib/api/communication";
 import {
@@ -19,7 +22,6 @@ import {
   addPayslipLine,
   removePayslipLine,
   approvePayslip,
-  bankFileUrl,
   createStructure,
   deletePayslip,
   deleteRule,
@@ -27,7 +29,6 @@ import {
   generatePayslip,
   getPayslipLines,
   getPayslipPdfObjectUrl,
-  getTeacherAttendanceStats,
   listPayslips,
   listRules,
   listStructures,
@@ -63,10 +64,9 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
@@ -113,11 +113,13 @@ export default function PayrollPage() {
           <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>
           <TabsTrigger value="structures" icon={SettingsIcon}>Structures salariales</TabsTrigger>
           <TabsTrigger value="deductions" icon={HandCoins}>Déductions scolarité</TabsTrigger>
+          <TabsTrigger value="advances" icon={Wallet}>Avances sur salaire</TabsTrigger>
         </TabsList>
         <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
         <TabsPanel value="compensation"><CompensationTab /></TabsPanel>
         <TabsPanel value="structures"><StructuresTab /></TabsPanel>
         <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"])} /></TabsPanel>
+        <TabsPanel value="advances"><SalaryAdvancePanel /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -125,28 +127,63 @@ export default function PayrollPage() {
 
 function PayslipsTab() {
   const { user } = useAuth();
-  const teachersQuery = useQuery(listTeachers, []);
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const teacherName = useMemo(() => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachers]);
-  const structuresQuery = useQuery(listStructures, []);
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, listEmployees, [tenantId]);
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
+  const employeeName = useMemo(() => new Map(employees.map((e) => [e.id, `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim()])), [employees]);
+  // Enseignants et personnel ont deux séquences d'id distinctes qui peuvent coïncider (même #2 pour un
+  // enseignant ET un employé) — il faut donc résoudre le nom dans le bon référentiel selon employeeType,
+  // jamais toujours dans celui des enseignants (c'était la cause du repli « #id » pour le personnel).
+  function personName(p: Payslip): string {
+    const name = p.employeeType === "TEACHER" ? teacherName.get(p.teacherId) : employeeName.get(p.teacherId);
+    return name || `#${p.teacherId}`;
+  }
+  const structuresQuery = useCachedQuery(tenantId ? `payroll-structures:${tenantId}` : null, listStructures, [tenantId]);
 
   const [status, setStatus] = useState<Payslip["status"] | "">("");
   const q = useQuery(() => listPayslips({ status: status || undefined }), [status]);
 
-  const [generating, setGenerating] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [linesFor, setLinesFor] = useState<Payslip | null>(null);
   const [notifying, setNotifying] = useState(false);
   const [staffPayslipOpen, setStaffPayslipOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   function act(p: Promise<unknown>) { p.then(() => { notifySuccess("Mis à jour"); q.refetch(); }).catch(notifyError); }
   function remove(p: Payslip) {
     confirmAction({ title: "Supprimer la fiche", message: "Confirmer ?", confirmLabel: "Supprimer", danger: true,
       onConfirm: async () => { try { await deletePayslip(p.id); notifySuccess("Supprimée"); q.refetch(); } catch (e) { notifyError(e); } } });
   }
-  async function downloadBankFile() {
-    try { window.open(await bankFileUrl(), "_blank"); } catch (e) { notifyError(e); }
+  function toggleSelected(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
+  const rows = q.data ?? [];
+  const selectableDraft = rows.filter((p) => selected.has(p.id) && p.status === "DRAFT").map((p) => p.id);
+  const selectableValidated = rows.filter((p) => selected.has(p.id) && p.status === "VALIDATED").map((p) => p.id);
+
+  async function bulkAction(ids: number[], fn: (id: number) => Promise<unknown>, label: string) {
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const results = await Promise.allSettled(ids.map((id) => fn(id)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) notifyError(new Error(`${failed} fiche(s) sur ${ids.length} ont échoué.`));
+      else notifySuccess(`${ids.length} fiche(s) ${label}.`);
+      setSelected(new Set());
+      q.refetch();
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   function notifyStaffSalariesAvailable() {
     confirmAction({
       title: "Notifier tout le personnel",
@@ -185,21 +222,43 @@ function PayslipsTab() {
           <Button variant="secondary" loading={notifying} leftSection={<Megaphone className="h-4 w-4" />} onClick={notifyStaffSalariesAvailable}>
             Notifier salaires disponibles
           </Button>
-          <Button variant="secondary" leftSection={<FileSpreadsheet className="h-4 w-4" />} onClick={downloadBankFile}>Fichier bancaire</Button>
           <Button variant="secondary" leftSection={<Banknote className="h-4 w-4" />} onClick={() => setBatchOpen(true)}>Générer en lot</Button>
           <Button variant="secondary" onClick={() => setStaffPayslipOpen(true)}>Personnel (direction/admin.)</Button>
-          <Button leftSection={<Plus className="h-4 w-4" />} onClick={() => setGenerating(true)}>Générer une fiche</Button>
         </div>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-50 px-3 py-2">
+          <p className="text-sm text-brand-800">{selected.size} fiche(s) sélectionnée(s)</p>
+          <Button size="sm" loading={bulkLoading} disabled={selectableDraft.length === 0}
+            onClick={() => bulkAction(selectableDraft, (id) => approvePayslip(id), "validée(s)")}>
+            Valider la sélection ({selectableDraft.length})
+          </Button>
+          <Button size="sm" loading={bulkLoading} disabled={selectableValidated.length === 0}
+            onClick={() => bulkAction(selectableValidated, (id) => payPayslip(id), "payée(s)")}>
+            Payer la sélection ({selectableValidated.length})
+          </Button>
+          <button type="button" className="text-xs text-gray-500 hover:underline" onClick={() => setSelected(new Set())}>Tout décocher</button>
+        </div>
+      )}
+
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Enseignant</TH><TH>Période</TH><TH className="hidden sm:table-cell">Base</TH><TH className="hidden sm:table-cell">Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr>
+            <TH>
+              <Checkbox
+                checked={rows.length > 0 && selected.size === rows.length}
+                onChange={() => setSelected(selected.size === rows.length ? new Set() : new Set(rows.map((p) => p.id)))}
+              />
+            </TH>
+            <TH>Enseignant</TH><TH>Période</TH><TH className="hidden sm:table-cell">Base</TH><TH className="hidden sm:table-cell">Brut</TH><TH>Net</TH><TH>Statut</TH><TH className="text-right">Actions</TH>
+          </tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
-            {(q.data ?? []).map((p) => (
+            {rows.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune fiche.</TD></TR>}
+            {rows.map((p) => (
               <TR key={p.id}>
-                <TD className="font-medium text-gray-900">{teacherName.get(p.teacherId) ?? `#${p.teacherId}`}</TD>
+                <TD><Checkbox checked={selected.has(p.id)} onChange={() => toggleSelected(p.id)} /></TD>
+                <TD className="font-medium text-gray-900">{personName(p)}</TD>
                 <TD>{p.periodLabel}</TD>
                 <TD className="hidden sm:table-cell">{formatGNF(p.baseSalary)}</TD>
                 <TD className="hidden sm:table-cell">{formatGNF(p.grossSalary)}</TD>
@@ -220,19 +279,13 @@ function PayslipsTab() {
         </Table>
       )}
 
-      <Modal open={generating} onClose={() => setGenerating(false)} title="Générer une fiche de paie">
-        <GenerateForm teachers={teachers} structures={structuresQuery.data ?? []}
-          onCancel={() => setGenerating(false)}
-          onDone={() => { setGenerating(false); notifySuccess("Fiche générée"); q.refetch(); }} />
-      </Modal>
-
       <Modal open={batchOpen} onClose={() => setBatchOpen(false)} title="Générer les fiches de paie en lot">
         <GenerateBatchForm teachers={teachers} structures={structuresQuery.data ?? []}
           onCancel={() => setBatchOpen(false)}
           onDone={(n) => { setBatchOpen(false); notifySuccess(`${n} fiche(s) générée(s)`); q.refetch(); }} />
       </Modal>
 
-      <Modal open={!!linesFor} onClose={() => setLinesFor(null)} title={linesFor ? `Détail — ${teacherName.get(linesFor.teacherId) ?? ""} (${linesFor.periodLabel})` : ""}>
+      <Modal open={!!linesFor} onClose={() => setLinesFor(null)} title={linesFor ? `Détail — ${personName(linesFor)} (${linesFor.periodLabel})` : ""}>
         {linesFor && <LinesPanel payslip={linesFor} onChanged={() => q.refetch()} />}
       </Modal>
 
@@ -251,7 +304,9 @@ function PayslipsTab() {
  * calculées automatiquement, voir generateCombinedPayslip).
  */
 function StaffPayslipPanel({ structures, onGenerated }: { structures: SalaryStructure[]; onGenerated: () => void }) {
-  const employeesQuery = useQuery(listEmployees, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, listEmployees, [tenantId]);
   const employees = employeesQuery.data ?? [];
   const now = new Date();
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -330,163 +385,6 @@ function StaffPayslipPanel({ structures, onGenerated }: { structures: SalaryStru
         </Table>
       )}
     </div>
-  );
-}
-
-const generateSchema = z.object({
-  teacherId: z.string().min(1, "Requis"),
-  periodLabel: z.string().trim().min(1, "Requis"),
-  structureId: z.string(),
-  baseSalary: z.union([z.number(), z.literal("")]),
-  periodStart: z.string(),
-  periodEnd: z.string(),
-  absentDays: z.union([z.number(), z.literal("")]),
-  workingDays: z.union([z.number(), z.literal("")]),
-  overtimeHours: z.union([z.number(), z.literal("")]),
-  overtimeRate: z.union([z.number(), z.literal("")]),
-  overtimeMultiplier: z.string(),
-});
-type GenerateFormValues = z.infer<typeof generateSchema>;
-
-function GenerateForm({ teachers, structures, onCancel, onDone }: {
-  teachers: { id: number; firstName: string; lastName: string; remunerationRate?: number | string | null; phone?: string | null; bankAccount?: string | null }[];
-  structures: SalaryStructure[]; onCancel: () => void; onDone: () => void;
-}) {
-  const [loading, setLoading] = useState(false);
-  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<GenerateFormValues>({
-    resolver: zodResolver(generateSchema),
-    defaultValues: {
-      teacherId: "", periodLabel: "", structureId: "", baseSalary: 0, periodStart: "", periodEnd: "",
-      absentDays: 0, workingDays: 26,
-      overtimeHours: 0, overtimeRate: 0, overtimeMultiplier: "1.5",
-    },
-  });
-  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
-  const v = watch();
-
-  const teacherOptions: SearchableOption[] = useMemo(
-    () => teachers.map((t) => {
-      const label = `${t.firstName} ${t.lastName}`;
-      return { value: String(t.id), trigger: label, label, searchText: label };
-    }),
-    [teachers],
-  );
-
-  function onTeacher(value: string) {
-    setValue("teacherId", value);
-    const t = teachers.find((x) => String(x.id) === value);
-    if (t?.remunerationRate != null && t.remunerationRate !== "") setValue("baseSalary", Number(t.remunerationRate));
-  }
-
-  // Auto-remplit les jours d'absence depuis le pointage dès que l'enseignant + la période sont saisis.
-  const { teacherId, periodStart, periodEnd } = v;
-  useEffect(() => {
-    if (!teacherId || !periodStart || !periodEnd) return;
-    let active = true;
-    getTeacherAttendanceStats(Number(teacherId), periodStart, periodEnd)
-      .then((s) => { if (active) setValue("absentDays", s.absentDays ?? 0); })
-      .catch(() => { /* pointage indisponible : saisie manuelle */ });
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teacherId, periodStart, periodEnd]);
-
-  async function submit(values: GenerateFormValues) {
-    setLoading(true);
-    try {
-      const t = teachers.find((x) => String(x.id) === values.teacherId);
-      await generatePayslip({
-        teacherId: Number(values.teacherId),
-        teacherName: t ? `${t.firstName} ${t.lastName}` : null,
-        periodLabel: values.periodLabel,
-        periodStart: values.periodStart || null,
-        periodEnd: values.periodEnd || null,
-        baseSalary: Number(values.baseSalary) || 0,
-        structureId: values.structureId ? Number(values.structureId) : null,
-        absentDays: Number(values.absentDays) || 0,
-        workingDays: Number(values.workingDays) || 0,
-        overtimeHours: Number(values.overtimeHours) || 0,
-        overtimeRate: Number(values.overtimeRate) || 0,
-        overtimeMultiplier: Number(values.overtimeMultiplier) || 1,
-        teacherPhone: t?.phone ?? null,
-        bankAccount: t?.bankAccount ?? null,
-      });
-      onDone();
-    } catch (err) { notifyError(err); } finally { setLoading(false); }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <Field>
-        <Label>Enseignant <span className="text-error-500">*</span></Label>
-        <SearchableSelect value={v.teacherId} options={teacherOptions} onChange={onTeacher} triggerClassName="w-full justify-between px-3" />
-        {errors.teacherId && <p className="text-xs text-error-600">{errors.teacherId.message}</p>}
-      </Field>
-      <Field>
-        <Label>Période <span className="text-error-500">*</span></Label>
-        <Input placeholder="Ex. Juin 2026" value={v.periodLabel} onChange={(e) => setValue("periodLabel", e.target.value)} aria-invalid={!!errors.periodLabel} />
-        {errors.periodLabel && <p className="text-xs text-error-600">{errors.periodLabel.message}</p>}
-      </Field>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field>
-          <Label>Du</Label>
-          <DatePicker value={v.periodStart} onChange={(val) => setValue("periodStart", val)} clearable maxDate={new Date()} />
-        </Field>
-        <Field>
-          <Label>Au</Label>
-          <DatePicker value={v.periodEnd} onChange={(val) => setValue("periodEnd", val)} clearable maxDate={new Date()} />
-        </Field>
-      </div>
-      <Field>
-        <Label>Salaire de base (GNF)</Label>
-        <Input type="number" min={0} value={v.baseSalary} onChange={(e) => setValue("baseSalary", e.target.value === "" ? "" : Number(e.target.value))} />
-      </Field>
-      <Field>
-        <Label>Structure salariale</Label>
-        <Select value={v.structureId} onChange={(e) => setValue("structureId", e.target.value)}>
-          <option value="">Aucune (base seule)</option>
-          {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-        </Select>
-      </Field>
-
-      <div className="rounded-xl border border-gray-200 p-3">
-        <p className="mb-2 text-sm font-semibold text-gray-700">Pointage & heures supplémentaires</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <Field>
-            <Label>Jours d&apos;absence</Label>
-            <Input type="number" min={0} value={v.absentDays} onChange={(e) => setValue("absentDays", e.target.value === "" ? "" : Number(e.target.value))} />
-          </Field>
-          <Field>
-            <Label>Jours ouvrés (mois)</Label>
-            <Input type="number" min={1} value={v.workingDays} onChange={(e) => setValue("workingDays", e.target.value === "" ? "" : Number(e.target.value))} />
-          </Field>
-        </div>
-        <p className="mt-1 text-xs text-gray-400">Jours d&apos;absence <strong>récupérés automatiquement</strong> du pointage sur la période (modifiable). Retenue = (base ÷ jours ouvrés) × jours d&apos;absence.</p>
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <Field>
-            <Label>Heures sup.</Label>
-            <Input type="number" min={0} value={v.overtimeHours} onChange={(e) => setValue("overtimeHours", e.target.value === "" ? "" : Number(e.target.value))} />
-          </Field>
-          <Field>
-            <Label>Taux horaire (GNF)</Label>
-            <Input type="number" min={0} value={v.overtimeRate} onChange={(e) => setValue("overtimeRate", e.target.value === "" ? "" : Number(e.target.value))} />
-          </Field>
-          <Field>
-            <Label>Coefficient</Label>
-            <Select value={v.overtimeMultiplier} onChange={(e) => setValue("overtimeMultiplier", e.target.value)}>
-              <option value="1">×1</option>
-              <option value="1.5">×1.5 (ordinaire)</option>
-              <option value="2">×2 (week-end)</option>
-              <option value="2.5">×2.5 (férié)</option>
-            </Select>
-          </Field>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-        <Button type="submit" loading={loading}>Calculer & créer</Button>
-      </div>
-    </form>
   );
 }
 
@@ -862,21 +760,27 @@ function RulesPanel({ structure }: { structure: SalaryStructure }) {
 }
 
 // ── Rémunération (horaire/fixe) & paie mensuelle (heures réalisées − retards) ──────
-function CompensationTab() {
-  const teachersQuery = useQuery(listTeachers, []);
-  const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
-  const [teacherId, setTeacherId] = useState<string>("");
-  const tid = teacherId ? Number(teacherId) : null;
+type CompPerson = { kind: "TEACHER" | "EMPLOYEE"; id: number };
 
-  // Classes de chaque enseignant — pour que le sélecteur affiche « Nom (Classe A, Classe B) » au lieu
-  // du seul nom : avec plusieurs enseignants homonymes ou peu connus, impossible de savoir dans quelle
-  // classe chacun évolue avant de le sélectionner.
+function CompensationTab() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, listEmployees, [tenantId]);
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
+
+  // Classes de chaque enseignant — affichées dans le tableau (colonne « Classes ») pour distinguer les
+  // homonymes ou les enseignants peu connus avant de cliquer sur leur ligne.
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
   const classesQuery = useQuery(
     () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
     [currentYearQuery.data?.id],
   );
   const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
+  const classLevelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.levelId]) ?? []), [classesQuery.data]);
+  const levelsQuery = useCachedQuery("levels-all", listLevels, []);
+  const levels = useMemo(() => (levelsQuery.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder), [levelsQuery.data]);
   const assignedClassesQuery = useQuery(
     () => Promise.all(teachers.map((t) => getAssignedClasses(t.id).then((ids) => [t.id, ids] as const)))
       .then((entries) => new Map(entries)),
@@ -891,14 +795,158 @@ function CompensationTab() {
     }
     return map;
   }, [teachers, assignedClassesQuery.data, classLabelById]);
+  // Niveaux couverts par chaque enseignant (via ses classes affectées) — pour le filtre « Niveau ».
+  const levelIdsByTeacher = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    for (const t of teachers) {
+      const ids = assignedClassesQuery.data?.get(t.id) ?? [];
+      const levelIds = new Set<number>();
+      for (const cid of ids) {
+        const lvl = classLevelById.get(cid);
+        if (lvl != null) levelIds.add(lvl);
+      }
+      map.set(t.id, levelIds);
+    }
+    return map;
+  }, [teachers, assignedClassesQuery.data, classLevelById]);
 
-  const compQuery = useQuery(() => (tid ? getCompensation(tid) : Promise.resolve(null)), [teacherId]);
+  const [selected, setSelected] = useState<CompPerson | null>(null);
+  const [levelFilter, setLevelFilter] = useState("");
+
+  type TeacherRow = { id: number; name: string; classesLabel: string };
+  const teacherRows: TeacherRow[] = useMemo(() => {
+    return teachers
+      .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}`, classesLabel: classesLabelByTeacher.get(t.id) || "—" }))
+      .filter((r) => !levelFilter || levelIdsByTeacher.get(r.id)?.has(Number(levelFilter)))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [teachers, classesLabelByTeacher, levelFilter, levelIdsByTeacher]);
+
+  type PersonnelRow = { id: number; name: string; poste: string };
+  const personnelRows: PersonnelRow[] = useMemo(() => {
+    return employees
+      .map((e) => ({
+        id: e.id, name: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim(),
+        poste: EMPLOYEE_CATEGORY_LABEL[e.category] + (e.jobTitle ? ` — ${e.jobTitle}` : ""),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [employees]);
+
+  const teacherColumns: Column<TeacherRow>[] = [
+    {
+      key: "name", header: "Nom", accessor: (r) => r.name, sortable: true,
+      render: (r) => (
+        <button type="button" onClick={() => setSelected({ kind: "TEACHER", id: r.id })}
+          className="text-left font-medium text-brand-600 hover:underline">
+          {r.name || "—"}
+        </button>
+      ),
+    },
+    { key: "classes", header: "Classe(s)", accessor: (r) => r.classesLabel, sortable: true, render: (r) => r.classesLabel },
+  ];
+  const personnelColumns: Column<PersonnelRow>[] = [
+    {
+      key: "name", header: "Nom", accessor: (r) => r.name, sortable: true,
+      render: (r) => (
+        <button type="button" onClick={() => setSelected({ kind: "EMPLOYEE", id: r.id })}
+          className="text-left font-medium text-brand-600 hover:underline">
+          {r.name || "—"}
+        </button>
+      ),
+    },
+    { key: "poste", header: "Poste", accessor: (r) => r.poste, sortable: true, render: (r) => r.poste },
+  ];
+
+  if (!selected) {
+    return (
+      <Tabs defaultValue="teachers">
+        <TabsList>
+          <TabsTrigger value="teachers">Enseignants</TabsTrigger>
+          <TabsTrigger value="personnel">Personnel</TabsTrigger>
+        </TabsList>
+        <TabsPanel value="teachers">
+          <DataTable
+            columns={teacherColumns}
+            rows={teacherRows}
+            loading={teachersQuery.loading}
+            getRowKey={(r) => r.id}
+            searchable
+            searchPlaceholder="Rechercher un enseignant…"
+            emptyLabel="Aucun enseignant."
+            toolbar={
+              <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="max-w-[200px]">
+                <option value="">Tous les niveaux</option>
+                {levels.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
+              </Select>
+            }
+          />
+        </TabsPanel>
+        <TabsPanel value="personnel">
+          <DataTable
+            columns={personnelColumns}
+            rows={personnelRows}
+            loading={employeesQuery.loading}
+            getRowKey={(r) => r.id}
+            searchable
+            searchPlaceholder="Rechercher un membre du personnel…"
+            emptyLabel="Aucun personnel."
+          />
+        </TabsPanel>
+      </Tabs>
+    );
+  }
+
+  return selected.kind === "TEACHER"
+    ? <TeacherCompensationPanel teacherId={selected.id} teachers={teachers} onBack={() => setSelected(null)} />
+    : <EmployeeCompensationPanel employeeId={selected.id} employees={employees} onBack={() => setSelected(null)} />;
+}
+
+/** Salaire fixe du personnel non-enseignant : pas d'heures de cours, donc pas de config horaire/fixe
+ * ici — le montant se règle sur la fiche Personnel, affiché ici en lecture seule pour cohérence avec
+ * le tableau ci-dessus. */
+function EmployeeCompensationPanel({ employeeId, employees, onBack }: {
+  employeeId: number; employees: Employee[]; onBack: () => void;
+}) {
+  const emp = employees.find((e) => e.id === employeeId);
+  return (
+    <div className="space-y-4">
+      <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+        <ArrowLeft className="h-4 w-4" /> Retour à la liste
+      </button>
+      <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">{emp ? `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim() : "Personnel"}</h3>
+        <p className="mb-3 text-xs text-gray-500">
+          {emp ? `${EMPLOYEE_CATEGORY_LABEL[emp.category]}${emp.jobTitle ? ` — ${emp.jobTitle}` : ""}` : ""}
+        </p>
+        <div className="rounded-xl bg-gray-50 px-4 py-3">
+          <p className="text-xs text-gray-500">Salaire de base (fixe)</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{formatGNF(emp?.baseSalary ?? 0)}</p>
+        </div>
+        <p className="mt-3 text-xs text-gray-400">
+          Le personnel non-enseignant n&apos;a pas d&apos;heures de cours : son salaire est un montant fixe
+          réglé directement sur sa fiche Personnel, pas ici.
+        </p>
+        <div className="mt-3">
+          <Link href="/teachers/staff" className="text-sm font-medium text-brand-600 hover:underline">
+            Modifier depuis la fiche Personnel →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeacherCompensationPanel({ teacherId, teachers, onBack }: {
+  teacherId: number; teachers: Array<{ id: number; firstName: string; lastName: string; phone: string | null; bankAccount: string | null; remunerationType?: string | null; remunerationRate?: string | number | null }>;
+  onBack: () => void;
+}) {
+  const tid = teacherId;
+  const compQuery = useQuery(() => getCompensation(tid), [tid]);
 
   const now = new Date();
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [y, m] = period.split("-").map(Number);
-  const payQuery = useQuery(() => (tid ? getMonthlyPay(tid, y, m) : Promise.resolve(null)), [teacherId, period]);
-  const theoreticalQuery = useQuery(() => (tid ? getTheoreticalPay(tid, y, m) : Promise.resolve(null)), [teacherId, period]);
+  const payQuery = useQuery(() => getMonthlyPay(tid, y, m), [tid, period]);
+  const theoreticalQuery = useQuery(() => getTheoreticalPay(tid, y, m), [tid, period]);
 
   const fmtH = (min: number) => `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")}`;
   const p: MonthlyPay | null | undefined = payQuery.data;
@@ -907,18 +955,7 @@ function CompensationTab() {
   const [genLoading, setGenLoading] = useState(false);
   const [genTimetableLoading, setGenTimetableLoading] = useState(false);
 
-  const teacherOptions: SearchableOption[] = useMemo(
-    () => teachers.map((t) => {
-      const classesLabel = classesLabelByTeacher.get(t.id);
-      const name = `${t.firstName} ${t.lastName}`;
-      const label = classesLabel ? `${name} — ${classesLabel}` : name;
-      return { value: String(t.id), trigger: label, label, searchText: label };
-    }),
-    [teachers, classesLabelByTeacher],
-  );
-
   async function genPayslip() {
-    if (!tid) return;
     setGenLoading(true);
     try {
       await ensureTeacherCompensation(tid, teacherName);
@@ -930,7 +967,6 @@ function CompensationTab() {
   }
 
   async function genPayslipFromTimetable() {
-    if (!tid) return;
     setGenTimetableLoading(true);
     try {
       await ensureTeacherCompensation(tid, teacherName);
@@ -943,19 +979,18 @@ function CompensationTab() {
 
   return (
     <div className="space-y-5">
-      <div className="max-w-md">
-        <Label>Enseignant / personnel</Label>
-        <SearchableSelect value={teacherId} options={teacherOptions} onChange={setTeacherId} triggerClassName="w-full justify-between px-3" />
-      </div>
+      <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
+        <ArrowLeft className="h-4 w-4" /> Retour à la liste
+      </button>
+      <h2 className="text-lg font-bold text-gray-900">
+        {teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : "Enseignant"}
+      </h2>
 
-      {!tid ? (
-        <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">Sélectionnez une personne pour paramétrer sa rémunération.</p>
-      ) : (
-        <>
+      <>
           {compQuery.loading ? (
             <div className="flex justify-center py-6"><Spinner /></div>
           ) : (
-            <CompForm key={teacherId} teacherId={tid} initial={compQuery.data ?? null} teacher={teacherName ?? null}
+            <CompForm key={tid} teacherId={tid} initial={compQuery.data ?? null} teacher={teacherName ?? null}
               onSaved={() => { compQuery.refetch(); payQuery.refetch(); theoreticalQuery.refetch(); }} />
           )}
 
@@ -1040,8 +1075,7 @@ function CompensationTab() {
               </div>
             )}
           </div>
-        </>
-      )}
+      </>
     </div>
   );
 }
@@ -1121,8 +1155,9 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
 function VacationPayMonths({ teacherId }: { teacherId: number }) {
   const q = useQuery(() => listVacationPayMonths(teacherId), [teacherId]);
   const months = q.data ?? [];
-  const now = new Date();
-  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  // Aucun mois pré-sélectionné par défaut : cet avantage est accordé au cas par cas, jamais par défaut
+  // sur le mois courant — mieux vaut forcer un choix explicite que risquer un ajout sur le mauvais mois.
+  const [period, setPeriod] = useState("");
   const [adding, setAdding] = useState(false);
 
   async function add() {

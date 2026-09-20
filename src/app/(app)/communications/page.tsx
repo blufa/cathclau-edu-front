@@ -5,6 +5,7 @@ import { Send, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listUsers } from "@/lib/api/iam";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -351,7 +352,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
 }) {
   const [loading, setLoading] = useState(false);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const classesQuery = useQuery(() => (currentYearId ? listClasses(currentYearId) : Promise.resolve([])), [currentYearId]);
@@ -360,7 +361,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
     [classesQuery.data],
   );
 
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(`students-all-v2:${tenantId}`, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentOptions: SearchableOption[] = useMemo(
     () => (studentsQuery.data ?? []).map((s) => {
       const label = `${s.firstName} ${s.lastName} (${s.studentNumber})`;

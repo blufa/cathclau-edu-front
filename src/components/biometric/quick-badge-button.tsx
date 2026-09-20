@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { IdCard } from "lucide-react";
-import { getStudentCard, issueStudentCard } from "@/lib/api/student-card";
+import { getStudentCard, issueStudentCard, listCardTemplates } from "@/lib/api/student-card";
 import type { StudentCard } from "@/lib/types/student-card";
 import { StudentCardPreview } from "@/features/students/components/student-card-preview";
 import { Button } from "@/components/ui/button";
 import { notifyError } from "@/lib/feedback";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 
 /**
  * Émission/consultation de la carte élève (le vrai « Badge » — carte scolaire avec photo, QR sécurisé
@@ -18,6 +20,9 @@ export function QuickBadgeButton({ studentId, studentName, studentNumber, photoU
   studentId: number; studentName: string; studentNumber?: string | null; photoUrl?: string | null;
   classId?: number | null; size?: "sm" | "md";
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
   const [card, setCard] = useState<StudentCard | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,7 +42,7 @@ export function QuickBadgeButton({ studentId, studentName, studentNumber, photoU
       <Button size={size} variant="ghost" leftSection={<IdCard className="h-4 w-4" />} onClick={openBadge} loading={loading}>
         Badge
       </Button>
-      <StudentCardPreview card={card} studentName={studentName} open={open} onClose={() => setOpen(false)} />
+      <StudentCardPreview card={card} studentName={studentName} open={open} onClose={() => setOpen(false)} templates={templatesQuery.data ?? []} />
     </>
   );
 }

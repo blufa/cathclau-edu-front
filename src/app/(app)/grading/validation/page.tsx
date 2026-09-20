@@ -5,6 +5,7 @@ import { PlayCircle, ArrowRight, Undo2, AlertTriangle, CheckCircle2, History, Aw
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listPeriods, listSubjects } from "@/lib/api/academics";
 import {
   advanceValidationWorkflow,
@@ -39,9 +40,10 @@ const STAGE_ORDER: WorkflowStage[] = [
 
 export default function ValidationPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canAct = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER");
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const [yearId, setYearId] = useState<number | null>(null);
@@ -61,7 +63,7 @@ export default function ValidationPage() {
     [effectiveYearId],
   );
   const periods = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectName = (id: number) => subjectsQuery.data?.find((s) => s.id === id)?.label ?? `#${id}`;
 
   const [classId, setClassId] = useState<number | null>(null);

@@ -8,13 +8,17 @@ import type { Niveau } from "@/lib/types/academics";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /**
- * Catalogue des niveaux (cycles) du système guinéen. Un « niveau » désigne le cycle d'enseignement ;
- * les classes concrètes (« 6ème A », « 7ème A »…) se créent ensuite et se rattachent à un niveau.
- * L'utilisateur coche les cycles à créer plutôt que de les saisir un par un. La Maternelle est
- * composée de ses 3 sections réelles (Petite/Moyenne/Grande Section) plutôt qu'un niveau générique
- * unique — chacune est créée avec le cycle MATERNELLE, qui déclenche le badge de retrait obligatoire.
- * La Garderie n'appartient pas à la progression pédagogique de la Maternelle (pas de PS/MS/GS) : elle
- * a son propre cycle GARDERIE, qui déclenche la même sécurité de retrait.
+ * Catalogue des niveaux (classes d'âge/grades) du système guinéen, groupés par cycle d'enseignement.
+ * Un « niveau » est un grade précis (Petite Section, 7ème, Terminale…) ; le « cycle » (Maternelle,
+ * Primaire, Collège, Lycée…) est l'attribut qui le classe — PS/MS/GS ne sont PAS des cycles, ce sont
+ * des niveaux du cycle MATERNELLE. Les classes concrètes (« 6ème A », « 7ème A »…) se créent ensuite
+ * et se rattachent à un niveau. L'utilisateur coche les niveaux à créer plutôt que de les saisir un
+ * par un. La Maternelle est composée de ses 3 sections réelles (Petite/Moyenne/Grande Section) plutôt
+ * qu'un niveau générique unique — chacune est créée avec le cycle MATERNELLE, qui déclenche le badge
+ * de retrait obligatoire. La Garderie n'appartient pas à la progression pédagogique de la Maternelle
+ * (pas de PS/MS/GS) : elle a son propre cycle GARDERIE, qui déclenche la même sécurité de retrait. Le
+ * secondaire est composé de deux cycles distincts (Collège 7ème-10ème, Lycée 11ème-Terminale), chacun
+ * avec ses propres niveaux — pas un niveau générique unique « Secondaire ».
  */
 export const LEVEL_CATALOG: { label: string; cycle: string }[] = [
   { label: "Garderie", cycle: "GARDERIE" },
@@ -27,12 +31,18 @@ export const LEVEL_CATALOG: { label: string; cycle: string }[] = [
   { label: "Cours Élémentaire 2 (CE2)", cycle: "PRIMAIRE" },
   { label: "Cours Moyen 1 (CM1)", cycle: "PRIMAIRE" },
   { label: "Cours Moyen 2 (CM2)", cycle: "PRIMAIRE" },
-  { label: "Secondaire", cycle: "COLLEGE" },
+  { label: "7ème", cycle: "COLLEGE" },
+  { label: "8ème", cycle: "COLLEGE" },
+  { label: "9ème", cycle: "COLLEGE" },
+  { label: "10ème", cycle: "COLLEGE" },
+  { label: "11ème", cycle: "LYCEE" },
+  { label: "12ème", cycle: "LYCEE" },
+  { label: "Terminale", cycle: "LYCEE" },
   { label: "Supérieur", cycle: "SUPERIEUR" },
 ];
 
 /**
- * Sélecteur de niveaux depuis le catalogue prédéfini. Crée les cycles cochés non encore présents
+ * Sélecteur de niveaux depuis le catalogue prédéfini. Crée les niveaux cochés non encore présents
  * (ordre séquentiel cohérent) et renvoie les niveaux créés via {@code onDone}.
  */
 export function LevelCatalogPicker({
@@ -58,7 +68,7 @@ export function LevelCatalogPicker({
   }
 
   async function handleAdd() {
-    // On ne crée que les cycles non encore présents, dans l'ordre du catalogue (progression cohérente).
+    // On ne crée que les niveaux non encore présents, dans l'ordre du catalogue (progression cohérente).
     const toCreate = LEVEL_CATALOG.filter((l) => selected.has(l.label) && !existingLabels.has(l.label.trim().toLowerCase()));
     if (toCreate.length === 0) {
       onCancel();
@@ -83,7 +93,7 @@ export function LevelCatalogPicker({
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Cochez les cycles à créer. Ceux déjà présents sont grisés. Les classes (« 6ème A », « 7ème A »…)
+        Cochez les niveaux à créer. Ceux déjà présents sont grisés. Les classes (« 6ème A », « 7ème A »…)
         se créent ensuite et se rattachent à un niveau.
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

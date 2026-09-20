@@ -35,6 +35,43 @@ export interface Payment {
   type: PaymentType;
   status: PaymentStatus;
   paidAt: string | null;
+  /** Utilisateur ayant physiquement encaissé (canal CASH uniquement, null sinon) — « Opérateur » du reçu. */
+  collectedByUserId?: number | null;
+}
+
+/** Rapport « encaissements par comptable » (rapprochement de caisse). */
+export interface CashierCollectionsSummary {
+  cashierId: number;
+  total: string;
+  payments: Payment[];
+}
+
+/** Ligne du rapport « encaissements par jour » (tous canaux). */
+export interface DailyCollectionsLine {
+  date: string;
+  total: string;
+  count: number;
+}
+
+/** Rapport « encaissements par jour » — vue du fondateur pour son contrôle mensuel. */
+export interface DailyCollectionsReport {
+  grandTotal: string;
+  days: DailyCollectionsLine[];
+}
+
+export type CashierSessionStatus = "OPEN" | "CLOSED";
+
+export interface CashierSession {
+  id: number;
+  tenantId: number | null;
+  cashierId: number;
+  openedAt: string;
+  closedAt: string | null;
+  systemTotal: string | null;
+  physicalCount: string | null;
+  discrepancy: string | null;
+  notes: string | null;
+  status: CashierSessionStatus;
 }
 
 export interface InitiatePaymentInput {

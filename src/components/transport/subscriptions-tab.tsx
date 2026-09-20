@@ -5,7 +5,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
+import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { searchStudents } from "@/lib/api/students";
 import { cancelSubscription, deleteSubscription, listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { DIRECTION_LABEL, SUB_STATUS_LABEL, type TransportDirection, type TransportRoute } from "@/lib/types/transport";
@@ -20,8 +22,10 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export function SubscriptionsTab() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const routesQuery = useQuery(listRoutes, []);
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(() => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])), [studentsQuery.data]);
   const routeName = useMemo(() => new Map((routesQuery.data ?? []).map((r) => [r.id, r.name])), [routesQuery.data]);
   const [routeFilter, setRouteFilter] = useState<string>("");

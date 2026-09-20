@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { listSubjects } from "@/lib/api/academics";
 import { getAssignedSubjects, setAssignedSubjects } from "@/lib/api/staff";
 import type { Matiere } from "@/lib/types/academics";
@@ -12,7 +14,9 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /** Affecte les matières enseignées par un enseignant (checklist multi-sélection sur sa fiche). */
 export function TeacherSubjectsSection({ teacherId, canWrite }: { teacherId: number; canWrite: boolean }) {
-  const subjectsQuery = useQuery(listSubjects, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const assignedQuery = useQuery(() => getAssignedSubjects(teacherId), [teacherId]);
 
   if (subjectsQuery.loading || assignedQuery.loading || !assignedQuery.data) {

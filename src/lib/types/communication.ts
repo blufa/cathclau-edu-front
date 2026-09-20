@@ -13,7 +13,8 @@ export type BroadcastAudience =
   | "CLASS_PARENTS_GIRLS"
   | "ALL_TEACHERS"
   | "ALL_STAFF"
-  | "STUDENT_PARENTS";
+  | "STUDENT_PARENTS"
+  | "ALL";
 
 export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
   ALL_PARENTS: "Tous les parents",
@@ -23,7 +24,50 @@ export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
   ALL_TEACHERS: "Tous les enseignants",
   ALL_STAFF: "Tout le personnel (enseignants + personnel)",
   STUDENT_PARENTS: "Parent(s) d'un élève précis",
+  ALL: "Toute l'école (élèves, parents, enseignants, personnel)",
 };
+
+export type ScheduledBroadcastStatus = "PENDING" | "SENT" | "CANCELLED" | "FAILED";
+export const SCHEDULED_BROADCAST_STATUS_LABEL: Record<ScheduledBroadcastStatus, string> = {
+  PENDING: "En attente",
+  SENT: "Envoyée",
+  CANCELLED: "Annulée",
+  FAILED: "Échouée",
+};
+
+/** Diffusion de masse programmée : part automatiquement à `sendAt`, sans action manuelle le jour J. */
+export interface ScheduledBroadcast {
+  id: number;
+  tenantId: number | null;
+  senderId: number | null;
+  channel: CommunicationChannel;
+  audience: BroadcastAudience;
+  classId: number | null;
+  studentId: number | null;
+  subject: string | null;
+  content: string;
+  reason: CommunicationReason | null;
+  sendAt: string;
+  status: ScheduledBroadcastStatus;
+  schoolEventId: number | null;
+  createdAt: string;
+  sentAt: string | null;
+  errorMessage: string | null;
+}
+
+export interface ScheduleBroadcastInput {
+  tenantId?: number | null;
+  senderId?: number | null;
+  channel: CommunicationChannel;
+  audience: BroadcastAudience;
+  classId?: number | null;
+  studentId?: number | null;
+  subject?: string | null;
+  content: string;
+  reason?: CommunicationReason | null;
+  sendAt: string;
+  schoolEventId?: number | null;
+}
 
 export const CHANNEL_LABEL: Record<CommunicationChannel, string> = {
   SMS: "SMS",

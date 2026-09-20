@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Calculator } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import {
   createFeeDeductionRule,
   deleteFeeDeductionRule,
@@ -142,7 +144,9 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
 
 /** Lets the user preview the computed deduction for a given teacher. */
 function PreviewCard() {
-  const teachersQuery = useQuery(listTeachers, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const [teacherId, setTeacherId] = useState<string>("");
   const [result, setResult] = useState<FeeDeduction | null>(null);

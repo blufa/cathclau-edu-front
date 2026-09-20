@@ -5,6 +5,7 @@ import { GraduationCap, Rocket } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClassStudents, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { reenroll } from "@/lib/api/enrollments";
 import type { ClassStudent, Classe } from "@/lib/types/academics";
@@ -32,8 +33,8 @@ export default function ReEnrollmentPage() {
   const tenantId = user?.tenantId ?? null;
   const canDo = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:create"]);
 
-  const yearsQuery = useQuery(() => listAcademicYears(), []);
-  const levelsQuery = useQuery(() => listLevels(), []);
+  const yearsQuery = useCachedQuery("academic-years", () => listAcademicYears(), []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, () => listLevels(), [tenantId]);
   const years = useMemo(() => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "")), [yearsQuery.data]);
 
   const current = years.find((y) => y.current) ?? years[0];

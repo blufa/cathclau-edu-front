@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -245,9 +245,8 @@ const addSchema = z.object({
 }).superRefine((v, ctx) => {
   const phoneError = phoneRule(v.phone);
   if (phoneError) ctx.addIssue({ code: "custom", path: ["phone"], message: phoneError });
-  if (v.createLogin && !/^\S+@\S+$/.test(v.email)) {
-    ctx.addIssue({ code: "custom", path: ["email"], message: "Email requis pour l'accès" });
-  }
+  // L'email n'est jamais exigé pour créer l'accès : la connexion se fait par numéro de téléphone
+  // (déjà obligatoire ci-dessus), l'email n'est qu'un canal optionnel pour recevoir les identifiants.
   if (v.createLogin && v.password.length < 6) {
     ctx.addIssue({ code: "custom", path: ["password"], message: "Mot de passe (6 caractères min.)" });
   }
@@ -262,10 +261,18 @@ export function AddParentForm({ studentId, onCancel, onDone }: { studentId: numb
   const [relationship, setRelationship] = useState<Relationship>("FATHER");
   const [loading, setLoading] = useState(false);
 
-  // Existing parent search (reuse a parent across siblings).
+  // Existing parent search (reuse a parent across siblings) — recherche dynamique : la liste complète
+  // est chargée une seule fois, puis filtrée localement à chaque frappe (suggestions immédiates, sans
+  // aller-retour réseau ni bouton « Chercher »).
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
-  const parentsQuery = useQuery(() => (query ? listParents(query) : Promise.resolve([])), [query]);
+  const allParentsQuery = useQuery(() => listParents(), []);
+  const suggestions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return (allParentsQuery.data ?? [])
+      .filter((p) => `${p.firstName} ${p.lastName} ${p.phone ?? ""} ${p.email ?? ""}`.toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [allParentsQuery.data, search]);
 
   // New parent form.
   const { handleSubmit, watch, setValue, formState: { errors } } = useForm<AddFormValues>({
@@ -300,7 +307,7 @@ export function AddParentForm({ studentId, onCancel, onDone }: { studentId: numb
       let userId: number | null = null;
       if (values.createLogin) {
         const user = await createUserWithRole(
-          { firstName: values.firstName, lastName: values.lastName, email: values.email, password: values.password, phone: values.phone || null },
+          { firstName: values.firstName, lastName: values.lastName, email: values.email.trim() || null, password: values.password, phone: values.phone || null },
           "PARENT",
         );
         userId = user.id;
@@ -346,13 +353,17 @@ export function AddParentForm({ studentId, onCancel, onDone }: { studentId: numb
 
       {mode === "existing" ? (
         <div className="space-y-3">
-          <form onSubmit={(e) => { e.preventDefault(); setQuery(search.trim()); }} className="flex gap-2">
-            <Input className="flex-1" placeholder="Rechercher (nom, téléphone, email)…" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button type="submit" variant="secondary">Chercher</Button>
-          </form>
+          <Input
+            className="w-full"
+            placeholder="Rechercher (nom, téléphone, email)…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            autoFocus
+          />
           <p className="text-xs text-slate-400">Réutilisez un parent déjà enregistré (fratrie).</p>
           <div className="max-h-64 space-y-1 overflow-auto">
-            {(parentsQuery.data ?? []).map((p) => (
+            {allParentsQuery.loading && <div className="flex justify-center py-4"><Spinner /></div>}
+            {suggestions.map((p) => (
               <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
                 <div>
                   <p className="text-sm font-medium text-slate-900">{p.firstName} {p.lastName}</p>
@@ -361,7 +372,7 @@ export function AddParentForm({ studentId, onCancel, onDone }: { studentId: numb
                 <Button size="sm" loading={loading} onClick={() => linkExisting(p)}>Rattacher</Button>
               </div>
             ))}
-            {query && (parentsQuery.data ?? []).length === 0 && (
+            {search.trim() && !allParentsQuery.loading && suggestions.length === 0 && (
               <p className="text-sm text-slate-400">Aucun parent trouvé — créez-en un nouveau.</p>
             )}
           </div>
@@ -404,7 +415,7 @@ export function AddParentForm({ studentId, onCancel, onDone }: { studentId: numb
             </div>
             {v.createLogin && (
               <div className="mt-3 space-y-2">
-                <p className="text-xs text-slate-400">Le parent se connectera avec son <strong>email</strong> et ce mot de passe.</p>
+                <p className="text-xs text-slate-400">Le parent se connectera avec son <strong>numéro de téléphone</strong> et ce mot de passe.</p>
                 <Field>
                   <Label>Mot de passe</Label>
                   <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />

@@ -6,9 +6,9 @@ export default function CommunicationsLayout({ children }: { children: ReactNode
     <div>
       <RouteTabs
         tabs={[
-          { label: "Messages", href: "/communications", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], module: "COMMUNICATION" },
-          { label: "Annonces", href: "/communications/announcements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"] },
-          { label: "Modèles", href: "/communications/templates", roles: ["SCHOOL_ADMIN", "DIRECTOR"], module: "COMMUNICATION" },
+          { label: "Messages", href: "/communications", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["communication:send"], module: "COMMUNICATION" },
+          { label: "Annonces", href: "/communications/announcements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["annonce:manage"] },
+          { label: "Modèles", href: "/communications/templates", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["modele:manage"], module: "COMMUNICATION" },
         ]}
       />
       {children}

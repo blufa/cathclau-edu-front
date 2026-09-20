@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
-import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
-import { getAssignedClasses, setAssignedClasses } from "@/lib/api/staff";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
+import { assignClassSubject, listAcademicYears, listClasses, listLevels, listSubjects } from "@/lib/api/academics";
+import { getAssignedClasses, getAssignedSubjects, setAssignedClasses } from "@/lib/api/staff";
 import type { AnneeScolaire, Classe, Niveau } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -16,8 +18,10 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
  * Un filtre par niveau aide à retrouver les classes ; la checklist conserve la sélection multi-niveaux.
  */
 export function TeacherClassesSection({ teacherId, canWrite }: { teacherId: number; canWrite: boolean }) {
-  const yearsQuery = useQuery(listAcademicYears, []);
-  const levelsQuery = useQuery(listLevels, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYear = years.find((y) => y.current) ?? years[0];
   const classesQuery = useQuery(
@@ -55,9 +59,23 @@ function ClassPicker({
   initialSelected: string[];
   onSaved: () => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const [levelFilter, setLevelFilter] = useState("");
   const [selected, setSelected] = useState<string[]>(initialSelected);
+  const [subjectId, setSubjectId] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Matières déjà déclarées par l'enseignant (fiche « Matières enseignées ») — servent à affecter
+  // automatiquement la matière sur chaque nouvelle classe cochée, sans repasser par un second écran.
+  const assignedSubjectsQuery = useQuery(() => getAssignedSubjects(teacherId), [teacherId]);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
+  const teacherSubjects = useMemo(
+    () => (subjectsQuery.data ?? []).filter((s) => (assignedSubjectsQuery.data ?? []).includes(s.id)),
+    [subjectsQuery.data, assignedSubjectsQuery.data],
+  );
+  // Repli sur le catalogue complet si l'enseignant n'a encore déclaré aucune matière.
+  const subjectOptions = teacherSubjects.length > 0 ? teacherSubjects : (subjectsQuery.data ?? []);
 
   const levelOrder = useMemo(() => new Map(levels.map((l) => [l.id, l.sortOrder])), [levels]);
   const options = useMemo(
@@ -77,6 +95,13 @@ function ClassPicker({
     setSaving(true);
     try {
       await setAssignedClasses(teacherId, selected.map(Number));
+      // Affecte directement la matière choisie sur chaque classe nouvellement cochée — l'enseignant
+      // apparaît alors tout de suite dans l'emploi du temps/la saisie de notes de cette classe pour
+      // cette matière, sans passer par un second écran (Classe → Matières).
+      const newlyAdded = selected.filter((id) => !initialSelected.includes(id));
+      if (subjectId && newlyAdded.length > 0) {
+        await Promise.all(newlyAdded.map((id) => assignClassSubject(Number(id), Number(subjectId), teacherId)));
+      }
       notifySuccess("Classes enseignées enregistrées");
       onSaved();
     } catch (err) { notifyError(err); } finally { setSaving(false); }
@@ -106,6 +131,18 @@ function ClassPicker({
           ))}
         </div>
       </Field>
+      {canWrite && subjectOptions.length > 0 && (
+        <Field>
+          <Label>Matière enseignée dans les nouvelles classes cochées</Label>
+          <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+            <option value="">— Ne pas affecter de matière automatiquement —</option>
+            {subjectOptions.map((s) => (<option key={s.id} value={s.id}>{s.label}</option>))}
+          </Select>
+          <p className="mt-1 text-xs text-gray-400">
+            S&apos;applique uniquement aux classes que vous venez de cocher (pas celles déjà enregistrées).
+          </p>
+        </Field>
+      )}
       {canWrite && (
         <div className="flex justify-end">
           <Button onClick={save} loading={saving}>Enregistrer</Button>

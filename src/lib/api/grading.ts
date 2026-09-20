@@ -7,6 +7,7 @@ import type {
   AssessmentTypeConfig,
   AssessmentTypeConfigInput,
   AnnualReportCard,
+  CycleGroup,
   DecisionRule,
   DecisionRuleInput,
   EliminatoryRule,
@@ -208,6 +209,11 @@ export function getAssessmentPlanPdfObjectUrl(classId: number, subjectId: number
   return api.blobUrl(`/grading/assessments/plan/pdf`, { query: { classId, subjectId, academicYearId } });
 }
 
+/** PDF téléchargeable d'UNE évaluation précise (ex. l'épreuve orale d'octobre), notes déjà saisies incluses. */
+export function getAssessmentGradeSheetPdfObjectUrl(assessmentId: number): Promise<string> {
+  return api.blobUrl(`/grading/assessments/${assessmentId}/pdf`);
+}
+
 // ── Bulletin annuel (agrégation des 2 semestres) ─────────────────────────────
 export function getAnnualReportCards(classId: number, academicYearId: number): Promise<AnnualReportCard[]> {
   return api.get<AnnualReportCard[]>("/grading/report-cards/annual", { query: { classId, academicYearId } });
@@ -221,13 +227,13 @@ export function getAnnualReportCardPdfObjectUrl(studentId: number, classId: numb
   return api.blobUrl(`/grading/report-cards/annual/${studentId}/pdf/download`, { query: { classId, academicYearId } });
 }
 
-// ── Grading scale (barème) ───────────────────────────────────────────────────
-export function getGradingScale(): Promise<GradingScale> {
-  return api.get<GradingScale>("/grading/scale");
+// ── Grading scale (barème, un par groupe de cycle primaire/secondaire) ──────
+export function getGradingScale(cycleGroup: CycleGroup): Promise<GradingScale> {
+  return api.get<GradingScale>("/grading/scale", { query: { cycleGroup } });
 }
 
-export function updateGradingScale(input: GradingScaleInput): Promise<GradingScale> {
-  return api.put<GradingScale>("/grading/scale", input);
+export function updateGradingScale(cycleGroup: CycleGroup, input: GradingScaleInput): Promise<GradingScale> {
+  return api.put<GradingScale>("/grading/scale", input, { query: { cycleGroup } });
 }
 
 // ── Calculation settings (moteur de calcul) ──────────────────────────────────
@@ -372,7 +378,7 @@ export function getSubjectGradeReport(classId: number, subjectId: number, period
   return api.get<SubjectGradeReport>(`/grading/classes/${classId}/subjects/${subjectId}/periods/${periodId}/releve`);
 }
 
-/** Relevé de notes d'une matière (PDF) — object URL local. */
-export function getSubjectGradeReportPdfObjectUrl(classId: number, subjectId: number, periodId: number): Promise<string> {
-  return api.blobUrl(`/grading/classes/${classId}/subjects/${subjectId}/periods/${periodId}/releve/download`);
+/** Relevé de notes d'une matière (PDF) — object URL local. `month` (1-12) limite au relevé de ce mois. */
+export function getSubjectGradeReportPdfObjectUrl(classId: number, subjectId: number, periodId: number, month?: number): Promise<string> {
+  return api.blobUrl(`/grading/classes/${classId}/subjects/${subjectId}/periods/${periodId}/releve/download`, { query: { month } });
 }

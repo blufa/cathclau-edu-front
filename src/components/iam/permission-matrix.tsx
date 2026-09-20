@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { splitPermission, type Permission } from "@/lib/types/iam";
+import { RESOURCE_LABEL } from "@/lib/auth/role-labels";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { notifyError } from "@/lib/feedback";
@@ -86,7 +87,7 @@ export function PermissionMatrix({
           return (
             <div key={resource} className="rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-sm font-semibold capitalize text-slate-900">{resource}</h4>
+                <h4 className="text-sm font-semibold text-slate-900">{RESOURCE_LABEL[resource] ?? resource}</h4>
                 <button
                   type="button"
                   onClick={() => toggleResource(perms, allOn)}
@@ -98,12 +99,12 @@ export function PermissionMatrix({
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {perms.map((p) => {
                   const on = selected.has(p.id);
-                  const { action } = splitPermission(p.code);
                   return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => toggle(p.id)}
+                      title={p.code}
                       className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
                         on
                           ? "border-brand-300 bg-brand-50 text-brand-800"
@@ -117,7 +118,7 @@ export function PermissionMatrix({
                       >
                         {on && <Check className="h-3 w-3" strokeWidth={3} />}
                       </span>
-                      <span className="font-mono">{action || p.code}</span>
+                      <span>{p.name || p.code}</span>
                     </button>
                   );
                 })}

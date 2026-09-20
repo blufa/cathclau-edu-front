@@ -32,7 +32,10 @@ export interface Role {
 export interface CreateUserInput {
   firstName: string;
   lastName: string;
-  email: string;
+  /** Optionnel : tous les utilisateurs se connectent par numéro de téléphone — l'email n'est qu'un
+   * canal optionnel supplémentaire pour recevoir les identifiants. Au moins l'un des deux (email ou
+   * phone) reste exigé côté backend. */
+  email?: string | null;
   password: string;
   phone?: string | null;
 }

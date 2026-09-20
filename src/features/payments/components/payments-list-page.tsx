@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
-import { useQuery as useLegacyQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
+import { listUsers } from "@/lib/api/iam";
 import {
   PAYMENT_CHANNEL_LABEL,
   PAYMENT_STATUS_LABEL,
@@ -42,7 +43,7 @@ export default function PaymentsListPage() {
   const tenantId = user?.tenantId ?? null;
   const canRefund = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paiement:refund"]);
 
-  const yearsQuery = useLegacyQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(
     () => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "", "fr", { numeric: true })),
     [yearsQuery.data],
@@ -52,12 +53,31 @@ export default function PaymentsListPage() {
   const yearId = selectedYearId ?? defaultYearId;
   const q = usePaymentsQuery(tenantId, yearId);
   const [status, setStatus] = useState<PaymentStatus | "">("");
-  const studentsQuery = useLegacyQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(
+    tenantId ? `students-all-v2:${tenantId}` : null,
+    () => searchStudents({ size: 1000 }).then((p) => p.content),
+    [tenantId],
+  );
   const studentName = useMemo(() => {
     const map = new Map<number, string>();
-    (studentsQuery.data?.content ?? []).forEach((s) => map.set(s.id, `${s.firstName} ${s.lastName}`));
+    (studentsQuery.data ?? []).forEach((s) => map.set(s.id, `${s.firstName} ${s.lastName}`));
     return (id: number) => map.get(id) ?? `Élève #${id}`;
   }, [studentsQuery.data]);
+
+  // Filtre « Comptable » (rapprochement) — visible seulement pour les rôles qui supervisent les
+  // encaissements des autres (pas un comptable qui ne verrait que les siens, ça reste une liste globale).
+  const canSeeCashierFilter = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const usersQuery = useCachedQuery(
+    canSeeCashierFilter && tenantId ? `users-page1:${tenantId}` : null,
+    () => listUsers(0, 100),
+    [canSeeCashierFilter, tenantId],
+  );
+  const cashierName = useMemo(() => {
+    const map = new Map<number, string>();
+    (usersQuery.data?.content ?? []).forEach((u) => map.set(u.id, `${u.firstName} ${u.lastName}`));
+    return (id: number) => map.get(id) ?? `Utilisateur #${id}`;
+  }, [usersQuery.data]);
+  const [cashierId, setCashierId] = useState<number | "">("");
 
   const refundMutation = useRefundPaymentMutation(tenantId);
   const checkStatusMutation = useCheckPaymentStatusMutation(tenantId);
@@ -67,7 +87,12 @@ export default function PaymentsListPage() {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé aux comptes d&apos;établissement.</div>;
   }
 
-  const rows = (q.data ?? []).filter((p) => !status || p.status === status);
+  const rows = (q.data ?? [])
+    .filter((p) => !status || p.status === status)
+    .filter((p) => !cashierId || p.collectedByUserId === cashierId);
+  const cashierTotal = cashierId
+    ? rows.filter((p) => p.status === "SUCCEEDED").reduce((sum, p) => sum + Number(p.amount), 0)
+    : null;
 
   async function receipt(p: Payment) {
     try {
@@ -121,7 +146,21 @@ export default function PaymentsListPage() {
           <option value="">Tous les statuts</option>
           {(Object.keys(PAYMENT_STATUS_LABEL) as PaymentStatus[]).map((s) => (<option key={s} value={s}>{PAYMENT_STATUS_LABEL[s]}</option>))}
         </Select>
+        {canSeeCashierFilter && (usersQuery.data?.content?.length ?? 0) > 0 && (
+          <Select className="max-w-[220px]" value={cashierId} onChange={(e) => setCashierId(e.target.value ? Number(e.target.value) : "")}>
+            <option value="">Tous les comptables</option>
+            {(usersQuery.data?.content ?? []).map((u) => (<option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>))}
+          </Select>
+        )}
       </div>
+
+      {cashierId !== "" && cashierTotal !== null && (
+        <div className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+          <span className="font-semibold">{cashierName(cashierId)}</span> a encaissé{" "}
+          <span className="font-semibold">{formatGNF(cashierTotal)}</span> sur {rows.filter((p) => p.status === "SUCCEEDED").length} paiement(s) réussi(s) —
+          dans le filtre courant (année/statut).
+        </div>
+      )}
 
       {q.isLoading ? (
         <div className="flex justify-center py-12"><Spinner /></div>

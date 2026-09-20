@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, GraduationCap, Receipt, Wallet, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarCheck, GraduationCap, MessageSquare, Percent, Receipt, Wallet, TrendingUp } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useSubscription } from "@/providers/subscription-provider";
 import { setAutoRenewal } from "@/lib/api/platform";
 import { Switch } from "@/components/ui/switch";
 import { INVOICE_STATUS_LABEL, type Invoice, type InvoiceStatus } from "@/lib/types/billing";
+import { CHANNEL_LABEL, REASON_LABEL } from "@/lib/types/communication";
+import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE } from "@/lib/types/calendar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { CardSkeleton, StatCardSkeleton } from "@/components/ui/skeleton";
@@ -16,14 +18,25 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { BarBreakdownChart, type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
+import { PieBreakdownChart } from "@/components/charts/pie-breakdown-chart";
 import { SubscriptionStatusBadge } from "@/components/platform/status-badge";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { PendingSubscriptionBanner } from "@/components/platform/pending-subscription-banner";
 import { Reveal } from "@/components/public/reveal";
-import { formatDate, formatGNF } from "@/lib/format";
+import { formatDate, formatDateTime, formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { GettingStarted } from "./getting-started";
-import { useRecentInvoicesQuery, useStudentsCountQuery } from "../hooks/use-dashboard";
+import {
+  useAcademicDashboardQuery,
+  useAverageDistributionQuery,
+  useCurrentPeriodQuery,
+  useRecentCommunicationsQuery,
+  useRecentInvoicesQuery,
+  useStudentsCountQuery,
+  useTodayAttendanceQuery,
+  useUpcomingEventsQuery,
+  useUpcomingInstallmentsQuery,
+} from "../hooks/use-dashboard";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 
@@ -67,6 +80,15 @@ export default function DashboardPage() {
 
   const studentsQuery = useStudentsCountQuery(tenantScoped);
   const invoicesQuery = useRecentInvoicesQuery(tenantId, tenantScoped);
+  const periodQuery = useCurrentPeriodQuery(tenantScoped);
+  const currentPeriod = periodQuery.data ?? null;
+  const academicQuery = useAcademicDashboardQuery(currentPeriod?.id ?? null, tenantScoped);
+  const academicClassIds = (academicQuery.data?.classes ?? []).map((c) => c.classId);
+  const distributionQuery = useAverageDistributionQuery(academicClassIds, currentPeriod?.id ?? null, tenantScoped && !!academicQuery.data);
+  const communicationsQuery = useRecentCommunicationsQuery(tenantId, tenantScoped);
+  const attendanceQuery = useTodayAttendanceQuery(tenantScoped);
+  const upcomingInstallmentsQuery = useUpcomingInstallmentsQuery(tenantScoped);
+  const upcomingEventsQuery = useUpcomingEventsQuery(tenantScoped);
   // Guide « Premiers pas » : contenu 100% configuration (classes, enseignants, logo, modèles...) et
   // appels à des endpoints réservés à l'admin (profil école, modèles de message) — ne doit se
   // déclencher que pour les rôles qui font réellement cette configuration, pas pour tout le monde
@@ -173,6 +195,125 @@ export default function DashboardPage() {
                 hint={`${unpaidCount} impayée(s)`} />
               <StatCard title="Taux de recouvrement" value={`${recovery}%`} icon={TrendingUp} accent="sky"
                 trend={{ value: `${recovery}%`, positive: recovery >= 70 }} />
+            </div>
+          </Reveal>
+          )}
+
+          {/* Activité pédagogique — présences du jour, moyenne générale, réussite, messages récents,
+              prochaines échéances, répartition des moyennes élèves (période scolaire actuellement
+              ouverte). */}
+          {(attendanceQuery.data || (academicQuery.data && Number(academicQuery.data.studentCount) > 0)) && (
+          <Reveal y={12}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {attendanceQuery.data && (
+                <StatCard title="Présences aujourd'hui"
+                  value={attendanceQuery.data.expectedCount > 0 ? `${attendanceQuery.data.presentPercentage}%` : "—"}
+                  icon={CalendarCheck} accent="teal"
+                  hint={attendanceQuery.data.expectedCount > 0
+                    ? `${attendanceQuery.data.presentCount}/${attendanceQuery.data.expectedCount} élèves présents`
+                    : "Aucun élève inscrit"} />
+              )}
+              {academicQuery.data && Number(academicQuery.data.studentCount) > 0 && (
+                <>
+                  <StatCard title="Moyenne générale" value={`${academicQuery.data.overallAverage}/20`} icon={GraduationCap} accent="amber"
+                    hint={currentPeriod?.label ?? undefined} />
+                  <StatCard title="Taux de réussite" value={`${academicQuery.data.passRate}%`} icon={Percent} accent="emerald"
+                    trend={{ value: `${academicQuery.data.passRate}%`, positive: Number(academicQuery.data.passRate) >= 70 }} />
+                </>
+              )}
+            </div>
+          </Reveal>
+          )}
+
+          {(communicationsQuery.data?.length || distributionQuery.data || upcomingInstallmentsQuery.data || upcomingEventsQuery.data) && (
+          <Reveal y={12}>
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+              <Card>
+                <CardHeader><CardTitle>Messages récents</CardTitle></CardHeader>
+                <CardBody>
+                  {!communicationsQuery.data || communicationsQuery.data.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-gray-400">Aucune communication envoyée.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {communicationsQuery.data.map((c) => (
+                        <li key={c.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-2 font-medium text-gray-900">
+                              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-brand-500" />
+                              {c.subject || REASON_LABEL[c.reason]}
+                            </p>
+                            <p className="truncate text-xs text-gray-500">{CHANNEL_LABEL[c.channel]} — {c.content}</p>
+                          </div>
+                          <span className="shrink-0 text-xs text-gray-400">{c.sentAt ? formatDateTime(c.sentAt) : "—"}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="pt-3"><Button component={Link} href="/communications" size="sm" variant="ghost">Toutes les communications →</Button></div>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle>Prochaines échéances</CardTitle></CardHeader>
+                <CardBody>
+                  {!upcomingInstallmentsQuery.data || upcomingInstallmentsQuery.data.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-gray-400">Aucune échéance de frais à venir.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {upcomingInstallmentsQuery.data.map((i) => (
+                        <li key={i.installmentId} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                          <div className="flex items-center gap-2 text-gray-900">
+                            <CalendarClock className="h-3.5 w-3.5 shrink-0 text-brand-500" />
+                            {i.label}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-gray-900">{formatGNF(i.amount)}</p>
+                            <p className="text-xs text-gray-400">{formatDate(i.dueDate)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardBody>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle>Prochains événements</CardTitle></CardHeader>
+                <CardBody>
+                  {!upcomingEventsQuery.data || upcomingEventsQuery.data.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-gray-400">Aucun événement à venir.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {upcomingEventsQuery.data.map((e) => (
+                        <li key={e.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-gray-900">{e.title}</p>
+                            <Badge tone={EVENT_TYPE_TONE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</Badge>
+                          </div>
+                          <span className="shrink-0 text-xs text-gray-400">{formatDate(e.startDate)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="pt-3"><Button component={Link} href="/calendar" size="sm" variant="ghost">Tout le calendrier →</Button></div>
+                </CardBody>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle>Résumé des performances</CardTitle></CardHeader>
+                <CardBody>
+                  {!distributionQuery.data ? (
+                    <div className="flex justify-center py-10"><Spinner /></div>
+                  ) : (
+                    <PieBreakdownChart
+                      centerLabel="élèves notés"
+                      data={[
+                        { name: "Excellents (16-20)", value: distributionQuery.data.excellent, color: "#10b981" },
+                        { name: "Bien (14-16)", value: distributionQuery.data.bien, color: "#6366f1" },
+                        { name: "Assez bien (10-14)", value: distributionQuery.data.assezBien, color: "#f59e0b" },
+                        { name: "À améliorer (<10)", value: distributionQuery.data.aAmeliorer, color: "#f43f5e" },
+                      ]}
+                    />
+                  )}
+                </CardBody>
+              </Card>
             </div>
           </Reveal>
           )}

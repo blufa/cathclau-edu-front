@@ -6,9 +6,10 @@ export default function AccountingLayout({ children }: { children: ReactNode }) 
     <div>
       <RouteTabs
         tabs={[
-          { label: "Comptabilité générale", href: "/accounting", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], module: "ACCOUNTING" },
-          { label: "Rapprochement bancaire", href: "/accounting/reconciliation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"] },
-          { label: "Petite caisse", href: "/accounting/petty-cash", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"] },
+          { label: "Comptabilité générale", href: "/accounting", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["comptabilite:manage"], module: "ACCOUNTING" },
+          { label: "Rapprochement bancaire", href: "/accounting/reconciliation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["comptabilite:manage"] },
+          { label: "Petite caisse", href: "/accounting/petty-cash", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["petite_caisse:manage", "petite_caisse:enregistrer"] },
+          { label: "Session de caisse", href: "/accounting/cashier-session", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"] },
         ]}
       />
       {children}

@@ -382,17 +382,8 @@ export function resendInvoice(id: number): Promise<SubscriptionInvoice> {
   return api.post<SubscriptionInvoice>(`/platform/subscription-invoices/${id}/resend`);
 }
 
-// ── Frais d'usage plateforme (SUPER_ADMIN : montant ; école : solde dû + règlement Djomy) ──────
-// `amount` (BigDecimal côté backend) arrive en nombre JSON brut, pas en chaîne — typé large ici pour
-// forcer les appelants à normaliser avec String(...)/Number(...) plutôt que de supposer une chaîne.
-export function getPlatformFeeAmount(): Promise<{ amount: string | number }> {
-  return api.get<{ amount: string | number }>("/platform/frais-plateforme");
-}
-
-export function setPlatformFeeAmount(amount: string): Promise<{ amount: string | number }> {
-  return api.put<{ amount: string | number }>("/platform/frais-plateforme", { amount });
-}
-
+// ── Frais d'usage plateforme (frais annexe configuré par chaque école ; SUPER_ADMIN ne voit que le
+// tableau des soldes dus, réglés ensuite par l'école via Djomy) ────────────────────────────────
 export function getPlatformFeeBalance(): Promise<{ balance: string }> {
   return api.get<{ balance: string }>("/platform-fee/balance");
 }

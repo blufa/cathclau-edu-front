@@ -18,11 +18,13 @@ import { ApiError, isNetworkError } from "@/lib/api/errors";
 import type { CreateStudentInput, EnrollmentType } from "@/lib/types/student";
 import type { CreateTeacherInput } from "@/lib/types/staff";
 import type { ParentInput } from "@/lib/api/parents";
+import { enterBulkGrades } from "@/lib/api/grading";
 import {
   offlineDb,
   type QueuedAttendance,
   type QueuedAttendanceAction,
   type QueuedEnrollment,
+  type QueuedGradeEntry,
   type QueuedGroupPayment,
   type QueuedParent,
   type QueuedTeacher,
@@ -33,6 +35,7 @@ import { useEnrollmentQueueStore } from "./enrollment-queue-store";
 import { useTeacherQueueStore } from "./teacher-queue-store";
 import { useParentQueueStore } from "./parent-queue-store";
 import { useAttendanceQueueStore } from "./attendance-queue-store";
+import { useGradeQueueStore } from "./grade-queue-store";
 
 async function refreshQueueSnapshot(): Promise<void> {
   const items = await offlineDb.paymentQueue.orderBy("createdAt").toArray();
@@ -489,10 +492,82 @@ export async function discardFailedAttendanceEntry(id: string): Promise<void> {
   await refreshAttendanceQueueSnapshot();
 }
 
+// ── Notes hors-ligne (§grading) ─────────────────────────────────────────────────────────────────
+
+async function refreshGradeQueueSnapshot(): Promise<void> {
+  const items = await offlineDb.gradeQueue.orderBy("createdAt").toArray();
+  useGradeQueueStore.getState().setItems(items);
+}
+
+/** Enregistre (ou remplace) la saisie de notes hors-ligne pour une évaluation — une nouvelle
+ * sauvegarde hors-ligne pour la MÊME évaluation écrase la précédente au lieu de s'empiler, voir
+ * QueuedGradeEntry dans db.ts. */
+export async function enqueueGrades(
+  assessmentId: number, grades: { studentId: number; value: number }[],
+): Promise<QueuedGradeEntry> {
+  const entry: QueuedGradeEntry = {
+    assessmentId, grades,
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    attempts: 0,
+  };
+  await offlineDb.gradeQueue.put(entry);
+  await refreshGradeQueueSnapshot();
+  return entry;
+}
+
+let gradeSyncing = false;
+
+/** Rejoue les notes en attente dès que le réseau revient — l'endpoint bulk est un UPSERT par élève
+ * (GradeService.enterBulk, ignore silencieusement les notes déjà validées) : rejouer la même valeur
+ * plusieurs fois est sans risque, contrairement aux paiements/inscriptions. Un échec réseau interrompt
+ * le cycle (on retentera plus tard) ; une vraie erreur métier (période clôturée entre-temps, §422) marque
+ * l'entrée `failed` pour intervention manuelle. */
+export async function processGradeQueue(): Promise<void> {
+  if (gradeSyncing || !useNetworkStore.getState().online) return;
+  gradeSyncing = true;
+  useGradeQueueStore.getState().setSyncing(true);
+  try {
+    const pending = await offlineDb.gradeQueue.where("status").equals("pending").toArray();
+    for (const entry of pending) {
+      try {
+        await enterBulkGrades(entry.assessmentId, entry.grades);
+        await offlineDb.gradeQueue.delete(entry.assessmentId);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          break; // connexion à nouveau instable : on s'arrête là, cette entrée reste "pending"
+        }
+        await offlineDb.gradeQueue.update(entry.assessmentId, {
+          status: "failed",
+          attempts: entry.attempts + 1,
+          lastError: err instanceof Error ? err.message : "Erreur inconnue",
+        });
+      }
+    }
+  } finally {
+    gradeSyncing = false;
+    useGradeQueueStore.getState().setSyncing(false);
+    await refreshGradeQueueSnapshot();
+  }
+}
+
+/** Remet une entrée en échec dans la file pour une nouvelle tentative. */
+export async function retryFailedGradeEntry(assessmentId: number): Promise<void> {
+  await offlineDb.gradeQueue.update(assessmentId, { status: "pending" });
+  await refreshGradeQueueSnapshot();
+  await processGradeQueue();
+}
+
+/** Supprime définitivement une entrée en échec (l'agent a résolu le problème autrement). */
+export async function discardFailedGradeEntry(assessmentId: number): Promise<void> {
+  await offlineDb.gradeQueue.delete(assessmentId);
+  await refreshGradeQueueSnapshot();
+}
+
 let wired = false;
 
-/** Déclenche la synchronisation (paiements, inscriptions, enseignants, parents, présences) au retour
- * du réseau et une fois au démarrage (file déjà non vide). */
+/** Déclenche la synchronisation (paiements, inscriptions, enseignants, parents, présences, notes) au
+ * retour du réseau et une fois au démarrage (file déjà non vide). */
 export function wireSyncTriggers(): void {
   if (wired || typeof window === "undefined") return;
   wired = true;
@@ -502,6 +577,7 @@ export function wireSyncTriggers(): void {
     void processTeacherQueue();
     void processParentQueue();
     void processAttendanceQueue();
+    void processGradeQueue();
   });
   void refreshQueueSnapshot().then(() => {
     if (useNetworkStore.getState().online) void processQueue();
@@ -517,5 +593,8 @@ export function wireSyncTriggers(): void {
   });
   void refreshAttendanceQueueSnapshot().then(() => {
     if (useNetworkStore.getState().online) void processAttendanceQueue();
+  });
+  void refreshGradeQueueSnapshot().then(() => {
+    if (useNetworkStore.getState().online) void processGradeQueue();
   });
 }

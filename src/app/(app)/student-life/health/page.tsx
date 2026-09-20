@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { HeartPulse, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
@@ -41,9 +42,13 @@ const OUTCOME_TONE: Record<VisitOutcome, "green" | "amber" | "red" | "gray"> = {
 
 export default function HealthPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["sante:manage"]);
+  // Suppression réservée à l'administration (backend: sante:delete, plus strict que sante:manage —
+  // un rôle qui peut seulement enregistrer/modifier un passage ne peut pas le supprimer).
+  const canDelete = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["sante:delete"]);
 
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],
@@ -127,7 +132,7 @@ export default function HealthPage() {
                         )}
                         {canWrite && !v.parentNotified && <Button size="sm" variant="ghost" onClick={() => notify(v)}>Marquer prévenu</Button>}
                         {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditingVisit(v)}>Modifier</Button>}
-                        {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(v)}>Suppr.</Button>}
+                        {canDelete && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(v)}>Suppr.</Button>}
                       </div>
                     </TD>
                   </TR>

@@ -83,7 +83,10 @@ export default function TeacherDashboardPage() {
     for (const id of classIds) {
       const [students, assessments] = await Promise.all([getClassStudents(id), listAssessmentsByClass(id)]);
       studentTotal += students.length;
-      for (const a of assessments) {
+      // Uniquement MES évaluations : une classe peut avoir plusieurs enseignants (matières
+      // différentes), on ne veut pas afficher/compter la saisie des autres professeurs.
+      const myAssessments = assessments.filter((a) => a.teacherId === me.id);
+      for (const a of myAssessments) {
         const grades = await getAssessmentGrades(a.id);
         const entered = grades.filter((g) => g.value != null && g.value !== "").length;
         totalEntered += entered;

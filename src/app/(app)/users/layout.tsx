@@ -6,8 +6,8 @@ export default function UsersLayout({ children }: { children: ReactNode }) {
     <div>
       <RouteTabs
         tabs={[
-          { label: "Utilisateurs", href: "/users", roles: ["SCHOOL_ADMIN", "DIRECTOR"] },
-          { label: "Rôles & permissions", href: "/users/roles", roles: ["SCHOOL_ADMIN"] },
+          { label: "Utilisateurs", href: "/users", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["user:read"] },
+          { label: "Rôles & permissions", href: "/users/roles", roles: ["SCHOOL_ADMIN"], permissions: ["role:read"] },
         ]}
       />
       {children}

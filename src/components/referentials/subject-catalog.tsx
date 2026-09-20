@@ -11,11 +11,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const SERIES_LYCEE = [
-  { value: "SCIENCES", label: "11ème — Sciences (tronc commun)" },
-  { value: "SOCIALES", label: "11ème — Sciences Sociales (tronc commun)" },
-  { value: "SM", label: "Terminale — Sciences Mathématiques (SM)" },
-  { value: "SE", label: "Terminale — Sciences Expérimentales (SE)" },
-  { value: "SS", label: "Terminale — Sciences Sociales (SS)" },
+  { value: "LITTERAIRE", label: "Série Littéraire" },
+  { value: "SCIENTIFIQUE", label: "Série Scientifique" },
 ];
 
 /**

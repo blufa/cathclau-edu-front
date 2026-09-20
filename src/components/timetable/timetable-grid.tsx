@@ -13,16 +13,17 @@ import { cn } from "@/lib/utils";
 import type { ClasseMatiere, CreateScheduleInput, EmploiDuTemps, JourSemaine, Matiere } from "@/lib/types/academics";
 
 /** Bandes horaires par défaut de la grille — un point de repère visuel, pas une contrainte : l'heure
- * réelle de chaque séance reste entièrement libre dans sa cellule. Bandes d'1h (au lieu de 2h) pour
- * une saisie plus fine ; une matière qui dure plusieurs heures (ex. 8h-10h) fusionne visuellement les
- * bandes concernées (voir {@link spanCount}) au lieu d'être coupée à la première heure. Ces bornes
- * 08h-18h conviennent à la plupart des écoles, mais une école de garderie/primaire peut avoir des
- * horaires différents (ex. dès 07h) — {@link buildSlots} étend automatiquement les bandes pour
- * couvrir tout créneau réellement enregistré en dehors de cette plage par défaut, pour ne jamais
- * masquer une séance dans la grille. */
+ * réelle de chaque séance reste entièrement libre dans sa cellule. Largeur de bande paramétrable par
+ * l'appelant (voir {@link TimetableGridProps.slotBandMinutes}, ex. 2h au secondaire, 1h ailleurs) ;
+ * une matière qui dure plus longtemps qu'une bande (ex. 8h-10h sur une grille en bandes d'1h) fusionne
+ * visuellement les bandes concernées (voir {@link spanCount}) au lieu d'être coupée à la première
+ * heure. Ces bornes 08h-18h conviennent à la plupart des écoles, mais une école de garderie/primaire
+ * peut avoir des horaires différents (ex. dès 07h) — {@link buildSlots} étend automatiquement les
+ * bandes pour couvrir tout créneau réellement enregistré en dehors de cette plage par défaut, pour ne
+ * jamais masquer une séance dans la grille. */
 const DEFAULT_SLOT_START = "08:00";
 const DEFAULT_SLOT_END = "18:00";
-const SLOT_BAND_MINUTES = 60;
+const DEFAULT_SLOT_BAND_MINUTES = 60;
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -36,23 +37,23 @@ function slotLabel(start: string, end: string): string {
   return `${start.replace(":", "h")}–${end.replace(":", "h")}`;
 }
 
-/** Construit les bandes de la grille : la plage par défaut (08h-16h par bandes de 2h), étendue avant
- * et/ou après si des créneaux réellement enregistrés (`slots`) débordent de cette plage. */
-function buildSlots(slots: EmploiDuTemps[]): { start: string; end: string; label: string }[] {
+/** Construit les bandes de la grille : la plage par défaut (08h-18h par bandes de `bandMinutes`),
+ * étendue avant et/ou après si des créneaux réellement enregistrés (`slots`) débordent de cette plage. */
+function buildSlots(slots: EmploiDuTemps[], bandMinutes: number): { start: string; end: string; label: string }[] {
   let rangeStart = timeToMinutes(DEFAULT_SLOT_START);
   let rangeEnd = timeToMinutes(DEFAULT_SLOT_END);
   for (const s of slots) {
     rangeStart = Math.min(rangeStart, timeToMinutes(s.startTime.slice(0, 5)));
     rangeEnd = Math.max(rangeEnd, timeToMinutes(s.endTime.slice(0, 5)));
   }
-  // Aligne sur des bandes rondes d'1h pour rester lisible (ex. début à 6h50 → bande à partir de 6h).
-  rangeStart = Math.floor(rangeStart / SLOT_BAND_MINUTES) * SLOT_BAND_MINUTES;
-  rangeEnd = Math.ceil(rangeEnd / SLOT_BAND_MINUTES) * SLOT_BAND_MINUTES;
+  // Aligne sur des bandes rondes pour rester lisible (ex. début à 6h50 → bande à partir de 6h).
+  rangeStart = Math.floor(rangeStart / bandMinutes) * bandMinutes;
+  rangeEnd = Math.ceil(rangeEnd / bandMinutes) * bandMinutes;
 
   const bands: { start: string; end: string; label: string }[] = [];
-  for (let t = rangeStart; t < rangeEnd; t += SLOT_BAND_MINUTES) {
+  for (let t = rangeStart; t < rangeEnd; t += bandMinutes) {
     const start = minutesToTime(t);
-    const end = minutesToTime(t + SLOT_BAND_MINUTES);
+    const end = minutesToTime(t + bandMinutes);
     bands.push({ start, end, label: slotLabel(start, end) });
   }
   return bands;
@@ -78,6 +79,7 @@ export function TimetableGrid({
   classSubjects,
   subjects,
   teacherName,
+  slotBandMinutes,
   onChanged,
 }: {
   classId: number;
@@ -86,10 +88,15 @@ export function TimetableGrid({
   subjects: Matiere[];
   /** Nom de l'enseignant par identifiant — concaténé au libellé de chaque option du menu déroulant. */
   teacherName?: Map<number, string>;
+  /** Largeur des bandes horaires en minutes (ex. 120 pour le secondaire, 60 ailleurs) — repli sur 1h. */
+  slotBandMinutes?: number;
   onChanged: () => void;
 }) {
   const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
-  const fixedSlots = useMemo(() => buildSlots(slots), [slots]);
+  const fixedSlots = useMemo(
+    () => buildSlots(slots, slotBandMinutes ?? DEFAULT_SLOT_BAND_MINUTES),
+    [slots, slotBandMinutes],
+  );
 
   // Codes enseignants connus pour chaque matière de la classe (ex. CH1, CH2) — permet de réaffecter
   // rapidement un autre professeur codé sur la même matière, pas seulement celui par défaut.

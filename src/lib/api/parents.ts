@@ -43,8 +43,10 @@ export function listParentsWithPlatformAccess(): Promise<ParentWithAccess[]> {
   return api.get<ParentWithAccess[]>("/parents/with-platform-access");
 }
 
-/** List parents of the current tenant (to reuse a parent across siblings). */
-export function listParents(search?: string, size = 20): Promise<Parent[]> {
+/** List parents of the current tenant (to reuse a parent across siblings). Default size large enough
+ * to cover a whole tenant so the client-side `search` filter below actually searches everyone, not
+ * just the first page — a real gap when a school has more than a couple dozen parents. */
+export function listParents(search?: string, size = 1000): Promise<Parent[]> {
   return api.get<Page<Parent>>("/parents", { query: { size } }).then((p) => {
     const q = (search ?? "").trim().toLowerCase();
     const rows = p.content;

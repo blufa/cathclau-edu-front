@@ -5,13 +5,17 @@ import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   createTeacher,
   deleteTeacher,
+  getTeacherSubjects,
   listTeachers,
   setTeacherActive,
   updateTeacher,
 } from "@/lib/api/staff";
+import { listCardTemplates } from "@/lib/api/student-card";
+import { getCurrentAcademicYear, listClasses, listSubjects } from "@/lib/api/academics";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +29,7 @@ import { OfflineTeacherFields } from "@/components/staff/offline-teacher-fields"
 import { IdBadge } from "@/components/cards/id-badge";
 import { generateBadge } from "@/lib/api/biometric";
 import { buildIdentityQr } from "@/lib/identity-qr";
+import { resolveBadgeColors } from "@/lib/badge-colors";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useNetworkStore } from "@/lib/offline/network-store";
 import { useTeacherQueueStore } from "@/lib/offline/teacher-queue-store";
@@ -239,21 +244,57 @@ export default function TeachersPage() {
         )}
       </Modal>
       <Modal open={!!badgeFor} onClose={() => { setBadgeFor(null); setBadgeQr(null); }} title="Badge enseignant">
-        {badgeFor && (
-          <IdBadge
-            kind="Badge enseignant"
-            fullName={`${badgeFor.firstName} ${badgeFor.lastName}`.trim()}
-            subtitle={badgeFor.specialization ?? "Enseignant"}
-            fields={[
-              { label: "Matricule", value: badgeFor.staffNumber ?? "—", mono: true },
-              { label: "Téléphone", value: badgeFor.phone ?? "—" },
-              { label: "Statut", value: badgeFor.active ? "Actif" : "Inactif" },
-            ]}
-            qrData={buildIdentityQr({ type: "TEACHER", fullName: `${badgeFor.firstName} ${badgeFor.lastName}`, matricule: badgeFor.staffNumber })}
-            footerNote={badgeQr ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}
-          />
-        )}
+        {badgeFor && <TeacherBadgeContent teacher={badgeFor} enrolled={!!badgeQr} />}
       </Modal>
     </div>
+  );
+}
+
+/** Contenu du badge enseignant : matières enseignées (à la place de la spécialité), photo, couleurs du
+ * modèle « Enseignant » par défaut — extrait pour ne charger ces requêtes que quand la modale est ouverte. */
+function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
+  const teacherSubjectsQuery = useQuery(() => getTeacherSubjects(teacher.id), [teacher.id]);
+  const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const classesQuery = useQuery(
+    () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
+    [currentYearQuery.data?.id],
+  );
+
+  const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
+  const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
+  const taughtSubjects = useMemo(() => {
+    const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.subjectId))];
+    return ids.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
+  }, [teacherSubjectsQuery.data, subjectLabel]);
+  const taughtClasses = useMemo(() => {
+    const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.classId))];
+    return ids.map((id) => classLabel.get(id)).filter((l): l is string => !!l).join(", ");
+  }, [teacherSubjectsQuery.data, classLabel]);
+
+  const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
+
+  return (
+    <IdBadge
+      kind="Badge enseignant"
+      fullName={`${teacher.firstName} ${teacher.lastName}`.trim()}
+      firstName={teacher.firstName}
+      lastName={teacher.lastName}
+      photoUrl={teacher.photo}
+      idNumber={teacher.staffNumber}
+      academicYearLabel={currentYearQuery.data?.label}
+      fields={[
+        { label: "Téléphone", value: teacher.phone ?? "—" },
+        { label: "Matières", value: taughtSubjects || "—" },
+        { label: "Classes", value: taughtClasses || "—" },
+      ]}
+      qrData={buildIdentityQr({ type: "TEACHER", fullName: `${teacher.firstName} ${teacher.lastName}`, matricule: teacher.staffNumber })}
+      footerNote={enrolled ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}
+      primaryColor={colors.primaryColor}
+      secondaryColor={colors.secondaryColor}
+    />
   );
 }

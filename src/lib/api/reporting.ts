@@ -31,6 +31,21 @@ export function getAcademicDashboard(periodId: number, top = 10): Promise<Academ
   return api.get<AcademicDashboard>("/dashboard/academic", { query: { periodId, top } });
 }
 
+// ── Présences élèves du jour ──────────────────────────────────────────────
+export interface TodayAttendanceStats {
+  expectedCount: number;
+  presentCount: number;
+  absentCount: number;
+  lateCount: number;
+  presentPercentage: string;
+}
+
+/** Taux de présence élèves du jour, toutes classes confondues. Le pourcentage se stabilise en
+ * cours de journée (un job planifié marque automatiquement absents les élèves non pointés à 14h). */
+export function getTodayAttendanceStats(): Promise<TodayAttendanceStats> {
+  return api.get<TodayAttendanceStats>("/dashboard/attendance/today");
+}
+
 // ── 10.2 Financier ─────────────────────────────────────────────────────────
 export interface FinanceDashboard {
   invoiced: string;
@@ -42,6 +57,19 @@ export interface FinanceDashboard {
 
 export function getFinanceDashboard(): Promise<FinanceDashboard> {
   return api.get<FinanceDashboard>("/dashboard/finance");
+}
+
+export interface UpcomingInstallment {
+  installmentId: number;
+  feeId: number;
+  label: string;
+  dueDate: string;
+  amount: string;
+}
+
+/** Prochaines échéances de paiement des frais (statut en attente), triées par date limite croissante. */
+export function getUpcomingInstallments(daysAhead = 30, limit = 5): Promise<UpcomingInstallment[]> {
+  return api.get<UpcomingInstallment[]>("/dashboard/finance/upcoming-installments", { query: { daysAhead, limit } });
 }
 
 export interface ProjectionMonth {
@@ -132,8 +160,20 @@ export interface TopDebtorRow {
   className: string | null;
   outstanding: string;
 }
+// Forme brute de gn.lacaeducation.billing.BillingStats renvoyée telle quelle par /dashboard/founder
+// (contrairement à /dashboard/finance, qui la remappe explicitement dans FinanceDashboard) — même 4
+// premiers champs, mais la clé JSON du compteur est `unpaidCount`, pas `unpaidInvoices`.
+export interface BillingStatsView {
+  invoiced: string;
+  collected: string;
+  outstanding: string;
+  recoveryRate: string;
+  unpaidCount: number;
+  paidCount: number;
+}
+
 export interface RecoveryView {
-  overall: FinanceDashboard;
+  overall: BillingStatsView;
   byClass: ClassRecoveryRow[];
   byPeriod: PeriodRecoveryRow[];
   topDebtors: TopDebtorRow[];
@@ -188,6 +228,8 @@ export interface SubsidyStats {
   totalExemptions: number;
   partialExemptions: number;
   familyDiscountAmount: string;
+  familyDiscountInvoiceCount: number;
+  familyDiscountInvoicePaidCount: number;
   studentsFullySettledMonthlyFees: number;
   estimatedEarlyPaymentSavings: string;
 }
@@ -231,4 +273,19 @@ export function getFounderDashboard(
   return api.get<FounderDashboard>("/dashboard/founder", {
     query: { academicYearId, ...options },
   });
+}
+
+/** Élève parti en cours d'année (abandon) sur une année scolaire, avec le montant de factures
+ * autrefois impayées désormais annulées (jamais ce qui a déjà été encaissé) — pour que le comptable
+ * puisse justifier la disparition de ces montants des statistiques de recouvrement. */
+export interface AbandonedStudentRow {
+  studentId: number;
+  studentName: string;
+  classId: number | null;
+  className: string | null;
+  writtenOffAmount: string;
+}
+
+export function getAbandonedStudents(academicYearId: number): Promise<AbandonedStudentRow[]> {
+  return api.get<AbandonedStudentRow[]>("/dashboard/founder/abandoned-students", { query: { academicYearId } });
 }
