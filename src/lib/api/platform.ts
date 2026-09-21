@@ -79,6 +79,11 @@ export interface SchoolProfile {
   payoutOperator: string | null;
   /** Nom du titulaire du compte marchand. */
   payoutAccountName: string | null;
+  /** Format du matricule (élèves/enseignants), défini librement par l'école avec les jetons
+   * {PREFIXE}/{ANNEE}/{NUM} — null = format par défaut ({PREFIXE}{NUM}, ex. "AT00001"). */
+  matriculeFormat: string | null;
+  /** Nombre de chiffres du numéro séquentiel du matricule (zéros de tête) — null = 5 par défaut. */
+  matriculeDigits: number | null;
   status?: TenantStatus;
   trialEndsAt?: string | null;
   activatedAt?: string | null;
@@ -90,6 +95,7 @@ export type SchoolProfileInput = Pick<
   | "website" | "director" | "accreditationNumber" | "openingAuthorization" | "motto" | "slogan"
   | "ire" | "dpeLabel" | "sousPrefectureLabel"
   | "payoutMerchantNumber" | "payoutOperator" | "payoutAccountName"
+  | "matriculeFormat" | "matriculeDigits"
 >;
 
 export function getSchoolProfile(): Promise<SchoolProfile> {

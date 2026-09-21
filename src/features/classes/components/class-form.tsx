@@ -14,7 +14,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { RoomForm } from "@/components/referentials/room-form";
 import { LevelCatalogPicker } from "@/components/referentials/level-catalog";
-import { SECTIONS, SERIES, composeClassLabel, gradeHasSeries, gradesForCycle } from "@/lib/academics-grades";
+import {
+  SECTIONS,
+  SERIES,
+  composeClassLabel,
+  gradeHasSeries,
+  gradesForCycle,
+  resolveGradeCode,
+  GRADE_LABEL_BY_CODE,
+} from "@/lib/academics-grades";
 import { notifySuccess } from "@/lib/feedback";
 
 interface ClassFormProps {
@@ -75,8 +83,8 @@ export function ClassForm({
     resolver: zodResolver(schema),
     defaultValues: {
       label: initial?.label ?? "",
-      grade: "",
-      series: "",
+      grade: initial?.grade ? (GRADE_LABEL_BY_CODE[initial.grade] ?? "") : "",
+      series: initial?.serie ?? "",
       section: "",
       levelId: initial?.levelId ? String(initial.levelId) : "",
       roomId: initial?.roomId ? String(initial.roomId) : "",
@@ -120,6 +128,12 @@ export function ClassForm({
         maxCapacity: v.maxCapacity === "" ? null : Number(v.maxCapacity),
         headTeacherId: initial?.headTeacherId ?? null, // désigné depuis le tableau matières/enseignants
         classType: v.classType as "NORMALE" | "EXAMEN",
+        // Résolution du libellé de grade saisi vers le code canonique backend (ex. "7ème" →
+        // "SEPTIEME") — null si nomenclature maison hors catalogue (dégradation gracieuse, la
+        // classe reste créable sans grade exploitable finement par le calcul de remise fratrie ou
+        // le catalogue MEPUA).
+        grade: resolveGradeCode(v.grade) as CreateClassInput["grade"],
+        serie: v.series.trim() === "" ? null : v.series,
       });
     } catch (err) {
       if (err instanceof ApiError) {

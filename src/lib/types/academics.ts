@@ -98,6 +98,18 @@ export interface CreatePeriodInput {
 
 export type ClassType = "NORMALE" | "EXAMEN";
 
+/** Grade pédagogique précis (miroir de l'enum backend `Grade`) — porte la granularité que le Niveau
+ * (réduit à Maternelle/Primaire/Secondaire) ne porte plus depuis la réforme du catalogue de
+ * référentiels. Voir `src/lib/academics-grades.ts` pour la correspondance avec les libellés affichés. */
+export type Grade =
+  | "GARDERIE"
+  | "PETITE_SECTION" | "MOYENNE_SECTION" | "GRANDE_SECTION"
+  | "CP1" | "CP2" | "CE1" | "CE2" | "CM1" | "CM2"
+  | "SIXIEME" | "CINQUIEME" | "QUATRIEME" | "TROISIEME"
+  | "SEPTIEME" | "HUITIEME" | "NEUVIEME" | "DIXIEME"
+  | "SECONDE" | "PREMIERE"
+  | "ONZIEME" | "DOUZIEME" | "TERMINALE";
+
 export interface Classe {
   id: number;
   tenantId: number;
@@ -112,6 +124,12 @@ export interface Classe {
   classType: ClassType;
   /** Élève désigné pour scanner les badges de la classe le matin. */
   classRepresentativeStudentId: number | null;
+  /** Grade précis de la classe (ex. CP1, SEPTIEME, TERMINALE) — null si non renseigné (classe
+   * historique non migrée ou nomenclature maison hors catalogue). */
+  grade: Grade | null;
+  /** Série de la classe (ex. "SM", "SE" — voir `SERIES` dans academics-grades.ts), pertinent
+   * uniquement pour les grades de lycée. */
+  serie: string | null;
 }
 
 export type JourSemaine = "LUNDI" | "MARDI" | "MERCREDI" | "JEUDI" | "VENDREDI" | "SAMEDI";
@@ -236,4 +254,6 @@ export interface CreateClassInput {
   label: string;
   maxCapacity: number | null;
   classType?: ClassType | null;
+  grade?: Grade | null;
+  serie?: string | null;
 }

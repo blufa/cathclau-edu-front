@@ -2,14 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Upload, UserPlus } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Search, Upload } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
 import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions";
-import { ApiError } from "@/lib/api/errors";
-import { qk } from "@/lib/query";
-import type { CreateStudentInput, Enrollment, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
+import type { CreateStudentInput, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch } from "@/lib/api/billing";
@@ -23,16 +20,9 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { StudentForm } from "./student-form";
-import { AddParentForm } from "./parents-manager";
-import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
-import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal";
-import { OfflineEnrollFields } from "@/features/enrollments/components/offline-enroll-fields";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { submitStudentOfflineAware } from "@/lib/offline/submit-student-enrollment";
-import { useEnrollmentQueueStore } from "@/lib/offline/enrollment-queue-store";
-import { discardFailedEnrollmentEntry, retryFailedEnrollmentEntry } from "@/lib/offline/sync-engine";
 import { useDeleteStudentMutation, useStudentsSummaryQuery, useUpdateStudentMutation } from "../hooks/use-students";
 
 const PAGE_SIZE = 20;
@@ -53,24 +43,7 @@ export default function StudentsPage() {
   const [status, setStatus] = useState<EnrollmentStatus | "NOT_ENROLLED" | "">("");
   const [page, setPage] = useState(0);
 
-  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
-  const [quotaError, setQuotaError] = useState<string | null>(null);
-  // Juste après la création : rattacher un parent AVANT l'inscription/encaissement — c'est à lui que
-  // part le SMS de confirmation de paiement, il doit donc exister avant de proposer d'encaisser.
-  // Étape non bloquante (« Plus tard ») : un élève peut être créé sans parent tout de suite si besoin.
-  const [attachingParentFor, setAttachingParentFor] = useState<Student | null>(null);
-  // Proposé juste après le rattachement du parent : inscrire immédiatement (utile pour un ancien élève
-  // de l'établissement qui n'était pas encore dans le logiciel — il choisit « Réinscription » ici).
-  const [enrollingNew, setEnrollingNew] = useState<Student | null>(null);
-  // Enchaînement direct après l'inscription : montrer tout de suite les frais (inscription déjà
-  // facturée automatiquement, mensualités générées automatiquement) prêts à encaisser, sans exiger
-  // une étape manuelle de génération séparée.
-  const [collectingFor, setCollectingFor] = useState<Enrollment | null>(null);
-  // Élève créé hors-ligne (réseau indisponible, §students) : propose de choisir sa classe tout de
-  // suite via le formulaire simplifié, sur l'entrée en file plutôt que sur un élève réel.
-  const [offlineEnrollingEntryId, setOfflineEnrollingEntryId] = useState<string | null>(null);
-  const enrollmentQueueItems = useEnrollmentQueueStore((s) => s.items);
 
   // Résumé (élève + classe courante + parent principal) en un seul appel, déjà trié alphabétiquement
   // (nom, ascendant) côté serveur — voir searchStudentsSummary.
@@ -84,7 +57,6 @@ export default function StudentsPage() {
   });
   const updateMutation = useUpdateStudentMutation();
   const deleteMutation = useDeleteStudentMutation();
-  const queryClient = useQueryClient();
 
   // Libellés de classe (colonne « Classe ») — résolus depuis l'année scolaire courante.
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
@@ -134,35 +106,6 @@ export default function StudentsPage() {
     setSearch(searchInput.trim());
   }
 
-  async function handleCreate(input: CreateStudentInput) {
-    try {
-      const attempt = await submitStudentOfflineAware(input);
-      setCreating(false);
-      setQuotaError(null);
-      if (attempt.outcome === "queued") {
-        notifySuccess("Élève enregistré hors-ligne — sera synchronisé automatiquement.");
-        setOfflineEnrollingEntryId(attempt.entry.id);
-        return;
-      }
-      void queryClient.invalidateQueries({ queryKey: qk.students.all });
-      notifySuccess("Élève créé");
-      refreshSubscription();
-      setAttachingParentFor(attempt.student);
-    } catch (err) {
-      // Quota guard (§students): 403 with {resource:"ELEVES", limite, consomme}.
-      if (err instanceof ApiError && err.status === 403) {
-        const p = err.problem as { limite?: number; consomme?: number } | undefined;
-        const detail =
-          p?.limite != null
-            ? `Limite de votre plan atteinte (${p.consomme ?? "?"}/${p.limite} élèves). Passez à un plan supérieur.`
-            : "Limite de votre plan atteinte. Passez à un plan supérieur.";
-        setQuotaError(detail);
-        return; // keep the form open so the message is visible
-      }
-      throw err; // let the form surface validation/other errors
-    }
-  }
-
   async function handleUpdate(input: CreateStudentInput) {
     if (!editing) return;
     await updateMutation.mutateAsync({ id: editing.id, input });
@@ -186,11 +129,6 @@ export default function StudentsPage() {
         }
       },
     });
-  }
-
-  function openCreate() {
-    setQuotaError(null);
-    setCreating(true);
   }
 
   const columns: Column<StudentSummary>[] = [
@@ -296,8 +234,11 @@ export default function StudentsPage() {
             <Button component={Link} href="/students/import" variant="outline" leftSection={<Upload className="h-4 w-4" />}>
               Import CSV
             </Button>
-            <Button onClick={openCreate} leftSection={<UserPlus className="h-4 w-4" />} disabled={limitReached}>
-              Nouvel élève
+            {/* La création d'un élève se fait toujours via son inscription (Inscriptions → Inscrire) —
+                jamais « à vide » depuis cette liste, pour garantir qu'un élève créé passe par le parent
+                et la classe dès le départ. */}
+            <Button component={Link} href="/enrollments" variant="secondary">
+              Inscrire un élève
             </Button>
           </div>
         )}
@@ -379,53 +320,6 @@ export default function StudentsPage() {
         exportFilename="eleves.csv"
       />
 
-      {enrollmentQueueItems.length > 0 && (
-        <Card>
-          <CardBody>
-            <h2 className="mb-3 text-sm font-semibold text-warning-700">
-              Élèves en attente de synchronisation (hors-ligne)
-            </h2>
-            <ul className="divide-y divide-slate-100">
-              {enrollmentQueueItems.map((entry) => (
-                <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
-                  <span className="text-slate-700">
-                    {entry.studentInput.firstName} {entry.studentInput.lastName}
-                    <span className="ml-2 font-mono text-xs text-slate-400">Matricule : en attente</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {entry.status === "failed" ? (
-                      <>
-                        <span className="text-xs text-error-600">{entry.lastError ?? "Échec"}</span>
-                        <Button size="sm" variant="secondary" onClick={() => discardFailedEnrollmentEntry(entry.id)}>Ignorer</Button>
-                        <Button size="sm" onClick={() => retryFailedEnrollmentEntry(entry.id)}>Réessayer</Button>
-                      </>
-                    ) : entry.enroll ? (
-                      <Badge tone="blue">Classe choisie — en attente de connexion</Badge>
-                    ) : (
-                      <Button size="sm" variant="secondary" onClick={() => setOfflineEnrollingEntryId(entry.id)}>
-                        Choisir la classe
-                      </Button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-      )}
-
-      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvel élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        {quotaError && (
-          <div className="mb-4 rounded-xl border border-error-200 bg-error-50 px-4 py-3 text-sm text-error-700">
-            {quotaError}{" "}
-            <Link href="/subscription" className="font-semibold underline">
-              Voir les plans
-            </Link>
-          </div>
-        )}
-        <StudentForm submitLabel="Créer" onSubmit={handleCreate} onCancel={() => setCreating(false)} />
-      </Modal>
-
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         {editing && (
           <StudentForm
@@ -433,92 +327,6 @@ export default function StudentsPage() {
             submitLabel="Enregistrer"
             onSubmit={handleUpdate}
             onCancel={() => setEditing(null)}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        open={!!attachingParentFor}
-        onClose={() => {
-          setEnrollingNew(attachingParentFor);
-          setAttachingParentFor(null);
-        }}
-        title="Rattacher un parent"
-      >
-        {attachingParentFor && (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-500">
-              Avant d&apos;inscrire {attachingParentFor.firstName} {attachingParentFor.lastName}, rattachez son
-              parent ou tuteur — c&apos;est à lui que partira le SMS de confirmation lors de l&apos;encaissement.
-            </p>
-            <AddParentForm
-              studentId={attachingParentFor.id}
-              onCancel={() => {
-                setEnrollingNew(attachingParentFor);
-                setAttachingParentFor(null);
-              }}
-              onDone={() => {
-                // Le parent rattaché (téléphone) fait partie des colonnes de la liste — sans cette
-                // invalidation, il fallait recharger la page pour le voir apparaître.
-                void queryClient.invalidateQueries({ queryKey: qk.students.all });
-                setEnrollingNew(attachingParentFor);
-                setAttachingParentFor(null);
-              }}
-            />
-            <div className="flex justify-end border-t border-slate-100 pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setEnrollingNew(attachingParentFor);
-                  setAttachingParentFor(null);
-                }}
-              >
-                Plus tard — passer à l&apos;inscription
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {enrollingNew && (
-        <EnrollModal
-          studentId={enrollingNew.id}
-          open={!!enrollingNew}
-          onClose={() => setEnrollingNew(null)}
-          onEnrolled={(enrollment) => {
-            // La classe (et le statut d'inscription) affichées dans la liste viennent de cette
-            // inscription — sans cette invalidation, il fallait recharger la page pour la voir.
-            void queryClient.invalidateQueries({ queryKey: qk.students.all });
-            setEnrollingNew(null);
-            setCollectingFor(enrollment);
-          }}
-        />
-      )}
-
-      {collectingFor && user?.tenantId != null && (
-        <CollectFeeModal
-          studentId={collectingFor.studentId}
-          classId={collectingFor.classId}
-          tenantId={user.tenantId}
-          open={!!collectingFor}
-          onClose={() => setCollectingFor(null)}
-          // Ne ferme plus la modale automatiquement : le reçu s'affiche dans la même fenêtre juste
-          // après l'encaissement, l'utilisateur ferme lui-même une fois qu'il l'a visualisé/imprimé.
-          onCollected={() => {}}
-        />
-      )}
-
-      <Modal
-        open={!!offlineEnrollingEntryId}
-        onClose={() => setOfflineEnrollingEntryId(null)}
-        title="Inscrire l'élève (hors-ligne)"
-      >
-        {offlineEnrollingEntryId && (
-          <OfflineEnrollFields
-            entryId={offlineEnrollingEntryId}
-            onDone={() => setOfflineEnrollingEntryId(null)}
-            onSkip={() => setOfflineEnrollingEntryId(null)}
           />
         )}
       </Modal>

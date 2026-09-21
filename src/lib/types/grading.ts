@@ -131,9 +131,9 @@ export interface ReportCardLine {
   subjectAverage: string | null;
   coefficient: string | null;
   weightedAverage: string | null;
-  /** Moyenne de cours de la matière, si la formule active en fournit une (§StepRole). */
+  /** Moyenne de cours (interrogations/devoirs) — secondaire uniquement, null au primaire. */
   coursAverage?: string | null;
-  /** Moyenne de composition de la matière, si la formule active en fournit une (§StepRole). */
+  /** Moyenne de composition — secondaire uniquement, null au primaire. */
   compoAverage?: string | null;
   subjectRank: number | null;
   comment: string | null;
@@ -200,38 +200,6 @@ export interface GradingScaleInput {
   felicitationsMin: number;
   complimentsMin: number;
   distinctionNoFailingThreshold: number;
-}
-
-// ── Calculation settings (moteur de calcul des moyennes) ─────────────────────
-export type AverageMethod = "SIMPLE" | "WEIGHTED" | "BEST_SCORE" | "DROP_LOWEST" | "BY_CATEGORY";
-export type RoundingPolicy = "MATHEMATICAL" | "UP" | "DOWN" | "NONE";
-
-export const AVERAGE_METHOD_LABEL: Record<AverageMethod, string> = {
-  SIMPLE: "Moyenne simple",
-  WEIGHTED: "Pondérée par coefficient",
-  BEST_SCORE: "Meilleure note",
-  DROP_LOWEST: "Sans la plus faible",
-  BY_CATEGORY: "Par catégorie",
-};
-export const ROUNDING_POLICY_LABEL: Record<RoundingPolicy, string> = {
-  MATHEMATICAL: "Arrondi mathématique",
-  UP: "Au supérieur",
-  DOWN: "À l'inférieur",
-  NONE: "Aucun (troncature)",
-};
-
-export interface GradingCalculationSettings {
-  id: number | null;
-  tenantId: number | null;
-  averageMethod: AverageMethod;
-  decimals: number;
-  rounding: RoundingPolicy;
-}
-
-export interface GradingCalculationSettingsInput {
-  averageMethod: AverageMethod;
-  decimals: number;
-  rounding: RoundingPolicy;
 }
 
 // ── Eliminatory rules (notes éliminatoires par matière) ──────────────────────
@@ -393,66 +361,3 @@ export interface GradeHistory {
   reason: string | null;
 }
 
-// ── Grading formulas (formule de calcul par étapes) ──────────────────────────
-export type FormulaPeriodType = "SEMESTRE" | "TRIMESTRE";
-export const FORMULA_PERIOD_TYPE_LABEL: Record<FormulaPeriodType, string> = {
-  SEMESTRE: "Semestre",
-  TRIMESTRE: "Trimestre",
-};
-
-export type StepKind = "GROUP" | "COMBINE";
-export const STEP_KIND_LABEL: Record<StepKind, string> = {
-  GROUP: "Moyenne d'un groupe d'évaluations",
-  COMBINE: "Combinaison d'étapes précédentes",
-};
-
-export type WeightMode = "EQUAL" | "SUBJECT_COEFFICIENT" | "FIXED";
-export const WEIGHT_MODE_LABEL: Record<WeightMode, string> = {
-  EQUAL: "Poids égal (1)",
-  SUBJECT_COEFFICIENT: "Coefficient de la matière",
-  FIXED: "Poids fixe",
-};
-
-/** Étiquette d'une étape pour la moyenne générale (toutes matières confondues) : la composition
- * pèse le coefficient de la matière, le cours compte à parts égales entre matières. */
-export type StepRole = "NONE" | "COURS" | "COMPOSITION";
-export const STEP_ROLE_LABEL: Record<StepRole, string> = {
-  NONE: "Aucun",
-  COURS: "Cours (moyenne générale simple entre matières)",
-  COMPOSITION: "Composition (moyenne générale pondérée par coefficient)",
-};
-
-export interface GradingFormulaStepInput {
-  id?: number;
-  refStepOrder: number;
-  weightMode: WeightMode;
-  fixedWeight?: number | null;
-}
-
-export interface GradingFormulaStep {
-  id?: number;
-  stepOrder: number;
-  label: string | null;
-  stepKind: StepKind;
-  monthIndex?: number | null;
-  assessmentTypeId?: number | null;
-  inputs: GradingFormulaStepInput[];
-  finalStep: boolean;
-  role?: StepRole;
-}
-
-export interface GradingFormula {
-  id: number;
-  tenantId: number | null;
-  label: string;
-  periodType: FormulaPeriodType;
-  active: boolean;
-  steps: GradingFormulaStep[];
-}
-
-export interface GradingFormulaInput {
-  label: string;
-  periodType: FormulaPeriodType;
-  active?: boolean | null;
-  steps: GradingFormulaStep[];
-}

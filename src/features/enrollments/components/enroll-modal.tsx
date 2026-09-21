@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
+import { getClass, listAcademicYears, listClasses } from "@/lib/api/academics";
+import { GRADE_LABEL_BY_CODE, gradeProgressionRank } from "@/lib/academics-grades";
 import { enroll, reenroll, searchEnrollments, updateEnrollment, updateMonthlyPayment, updatePlatformAccess } from "@/lib/api/enrollments";
 import { listFeesByClass, subscribeAnnexFee } from "@/lib/api/billing";
 import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
@@ -94,17 +95,21 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
     () => (previous ? getClass(previous.classId) : Promise.resolve(null)),
     [previous?.classId],
   );
-  const levelsQuery = useQuery(() => (previous ? listLevels() : Promise.resolve([])), [previous?.id]);
 
   const prevClass = prevClassQuery.data;
   const prevYearLabel = years.find((y) => y.id === previous?.academicYearId)?.label ?? "";
-  const levels = levelsQuery.data ?? [];
-  const prevLevel = levels.find((l) => l.id === prevClass?.levelId);
-  const nextLevel = prevLevel
-    ? levels.filter((l) => l.sortOrder > prevLevel.sortOrder).sort((a, b) => a.sortOrder - b.sortOrder)[0] ?? null
-    : null;
-  const sameLevelClass = prevClass?.levelId != null ? classes.find((c) => c.levelId === prevClass.levelId) : undefined;
-  const nextLevelClass = nextLevel ? classes.find((c) => c.levelId === nextLevel.id) : undefined;
+  // Progression par grade précis de la classe (ex. CM2 → 7ème), plus par Niveau.sortOrder : le
+  // Niveau (réduit à Maternelle/Primaire/Secondaire) ne peut plus distinguer "CP1→CP2" (même niveau)
+  // de "CM2→7ème" (changement de niveau) — voir Classe.grade.
+  const prevGradeLabel = prevClass?.grade ? GRADE_LABEL_BY_CODE[prevClass.grade] ?? null : null;
+  const prevGradeRank = gradeProgressionRank(prevGradeLabel);
+  const nextLevelClass = prevGradeRank >= 0
+    ? classes
+        .filter((c) => c.grade && gradeProgressionRank(GRADE_LABEL_BY_CODE[c.grade] ?? null) > prevGradeRank)
+        .sort((a, b) =>
+          gradeProgressionRank(GRADE_LABEL_BY_CODE[a.grade!] ?? null) - gradeProgressionRank(GRADE_LABEL_BY_CODE[b.grade!] ?? null))[0]
+    : undefined;
+  const sameLevelClass = prevClass?.grade != null ? classes.find((c) => c.grade === prevClass.grade) : undefined;
 
   // (5) Classe cible présélectionnée : par défaut le passage au niveau supérieur (redoublant = même
   // niveau via le bouton « Redoubler »). L'utilisateur peut toujours changer dans la liste.

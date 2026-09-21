@@ -16,10 +16,6 @@ import type {
   ExamInput,
   Grade,
   GradeHistory,
-  GradingCalculationSettings,
-  GradingCalculationSettingsInput,
-  GradingFormula,
-  GradingFormulaInput,
   GradingScale,
   GradingScaleInput,
   ReportCard,
@@ -236,17 +232,6 @@ export function updateGradingScale(cycleGroup: CycleGroup, input: GradingScaleIn
   return api.put<GradingScale>("/grading/scale", input, { query: { cycleGroup } });
 }
 
-// ── Calculation settings (moteur de calcul) ──────────────────────────────────
-export function getCalculationSettings(): Promise<GradingCalculationSettings> {
-  return api.get<GradingCalculationSettings>("/grading/calculation-settings");
-}
-
-export function updateCalculationSettings(
-  input: GradingCalculationSettingsInput,
-): Promise<GradingCalculationSettings> {
-  return api.put<GradingCalculationSettings>("/grading/calculation-settings", input);
-}
-
 // ── Assessment session settings (durées de séance) ───────────────────────────
 export function getAssessmentSessionSettings(): Promise<AssessmentSessionSettings> {
   return api.get<AssessmentSessionSettings>("/grading/assessment-session-settings");
@@ -284,20 +269,6 @@ export function updateDecisionRule(id: number, input: DecisionRuleInput): Promis
 }
 export function deleteDecisionRule(id: number): Promise<void> {
   return api.delete<void>(`/grading/decision-rules/${id}`);
-}
-
-// ── Grading formulas (formule de calcul par étapes) ──────────────────────────
-export function listGradingFormulas(): Promise<GradingFormula[]> {
-  return api.get<GradingFormula[]>("/grading/formulas");
-}
-export function createGradingFormula(input: GradingFormulaInput): Promise<GradingFormula> {
-  return api.post<GradingFormula>("/grading/formulas", input);
-}
-export function updateGradingFormula(id: number, input: GradingFormulaInput): Promise<GradingFormula> {
-  return api.put<GradingFormula>(`/grading/formulas/${id}`, input);
-}
-export function deleteGradingFormula(id: number): Promise<void> {
-  return api.delete<void>(`/grading/formulas/${id}`);
 }
 
 // ── Assessment type configs (types d'évaluation configurables) ───────────────

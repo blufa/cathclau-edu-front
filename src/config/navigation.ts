@@ -245,6 +245,10 @@ export const NAVIGATION: NavSection[] = [
       { label: "Documents & modèles", href: "/documents", icon: FileText, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["document:manage", "document:generate"] },
       {
         label: "Utilisateurs & Rôles", icon: Users,
+        // Gate explicite sur le groupe lui-même (pas seulement ses enfants) : filet de sécurité si un
+        // futur enfant est ajouté ici sans son propre gate — sans ce filet, isNavItemAllowed traite
+        // l'absence de roles/permissions comme "visible par tous" (voir permissions.ts).
+        roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["user:read", "role:read"],
         children: [
           { label: "Utilisateurs", href: "/users", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["user:read"] },
           { label: "Rôles & permissions", href: "/users/roles", roles: ["SCHOOL_ADMIN"], permissions: ["role:read"] },
@@ -252,6 +256,7 @@ export const NAVIGATION: NavSection[] = [
       },
       {
         label: "Intégrations", icon: Webhook,
+        roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["biometrique:manage", "webhook:manage"],
         children: [
           { label: "Biométrie", href: "/biometric", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["biometrique:manage"] },
           { label: "Webhooks", href: "/biometric/webhooks", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["webhook:manage"], module: "WEBHOOKS" },
