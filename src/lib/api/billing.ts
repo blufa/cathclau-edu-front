@@ -17,6 +17,7 @@ import type {
   StaffChildBenefitPolicy,
   StaffChildBenefitPolicyInput,
   StaffCoverage,
+  StudentCoverage,
 } from "@/lib/types/billing";
 
 // ── School fees ──────────────────────────────────────────────────────────
@@ -183,6 +184,11 @@ export function deleteStaffChildBenefit(id: number): Promise<void> {
 export function getStaffChildCoverage(studentId: number, feeType: FeeType): Promise<StaffCoverage> {
   return api.get<StaffCoverage>("/billing/staff-child-benefits/coverage", { query: { studentId, feeType } });
 }
+/** Parmi `studentIds`, ceux pris en charge (enfants de personnel) pour un frais (badge liste des élèves). */
+export function getStaffChildCoverageBatch(studentIds: number[], feeType: FeeType): Promise<StudentCoverage[]> {
+  if (studentIds.length === 0) return Promise.resolve([]);
+  return api.get<StudentCoverage[]>("/billing/staff-child-benefits/coverage-batch", { query: { studentIds: studentIds.join(","), feeType } });
+}
 
 // ── Family discount rules (remise fratrie) ───────────────────────────────────
 export function listFamilyDiscountRules(): Promise<FamilyDiscountRule[]> {
@@ -199,6 +205,11 @@ export function deleteFamilyDiscountRule(id: number): Promise<void> {
 }
 export function getApplicableFamilyDiscount(studentId: number, feeType: FeeType): Promise<ApplicableDiscount> {
   return api.get<ApplicableDiscount>("/billing/family-discount-rules/applicable", { query: { studentId, feeType } });
+}
+/** Parmi `studentIds`, ceux qui sont le cadet exonéré d'une fratrie nombreuse (badge liste des élèves). */
+export function getEligibleYoungestStudentIds(studentIds: number[]): Promise<number[]> {
+  if (studentIds.length === 0) return Promise.resolve([]);
+  return api.get<number[]>("/billing/family-discount-rules/eligible-youngest", { query: { studentIds: studentIds.join(",") } });
 }
 
 // ── Early payment discount rules (remise paiement annuel complet) ───────────

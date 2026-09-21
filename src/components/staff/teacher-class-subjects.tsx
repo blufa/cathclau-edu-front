@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { assignClassSubject, listAcademicYears, listClassSubjects, listClasses, listLevels, listSubjects } from "@/lib/api/academics";
 import { getAssignedClasses, getAssignedSubjects, setAssignedClasses, setAssignedSubjects } from "@/lib/api/staff";
 import type { ClasseMatiere } from "@/lib/types/academics";
@@ -26,11 +28,13 @@ const emptyRow = (): Row => ({ key: `r${++seq}`, classId: "", subjectId: "" });
  * Études) sont proposées — le coefficient existant est conservé, pas ressaisi ici.
  */
 export function TeacherClassSubjectsAssignment({ teacherId }: { teacherId: number }) {
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const currentYear = years.find((y) => y.current) ?? years[0];
   const classesQuery = useQuery(() => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])), [currentYear?.id]);
-  const levelsQuery = useQuery(listLevels, []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
   const levels = useMemo(() => levelsQuery.data ?? [], [levelsQuery.data]);
 
@@ -154,9 +158,11 @@ function ClassSubjectRow({
   onChange: (patch: Partial<Row>) => void;
   onRemove: () => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const classId = row.classId ? Number(row.classId) : null;
   const classSubjectsQuery = useQuery(() => (classId ? listClassSubjects(classId) : Promise.resolve([])), [classId]);
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectLabel = useMemo(
     () => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])),
     [subjectsQuery.data],

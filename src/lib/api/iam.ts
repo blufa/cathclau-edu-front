@@ -73,9 +73,10 @@ export function deleteUser(id: number): Promise<void> {
   return api.delete<void>(`/users/${id}`);
 }
 
-/** Role names currently assigned to a user. */
-export function getUserRoles(id: number): Promise<string[]> {
-  return api.get<string[]>(`/users/${id}/roles`);
+/** Roles currently assigned to a user (id + name — comparer par id, jamais par nom : un rôle
+ * personnalisé peut porter le même libellé qu'un rôle système). */
+export function getUserRoles(id: number): Promise<{ id: number; name: string }[]> {
+  return api.get<{ id: number; name: string }[]>(`/users/${id}/roles`);
 }
 
 export function assignRoleToUser(userId: number, roleId: number): Promise<void> {

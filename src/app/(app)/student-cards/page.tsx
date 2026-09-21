@@ -8,6 +8,7 @@ import { IdCard, Plus, Search, Tags } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getStudent, searchStudents } from "@/lib/api/students";
 import { getClass, listAcademicYears } from "@/lib/api/academics";
 import {
@@ -22,7 +23,9 @@ import {
   setDefaultCardTemplate,
 } from "@/lib/api/student-card";
 import {
+  BADGE_KIND_LABEL,
   CARD_STATUS_LABEL,
+  type BadgeKind,
   type CardOrientation,
   type CardStatus,
   type CardTemplate,
@@ -73,11 +76,12 @@ export default function StudentCardsPage() {
 
 function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["carte:manage"]);
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => listCards(), []);
   const templatesQuery = useQuery(() => listCardTemplates(), []);
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(() => {
-    const m = new Map((studentsQuery.data?.content ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
+    const m = new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
     return (id: number) => m.get(id) ?? `Élève #${id}`;
   }, [studentsQuery.data]);
   const [status, setStatus] = useState<CardStatus | "">("");
@@ -141,7 +145,7 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
       </Modal>
 
       <StudentCardPreview card={preview} studentName={preview ? studentName(preview.studentId) : null}
-        className={previewClass} open={!!preview} onClose={() => setPreview(null)} />
+        className={previewClass} open={!!preview} onClose={() => setPreview(null)} templates={templatesQuery.data ?? []} />
     </div>
   );
 }
@@ -209,6 +213,7 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
 function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["carte:manage"]);
   const q = useQuery(() => listCardTemplates(), []);
+  const [kindFilter, setKindFilter] = useState<BadgeKind | "">("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CardTemplate | null>(null);
 
@@ -216,18 +221,26 @@ function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
     try { await fn(); notifySuccess(ok); q.refetch(); } catch (e) { notifyError(e); }
   }
 
+  const rows = (q.data ?? []).filter((t) => !kindFilter || t.badgeKind === kindFilter);
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">{canEdit && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau modèle</Button>}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Select className="max-w-[220px]" value={kindFilter} onChange={(e) => setKindFilter(e.target.value as BadgeKind | "")}>
+          <option value="">Tous les types de badge</option>
+          {(Object.keys(BADGE_KIND_LABEL) as BadgeKind[]).map((k) => (<option key={k} value={k}>{BADGE_KIND_LABEL[k]}</option>))}
+        </Select>
+        {canEdit && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau modèle</Button>}
+      </div>
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Nom</TH><TH>Orientation</TH><TH>Couleurs</TH><TH>Défaut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Nom</TH><TH>Type de badge</TH><TH>Couleurs</TH><TH>Défaut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun modèle.</TD></TR>}
-            {(q.data ?? []).map((t) => (
+            {rows.length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun modèle.</TD></TR>}
+            {rows.map((t) => (
               <TR key={t.id}>
                 <TD className="font-medium text-gray-900">{t.name}</TD>
-                <TD>{t.orientation === "PORTRAIT" ? "Portrait" : "Paysage"}</TD>
+                <TD><Badge tone="indigo">{BADGE_KIND_LABEL[t.badgeKind]}</Badge></TD>
                 <TD>
                   <div className="flex gap-1">
                     {t.primaryColor && <span className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: t.primaryColor }} />}
@@ -251,7 +264,7 @@ function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
       )}
 
       <Modal open={creating || !!editing} onClose={() => { setCreating(false); setEditing(null); }} title={editing ? "Modifier le modèle de carte" : "Nouveau modèle de carte"}>
-        <TemplateForm initial={editing} onCancel={() => { setCreating(false); setEditing(null); }}
+        <TemplateForm initial={editing} defaultKind={kindFilter || "STUDENT"} onCancel={() => { setCreating(false); setEditing(null); }}
           onCreated={() => { setCreating(false); setEditing(null); notifySuccess(editing ? "Modèle mis à jour" : "Modèle créé"); q.refetch(); }} />
       </Modal>
     </div>
@@ -260,6 +273,7 @@ function TemplatesTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
 const templateSchema = z.object({
   name: z.string().trim().min(1, "Requis"),
+  badgeKind: z.string(),
   orientation: z.string(),
   primaryColor: z.string(),
   secondaryColor: z.string(),
@@ -267,12 +281,15 @@ const templateSchema = z.object({
 });
 type TemplateFormValues = z.infer<typeof templateSchema>;
 
-function TemplateForm({ initial, onCancel, onCreated }: { initial?: CardTemplate | null; onCancel: () => void; onCreated: () => void }) {
+function TemplateForm({ initial, defaultKind, onCancel, onCreated }: {
+  initial?: CardTemplate | null; defaultKind: BadgeKind; onCancel: () => void; onCreated: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   const { handleSubmit, watch, setValue, formState: { errors } } = useForm<TemplateFormValues>({
     resolver: zodResolver(templateSchema),
     defaultValues: {
       name: initial?.name ?? "",
+      badgeKind: initial?.badgeKind ?? defaultKind,
       orientation: initial?.orientation ?? "LANDSCAPE",
       primaryColor: initial?.primaryColor ?? "#14b8a6",
       secondaryColor: initial?.secondaryColor ?? "#0f766e",
@@ -285,7 +302,10 @@ function TemplateForm({ initial, onCancel, onCreated }: { initial?: CardTemplate
   async function submit(values: TemplateFormValues) {
     setLoading(true);
     try {
-      const payload = { name: values.name, orientation: values.orientation as CardOrientation, primaryColor: values.primaryColor, secondaryColor: values.secondaryColor, logoUrl: values.logoUrl };
+      const payload = {
+        name: values.name, badgeKind: values.badgeKind as BadgeKind, orientation: values.orientation as CardOrientation,
+        primaryColor: values.primaryColor, secondaryColor: values.secondaryColor, logoUrl: values.logoUrl,
+      };
       if (initial) await updateCardTemplate(initial.id, payload);
       else await createCardTemplate(payload);
       onCreated();
@@ -297,6 +317,12 @@ function TemplateForm({ initial, onCancel, onCreated }: { initial?: CardTemplate
         <Label>Nom du modèle <span className="text-error-500">*</span></Label>
         <Input value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
         {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
+      </Field>
+      <Field>
+        <Label>Type de badge</Label>
+        <Select value={v.badgeKind} onChange={(e) => setValue("badgeKind", e.target.value)}>
+          {(Object.keys(BADGE_KIND_LABEL) as BadgeKind[]).map((k) => (<option key={k} value={k}>{BADGE_KIND_LABEL[k]}</option>))}
+        </Select>
       </Field>
       <Field>
         <Label>Orientation</Label>

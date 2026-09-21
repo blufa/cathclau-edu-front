@@ -61,7 +61,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`h-full antialiased ${outfit.variable}`}>
+    <html lang="fr" className={`h-full antialiased ${outfit.variable}`} data-scroll-behavior="smooth">
       <body className="min-h-full font-outfit" suppressHydrationWarning>
         <Toaster position="top-right" richColors closeButton />
         <ConfirmDialogHost />

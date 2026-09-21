@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { getClassStudents, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { reenroll } from "@/lib/api/enrollments";
 import type { Classe, Niveau } from "@/lib/types/academics";
@@ -32,8 +34,10 @@ function proposeNextClass(source: Classe | undefined, levels: Niveau[], targetCl
 export function PassageMasseModal({ open, onClose, onDone }: {
   open: boolean; onClose: () => void; onDone: () => void;
 }) {
-  const yearsQuery = useQuery(listAcademicYears, []);
-  const levelsQuery = useQuery(listLevels, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const levels = useMemo(() => levelsQuery.data ?? [], [levelsQuery.data]);
 

@@ -28,6 +28,12 @@ export interface ReadCacheEntry {
   updatedAt: string;
 }
 
+export interface QueryCacheEntry {
+  /** Clé de stockage du persister React Query (une seule entrée globale) — voir query-persister.ts. */
+  key: string;
+  value: string;
+}
+
 export type QueuedEnrollmentStatus = "pending" | "failed";
 
 export interface QueuedEnrollment {
@@ -94,6 +100,22 @@ export interface QueuedAttendance {
   lastError?: string;
 }
 
+export type QueuedGradeStatus = "pending" | "failed";
+
+export interface QueuedGradeEntry {
+  /** Clé = l'évaluation elle-même (PAS un UUID) : contrairement aux paiements/élèves/enseignants,
+   * l'endpoint `/grades/bulk` est un UPSERT par élève (voir GradeService.enterBulk côté serveur) — rejouer
+   * la même valeur plusieurs fois est sans risque. Du coup, une nouvelle sauvegarde hors-ligne pour la
+   * MÊME évaluation REMPLACE l'entrée précédente au lieu de s'empiler : c'est toujours le dernier état
+   * connu par l'enseignant qui part à la synchronisation, jamais une pile de sauvegardes intermédiaires. */
+  assessmentId: number;
+  grades: { studentId: number; value: number }[];
+  createdAt: string;
+  status: QueuedGradeStatus;
+  attempts: number;
+  lastError?: string;
+}
+
 class LacaOfflineDb extends Dexie {
   paymentQueue!: Table<QueuedGroupPayment, string>;
   /** Dernières données lues avec succès pour les écrans de consultation (emploi du temps, référentiels
@@ -108,6 +130,13 @@ class LacaOfflineDb extends Dexie {
   parentQueue!: Table<QueuedParent, string>;
   /** Présences (scan ou saisie manuelle) enregistrées hors-ligne en attente de synchronisation — §attendance. */
   attendanceQueue!: Table<QueuedAttendance, string>;
+  /** Stockage du cache React Query persisté (factures, paiements, reçus, transactions, classes…) — table
+   * séparée de `readCache` (qui garde son propre format simple clé→payload) pour ne jamais faire
+   * collision avec les clés du persister, voir query-persister.ts. */
+  queryCache!: Table<QueryCacheEntry, string>;
+  /** Notes saisies hors-ligne, en attente de synchronisation — §grading. Clé = assessmentId, voir
+   * QueuedGradeEntry ci-dessus. */
+  gradeQueue!: Table<QueuedGradeEntry, number>;
 
   constructor() {
     super("laca-offline");
@@ -137,6 +166,25 @@ class LacaOfflineDb extends Dexie {
       teacherQueue: "id, status, createdAt",
       parentQueue: "id, status, createdAt, studentId",
       attendanceQueue: "id, status, createdAt",
+    });
+    this.version(6).stores({
+      paymentQueue: "id, status, createdAt, *studentIds",
+      readCache: "key",
+      enrollmentQueue: "id, status, createdAt",
+      teacherQueue: "id, status, createdAt",
+      parentQueue: "id, status, createdAt, studentId",
+      attendanceQueue: "id, status, createdAt",
+      queryCache: "key",
+    });
+    this.version(7).stores({
+      paymentQueue: "id, status, createdAt, *studentIds",
+      readCache: "key",
+      enrollmentQueue: "id, status, createdAt",
+      teacherQueue: "id, status, createdAt",
+      parentQueue: "id, status, createdAt, studentId",
+      attendanceQueue: "id, status, createdAt",
+      queryCache: "key",
+      gradeQueue: "assessmentId, status, createdAt",
     });
   }
 }

@@ -17,10 +17,13 @@ interface PwaInstallState {
   isInstallable: boolean;
   /** true si l'app tourne déjà en mode standalone (déjà installée, sur ce device). */
   isInstalled: boolean;
-  /** true sur iOS Safari, où `beforeinstallprompt` n'existe pas (instructions manuelles). */
+  /** true sur tout navigateur iOS (Safari, Chrome, Firefox…) — tous basés sur WebKit, `beforeinstallprompt` n'existe jamais. */
+  isIos: boolean;
+  /** true seulement si en plus le navigateur est Safari lui-même (seul capable d'installer réellement sur iOS). */
   isIosSafari: boolean;
   setDeferredPrompt: (event: BeforeInstallPromptEvent | null) => void;
   setInstalled: (installed: boolean) => void;
+  setIos: (isIos: boolean) => void;
   setIosSafari: (isIos: boolean) => void;
 }
 
@@ -28,9 +31,11 @@ export const usePwaInstallStore = create<PwaInstallState>((set) => ({
   deferredPrompt: null,
   isInstallable: false,
   isInstalled: false,
+  isIos: false,
   isIosSafari: false,
   setDeferredPrompt: (event) => set({ deferredPrompt: event, isInstallable: event !== null }),
   setInstalled: (installed) => set({ isInstalled: installed }),
+  setIos: (isIos) => set({ isIos }),
   setIosSafari: (isIos) => set({ isIosSafari: isIos }),
 }));
 
@@ -40,12 +45,19 @@ export function isRunningStandalone(): boolean {
   return window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
 }
 
+/** true sur tout iPhone/iPad, quel que soit le navigateur (Chrome/Firefox/Edge iOS sont du WebKit maquillé). */
+export function isIosDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && navigator.maxTouchPoints > 1);
+}
+
+/** true seulement si en plus c'est Safari lui-même — seul navigateur autorisé par iOS à installer une PWA. */
 export function isIosSafariDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
-  const isIos = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && navigator.maxTouchPoints > 1);
   const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-  return isIos && isSafari;
+  return isIosDevice() && isSafari;
 }
 
 export function hasDismissedBannerRecently(): boolean {

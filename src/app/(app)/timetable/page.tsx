@@ -6,6 +6,7 @@ import { CalendarClock } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   cancelScheduleWeekException,
   createSchedule,
@@ -16,6 +17,7 @@ import {
   listAcademicYears,
   listClasses,
   listClassSubjects,
+  listLevels,
   listRooms,
   listSubjects,
   moveScheduleForWeek,
@@ -25,7 +27,7 @@ import {
 import { listTeachers } from "@/lib/api/staff";
 import { listEvents } from "@/lib/api/calendar";
 import { EVENT_TYPE_LABEL, type AcademicEvent } from "@/lib/types/calendar";
-import type { CreateScheduleInput, EffectiveScheduleSlot, EmploiDuTemps, JourSemaine, MoveScheduleForWeekInput } from "@/lib/types/academics";
+import { SCHOOL_CYCLE_LABEL, type CreateScheduleInput, type EffectiveScheduleSlot, type EmploiDuTemps, type JourSemaine, type MoveScheduleForWeekInput, type SchoolCycle } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -36,6 +38,7 @@ import { ScheduleForm } from "@/components/timetable/schedule-form";
 import { FixedScheduleForm } from "@/components/timetable/fixed-schedule-form";
 import { MoveScheduleForWeekForm } from "@/components/timetable/move-schedule-for-week-form";
 import { TimetableGrid } from "@/components/timetable/timetable-grid";
+import { TeacherLateSmsButton } from "@/components/timetable/teacher-late-sms-button";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
@@ -73,11 +76,13 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
 
 export default function TimetablePage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["emploi:manage"]);
 
   const [mode, setMode] = useState<"class" | "teacher">("class");
   const [view, setView] = useState<"liste" | "grille">("liste");
   const [selectedYearId, setSelectedYearId] = useState<number | null>(null);
+  const [cycleFilter, setCycleFilter] = useState<SchoolCycle | "">("");
   const [classId, setClassId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -86,26 +91,40 @@ export default function TimetablePage() {
   const [fixedOpen, setFixedOpen] = useState(false);
   const [printingAll, setPrintingAll] = useState(false);
 
-  const yearsQuery = useQuery(listAcademicYears, []);
-  const teachersQuery = useQuery(listTeachers, []);
-  const subjectsQuery = useQuery(listSubjects, []);
-  const roomsQuery = useQuery(listRooms, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
+  const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
 
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const subjects = useMemo(() => subjectsQuery.data ?? [], [subjectsQuery.data]);
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+  const levels = useMemo(() => levelsQuery.data ?? [], [levelsQuery.data]);
+  const levelCycleById = useMemo(() => new Map(levels.map((l) => [l.id, l.cycle])), [levels]);
+  // Deux cycles (Collège + Lycée) forment ensemble le « secondaire » — grille horaire par bandes de
+  // 2h, contre 1h pour les autres cycles (maternelle/primaire), qui alternent des séances plus courtes.
+  const isSecondaryCycle = (cycle: SchoolCycle | null | undefined) => cycle === "COLLEGE" || cycle === "LYCEE";
 
   const yearId = selectedYearId ?? years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
-  const classesQuery = useQuery(() => (yearId ? listClasses(yearId) : Promise.resolve([])), [yearId]);
-  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  const classesQuery = useCachedQuery(yearId ? `classes:${yearId}` : null, () => listClasses(yearId as number), [yearId]);
+  const allClasses = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  const classes = useMemo(
+    () => (cycleFilter ? allClasses.filter((c) => c.levelId != null && levelCycleById.get(c.levelId) === cycleFilter) : allClasses),
+    [allClasses, cycleFilter, levelCycleById],
+  );
 
   const effectiveClassId = classId ?? classes[0]?.id ?? null;
   const effectiveTeacherId = teacherId ?? teachers[0]?.id ?? null;
+  const effectiveClassCycle = effectiveClassId != null
+    ? levelCycleById.get(allClasses.find((c) => c.id === effectiveClassId)?.levelId ?? -1) ?? null
+    : null;
 
   // Matières affectées à la classe (avec enseignant) → restreint la matière + auto-affecte le prof.
-  const classSubjectsQuery = useQuery(
-    () => (effectiveClassId ? listClassSubjects(effectiveClassId) : Promise.resolve([])),
+  const classSubjectsQuery = useCachedQuery(
+    effectiveClassId ? `class-subjects:${effectiveClassId}` : null,
+    () => listClassSubjects(effectiveClassId as number),
     [effectiveClassId],
   );
   const classSubjects = useMemo(() => classSubjectsQuery.data ?? [], [classSubjectsQuery.data]);
@@ -114,7 +133,7 @@ export default function TimetablePage() {
   // vue effective (récurrent + déplacements/annulations ponctuels de cette semaine-là).
   const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [weekDate, setWeekDate] = useState<string>(() => isoLocal(new Date()));
-  const eventsQuery = useQuery(() => (yearId ? listEvents(yearId) : Promise.resolve([])), [yearId]);
+  const eventsQuery = useCachedQuery(yearId ? `events:${yearId}` : null, () => listEvents(yearId as number), [yearId]);
   const holidays = useMemo(
     () => (eventsQuery.data ?? []).filter((e) => e.eventType === "HOLIDAY" || e.eventType === "VACATION"),
     [eventsQuery.data],
@@ -137,10 +156,18 @@ export default function TimetablePage() {
 
   // Récurrent (toutes les semaines) — utilisé par la vue Grille et par Modifier/Supprimer (qui
   // agissent toujours sur le créneau récurrent, jamais sur une exception).
-  const slotsQuery = useQuery(() => {
-    if (mode === "class") return effectiveClassId ? getScheduleByClass(effectiveClassId) : Promise.resolve([]);
-    return effectiveTeacherId ? getScheduleByTeacher(effectiveTeacherId) : Promise.resolve([]);
-  }, [mode, effectiveClassId, effectiveTeacherId]);
+  const slotsCacheKey =
+    mode === "class"
+      ? (effectiveClassId ? `schedule-class:${effectiveClassId}` : null)
+      : (effectiveTeacherId ? `schedule-teacher:${effectiveTeacherId}` : null);
+  const slotsQuery = useCachedQuery(
+    slotsCacheKey,
+    () => {
+      if (mode === "class") return effectiveClassId ? getScheduleByClass(effectiveClassId) : Promise.resolve([]);
+      return effectiveTeacherId ? getScheduleByTeacher(effectiveTeacherId) : Promise.resolve([]);
+    },
+    [mode, effectiveClassId, effectiveTeacherId],
+  );
 
   // Vue grille = édition directe du récurrent (mode classe uniquement). Partout ailleurs (liste, ou
   // mode enseignant qui n'a pas de grille), on affiche la vue effective de la semaine sélectionnée.
@@ -158,6 +185,12 @@ export default function TimetablePage() {
   const roomLabel = useMemo(() => new Map(rooms.map((r) => [r.id, r.label])), [rooms]);
   const teacherName = useMemo(
     () => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
+    [teachers],
+  );
+  // Numéro de l'enseignant sur l'emploi du temps imprimé — pour pouvoir le joindre directement
+  // (ex. absence, remplacement) sans repasser par la fiche enseignant.
+  const teacherPhone = useMemo(
+    () => new Map(teachers.map((t) => [t.id, t.phone])),
     [teachers],
   );
   const classLabel = useMemo(() => new Map(classes.map((c) => [c.id, c.label])), [classes]);
@@ -203,11 +236,12 @@ export default function TimetablePage() {
         const who = mode === "class"
           ? (s.teacherId != null ? (teacherName.get(s.teacherId) ?? "") : "")
           : (classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`);
+        const phone = mode === "class" && s.teacherId != null ? (teacherPhone.get(s.teacherId) ?? null) : null;
         const room = s.roomId != null ? (roomLabel.get(s.roomId) ?? "") : "";
         const title = s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse");
         return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
           + `<div class="subj">${esc(title)}</div>`
-          + (who ? `<div>${esc(who)}</div>` : "")
+          + (who ? `<div>${esc(who)}${phone ? ` — ${esc(phone)}` : ""}</div>` : "")
           + (room ? `<div class="room">Salle : ${esc(room)}</div>` : "") + `</div>`;
       }).join("") || `<span class="empty">—</span>`;
       return `<td>${cells}</td>`;
@@ -243,9 +277,10 @@ export default function TimetablePage() {
           const cells = (byDay.get(d.key) ?? []).map((s) => {
             const title = s.subjectId != null ? esc(subjectLabelAll.get(s.subjectId) ?? `Matière #${s.subjectId}`) : esc(s.label ?? "Heure creuse");
             const who = s.teacherId != null ? esc(teacherName.get(s.teacherId) ?? "") : "";
+            const phone = s.teacherId != null ? teacherPhone.get(s.teacherId) : null;
             const room = s.roomId != null ? esc(roomLabelAll.get(s.roomId) ?? "") : "";
             return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
-              + `<div class="subj">${title}</div>` + (who ? `<div>${who}</div>` : "") + (room ? `<div class="room">Salle : ${room}</div>` : "") + `</div>`;
+              + `<div class="subj">${title}</div>` + (who ? `<div>${who}${phone ? ` — ${esc(phone)}` : ""}</div>` : "") + (room ? `<div class="room">Salle : ${room}</div>` : "") + `</div>`;
           }).join("") || `<span class="empty">—</span>`;
           return `<td>${cells}</td>`;
         }).join("");
@@ -351,6 +386,18 @@ export default function TimetablePage() {
                 {years.map((y) => (<option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>))}
               </Select>
             </div>
+            <div className="w-48">
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">Cycle</label>
+              <Select
+                value={cycleFilter}
+                onChange={(e) => { setCycleFilter(e.target.value as SchoolCycle | ""); setClassId(null); }}
+              >
+                <option value="">Tous les cycles</option>
+                {(Object.keys(SCHOOL_CYCLE_LABEL) as SchoolCycle[]).map((c) => (
+                  <option key={c} value={c}>{SCHOOL_CYCLE_LABEL[c]}</option>
+                ))}
+              </Select>
+            </div>
             <div className="w-56">
               <label className="mb-1.5 block text-sm font-medium text-gray-700">Classe</label>
               <SearchableSelect
@@ -370,6 +417,17 @@ export default function TimetablePage() {
             >
               {teachers.map((t) => (<option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>))}
             </Select>
+            {effectiveTeacherId != null && (
+              <div className="mt-1.5 flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  Téléphone : {teacherPhone.get(effectiveTeacherId) || "—"}
+                </span>
+                <TeacherLateSmsButton
+                  teacherName={teacherName.get(effectiveTeacherId) ?? "l'enseignant"}
+                  phone={teacherPhone.get(effectiveTeacherId) ?? null}
+                />
+              </div>
+            )}
           </div>
         )}
         {mode === "class" && (
@@ -397,6 +455,7 @@ export default function TimetablePage() {
           classSubjects={classSubjects}
           subjects={subjects}
           teacherName={teacherName}
+          slotBandMinutes={isSecondaryCycle(effectiveClassCycle) ? 120 : 60}
           onChanged={() => slotsQuery.refetch()}
         />
       ) : (
@@ -453,6 +512,20 @@ export default function TimetablePage() {
                         )}
                       {s.roomId ? ` · ${roomLabel.get(s.roomId) ?? `#${s.roomId}`}` : ""}
                     </p>
+                    {mode === "class" && s.teacherId != null && (
+                      // Numéro du professeur + SMS direct sur la carte : si on ne le voit pas en salle,
+                      // on peut le contacter sans quitter l'emploi du temps.
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <span className="text-[11px] text-gray-400">{teacherPhone.get(s.teacherId) || "—"}</span>
+                        {teacherPhone.get(s.teacherId) && (
+                          <TeacherLateSmsButton
+                            compact
+                            teacherName={teacherName.get(s.teacherId) ?? "l'enseignant"}
+                            phone={teacherPhone.get(s.teacherId) ?? null}
+                          />
+                        )}
+                      </div>
+                    )}
                     {s.moved && s.originalDay && (
                       <p className="mt-1 text-[11px] font-medium text-warning-700">
                         Déplacé depuis {dayLabel.get(s.originalDay) ?? s.originalDay}{" "}

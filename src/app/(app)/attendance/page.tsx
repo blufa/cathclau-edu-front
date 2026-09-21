@@ -6,6 +6,7 @@ import { AttendanceSettingsPanel } from "@/components/attendance/attendance-sett
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, getScheduleByClass, getScheduleByTeacher, listSubjects } from "@/lib/api/academics";
 import type { Classe, EmploiDuTemps, Matiere } from "@/lib/types/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -173,14 +174,15 @@ export default function AttendancePage() {
   const canManageStaff = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
   const canManageSettings = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const defaultYearId = years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const [yearId, setYearId] = useState<number | null>(null);
   const effectiveYearId = yearId ?? defaultYearId;
 
-  const classesQuery = useQuery(
-    () => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])),
+  const classesQuery = useCachedQuery(
+    effectiveYearId ? `classes:${effectiveYearId}` : null,
+    () => listClasses(effectiveYearId as number),
     [effectiveYearId],
   );
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
@@ -211,8 +213,9 @@ export default function AttendancePage() {
     catch (err) { notifyError(err); } finally { setPdfLoading(null); }
   }
 
-  const studentsQuery = useQuery(
-    () => (classId ? searchStudents({ classId, size: 300 }).then((p) => p.content) : Promise.resolve([])),
+  const studentsQuery = useCachedQuery(
+    classId ? `attendance-class-students:${classId}` : null,
+    () => searchStudents({ classId: classId as number, size: 300 }).then((p) => p.content),
     [classId],
   );
   const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
@@ -426,6 +429,8 @@ function RollCall({ classId, date, students, loading, canWrite }: {
 function AttendanceLog({ classId, date, students, canWrite }: {
   classId: number; date: string; students: Student[]; canWrite: boolean;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const { data, loading, error, refetch } = useQuery(
     () => getClassAttendance(classId, date),
     [classId, date],
@@ -467,8 +472,8 @@ function AttendanceLog({ classId, date, students, canWrite }: {
     }
     return map;
   }, [checkinsQuery.data]);
-  const scheduleQuery = useQuery(() => getScheduleByClass(classId), [classId]);
-  const subjectsQuery = useQuery(listSubjects, []);
+  const scheduleQuery = useCachedQuery(`schedule-class:${classId}`, () => getScheduleByClass(classId), [classId]);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   // Pas de classLabel ici : le tableau élèves est déjà scopé à une seule classe (redondant de l'afficher).
   const { courseLabel } = useSessionLabels(scheduleQuery.data, subjectsQuery.data, null);
   const [expandedStudents, setExpandedStudents] = useState<Set<number>>(new Set());
@@ -733,12 +738,14 @@ function SelectClassHint() {
 function AttendanceLogAllClasses({ classes, date, onPickClass }: {
   classes: Classe[]; date: string; onPickClass: (classId: number) => void;
 }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const rowsQuery = useQuery(
     () => Promise.allSettled(classes.map((c) => getClassAttendance(c.id, date).then((rows) => ({ c, rows }))))
       .then((results) => results.flatMap((r) => (r.status === "fulfilled" ? r.value.rows.map((row) => ({ row, classLabel: r.value.c.label, classId: r.value.c.id })) : []))),
     [classes.map((c) => c.id).join(","), date],
   );
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const nameOf = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],
@@ -779,12 +786,14 @@ function AttendanceLogAllClasses({ classes, date, onPickClass }: {
 
 // ── Teacher roll call (separate table) ───────────────────────────────────────
 function TeacherRollCall({ date, classes }: { date: string; classes: Classe[] }) {
-  const teachersQuery = useQuery(() => listTeachers(), []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, () => listTeachers(), [tenantId]);
   const teachers = useMemo<Teacher[]>(() => teachersQuery.data ?? [], [teachersQuery.data]);
   // Catalogue des matières chargé une seule fois pour toute la liste (pas par ligne), pour afficher
   // le nom du cours ET la classe dans le détail des séances de chaque enseignant — un enseignant
   // pouvant donner la même matière dans plusieurs classes, le nom du cours seul ne suffit pas.
-  const subjectsQuery = useQuery(listSubjects, []);
+  const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const [search, setSearch] = useState("");
   const filteredTeachers = useMemo(
     () => teachers.filter((t) => `${t.firstName} ${t.lastName}`.toLowerCase().includes(search.toLowerCase())),
@@ -828,7 +837,7 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
 }) {
   const { data, loading, refetch } = useQuery(() => getTeacherAttendance(t.id, date, date), [t.id, date]);
   const checkinsQuery = useQuery(() => getTeacherCheckins(t.id, date), [t.id, date]);
-  const scheduleQuery = useQuery(() => getScheduleByTeacher(t.id), [t.id]);
+  const scheduleQuery = useCachedQuery(`schedule-teacher:${t.id}`, () => getScheduleByTeacher(t.id), [t.id]);
   const { courseLabel, classLabel } = useSessionLabels(scheduleQuery.data, subjects, classes);
   const record = (data ?? []).find((a) => a.date === date) ?? null;
   const checkins = checkinsQuery.data ?? [];
@@ -947,7 +956,9 @@ function TeacherRollCallRow({ teacher: t, date, subjects, classes }: {
 
 // ── Récap mensuel pointage enseignant (heures + retard cumulé) ────────────────
 function TeacherMonthlyRecap() {
-  const teachersQuery = useQuery(() => listTeachers(), []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, () => listTeachers(), [tenantId]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
   const teacherOptions: SearchableOption[] = useMemo(
     () => teachers.map((t) => {
@@ -1045,7 +1056,9 @@ function TeacherMonthlyRecap() {
 
 // ── Personnel non-enseignant : présence (un seul pointage par jour) ───────────
 function EmployeeRollCall({ date }: { date: string }) {
-  const employeesQuery = useQuery(() => listEmployees(), []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const employees = useMemo<Employee[]>(() => employeesQuery.data ?? [], [employeesQuery.data]);
   const [search, setSearch] = useState("");
   const filteredEmployees = useMemo(
@@ -1177,7 +1190,9 @@ function EmployeeRollCallRow({ employee: e, date }: { employee: Employee; date: 
 
 // ── Récap mensuel pointage personnel (retard/départ anticipé cumulés) ─────────
 function EmployeeMonthlyRecap() {
-  const employeesQuery = useQuery(() => listEmployees(), []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
   const employeeOptions: SearchableOption[] = useMemo(
     () => employees.map((e) => {

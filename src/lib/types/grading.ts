@@ -170,9 +170,17 @@ export interface AnnualReportCard {
 }
 
 // ── Grading scale (barème mentions/décisions) ────────────────────────────────
+export type CycleGroup = "PRIMAIRE" | "SECONDAIRE";
+
+export const CYCLE_GROUP_LABEL: Record<CycleGroup, string> = {
+  PRIMAIRE: "Primaire",
+  SECONDAIRE: "Secondaire",
+};
+
 export interface GradingScale {
   id: number | null;
   tenantId: number | null;
+  cycleGroup: CycleGroup;
   passThreshold: string;
   passableMin: string;
   assezBienMin: string;

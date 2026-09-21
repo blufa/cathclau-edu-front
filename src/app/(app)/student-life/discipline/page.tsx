@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { searchStudents } from "@/lib/api/students";
 import {
   createIncident,
@@ -55,10 +56,14 @@ const SEV_TONE: Record<DisciplineSeverity, "gray" | "amber" | "red"> = { MINOR: 
 
 export default function DisciplinePage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["discipline:manage"]);
+  // Suppression réservée à l'administration (backend: discipline:delete, plus strict que
+  // discipline:manage — secrétariat/enseignant peuvent signaler/résoudre mais pas supprimer).
+  const canDelete = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["discipline:delete"]);
   // Résoudre/classer un signalement relève des rôles administratifs — un enseignant peut modifier
   // sa saisie mais pas trancher lui-même l'issue de l'incident qu'il a signalé.
-  const canResolve = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canResolve = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["discipline:manage"]);
 
   const [status, setStatus] = useState<DisciplineStatus | "">("");
   const [studentFilter, setStudentFilter] = useState("");
@@ -66,7 +71,7 @@ export default function DisciplinePage() {
     () => listIncidents({ studentId: studentFilter ? Number(studentFilter) : undefined, status: status || undefined }),
     [status, studentFilter],
   );
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }).then((p) => p.content), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(
     () => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])),
     [studentsQuery.data],
@@ -149,7 +154,7 @@ export default function DisciplinePage() {
                     {canWrite && i.status === "REPORTED" && <Button size="sm" variant="ghost" onClick={() => setEditing(i)}>Modifier</Button>}
                     {canResolve && i.status === "REPORTED" && <Button size="sm" variant="ghost" onClick={() => act(resolveIncident(i.id))}>Résoudre</Button>}
                     {canResolve && i.status === "REPORTED" && <Button size="sm" variant="ghost" onClick={() => act(dismissIncident(i.id))}>Classer</Button>}
-                    {hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(i)}>Suppr.</Button>}
+                    {canDelete && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(i)}>Suppr.</Button>}
                   </div>
                 </TD>
               </TR>

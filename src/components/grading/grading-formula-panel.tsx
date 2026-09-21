@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Sparkles, X } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import {
   createGradingFormula,
   deleteGradingFormula,
@@ -115,8 +117,10 @@ function stepsToDrafts(f: GradingFormula): StepDraft[] {
 }
 
 export function GradingFormulaPanel({ canWrite }: { canWrite: boolean }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const q = useQuery(listGradingFormulas, []);
-  const typesQuery = useQuery(listAssessmentTypes, []);
+  const typesQuery = useCachedQuery(tenantId ? `assessment-types:${tenantId}` : null, listAssessmentTypes, [tenantId]);
   const assessmentTypes = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
 
   const [open, setOpen] = useState(false);

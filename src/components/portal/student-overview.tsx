@@ -31,10 +31,10 @@ import { cn } from "@/lib/utils";
 const INVOICE_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
 export function StudentOverview({ student }: { student: Student }) {
-  const reportsQuery = useQuery(() => getStudentReportCards(student.id), [student.id]);
-  const statsQuery = useQuery(() => getStudentAttendanceStats(student.id), [student.id]);
-  const invoicesQuery = useQuery(() => listInvoicesByStudent(student.id), [student.id]);
-  const lessonsQuery = useQuery(() => listStudentLessons(student.id), [student.id]);
+  const reportsQuery = useCachedQuery(`student-report-cards:${student.id}`, () => getStudentReportCards(student.id), [student.id]);
+  const statsQuery = useCachedQuery(`student-attendance-stats:${student.id}`, () => getStudentAttendanceStats(student.id), [student.id]);
+  const invoicesQuery = useCachedQuery(`student-invoices:${student.id}`, () => listInvoicesByStudent(student.id), [student.id]);
+  const lessonsQuery = useCachedQuery(`student-lessons:${student.id}`, () => listStudentLessons(student.id), [student.id]);
   // Consultation hors-ligne (§Phase 2) : affiche le dernier emploi du temps connu de l'enfant pendant
   // qu'un rafraîchissement réseau tourne en tâche de fond.
   const online = useNetworkStore((s) => s.online);
@@ -48,7 +48,7 @@ export function StudentOverview({ student }: { student: Student }) {
     },
     [student.id],
   );
-  const documentsQuery = useQuery(() => getChildDocuments(student.id), [student.id]);
+  const documentsQuery = useCachedQuery(`student-documents:${student.id}`, () => getChildDocuments(student.id), [student.id]);
   const [openingDoc, setOpeningDoc] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
 

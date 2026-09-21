@@ -5,6 +5,7 @@ import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   createAnnouncement,
   deleteAnnouncement,
@@ -38,6 +39,7 @@ const SCOPE_TONE: Record<AnnouncementScope, "gray" | "amber" | "green"> = {
 
 export default function AnnouncementsPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["annonce:manage"]);
 
   const q = useQuery(listAnnouncements, []);
@@ -47,10 +49,10 @@ export default function AnnouncementsPage() {
     () => (yearId ? listClasses(yearId) : Promise.resolve([])),
     [yearId],
   );
-  const studentsQuery = useQuery(() => searchStudents({ size: 1000 }), []);
+  const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
 
   const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
-  const students = useMemo(() => studentsQuery.data?.content ?? [], [studentsQuery.data]);
+  const students = useMemo(() => studentsQuery.data ?? [], [studentsQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],

@@ -21,6 +21,8 @@ import type {
   Periode,
   Salle,
   SchoolCycle,
+  SchoolEvent,
+  SchoolEventInput,
   StatutAnneeScolaire,
 } from "@/lib/types/academics";
 
@@ -71,9 +73,9 @@ export function getEnrollmentCount(id: number): Promise<EnrollmentCountInfo> {
 export function listClassSubjects(classId: number): Promise<ClasseMatiere[]> {
   return api.get<ClasseMatiere[]>(`/academics/classes/${classId}/subjects`);
 }
-export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number, code?: string): Promise<ClasseMatiere> {
+export function assignClassSubject(classId: number, subjectId: number, teacherId?: number, coefficient?: number, code?: string, specialty?: boolean): Promise<ClasseMatiere> {
   return api.post<ClasseMatiere>(`/academics/classes/${classId}/subjects`, undefined, {
-    query: { subjectId, teacherId, coefficient, code },
+    query: { subjectId, teacherId, coefficient, code, specialty },
   });
 }
 /** Codes déjà attribués pour cette matière (ex. CH1, CH2), toutes classes confondues — pour la grille horaire. */
@@ -244,4 +246,15 @@ export interface TimetableProposal { slots: ProposedSlot[]; teachersWithoutAvail
 /** Propose un emploi du temps à partir des disponibilités enseignants (sans nombre de séances). */
 export function proposeTimetable(classIds: number[]): Promise<TimetableProposal> {
   return api.post<TimetableProposal>("/staff/timetable/propose", { classIds });
+}
+
+// ── Événements école (kermesse, match, entraînement... — les enseignants concernés restent payés) ──
+export function listSchoolEvents(): Promise<SchoolEvent[]> {
+  return api.get<SchoolEvent[]>("/academics/school-events");
+}
+export function createSchoolEvent(input: SchoolEventInput): Promise<SchoolEvent> {
+  return api.post<SchoolEvent>("/academics/school-events", input);
+}
+export function deleteSchoolEvent(id: number): Promise<void> {
+  return api.delete<void>(`/academics/school-events/${id}`);
 }

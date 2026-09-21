@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { listLevels } from "@/lib/api/academics";
 import { getAssignedLevels, setAssignedLevels } from "@/lib/api/staff";
 import type { Niveau } from "@/lib/types/academics";
@@ -12,7 +14,9 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /** Affecte les niveaux (cycles) où un enseignant est habilité à enseigner (checklist sur sa fiche). */
 export function TeacherLevelsSection({ teacherId, canWrite }: { teacherId: number; canWrite: boolean }) {
-  const levelsQuery = useQuery(listLevels, []);
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const assignedQuery = useQuery(() => getAssignedLevels(teacherId), [teacherId]);
 
   if (levelsQuery.loading || assignedQuery.loading || !assignedQuery.data) {

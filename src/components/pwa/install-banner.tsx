@@ -16,13 +16,16 @@ const SHOW_AFTER_MS = 8000;
 export function InstallBanner() {
   const deferredPrompt = usePwaInstallStore((s) => s.deferredPrompt);
   const isInstalled = usePwaInstallStore((s) => s.isInstalled);
+  const isIos = usePwaInstallStore((s) => s.isIos);
   const isIosSafari = usePwaInstallStore((s) => s.isIosSafari);
   const setDeferredPrompt = usePwaInstallStore((s) => s.setDeferredPrompt);
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [showIosModal, setShowIosModal] = useState(false);
 
-  const installable = Boolean(deferredPrompt) || isIosSafari;
+  // Sur iOS (tout navigateur), la marche à suivre manuelle est toujours proposable ; ailleurs, il faut
+  // que Chrome/Edge ait effectivement signalé l'event `beforeinstallprompt`.
+  const installable = Boolean(deferredPrompt) || isIos;
 
   useEffect(() => {
     if (!installable || isInstalled) return;
@@ -37,7 +40,7 @@ export function InstallBanner() {
   }
 
   async function handleInstall() {
-    if (isIosSafari) {
+    if (isIos) {
       setShowIosModal(true);
       return;
     }
@@ -74,7 +77,7 @@ export function InstallBanner() {
           </button>
         </div>
       </div>
-      <IosInstallInstructionsModal open={showIosModal} onClose={() => setShowIosModal(false)} />
+      <IosInstallInstructionsModal open={showIosModal} onClose={() => setShowIosModal(false)} inSafari={isIosSafari} />
     </>
   );
 }

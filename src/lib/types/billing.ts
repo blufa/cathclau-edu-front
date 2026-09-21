@@ -1,6 +1,6 @@
 /** Billing contracts mirrored from the backend billing module (school fees ↔ parents). */
 
-export type FeeType = "ENROLLMENT" | "RE_ENROLLMENT" | "MONTHLY" | "TRANSPORT" | "CANTEEN" | "EXAM" | "OTHER";
+export type FeeType = "ENROLLMENT" | "RE_ENROLLMENT" | "MONTHLY" | "TRANSPORT" | "CANTEEN" | "EXAM" | "OTHER" | "PLATFORM";
 
 export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   ENROLLMENT: "Inscription",
@@ -10,6 +10,9 @@ export const FEE_TYPE_LABEL: Record<FeeType, string> = {
   CANTEEN: "Cantine",
   EXAM: "Examen",
   OTHER: "Autre (frais annexe)",
+  // Frais annexe configuré par l'école elle-même (nom et montant à sa discrétion) — tout encaissement
+  // dessus alimente en plus le solde dû à l'éditeur de la plateforme (voir Platform → Frais plateforme).
+  PLATFORM: "Frais plateforme",
 };
 
 export interface SchoolFee {
@@ -89,8 +92,8 @@ export interface Invoice {
    * pour une facture multi-mois (tranche) payée en plusieurs fois. Vide/absent pour une facture d'un
    * seul mois, ou une tranche réglée en une seule fois (periodLabel suffit alors). */
   paidMonths?: string[] | null;
-  /** Part de frais d'usage plateforme incluse dans totalAmount (mensualité, si le parent a accès
-   * plateforme) — figée à la génération. Null/absent si aucun frais plateforme sur cette facture. */
+  /** Non-null uniquement sur une facture dédiée au frais d'usage plateforme (frais annexe, jamais
+   * mêlée à la mensualité) — dans ce cas égal à totalAmount. Null/absent sur une facture normale. */
   platformFeeAmount?: string | null;
 }
 
@@ -119,7 +122,8 @@ export interface Exemption {
   type: ExemptionType;
   percentage: string | null;
   amount: string | null;
-  feeType: FeeType | null;
+  /** Un seul type, plusieurs, ou vide/null = tous les frais. */
+  feeTypes: FeeType[] | null;
   reason: string | null;
   startDate: string | null;
   endDate: string | null;
@@ -133,7 +137,7 @@ export interface ExemptionInput {
   type: ExemptionType;
   percentage?: number | null;
   amount?: number | null;
-  feeType?: FeeType | null;
+  feeTypes?: FeeType[] | null;
   reason?: string | null;
   startDate?: string | null;
   endDate?: string | null;
@@ -146,7 +150,8 @@ export interface StaffChildBenefitPolicy {
   label: string;
   coveredChildrenCount: number | null;
   coveragePercent: string | null;
-  feeType: FeeType | null;
+  /** Un seul type, plusieurs, ou vide/null = tous les frais. */
+  feeTypes: FeeType[] | null;
   active: boolean;
 }
 
@@ -154,12 +159,18 @@ export interface StaffChildBenefitPolicyInput {
   label: string;
   coveredChildrenCount?: number | null;
   coveragePercent?: number | null;
-  feeType?: FeeType | null;
+  feeTypes?: FeeType[] | null;
   active?: boolean | null;
 }
 
 export interface StaffCoverage {
   coveragePercent: string | null;
+  policyLabel: string | null;
+}
+
+export interface StudentCoverage {
+  studentId: number;
+  coveragePercent: string;
   policyLabel: string | null;
 }
 
@@ -171,7 +182,8 @@ export interface FamilyDiscountRule {
   minChildren: number | null;
   maxChildren: number | null;
   percentage: string | null;
-  feeType: FeeType | null;
+  /** Un seul type, plusieurs, ou vide/null = tous les frais. */
+  feeTypes: FeeType[] | null;
   appliesToYoungest: boolean;
   active: boolean;
 }
@@ -181,7 +193,7 @@ export interface FamilyDiscountRuleInput {
   minChildren?: number | null;
   maxChildren?: number | null;
   percentage?: number | null;
-  feeType?: FeeType | null;
+  feeTypes?: FeeType[] | null;
   appliesToYoungest?: boolean | null;
   active?: boolean | null;
 }

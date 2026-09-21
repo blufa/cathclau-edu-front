@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClass, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { enroll, reenroll, searchEnrollments, updateEnrollment, updateMonthlyPayment, updatePlatformAccess } from "@/lib/api/enrollments";
 import { listFeesByClass, subscribeAnnexFee } from "@/lib/api/billing";
@@ -32,7 +33,7 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const editing = !!enrollment;
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const yearsQuery = useQuery(listAcademicYears, []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
 
   // Seeded from the edited enrollment; the edit modal is mounted fresh per enrollment (keyed by render),
@@ -50,7 +51,8 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const [direction, setDirection] = useState<TransportDirection>("BOTH");
   const [wantsCanteen, setWantsCanteen] = useState(false);
   // Frais annexe optionnel : accès de l'élève à la plateforme, décidé par le parent à l'inscription
-  // (modifiable ensuite). Si non coché, aucun frais plateforme n'est jamais ajouté à ses mensualités.
+  // (modifiable ensuite). Si non coché, aucune facture de frais plateforme n'est jamais générée pour
+  // lui — sinon, elle est facturée séparément (jamais mêlée au montant de la mensualité elle-même).
   const [wantsPlatformAccess, setWantsPlatformAccess] = useState(enrollment?.platformAccessOptIn ?? false);
   const [wantsMonthlyPayment, setWantsMonthlyPayment] = useState(enrollment?.monthlyPaymentOptIn ?? false);
   const routesQuery = useQuery(() => (open && !editing ? listRoutes() : Promise.resolve([])), [open, editing]);

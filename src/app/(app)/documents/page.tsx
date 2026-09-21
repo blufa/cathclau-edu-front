@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { FileText, History, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import {
@@ -249,6 +250,8 @@ const INVOICE_DOCS = new Set(["FACTURE", "ECHEANCIER"]);
 const PAYMENT_DOCS = new Set(["RECU_PAIEMENT", "HISTORIQUE_PAIEMENTS"]);
 
 function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClose: () => void }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const vars = useMemo(() => extractVars(template.headerHtml, template.bodyHtml, template.footerHtml), [template]);
   const isTeacherDoc = TEACHER_DOCS.has(template.documentType);
   const isInvoiceDoc = INVOICE_DOCS.has(template.documentType);
@@ -262,7 +265,11 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
   const [financeId, setFinanceId] = useState("");
   const [filling, setFilling] = useState(false);
 
-  const studentsQuery = useQuery(() => (isTeacherDoc ? Promise.resolve([]) : searchStudents({ size: 1000 }).then((p) => p.content)), [isTeacherDoc]);
+  const studentsQuery = useCachedQuery(
+    !isTeacherDoc && tenantId ? `students-all-v2:${tenantId}` : null,
+    () => (isTeacherDoc ? Promise.resolve([]) : searchStudents({ size: 1000 }).then((p) => p.content)),
+    [isTeacherDoc, tenantId],
+  );
   const teachersQuery = useQuery(() => (isTeacherDoc ? listTeachers() : Promise.resolve([])), [isTeacherDoc]);
   const options: SearchableOption[] = useMemo(() => {
     const src = isTeacherDoc
@@ -271,8 +278,16 @@ function GeneratePane({ template, onClose }: { template: DocumentTemplate; onClo
     return src.map((o) => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label }));
   }, [isTeacherDoc, teachersQuery.data, studentsQuery.data]);
 
-  const invoicesQuery = useQuery(() => (isInvoiceDoc && subjectId ? listInvoicesByStudent(Number(subjectId)) : Promise.resolve([])), [subjectId, isInvoiceDoc]);
-  const paymentsQuery = useQuery(() => (isPaymentDoc && subjectId ? listPaymentsByStudent(Number(subjectId)) : Promise.resolve([])), [subjectId, isPaymentDoc]);
+  const invoicesQuery = useCachedQuery(
+    isInvoiceDoc && subjectId ? `student-invoices:${subjectId}` : null,
+    () => listInvoicesByStudent(Number(subjectId)),
+    [subjectId, isInvoiceDoc],
+  );
+  const paymentsQuery = useCachedQuery(
+    isPaymentDoc && subjectId ? `student-payments:${subjectId}` : null,
+    () => listPaymentsByStudent(Number(subjectId)),
+    [subjectId, isPaymentDoc],
+  );
   const financeOptions: SearchableOption[] = useMemo(() => {
     const src = isInvoiceDoc
       ? (invoicesQuery.data ?? []).map((i) => ({ value: String(i.id), label: `${i.reference} · ${i.periodLabel ?? ""} · reste ${formatGNF(i.remainingBalance ?? i.totalAmount)}` }))

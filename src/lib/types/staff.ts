@@ -22,6 +22,9 @@ export interface Teacher {
   /** Compte bancaire (RIB/IBAN) optionnel — pour le fichier bancaire de paie. Le téléphone reste
    * prioritaire pour le virement Mobile Money. */
   bankAccount: string | null;
+  /** Enseignant exceptionnel pouvant couvrir plusieurs classes en même temps (ex. professeur d'EPS) —
+   * désactive la détection de conflit d'emploi du temps sur lui précisément. */
+  allowsConcurrentClasses: boolean;
 }
 
 /** Body for POST /staff/teachers — tenantId resolved server-side. */

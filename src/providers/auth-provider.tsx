@@ -21,12 +21,21 @@ import { getMyParent } from "@/lib/api/parents";
 import { getMyStudent } from "@/lib/api/students";
 import { getMyTeacher } from "@/lib/api/staff";
 import { offlineDb } from "@/lib/offline/db";
+import { runConfigBootstrap } from "@/lib/offline/bootstrap-sync";
 
 /** Clé du dernier profil connu, pour rester connecté hors-ligne (voir bootstrap ci-dessous). */
 const AUTH_CACHE_KEY = "auth:me";
 
 function roleNames(roles: string[]): string[] {
   return roles.map((r) => r.replace(/^ROLE_/, ""));
+}
+
+/** Le préchargement de la configuration (classes, frais, emploi du temps...) ne sert qu'aux rôles qui
+ * utilisent les écrans d'administration/gestion — pas aux portails parent/élève, qui ont leurs propres
+ * données déjà mises en cache séparément (voir `student-schedule:*`, `getMyParent`/`getMyStudent`). */
+function needsConfigBootstrap(roles: string[]): boolean {
+  const names = roleNames(roles);
+  return !names.includes("PARENT") && !names.includes("STUDENT") && !names.includes("SUPER_ADMIN");
 }
 
 /**
@@ -90,6 +99,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // hors-ligne (voir le bootstrap ci-dessous) — jamais utilisé pour authentifier, seulement pour
     // afficher l'identité/permissions déjà validées par le serveur lors de cette connexion.
     void offlineDb.readCache.put({ key: AUTH_CACHE_KEY, payload: me, updatedAt: new Date().toISOString() });
+    // On vient de prouver qu'on est en ligne (fetchMe a réussi) : profite-en pour précharger toute la
+    // configuration de l'école, sans bloquer l'affichage de l'app (fire-and-forget).
+    if (me.tenantId != null && needsConfigBootstrap(me.roles)) {
+      void runConfigBootstrap(me.tenantId);
+    }
     return me;
   }, []);
 
@@ -135,6 +149,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSessionExpiredHandler(clearSession);
     return () => setSessionExpiredHandler(null);
   }, [clearSession]);
+
+  // Rafraîchit la configuration mise en cache à chaque retour de réseau (pas seulement au login) — le
+  // cas d'usage visé : l'agent travaille hors-ligne toute la journée, puis se reconnecte le soir pour
+  // synchroniser ; la config doit se remettre à jour à ce moment-là aussi, pas seulement à la prochaine
+  // connexion complète (déconnexion/reconnexion), qui peut n'arriver que des jours plus tard.
+  useEffect(() => {
+    if (status !== "authenticated" || !user || user.tenantId == null || !needsConfigBootstrap(user.roles)) return;
+    const tenantId = user.tenantId;
+    const onOnline = () => void runConfigBootstrap(tenantId);
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [status, user]);
 
   const login = useCallback(
     async (email: string, password: string) => {

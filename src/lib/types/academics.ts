@@ -183,6 +183,31 @@ export interface ClasseMatiere {
   /** Code affecté par le Directeur des Études pour identifier ce professeur sur cette matière
    * (ex. "CH1", "CH2") — généré automatiquement à l'affectation, modifiable ensuite. */
   code: string | null;
+  /** Matière de spécialité de la série (lycée) — ex. Mathématiques en série Scientifique. */
+  specialty: boolean;
+}
+
+/** Événement école (kermesse, match, entraînement...) qui empêche les élèves de suivre le cours sur
+ * une période — les enseignants dont un créneau tombe dans cette période restent payés (§payroll). */
+export interface SchoolEvent {
+  id: number;
+  tenantId: number | null;
+  label: string;
+  startDate: string;
+  endDate: string;
+  /** null = couvre toute la journée. */
+  startTime: string | null;
+  endTime: string | null;
+  reason: string | null;
+}
+
+export interface SchoolEventInput {
+  label: string;
+  startDate: string;
+  endDate: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  reason?: string | null;
 }
 
 /** Roster projection from GET /classes/{id}/students. */
@@ -198,7 +223,8 @@ export interface EnrollmentCountInfo {
   classId: number;
   currentCount: number;
   maxCapacity: number | null;
-  available: number;
+  /** null quand la classe n'a pas de capacité maximale définie (pas de limite). */
+  available: number | null;
 }
 
 /** Body for POST/PUT class — tenantId resolved server-side. */

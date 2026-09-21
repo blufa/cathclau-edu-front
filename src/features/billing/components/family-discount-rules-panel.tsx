@@ -13,20 +13,19 @@ import {
   FEE_TYPE_LABEL,
   type FamilyDiscountRule,
   type FamilyDiscountRuleInput,
-  type FeeType,
 } from "@/lib/types/billing";
+import { FeeTypeMultiSelect } from "@/components/billing/fee-type-multi-select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const EMPTY: FamilyDiscountRuleInput = {
-  label: "", minChildren: 2, maxChildren: null, percentage: 10, feeType: null, appliesToYoungest: false, active: true,
+  label: "", minChildren: 2, maxChildren: null, percentage: 10, feeTypes: [], appliesToYoungest: false, active: true,
 };
 
 export function FamilyDiscountRulesPanel({ canWrite }: { canWrite: boolean }) {
@@ -42,7 +41,7 @@ export function FamilyDiscountRulesPanel({ canWrite }: { canWrite: boolean }) {
     setForm({
       label: r.label, minChildren: r.minChildren, maxChildren: r.maxChildren,
       percentage: r.percentage != null ? Number(r.percentage) : null,
-      feeType: r.feeType, appliesToYoungest: r.appliesToYoungest, active: r.active,
+      feeTypes: r.feeTypes ?? [], appliesToYoungest: r.appliesToYoungest, active: r.active,
     });
     setOpen(true);
   }
@@ -92,7 +91,9 @@ export function FamilyDiscountRulesPanel({ canWrite }: { canWrite: boolean }) {
                 <TD className="font-medium text-slate-900">{r.label}</TD>
                 <TD>{r.minChildren ?? 0}{r.maxChildren ? `–${r.maxChildren}` : "+"}</TD>
                 <TD>{r.percentage ?? 0} %</TD>
-                <TD className="text-sm text-slate-600">{r.feeType ? FEE_TYPE_LABEL[r.feeType] : "Tous"}</TD>
+                <TD className="text-sm text-slate-600">
+                  {r.feeTypes && r.feeTypes.length > 0 ? r.feeTypes.map((t) => FEE_TYPE_LABEL[t]).join(", ") : "Tous"}
+                </TD>
                 <TD>{r.appliesToYoungest ? "Oui" : "Non"}</TD>
                 <TD><Badge tone={r.active ? "green" : "gray"}>{r.active ? "Active" : "Inactive"}</Badge></TD>
                 {canWrite && (
@@ -127,13 +128,7 @@ export function FamilyDiscountRulesPanel({ canWrite }: { canWrite: boolean }) {
             <Label>Remise (%)</Label>
             <Input type="number" min={0} max={100} value={form.percentage ?? ""} onChange={(e) => setForm({ ...form, percentage: e.target.value === "" ? null : Number(e.target.value) })} />
           </Field>
-          <Field>
-            <Label>Type de frais concerné</Label>
-            <Select value={form.feeType ?? ""} onChange={(e) => setForm({ ...form, feeType: (e.target.value as FeeType) || null })}>
-              <option value="">Tous les frais</option>
-              {Object.entries(FEE_TYPE_LABEL).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-            </Select>
-          </Field>
+          <FeeTypeMultiSelect value={form.feeTypes} onChange={(v) => setForm({ ...form, feeTypes: v })} />
           <div className="flex items-center gap-3">
             <Switch checked={form.appliesToYoungest ?? false} onChange={(checked) => setForm({ ...form, appliesToYoungest: checked })} ariaLabel="S'applique au cadet uniquement" />
             <span className="text-sm text-gray-700">S&apos;applique au cadet uniquement</span>

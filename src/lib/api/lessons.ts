@@ -1,8 +1,8 @@
 import { api } from "@/lib/api/client";
 import type { LessonEntry, LessonInput } from "@/lib/types/lesson";
 
-export function listLessons(params?: { classId?: number; subjectId?: number }): Promise<LessonEntry[]> {
-  return api.get<LessonEntry[]>("/lessons", { query: { classId: params?.classId, subjectId: params?.subjectId } });
+export function listLessons(params?: { classId?: number; subjectId?: number; teacherId?: number }): Promise<LessonEntry[]> {
+  return api.get<LessonEntry[]>("/lessons", { query: { classId: params?.classId, subjectId: params?.subjectId, teacherId: params?.teacherId } });
 }
 
 /** Cahier de textes de la classe d'un élève (portail élève / parent). */

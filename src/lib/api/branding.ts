@@ -15,6 +15,8 @@ export interface TenantBranding {
   dpeLabel: string | null;
   /** Sous-préfecture / commune (DSSEE), imprimée au verso des badges/cartes. */
   sousPrefectureLabel: string | null;
+  /** Numéro de téléphone de l'école, imprimé sur les badges élève (contact en cas de besoin). */
+  phone: string | null;
 }
 
 export function getTenantBranding(): Promise<TenantBranding> {

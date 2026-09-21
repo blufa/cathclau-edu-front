@@ -5,6 +5,8 @@ import type {
   DiffusionInput,
   MessageRecipient,
   MessageTemplate,
+  ScheduleBroadcastInput,
+  ScheduledBroadcast,
   SendCommunicationInput,
 } from "@/lib/types/communication";
 
@@ -31,6 +33,21 @@ export function sendCommunication(input: SendCommunicationInput): Promise<Commun
  * précis) — le serveur résout lui-même les numéros/e-mails réels. */
 export function sendDiffusion(input: DiffusionInput): Promise<Communication> {
   return api.post<Communication>("/communications/diffusion", input);
+}
+
+/** Programme une diffusion de masse à une date/heure future — part automatiquement, sans action
+ * manuelle le jour J (ex. annonce d'un événement école à toute l'école). */
+export function scheduleBroadcast(input: ScheduleBroadcastInput): Promise<ScheduledBroadcast> {
+  return api.post<ScheduledBroadcast>("/communications/diffusion/programmee", input);
+}
+
+export function listScheduledBroadcasts(tenantId: number): Promise<ScheduledBroadcast[]> {
+  return api.get<ScheduledBroadcast[]>("/communications/diffusion/programmee", { query: { tenantId } });
+}
+
+/** Annule une diffusion programmée tant qu'elle n'est pas encore partie. */
+export function cancelScheduledBroadcast(id: number): Promise<void> {
+  return api.delete<void>(`/communications/diffusion/programmee/${id}`);
 }
 
 export function listCommunicationsByTenant(tenantId: number): Promise<Communication[]> {

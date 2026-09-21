@@ -1,12 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/query";
-import type { CreateStudentInput, StudentSearchParams, UpdateStudentInput } from "@/lib/types/student";
-import { createStudent, deleteStudent, getStudent, searchStudents, updateStudent } from "../api/students";
+import type { CreateStudentInput, EnrollmentStatus, Gender, StudentSearchParams, UpdateStudentInput } from "@/lib/types/student";
+import { createStudent, deleteStudent, getStudent, searchStudents, searchStudentsSummary, updateStudent } from "../api/students";
 
 export function useStudentsQuery(params: StudentSearchParams) {
   return useQuery({
     queryKey: qk.students.list({ ...params }),
     queryFn: () => searchStudents(params),
+  });
+}
+
+/** Élèves + classe courante + parent principal en un seul appel (liste élèves, guichet d'accueil). */
+export function useStudentsSummaryQuery(params: {
+  search?: string; gender?: Gender; enrollmentStatus?: EnrollmentStatus; notEnrolled?: boolean;
+  page?: number; size?: number;
+}) {
+  return useQuery({
+    queryKey: [...qk.students.list({ ...params }), "summary"],
+    queryFn: () => searchStudentsSummary(params),
   });
 }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
@@ -37,7 +38,7 @@ const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAm
 /** Ordre d'affichage naturel du guichet : inscription/réinscription d'abord, puis la scolarité
  * (tranches, triées chronologiquement), puis les frais annexes (transport, cantine, examen…). */
 const GROUP_ORDER: Record<FeeType, number> = {
-  ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1, TRANSPORT: 2, CANTEEN: 2, EXAM: 2, OTHER: 2,
+  ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1, TRANSPORT: 2, CANTEEN: 2, EXAM: 2, OTHER: 2, PLATFORM: 2,
 };
 
 /**
@@ -57,9 +58,9 @@ export function CollectFeeModal({
   onClose: () => void;
   onCollected: () => void;
 }) {
-  const q = useQuery(() => (open ? listInvoicesByStudent(studentId) : Promise.resolve([])), [open, studentId]);
-  const payments = useQuery(() => (open ? listPaymentsByStudent(studentId) : Promise.resolve([])), [open, studentId]);
-  const fees = useQuery(() => (open && classId ? listFeesByClass(classId) : Promise.resolve([])), [open, classId]);
+  const q = useCachedQuery(open ? `student-invoices:${studentId}` : null, () => listInvoicesByStudent(studentId), [open, studentId]);
+  const payments = useCachedQuery(open ? `student-payments:${studentId}` : null, () => listPaymentsByStudent(studentId), [open, studentId]);
+  const fees = useCachedQuery(open && classId ? `fees-class:${classId}` : null, () => listFeesByClass(classId as number), [open, classId]);
 
   const all = q.data ?? [];
   const unpaid = all.filter((inv) => inv.status !== "PAID");
@@ -89,6 +90,34 @@ export function CollectFeeModal({
     installmentsByFeeId.set(inst.feeId, list);
   }
   const installmentMonths = new Map((installments.data ?? []).map((i) => [i.id, i.months ?? []]));
+  // Mois couverts PAR CETTE FACTURE précisément (pas par toute la tranche) — indispensable quand le
+  // parent a choisi « paiement par mois » (§billing) : plusieurs factures distinctes partagent alors le
+  // même installmentId (une par mois), et `installmentMonths.get(installmentId)` renverrait à tort TOUS
+  // les mois de la tranche pour chacune, faisant apparaître « octobre, novembre, décembre » sur une
+  // facture qui ne couvre en réalité qu'un seul mois. Générées dans le même ordre que les mois de la
+  // tranche (voir generateMonthly), les factures triées par id correspondent donc 1 à 1 aux mois dans
+  // l'ordre où ils sont stockés.
+  const coveredMonthsByInvoiceId = new Map<number, string[]>();
+  {
+    const byInstallmentId = new Map<number, Invoice[]>();
+    for (const inv of all) {
+      if (inv.installmentId == null) continue;
+      const list = byInstallmentId.get(inv.installmentId) ?? [];
+      list.push(inv);
+      byInstallmentId.set(inv.installmentId, list);
+    }
+    for (const [instId, invs] of byInstallmentId) {
+      const monthsOfInstallment = installmentMonths.get(instId) ?? [];
+      if (invs.length <= 1 || monthsOfInstallment.length <= 1) {
+        for (const inv of invs) coveredMonthsByInvoiceId.set(inv.id, monthsOfInstallment);
+        continue;
+      }
+      [...invs].sort((a, b) => a.id - b.id).forEach((inv, idx) => {
+        const single = monthsOfInstallment[idx];
+        coveredMonthsByInvoiceId.set(inv.id, single != null ? [single] : monthsOfInstallment);
+      });
+    }
+  }
   const installmentSortKey = new Map(
     (installments.data ?? []).map((i) => {
       const months = [...(i.months ?? [])].sort();
@@ -269,7 +298,7 @@ export function CollectFeeModal({
               <InvoiceCollect
                 invoices={payable}
                 labelFor={labelFor}
-                installmentMonths={installmentMonths}
+                coveredMonthsByInvoiceId={coveredMonthsByInvoiceId}
                 monthlyFeeId={monthlyFee?.id ?? null}
                 tenantId={tenantId}
                 studentId={studentId}
@@ -434,12 +463,13 @@ export function CollectFeeModal({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, labelFor, installmentMonths, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
+  invoices, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
   labelFor: (inv: Invoice) => string;
-  /** Mois "YYYY-MM" couverts par tranche (installmentId → mois), pour le détail et le paiement par mois. */
-  installmentMonths: Map<number, string[]>;
+  /** Mois "YYYY-MM" couverts par CETTE facture précisément (id de facture → mois) — un seul mois pour
+   * une facture éclatée « paiement par mois », tous les mois de la tranche pour une facture groupée. */
+  coveredMonthsByInvoiceId: Map<number, string[]>;
   /** Id du frais MENSUALITE (scolarité) — sert à isoler les tranches pour la remise année complète. */
   monthlyFeeId: number | null;
   tenantId: number;
@@ -518,7 +548,7 @@ function InvoiceCollect({
    * libellé complet de la tranche — sinon le reçu affiche à tort « mai, juin » pour un paiement d'un seul mois.
    */
   function receiptLabelFor(m: Invoice): string {
-    const coveredMonths = installmentMonths.get(m.installmentId ?? -1) ?? [];
+    const coveredMonths = coveredMonthsByInvoiceId.get(m.id) ?? [];
     if (coveredMonths.length <= 1) return labelFor(m);
     const checked = monthSelections[m.id] ?? coveredMonths;
     if (checked.length === coveredMonths.length) return labelFor(m);
@@ -570,7 +600,7 @@ function InvoiceCollect({
     // que la facture affiche « Tranche 1 — avril, mai réglés » plutôt qu'un simple solde, y compris
     // quand le règlement ne couvre qu'une partie des mois cochés à l'écran.
     const shares = selectedInvoices.map((m) => {
-      const coveredMonths = installmentMonths.get(m.installmentId ?? -1) ?? [];
+      const coveredMonths = coveredMonthsByInvoiceId.get(m.id) ?? [];
       const paidMonths = coveredMonths.length > 1 ? (monthSelections[m.id] ?? coveredMonths) : undefined;
       return { invoiceId: m.id, amount: amountFor(m), paidMonths };
     }).filter((s) => s.amount > 0);
@@ -643,7 +673,7 @@ function InvoiceCollect({
 
       <div className="space-y-1.5">
         {effectiveInvoices.map((m) => {
-          const coveredMonths = installmentMonths.get(m.installmentId ?? -1) ?? [];
+          const coveredMonths = coveredMonthsByInvoiceId.get(m.id) ?? [];
           const isChecked = selected.includes(m.id);
           const checkedSubMonths = monthSelections[m.id] ?? coveredMonths;
           const partial = isChecked && amountFor(m) < remainingOf(m);
@@ -659,11 +689,6 @@ function InvoiceCollect({
                       {m.discountAmount != null && Number(m.discountAmount) > 0 && (
                         <span className="ml-1.5 text-xs font-medium text-success-600" title={m.discountReason ?? undefined}>
                           (remise −{formatGNF(m.discountAmount)})
-                        </span>
-                      )}
-                      {m.platformFeeAmount != null && Number(m.platformFeeAmount) > 0 && (
-                        <span className="ml-1.5 text-xs text-slate-400">
-                          (dont frais plateforme {formatGNF(m.platformFeeAmount)})
                         </span>
                       )}
                     </span>

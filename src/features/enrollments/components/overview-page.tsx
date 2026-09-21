@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { listFeesByTenant, listInvoicesByTenant } from "@/lib/api/billing";
@@ -22,14 +23,14 @@ export default function RentreeDashboardPage() {
   const tenantId = user?.tenantId ?? null;
   const allowed = hasRole(user, "SUPER_ADMIN", "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["inscription:read"]);
 
-  const yearsQuery = useQuery(() => listAcademicYears(), []);
+  const yearsQuery = useCachedQuery("academic-years", () => listAcademicYears(), []);
   const years = useMemo(() => [...(yearsQuery.data ?? [])].sort((a, b) => (b.label ?? "").localeCompare(a.label ?? "")), [yearsQuery.data]);
   const current = years.find((y) => y.current) ?? years[0];
   const [yearId, setYearId] = useState<string>("");
   const effectiveYear = yearId || (current ? String(current.id) : "");
 
   const classesQuery = useQuery(() => (effectiveYear ? listClasses(Number(effectiveYear)) : Promise.resolve([])), [effectiveYear]);
-  const levelsQuery = useQuery(() => listLevels(), []);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, () => listLevels(), [tenantId]);
   const enrollmentsQuery = useQuery(
     () => (effectiveYear ? searchEnrollments({ academicYearId: Number(effectiveYear), status: "VALIDATED" }) : Promise.resolve([])),
     [effectiveYear],
