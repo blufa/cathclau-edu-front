@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Palette, Wallet } from "lucide-react";
+import { Building2, Hash, Palette, Wallet } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/providers/auth-provider";
 import { useBranding } from "@/providers/branding-provider";
@@ -24,6 +24,16 @@ const PAYOUT_OPERATORS = [
   { value: "MTN_MONEY", label: "MTN MoMo" },
   { value: "WAVE", label: "Wave" },
 ];
+
+/** Aperçu du matricule tel qu'il serait généré (miroir du calcul backend, `MatriculeFormatter`) —
+ * utilise un sigle et un numéro d'exemple, juste pour donner une idée visuelle du format choisi. */
+function previewMatricule(format: string | null, digits: number | null): string {
+  const safeFormat = format && format.trim() !== "" ? format : "{PREFIXE}{NUM}";
+  const width = digits && digits >= 1 ? Math.min(digits, 10) : 5;
+  const num = "1".padStart(width, "0");
+  const year = String(new Date().getFullYear());
+  return safeFormat.replaceAll("{PREFIXE}", "AT").replaceAll("{ANNEE}", year).replaceAll("{NUM}", num);
+}
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -121,6 +131,8 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         payoutMerchantNumber: profile.payoutMerchantNumber,
         payoutOperator: profile.payoutOperator,
         payoutAccountName: profile.payoutAccountName,
+        matriculeFormat: profile.matriculeFormat,
+        matriculeDigits: profile.matriculeDigits,
       });
       setProfile(updated);
       notifySuccess("Informations enregistrées");
@@ -176,6 +188,45 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <Field><Label>Inspection régionale (IRE)</Label><Input placeholder="Ex. KINDIA" value={profile.ire ?? ""} disabled={ro} onChange={(e) => set("ire", e.target.value)} /></Field>
         <Field><Label>Direction préfectorale / communale (DPE/DCE)</Label><Input placeholder="Ex. COYAH" value={profile.dpeLabel ?? ""} disabled={ro} onChange={(e) => set("dpeLabel", e.target.value)} /></Field>
         <Field><Label>Sous-préfecture / commune (DSSEE)</Label><Input placeholder="Ex. MANGATA" value={profile.sousPrefectureLabel ?? ""} disabled={ro} onChange={(e) => set("sousPrefectureLabel", e.target.value)} /></Field>
+      </div>
+
+      <div className="pt-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <Hash className="h-4 w-4 text-brand-600" /> Format des matricules
+        </h3>
+        <p className="mb-3 mt-1 text-xs text-gray-400">
+          Choisissez comment sont générés les matricules des élèves et enseignants. Utilisez{" "}
+          <code className="rounded bg-gray-100 px-1">{"{PREFIXE}"}</code> (sigle de l&apos;école),{" "}
+          <code className="rounded bg-gray-100 px-1">{"{ANNEE}"}</code> (année en cours) et{" "}
+          <code className="rounded bg-gray-100 px-1">{"{NUM}"}</code> (numéro), dans l&apos;ordre que
+          vous voulez. Laissez vide pour garder le format par défaut.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field>
+            <Label>Format du matricule</Label>
+            <Input
+              placeholder="{PREFIXE}{NUM}"
+              value={profile.matriculeFormat ?? ""}
+              disabled={ro}
+              onChange={(e) => set("matriculeFormat", e.target.value)}
+            />
+          </Field>
+          <Field>
+            <Label>Nombre de chiffres</Label>
+            <Input
+              type="number"
+              min={1}
+              max={10}
+              placeholder="5"
+              value={profile.matriculeDigits ?? ""}
+              disabled={ro}
+              onChange={(e) => set("matriculeDigits", e.target.value === "" ? null : Number(e.target.value))}
+            />
+          </Field>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Aperçu : <span className="font-mono font-medium">{previewMatricule(profile.matriculeFormat, profile.matriculeDigits)}</span>
+        </p>
       </div>
 
       <div className="pt-2">

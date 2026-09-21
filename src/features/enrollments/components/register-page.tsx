@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EnrollModal } from "./enroll-modal";
+import { EnrollNewStudentWizard } from "./enroll-new-student-wizard";
 import { PassageMasseModal } from "./passage-masse-modal";
 import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal";
 import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
@@ -191,9 +192,12 @@ export default function EnrollmentsPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Inscriptions</h1>
           <p className="text-sm text-gray-500">Suivi et validation des inscriptions</p>
         </div>
-        {canDecide && (
-          <Button onClick={() => setPassageOpen(true)}>Passage en masse</Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canEdit && <EnrollNewStudentWizard />}
+          {canDecide && (
+            <Button onClick={() => setPassageOpen(true)}>Passage en masse</Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

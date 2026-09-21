@@ -71,3 +71,63 @@ export function gradesForCycle(label: string | null | undefined): string[] {
 export function composeClassLabel(grade: string, section: string, series?: string): string {
   return [grade, series ?? "", section].map((p) => p.trim()).filter(Boolean).join(" ");
 }
+
+/**
+ * Code canonique du grade (miroir de l'enum backend `Grade`) pour chaque libellé affiché du
+ * catalogue ci-dessus — nécessaire pour persister le grade précis d'une classe (voir `class-form.tsx`)
+ * plutôt que de le laisser uniquement dans le libellé texte de la classe. Le champ Grade côté
+ * `Classe` n'existe plus sur `Niveau` depuis la réforme du catalogue de référentiels (réduit à
+ * Maternelle/Primaire/Secondaire) : la précision fine vit désormais ici.
+ */
+export const GRADE_CODE_BY_LABEL: Record<string, string> = {
+  "PS": "PETITE_SECTION",
+  "MS": "MOYENNE_SECTION",
+  "GS": "GRANDE_SECTION",
+  "CP1": "CP1",
+  "CP2": "CP2",
+  "CE1": "CE1",
+  "CE2": "CE2",
+  "CM1": "CM1",
+  "CM2": "CM2",
+  "6ème": "SIXIEME",
+  "5ème": "CINQUIEME",
+  "4ème": "QUATRIEME",
+  "3ème": "TROISIEME",
+  "7ème": "SEPTIEME",
+  "8ème": "HUITIEME",
+  "9ème": "NEUVIEME",
+  "10ème": "DIXIEME",
+  "2nde": "SECONDE",
+  "1ère": "PREMIERE",
+  "11ème": "ONZIEME",
+  "12ème": "DOUZIEME",
+  "Terminale": "TERMINALE",
+};
+
+/** Table inverse (code backend → libellé affiché), pour retrouver le libellé d'un grade déjà persisté. */
+export const GRADE_LABEL_BY_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(GRADE_CODE_BY_LABEL).map(([label, code]) => [code, label]),
+);
+
+/** Résout le libellé saisi/choisi dans le formulaire vers le code `Grade` backend canonique, ou
+ * `null` si le libellé ne correspond à aucune entrée connue du catalogue (nomenclature maison —
+ * dégradation gracieuse : la classe reste créable, seulement sans grade exploitable finement). */
+export function resolveGradeCode(label: string | null | undefined): string | null {
+  if (!label) return null;
+  return GRADE_CODE_BY_LABEL[label.trim()] ?? null;
+}
+
+/** Progression plate de tous les grades (maternelle → terminale), dans l'ordre canonique — miroir de
+ * l'enum backend `Grade`. Utilisé pour suggérer le grade suivant lors d'une réinscription. */
+export const GRADE_PROGRESSION: string[] = [
+  "PS", "MS", "GS",
+  "CP1", "CP2", "CE1", "CE2", "CM1", "CM2",
+  "6ème", "7ème", "5ème", "8ème", "4ème", "9ème", "3ème", "10ème",
+  "2nde", "11ème", "1ère", "12ème", "Terminale",
+];
+
+/** Rang de progression d'un grade affiché (par libellé), ou -1 si non reconnu. */
+export function gradeProgressionRank(grade: string | null | undefined): number {
+  if (!grade) return -1;
+  return GRADE_PROGRESSION.indexOf(grade.trim());
+}
