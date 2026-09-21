@@ -21,12 +21,12 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "env=prod" >> "$GITHUB_OUTPUT"
-            echo "api=https://api.cathclau-edu.com/api/v1" >> "$GITHUB_OUTPUT"
-            echo "site=https://cathclau-edu.com" >> "$GITHUB_OUTPUT"
+            echo "api=https://api.ecole.jeccamtech.com/api/v1" >> "$GITHUB_OUTPUT"
+            echo "site=https://ecole.jeccamtech.com" >> "$GITHUB_OUTPUT"
           else
             echo "env=dev" >> "$GITHUB_OUTPUT"
-            echo "api=https://api-dev.cathclau-edu.com/api/v1" >> "$GITHUB_OUTPUT"
-            echo "site=https://dev.cathclau-edu.com" >> "$GITHUB_OUTPUT"
+            echo "api=https://api-dev.ecole.jeccamtech.com/api/v1" >> "$GITHUB_OUTPUT"
+            echo "site=https://dev.ecole.jeccamtech.com" >> "$GITHUB_OUTPUT"
           fi
 
   test:

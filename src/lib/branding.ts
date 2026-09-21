@@ -14,8 +14,8 @@ export interface Branding {
 }
 
 export const DEFAULT_BRANDING: Branding = {
-  appName: "CathClau Edu",
-  logoLetter: "C",
+  appName: "École",
+  logoLetter: "É",
   logoUrl: null,
   primaryColor: "indigo",
 };
