@@ -121,6 +121,10 @@ export interface SendCommunicationInput {
    * pour qu'un envoi manuel parte réellement : un recipientUserId seul, sans destination, reste "en
    * attente" indéfiniment côté serveur (aucune résolution différée n'existe). */
   recipientDestinations?: string[];
+  /** Clé d'idempotence générée côté client (une par tentative d'envoi) : rejouer avec la même clé
+   * (double-clic, requête réseau dupliquée) renvoie la communication déjà créée côté serveur au lieu
+   * d'en créer une seconde. */
+  idempotencyKey?: string;
 }
 
 /** Diffusion de masse segmentée — le serveur résout lui-même les destinataires réels. */
@@ -134,6 +138,8 @@ export interface DiffusionInput {
   subject?: string | null;
   content: string;
   reason?: CommunicationReason | null;
+  /** Clé d'idempotence générée côté client — voir {@link SendCommunicationInput.idempotencyKey}. */
+  idempotencyKey?: string;
 }
 
 export interface MessageRecipient {

@@ -308,6 +308,9 @@ const createUserSchema = z.object({
   email: z.union([z.string().trim().regex(/^\S+@\S+\.\S+$/, "Email invalide"), z.literal("")]),
   password: z.string().min(8, "8 caractères minimum"),
   phone: z.string(),
+  // Assigné dans le MÊME formulaire (pas dans une étape séparée facultative) : un compte créé sans
+  // rôle se connecte mais n'a aucune permission — 403 sur tout, sans indice pour comprendre pourquoi.
+  roleId: z.string().min(1, "Rôle requis"),
 }).refine((v) => v.email.trim() !== "" || v.phone.trim() !== "", {
   message: "Renseignez un email ou un numéro de téléphone",
   path: ["phone"],
@@ -316,9 +319,11 @@ type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
   const [loading, setLoading] = useState(false);
+  const rolesQuery = useQuery(() => listRoles(), []);
+  const roles = rolesQuery.data ?? [];
   const { handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { firstName: "", lastName: "", email: "", password: "", phone: "" },
+    defaultValues: { firstName: "", lastName: "", email: "", password: "", phone: "", roleId: "" },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
@@ -326,7 +331,9 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
   async function submit(values: CreateUserFormValues) {
     setLoading(true);
     try {
-      await createUser({ ...values, email: values.email.trim() === "" ? undefined : values.email } as CreateUserInput);
+      const { roleId, ...userInput } = values;
+      const user = await createUser({ ...userInput, email: userInput.email.trim() === "" ? undefined : userInput.email } as CreateUserInput);
+      await assignRoleToUser(user.id, Number(roleId));
       onCreated();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {

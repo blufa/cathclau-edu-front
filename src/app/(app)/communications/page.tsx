@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Send, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -165,6 +165,15 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
 }) {
   const templatesQuery = useQuery(() => listTemplates(tenantId), []);
   const [loading, setLoading] = useState(false);
+  // Garde synchrone contre le double-clic : `loading` (state React) n'est mis à jour qu'au rendu
+  // suivant, donc deux clics dans le même tick pourraient tous deux passer le test avant que le bouton
+  // ne se désactive visuellement — la ref, elle, est lue/écrite immédiatement, sans attendre un rendu.
+  const submittingRef = useRef(false);
+  // Une clé par ouverture du formulaire (la modale démonte/remonte ce composant à chaque ouverture,
+  // voir Modal) : filet de sécurité côté serveur si jamais deux requêtes réseau partent quand même
+  // malgré la garde ci-dessus (ex. double-tap tactile, retry réseau) — le serveur renvoie alors la
+  // communication déjà créée au lieu d'en créer une seconde.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const [channel, setChannel] = useState<CommunicationChannel>("SMS");
   const [recipientType, setRecipientType] = useState<RecipientType>("PARENT");
@@ -241,9 +250,11 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
   }
 
   async function submit() {
+    if (submittingRef.current) return;
     if (!content.trim()) { notifyError("Message requis"); return; }
     const selected = candidates.filter((c) => recipientKeys.includes(c.key));
     if (selected.length === 0) { notifyError("Sélectionnez au moins un destinataire"); return; }
+    submittingRef.current = true;
     setLoading(true);
     try {
       await sendCommunication({
@@ -254,9 +265,10 @@ function ComposeForm({ tenantId, senderId, onCancel, onSent }: {
         // repli sur l'id utilisateur uniquement pour les rares cas sans contact connu.
         recipientUserIds: selected.filter((c) => !c.destination && c.userId != null).map((c) => c.userId as number),
         recipientDestinations: selected.filter((c) => c.destination).map((c) => c.destination as string),
+        idempotencyKey,
       });
       onSent();
-    } catch (err) { notifyError(err); } finally { setLoading(false); }
+    } catch (err) { notifyError(err); } finally { submittingRef.current = false; setLoading(false); }
   }
 
   return (
@@ -351,6 +363,10 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
   tenantId: number; senderId: number | null; onCancel: () => void; onSent: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  // Garde synchrone contre le double-clic — voir le commentaire équivalent dans ComposeForm.
+  const submittingRef = useRef(false);
+  // Filet de sécurité côté serveur — voir le commentaire équivalent dans ComposeForm.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
@@ -382,9 +398,11 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
   const needsStudent = audience === "STUDENT_PARENTS";
 
   async function submit() {
+    if (submittingRef.current) return;
     if (!content.trim()) { notifyError("Message requis"); return; }
     if (needsClass && !classId) { notifyError("Sélectionnez une classe"); return; }
     if (needsStudent && !studentId) { notifyError("Sélectionnez un élève"); return; }
+    submittingRef.current = true;
     setLoading(true);
     try {
       await sendDiffusion({
@@ -392,6 +410,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
         classId: needsClass ? Number(classId) : null,
         studentId: needsStudent ? Number(studentId) : null,
         subject: subject || null, content,
+        idempotencyKey,
       });
       notifySuccess("Diffusion envoyée");
       onSent();
@@ -402,6 +421,7 @@ function BroadcastForm({ tenantId, senderId, onCancel, onSent }: {
         notifyError(err);
       }
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
