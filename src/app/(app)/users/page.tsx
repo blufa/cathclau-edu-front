@@ -299,20 +299,31 @@ export default function UsersPage() {
 }
 
 // ── Create form ────────────────────────────────────────────────────────────
+// Email optionnel : tous les utilisateurs se connectent par numéro de téléphone (voir
+// CreateUserInput) — seul le couple email/téléphone doit avoir au moins une valeur, comme déjà
+// exigé côté backend (UserService).
 const createUserSchema = z.object({
   firstName: z.string().trim().min(1, "Requis"),
   lastName: z.string().trim().min(1, "Requis"),
-  email: z.string().regex(/^\S+@\S+\.\S+$/, "Email invalide"),
+  email: z.union([z.string().trim().regex(/^\S+@\S+\.\S+$/, "Email invalide"), z.literal("")]),
   password: z.string().min(8, "8 caractères minimum"),
   phone: z.string(),
+  // Assigné dans le MÊME formulaire (pas dans une étape séparée facultative) : un compte créé sans
+  // rôle se connecte mais n'a aucune permission — 403 sur tout, sans indice pour comprendre pourquoi.
+  roleId: z.string().min(1, "Rôle requis"),
+}).refine((v) => v.email.trim() !== "" || v.phone.trim() !== "", {
+  message: "Renseignez un email ou un numéro de téléphone",
+  path: ["phone"],
 });
 type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreated: () => void }) {
   const [loading, setLoading] = useState(false);
+  const rolesQuery = useQuery(() => listRoles(), []);
+  const roles = rolesQuery.data ?? [];
   const { handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { firstName: "", lastName: "", email: "", password: "", phone: "" },
+    defaultValues: { firstName: "", lastName: "", email: "", password: "", phone: "", roleId: "" },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
@@ -320,7 +331,9 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
   async function submit(values: CreateUserFormValues) {
     setLoading(true);
     try {
-      await createUser(values as CreateUserInput);
+      const { roleId, ...userInput } = values;
+      const user = await createUser({ ...userInput, email: userInput.email.trim() === "" ? undefined : userInput.email } as CreateUserInput);
+      await assignRoleToUser(user.id, Number(roleId));
       onCreated();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -348,11 +361,13 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
         </Field>
       </div>
       <Field>
-        <Label>Email <span className="text-error-500">*</span></Label>
+        <Label>Email</Label>
         <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />
         {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
       </Field>
       <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
+      {errors.phone && <p className="text-xs text-error-600">{errors.phone.message}</p>}
+      <p className="text-xs text-gray-400">Email ou téléphone requis (au moins l&apos;un des deux) — la connexion se fait par numéro de téléphone.</p>
       <Field>
         <Label>Mot de passe initial <span className="text-error-500">*</span></Label>
         <Input type="password" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />

@@ -1,16 +1,14 @@
 "use client";
 
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { SlidersHorizontal, Calculator, Timer, ListChecks, Ban, GitBranch, FunctionSquare } from "lucide-react";
+import { SlidersHorizontal, Timer, ListChecks, Ban, GitBranch } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { GradingScalePanel } from "@/components/grading/grading-scale-panel";
-import { CalculationSettingsPanel } from "@/components/grading/calculation-settings-panel";
 import { SessionSettingsPanel } from "@/components/grading/session-settings-panel";
 import { AssessmentTypesPanel } from "@/components/grading/assessment-types-panel";
 import { EliminatoryRulesPanel } from "@/components/grading/eliminatory-rules-panel";
 import { DecisionRulesPanel } from "@/components/grading/decision-rules-panel";
-import { GradingFormulaPanel } from "@/components/grading/grading-formula-panel";
 
 export default function GradingSettingsPage() {
   const { user } = useAuth();
@@ -21,28 +19,24 @@ export default function GradingSettingsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Paramètres de notation</h1>
         <p className="text-sm text-gray-500">
-          Barème des mentions, moteur de calcul des moyennes, types d&apos;évaluation et règles de décision
+          Barème des mentions, types d&apos;évaluation et règles de décision
         </p>
       </div>
 
       <Tabs defaultValue="scale">
         <TabsList>
           <TabsTrigger value="scale" icon={SlidersHorizontal}>Barème</TabsTrigger>
-          <TabsTrigger value="calc" icon={Calculator}>Moteur de calcul</TabsTrigger>
           <TabsTrigger value="types" icon={ListChecks}>Types d&apos;évaluation</TabsTrigger>
           <TabsTrigger value="sessions" icon={Timer}>Durées de séance</TabsTrigger>
           <TabsTrigger value="eliminatory" icon={Ban}>Notes éliminatoires</TabsTrigger>
           <TabsTrigger value="decision" icon={GitBranch}>Règles de décision</TabsTrigger>
-          <TabsTrigger value="formula" icon={FunctionSquare}>Formule de calcul</TabsTrigger>
         </TabsList>
 
         <TabsPanel value="scale"><GradingScalePanel canWrite={canWrite} /></TabsPanel>
-        <TabsPanel value="calc"><CalculationSettingsPanel canWrite={canWrite} /></TabsPanel>
         <TabsPanel value="types"><AssessmentTypesPanel canWrite={canWrite} /></TabsPanel>
         <TabsPanel value="sessions"><SessionSettingsPanel canWrite={canWrite} /></TabsPanel>
         <TabsPanel value="eliminatory"><EliminatoryRulesPanel canWrite={canWrite} /></TabsPanel>
         <TabsPanel value="decision"><DecisionRulesPanel canWrite={canWrite} /></TabsPanel>
-        <TabsPanel value="formula"><GradingFormulaPanel canWrite={canWrite} /></TabsPanel>
       </Tabs>
     </div>
   );

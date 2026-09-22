@@ -142,6 +142,19 @@ export default function DashboardPage() {
           fois configuré ou fermée manuellement. Réservée aux rôles qui font la configuration. */}
       {tenantScoped && canSetup && <GettingStarted compact />}
 
+      {/* École sans donnée encore (ni élève, ni facture) ET rôle qui ne fait pas la configuration
+          (comptable, secrétaire...) : le guide « Premiers pas » ci-dessus ne s'affiche pas pour eux
+          (réservé aux admins), la page serait donc quasiment vide sans ce message explicite — pas une
+          erreur, juste rien à afficher pour l'instant. */}
+      {tenantScoped && !subLoading && !canSetup && !hasData && !studentsQuery.isLoading && !invoicesQuery.isLoading && (
+        <Card>
+          <CardBody className="py-10 text-center text-sm text-gray-500">
+            Aucune donnée à afficher pour le moment — l&apos;établissement n&apos;a pas encore d&apos;élèves
+            ou de factures enregistrés.
+          </CardBody>
+        </Card>
+      )}
+
       {!tenantScoped ? (
         <Card>
           <CardBody className="text-sm text-gray-600">
@@ -299,7 +312,9 @@ export default function DashboardPage() {
               <Card>
                 <CardHeader><CardTitle>Résumé des performances</CardTitle></CardHeader>
                 <CardBody>
-                  {!distributionQuery.data ? (
+                  {distributionQuery.error ? (
+                    <p className="py-10 text-center text-sm text-gray-400">Aucune donnée disponible.</p>
+                  ) : !distributionQuery.data ? (
                     <div className="flex justify-center py-10"><Spinner /></div>
                   ) : (
                     <PieBreakdownChart
