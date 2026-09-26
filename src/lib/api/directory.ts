@@ -24,3 +24,8 @@ export function searchDirectory(params: { matricule?: string; name?: string }): 
 export function searchSchools(q: string): Promise<string[]> {
   return api.get<string[]>("/directory/schools", { query: { q: q || undefined } });
 }
+
+/** Suggest platform "previous class" labels already entered (ex. "CM2", "10ème"). */
+export function searchPreviousClasses(q: string): Promise<string[]> {
+  return api.get<string[]>("/directory/previous-classes", { query: { q: q || undefined } });
+}

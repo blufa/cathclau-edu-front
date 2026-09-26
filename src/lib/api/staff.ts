@@ -12,6 +12,20 @@ export function listTeachers(): Promise<Teacher[]> {
   return api.get<Teacher[]>("/staff/teachers");
 }
 
+export interface StaffSearchResult {
+  userId: number;
+  staffType: "TEACHER" | "EMPLOYEE";
+  staffId: number;
+  fullName: string;
+  phone: string | null;
+}
+
+/** Recherche croisée enseignant/personnel par nom (§retour comptable, refonte inscription) — pour
+ * proposer "Lier comme parent" avec pré-remplissage nom/téléphone. */
+export function searchStaff(q: string): Promise<StaffSearchResult[]> {
+  return api.get<StaffSearchResult[]>("/staff/search", { query: { q } });
+}
+
 export function getTeacher(id: number): Promise<Teacher> {
   return api.get<Teacher>(`/staff/teachers/${id}`);
 }

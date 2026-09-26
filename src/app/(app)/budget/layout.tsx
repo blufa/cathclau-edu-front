@@ -1,17 +1,8 @@
 import type { ReactNode } from "react";
-import { RouteTabs } from "@/components/layout/route-tabs";
 
+// Plus d'onglets ici (§retour comptable, point 31) : /budget est désormais une destination unique
+// (fiches de dépense mensuelles). /budget/annual (ancien "Budget annuel") et /budget/grants
+// (Subventions) restent intacts et accessibles par URL directe, mais ne sont plus mis en avant.
 export default function BudgetLayout({ children }: { children: ReactNode }) {
-  return (
-    <div>
-      <RouteTabs
-        tabs={[
-          { label: "Budget annuel", href: "/budget", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["budget:manage", "budget:approve"] },
-          { label: "Subventions", href: "/budget/grants", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["budget:manage"] },
-          { label: "Dépenses", href: "/budget/expenses", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["depense:create", "depense:approve"], module: "EXPENSES" },
-        ]}
-      />
-      {children}
-    </div>
-  );
+  return <div>{children}</div>;
 }

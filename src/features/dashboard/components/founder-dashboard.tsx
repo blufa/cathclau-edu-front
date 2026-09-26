@@ -19,14 +19,13 @@ import {
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { listPaymentsByTenant } from "@/lib/api/payment";
 import { listExpenses } from "@/lib/api/expense";
 import { getCurrentAcademicYear, listAcademicYears } from "@/lib/api/academics";
-import { getAbandonedStudents, getFinanceDashboard, getFounderDashboard, getHrDashboard } from "@/lib/api/reporting";
+import { getAbandonedStudents, getFounderDashboard, getHrDashboard } from "@/lib/api/reporting";
 import { listEmployees, listTeachers } from "@/lib/api/staff";
 import { listPayslips } from "@/lib/api/payroll";
 import { listCommunicationsByTenant } from "@/lib/api/communication";
-import { checkOverdueInstallmentsNow } from "@/lib/api/billing";
+import { checkOverdueInstallmentsNow, listInvoicesByTenant } from "@/lib/api/billing";
 import { searchStudents } from "@/lib/api/students";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
@@ -62,14 +61,10 @@ export default function FounderDashboard() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
 
-  const paymentsQuery = useQuery(() => (tenantId ? listPaymentsByTenant(tenantId) : Promise.resolve([])), [tenantId]);
-  const expensesQuery = useQuery(() => listExpenses("PAID"), []);
-  // Même appel que /reports (Rapports & analytique) pour la carte « Recettes de l'école » — avant, ce
-  // montant était recalculé ici à partir des paiements bruts (`Payment.amount`), une source différente
-  // de celle des Rapports (`Invoice.paidAmount`), ce qui produisait deux chiffres divergents pour ce
-  // qui devrait être « la même chose ». `paymentsQuery` reste utilisé, mais uniquement pour la courbe
-  // mensuelle « Recettes vs dépenses » ci-dessous (vue de tendance, pas de total).
-  const financeQuery = useQuery(() => getFinanceDashboard(), []);
+  const expensesQuery = useQuery(() => listExpenses(), []);
+  // Factures émises (peu importe si déjà réglées) — pour « Bénéfice du mois », qui reflète le
+  // bénéfice PRÉVISIONNEL du mois (facturé, pas seulement encaissé), voir plus bas.
+  const invoicesQuery = useQuery(() => (tenantId ? listInvoicesByTenant(tenantId) : Promise.resolve([])), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, () => listTeachers(), [tenantId]);
   const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const now0 = new Date();
@@ -82,7 +77,7 @@ export default function FounderDashboard() {
   const communicationsQuery = useQuery(() => (tenantId ? listCommunicationsByTenant(tenantId) : Promise.resolve([])), [tenantId]);
   // Fiches de paie enseignants du mois — pour distinguer qui est déjà payé de qui ne l'est pas encore.
   const payslipsQuery = useQuery(() => listPayslips(), []);
-  const loading = paymentsQuery.loading || expensesQuery.loading || financeQuery.loading;
+  const loading = expensesQuery.loading || invoicesQuery.loading;
 
   // Le job de relance des échéances en retard ne tourne automatiquement qu'une fois par jour à 6h —
   // ce bouton permet de le déclencher tout de suite (utile en test, ou si le serveur n'a pas tourné en
@@ -100,25 +95,24 @@ export default function FounderDashboard() {
     } catch (err) { notifyError(err); } finally { setCheckingOverdue(false); }
   }
 
-  const payments = paymentsQuery.data ?? [];
   const expenses = expensesQuery.data ?? [];
-  const revenue = Number(financeQuery.data?.collected ?? 0);
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const balance = revenue - totalExpenses;
 
   const teacherPhotoById = new Map((teachersQuery.data ?? []).map((t) => [t.id, t.photo]));
   const teacherSpecializationById = new Map((teachersQuery.data ?? []).map((t) => [t.id, t.specialization]));
   const hrByTeacherId = new Map((hrQuery.data?.teachers ?? []).map((t) => [t.teacherId, t]));
 
-  const revenueByMonth = new Map<string, number>();
-  for (const p of payments) {
-    if (p.status !== "SUCCEEDED" || !p.paidAt) continue;
-    const key = p.paidAt.slice(0, 7);
-    revenueByMonth.set(key, (revenueByMonth.get(key) ?? 0) + Number(p.amount));
+  // Facturé du mois (toutes les factures ÉMISES ce mois-ci, payées ou non) — c'est ce chiffre, pas
+  // l'encaissé, qui entre dans le bénéfice PRÉVISIONNEL du mois (voir monthlyProfit plus bas).
+  const invoicedByMonth = new Map<string, number>();
+  for (const i of invoicesQuery.data ?? []) {
+    if (i.status === "CANCELLED" || !i.issueDate) continue;
+    const key = i.issueDate.slice(0, 7);
+    invoicedByMonth.set(key, (invoicedByMonth.get(key) ?? 0) + Number(i.totalAmount));
   }
   const expensesByMonth = new Map<string, number>();
   for (const e of expenses) {
-    const key = (e.expenseDate ?? e.paidAt ?? "").slice(0, 7);
+    const key = (e.expenseDate ?? "").slice(0, 7);
     if (!key) continue;
     expensesByMonth.set(key, (expensesByMonth.get(key) ?? 0) + Number(e.amount));
   }
@@ -202,10 +196,12 @@ export default function FounderDashboard() {
     payrollPaidByMonth.set(key, (payrollPaidByMonth.get(key) ?? 0) + Number(p.netSalary));
   }
 
-  // Bénéfice réel du mois : recettes − dépenses − masse salariale réellement payée (enseignants +
-  // personnel) — un chiffre qui n'existait nulle part ailleurs, contrairement à « Balance globale »
-  // (recettes − dépenses seules, sans déduire la masse salariale) affichée plus haut.
-  const monthlyProfit = (revenueByMonth.get(currentMonthKey) ?? 0)
+  // Bénéfice PRÉVISIONNEL du mois : facturé du mois (toutes les factures émises ce mois, encaissées
+  // ou non) − dépenses du mois − masse salariale réellement payée (enseignants + personnel) — le seul
+  // chiffre de rentabilité qui se réinitialise chaque mois (« Dépenses totales » ci-dessous reste
+  // cumulatif depuis toujours). Volontairement basé sur le FACTURÉ et non l'encaissé : un parent qui
+  // paie en retard ne doit pas faire disparaître le bénéfice attendu du mois où la facture a été émise.
+  const monthlyProfit = (invoicedByMonth.get(currentMonthKey) ?? 0)
     - (expensesByMonth.get(currentMonthKey) ?? 0)
     - (payrollPaidByMonth.get(currentMonthKey) ?? 0);
 
@@ -236,22 +232,18 @@ export default function FounderDashboard() {
       </Reveal>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
         </div>
       ) : (
         <Reveal y={12}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard title="Élèves dans l'école" value={studentsCountQuery.data ?? 0} icon={GraduationCap} accent="indigo" />
-            <StatCard title="Recettes de l'école" value={formatGNF(revenue)} icon={TrendingUp} accent="teal"
-              hint="Scolarité, inscriptions, frais annexes" />
             <StatCard title="Dépenses totales" value={formatGNF(totalExpenses)} icon={TrendingDown} accent="rose"
-              hint="Dépenses payées, toutes catégories" />
-            <StatCard title="Balance globale" value={formatGNF(balance)} icon={balance >= 0 ? Wallet : Banknote}
-              accent={balance >= 0 ? "indigo" : "rose"} hint="Recettes − dépenses courantes, hors salaires (toutes périodes confondues)" />
+              hint="Dépenses payées, toutes catégories (toutes périodes confondues)" />
             <StatCard title="Bénéfice du mois" value={formatGNF(monthlyProfit)} icon={monthlyProfit >= 0 ? Award : Banknote}
               accent={monthlyProfit >= 0 ? "emerald" : "rose"}
-              hint="Le vrai bénéfice de ce mois : recettes − dépenses − salaires versés (mois de travail, pas de virement)" />
+              hint="Prévisionnel : facturé du mois − dépenses du mois − salaires versés (mois de travail, pas de virement)" />
           </div>
         </Reveal>
       )}

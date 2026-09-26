@@ -15,7 +15,7 @@ import {
   updateTeacher,
 } from "@/lib/api/staff";
 import { listCardTemplates } from "@/lib/api/student-card";
-import { getCurrentAcademicYear, listClasses, listSubjects } from "@/lib/api/academics";
+import { getCurrentAcademicYear, listSubjects } from "@/lib/api/academics";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -259,21 +259,12 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const teacherSubjectsQuery = useQuery(() => getTeacherSubjects(teacher.id), [teacher.id]);
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
-  const classesQuery = useQuery(
-    () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
-    [currentYearQuery.data?.id],
-  );
 
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
-  const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
   const taughtSubjects = useMemo(() => {
     const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.subjectId))];
     return ids.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
   }, [teacherSubjectsQuery.data, subjectLabel]);
-  const taughtClasses = useMemo(() => {
-    const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.classId))];
-    return ids.map((id) => classLabel.get(id)).filter((l): l is string => !!l).join(", ");
-  }, [teacherSubjectsQuery.data, classLabel]);
 
   const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
 
@@ -289,7 +280,6 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
       fields={[
         { label: "Téléphone", value: teacher.phone ?? "—" },
         { label: "Matières", value: taughtSubjects || "—" },
-        { label: "Classes", value: taughtClasses || "—" },
       ]}
       qrData={buildIdentityQr({ type: "TEACHER", fullName: `${teacher.firstName} ${teacher.lastName}`, matricule: teacher.staffNumber })}
       footerNote={enrolled ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}

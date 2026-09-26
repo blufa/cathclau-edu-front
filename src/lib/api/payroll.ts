@@ -2,6 +2,7 @@ import { api, apiBlobUrl } from "@/lib/api/client";
 import type {
   FeeDeduction,
   Payslip,
+  PayslipEmployeeType,
   PayslipLine,
   PayslipLineType,
   PayslipStatus,
@@ -206,8 +207,8 @@ export function updateFeeDeductionRule(id: number, input: SalaryFeeDeductionRule
 export function deleteFeeDeductionRule(id: number): Promise<void> {
   return api.delete<void>(`/payroll/fee-deduction-rules/${id}`);
 }
-export function previewFeeDeduction(teacherId: number): Promise<FeeDeduction> {
-  return api.get<FeeDeduction>("/payroll/fee-deduction-rules/preview", { query: { teacherId } });
+export function previewFeeDeduction(teacherId: number, employeeType: PayslipEmployeeType = "TEACHER"): Promise<FeeDeduction> {
+  return api.get<FeeDeduction>("/payroll/fee-deduction-rules/preview", { query: { teacherId, employeeType } });
 }
 
 // ── Avances sur salaire ───────────────────────────────────────────────────────

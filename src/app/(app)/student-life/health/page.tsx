@@ -115,7 +115,9 @@ export default function HealthPage() {
                 {(visitsQuery.data ?? []).map((v) => (
                   <TR key={v.id}>
                     <TD className="whitespace-nowrap text-sm">{v.visitDate}{v.visitTime ? ` ${v.visitTime.slice(0, 5)}` : ""}</TD>
-                    <TD className="font-medium text-gray-900">{studentName.get(v.studentId) ?? `#${v.studentId}`}</TD>
+                    {/* Élève archivé (parti) : le passage à l'infirmerie reste dans l'historique
+                        médical, avec une mention explicite plutôt qu'un numéro brut (§retour comptable). */}
+                    <TD className="font-medium text-gray-900">{studentName.get(v.studentId) ?? `Élève archivé (#${v.studentId})`}</TD>
                     <TD className="max-w-[200px] truncate text-sm text-gray-600" title={v.reason ?? ""}>{v.reason ?? "—"}</TD>
                     <TD className="hidden max-w-[200px] truncate text-sm text-gray-600 sm:table-cell" title={v.careGiven ?? ""}>{v.careGiven ?? "—"}</TD>
                     <TD className="hidden text-sm sm:table-cell">{v.temperature ? `${v.temperature}°` : "—"}</TD>

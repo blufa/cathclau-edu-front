@@ -591,14 +591,16 @@ function AttendanceLog({ classId, date, students, canWrite }: {
 
   if (loading) return <div className="flex justify-center py-10"><Spinner /></div>;
   if (error) return <p className="rounded-xl bg-error-50 px-4 py-3 text-sm text-error-700">Impossible de charger les présences.</p>;
-  const alerts = alertsQuery.data ?? [];
+  // Un élève archivé (parti en cours d'année) ne doit plus déclencher d'alerte de convocation —
+  // il n'y a plus rien à traiter pour lui (§retour comptable).
+  const alerts = (alertsQuery.data ?? []).filter((a) => nameOf.has(a.studentId));
 
   return (
     <div className="space-y-3">
       {alerts.length > 0 && (
         <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">
           <strong>Alerte assiduité</strong> — {alerts.length} élève(s) avec ≥ 2 absences non justifiées ce mois (convocation parents recommandée) :{" "}
-          {alerts.map((a) => `${nameOf.get(a.studentId) ?? `#${a.studentId}`} (${a.unjustifiedCount})`).join(", ")}.
+          {alerts.map((a) => `${nameOf.get(a.studentId)} (${a.unjustifiedCount})`).join(", ")}.
         </div>
       )}
       {students.length === 0 ? (
@@ -752,7 +754,9 @@ function AttendanceLogAllClasses({ classes, date, onPickClass }: {
   );
   const [search, setSearch] = useState("");
   const rows = useMemo(() => {
-    const all = rowsQuery.data ?? [];
+    // Un élève archivé ne doit plus apparaître dans cette liste de travail — il n'y a plus rien à
+    // pointer/traiter pour lui (§retour comptable).
+    const all = (rowsQuery.data ?? []).filter((r) => nameOf.has(r.row.studentId));
     const q = search.trim().toLowerCase();
     return q ? all.filter((r) => (nameOf.get(r.row.studentId) ?? "").toLowerCase().includes(q) || r.classLabel.toLowerCase().includes(q)) : all;
   }, [rowsQuery.data, search, nameOf]);
@@ -769,7 +773,7 @@ function AttendanceLogAllClasses({ classes, date, onPickClass }: {
             {rows.length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucune présence enregistrée pour cette date.</TD></TR>}
             {rows.map(({ row, classLabel, classId: cId }) => (
               <TR key={row.id}>
-                <TD>{nameOf.get(row.studentId) ?? `#${row.studentId}`}</TD>
+                <TD>{nameOf.get(row.studentId)}</TD>
                 <TD>{classLabel}</TD>
                 <TD><Badge tone={STATUS_TONE[row.status]}>{ATTENDANCE_STATUS_LABEL[row.status]}</Badge></TD>
                 <TD className="text-right">

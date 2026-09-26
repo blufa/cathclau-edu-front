@@ -30,6 +30,8 @@ export function SubscriptionsTab() {
   const routeName = useMemo(() => new Map((routesQuery.data ?? []).map((r) => [r.id, r.name])), [routesQuery.data]);
   const [routeFilter, setRouteFilter] = useState<string>("");
   const q = useQuery(() => listSubscriptions({ routeId: routeFilter ? Number(routeFilter) : undefined }), [routeFilter]);
+  // Un élève archivé (parti) n'a plus d'abonnement transport à gérer activement (§retour comptable).
+  const subscriptions = (q.data ?? []).filter((s) => studentName.has(s.studentId));
   const [subscribing, setSubscribing] = useState(false);
 
   return (
@@ -45,10 +47,10 @@ export function SubscriptionsTab() {
         <Table>
           <THead><tr><TH>Élève</TH><TH>Ligne</TH><TH>Sens</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun abonnement.</TD></TR>}
-            {(q.data ?? []).map((s) => (
+            {subscriptions.length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun abonnement.</TD></TR>}
+            {subscriptions.map((s) => (
               <TR key={s.id}>
-                <TD className="font-medium text-gray-900">{studentName.get(s.studentId) ?? `#${s.studentId}`}</TD>
+                <TD className="font-medium text-gray-900">{studentName.get(s.studentId)}</TD>
                 <TD>{routeName.get(s.routeId) ?? `#${s.routeId}`}</TD>
                 <TD>{DIRECTION_LABEL[s.direction]}</TD>
                 <TD><Badge tone={s.status === "ACTIVE" ? "green" : "gray"}>{SUB_STATUS_LABEL[s.status]}</Badge></TD>

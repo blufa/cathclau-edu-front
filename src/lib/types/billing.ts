@@ -29,6 +29,23 @@ export interface SchoolFee {
   label: string | null;
 }
 
+/** Les factures effectivement créées pour un frais donné, à la génération groupée d'inscription
+ * (§retour comptable, refonte inscription) — vide si une facture existait déjà (idempotent). */
+export interface GeneratedFeeInvoices {
+  fee: SchoolFee;
+  invoices: Invoice[];
+}
+
+export interface GenerateAllFeesInput {
+  studentId: number;
+  classId: number;
+  academicYearId: number;
+  /** NEW ou RE_ENROLLMENT — exclut la facture du type opposé si la classe a les deux frais configurés. */
+  enrollmentType: "NEW" | "RE_ENROLLMENT";
+  wantsTransport: boolean;
+  transportFeeId?: number | null;
+}
+
 export interface SchoolFeeInput {
   tenantId?: number | null;
   classId?: number | null;
@@ -130,6 +147,9 @@ export interface Exemption {
   validatedBy: number | null;
   active: boolean;
   createdAt: string | null;
+  /** Avantage personnel (enfant de membre du personnel) : la facture est marquée pour la retenue
+   * sur salaire, au lieu d'une détection automatique. */
+  staffBenefit: boolean;
 }
 
 export interface ExemptionInput {
@@ -141,6 +161,31 @@ export interface ExemptionInput {
   reason?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  staffBenefit?: boolean | null;
+}
+
+/** Type d'exonération pré-configuré et réutilisable (§retour comptable, refonte inscription) — ex.
+ * "Orphelin — 100%", configuré une fois puis choisi dans une liste déroulante à l'inscription. */
+export interface ExemptionRule {
+  id: number;
+  tenantId: number | null;
+  label: string;
+  type: ExemptionType;
+  percentage: string | null;
+  amount: string | null;
+  feeTypes: FeeType[] | null;
+  staffBenefit: boolean;
+  active: boolean;
+}
+
+export interface ExemptionRuleInput {
+  label: string;
+  type: ExemptionType;
+  percentage?: number | null;
+  amount?: number | null;
+  feeTypes?: FeeType[] | null;
+  staffBenefit?: boolean | null;
+  active?: boolean;
 }
 
 // ── Staff child benefit policies (avantage enfants du personnel) ─────────────

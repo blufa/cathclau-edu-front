@@ -83,7 +83,7 @@ export function StaffChildBenefitsPanel({ canWrite }: { canWrite: boolean }) {
       ) : (
         <Table>
           <THead>
-            <TR><TH>Libellé</TH><TH>Enfants couverts</TH><TH>Prise en charge</TH><TH>Frais</TH><TH>Statut</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
+            <TR><TH>Libellé</TH><TH>Couvre jusqu&apos;au N-ième enfant</TH><TH>Prise en charge</TH><TH>Frais</TH><TH>Statut</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
           </THead>
           <TBody>
             {items.map((p) => (
@@ -116,7 +116,11 @@ export function StaffChildBenefitsPanel({ canWrite }: { canWrite: boolean }) {
             <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex. Enseignants — 50 % scolarité" />
           </Field>
           <Field>
-            <Label>Nombre d&apos;enfants couverts</Label>
+            <Label>Couvre jusqu&apos;au N-ième enfant (par ordre de naissance)</Label>
+            <p className="text-xs text-slate-400">
+              Ex. 2 = les deux premiers enfants du personnel sont couverts, pas les suivants — pas le
+              nombre total d&apos;enfants du personnel.
+            </p>
             <Input type="number" min={1} value={form.coveredChildrenCount ?? ""} onChange={(e) => setForm({ ...form, coveredChildrenCount: e.target.value === "" ? null : Number(e.target.value) })} />
           </Field>
           <Field>
