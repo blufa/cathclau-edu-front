@@ -6,6 +6,10 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   exclude: [/\.map$/],
   disable: process.env.NODE_ENV !== "production",
+  // Page de secours hors-ligne (voir src/sw.ts, fallbacks.entries) : précachée explicitement car ce
+  // n'est pas un asset buildé détecté automatiquement (fichier statique dans /public), sans quoi
+  // matchPrecache() ne la trouverait jamais au moment de servir le fallback.
+  additionalPrecacheEntries: [{ url: "/offline.html", revision: "1" }],
 });
 
 const nextConfig: NextConfig = {
@@ -39,6 +43,11 @@ const nextConfig: NextConfig = {
       { source: "/re-enrollment", destination: "/enrollments/re-enrollment", permanent: false },
       { source: "/enrollment-movements", destination: "/enrollments/movements", permanent: false },
       { source: "/dashboard/rentree", destination: "/enrollments/overview", permanent: false },
+      // Session de caisse déplacée sous /payments (§retour comptable, point 27).
+      { source: "/accounting/cashier-session", destination: "/payments/cashier-session", permanent: false },
+      // Refonte du budget (§retour comptable, point 31) : /budget/expenses (catégories/fournisseurs/
+      // dépenses à onglets) est remplacée par les fiches de dépense mensuelles, désormais sur /budget.
+      { source: "/budget/expenses", destination: "/budget", permanent: false },
     ];
   },
 };

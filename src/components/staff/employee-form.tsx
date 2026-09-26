@@ -38,8 +38,6 @@ export function EmployeeForm({
   const [employeeNumber, setEmployeeNumber] = useState(initial?.employeeNumber ?? "");
   const [hireDate, setHireDate] = useState(initial?.hireDate ?? "");
   const [baseSalary, setBaseSalary] = useState<string>(initial?.baseSalary ? String(initial.baseSalary) : "");
-  const [cnssNumber, setCnssNumber] = useState(initial?.cnssNumber ?? "");
-  const [bankAccount, setBankAccount] = useState(initial?.bankAccount ?? "");
   const [linkedTeacherId, setLinkedTeacherId] = useState<string>(
     initial?.linkedTeacherId != null ? String(initial.linkedTeacherId) : "",
   );
@@ -104,8 +102,10 @@ export function EmployeeForm({
         employeeNumber: employeeNumber.trim() || null,
         hireDate: hireDate || null,
         baseSalary: baseSalary === "" ? null : Number(baseSalary),
-        cnssNumber: cnssNumber.trim() || null,
-        bankAccount: bankAccount.trim() || null,
+        // Retirés du formulaire (trop long) — on repasse tels quels pour ne pas écraser une valeur
+        // déjà enregistrée : update() côté backend remplace inconditionnellement, sans fusion.
+        cnssNumber: initial?.cnssNumber ?? null,
+        bankAccount: initial?.bankAccount ?? null,
         linkedTeacherId: linkedTeacherId === "" ? null : Number(linkedTeacherId),
       });
     } finally {
@@ -170,20 +170,9 @@ export function EmployeeForm({
           <DatePicker value={hireDate} onChange={setHireDate} clearable />
         </Field>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field>
-          <Label>Salaire de base (GNF)</Label>
-          <Input type="number" min={0} value={baseSalary} onChange={(e) => setBaseSalary(e.target.value)} />
-        </Field>
-        <Field>
-          <Label>Numéro CNSS</Label>
-          <Input value={cnssNumber} onChange={(e) => setCnssNumber(e.target.value)} />
-        </Field>
-      </div>
       <Field>
-        <Label>Compte bancaire (optionnel)</Label>
-        <p className="text-xs text-gray-400">RIB/IBAN. Le téléphone reste prioritaire pour le virement (Mobile Money).</p>
-        <Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+        <Label>Salaire de base (GNF)</Label>
+        <Input type="number" min={0} value={baseSalary} onChange={(e) => setBaseSalary(e.target.value)} />
       </Field>
       <div className="rounded-xl border border-gray-200 p-3">
         <Field>

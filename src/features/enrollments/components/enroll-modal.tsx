@@ -6,7 +6,7 @@ import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClass, listAcademicYears, listClasses } from "@/lib/api/academics";
 import { GRADE_LABEL_BY_CODE, gradeProgressionRank } from "@/lib/academics-grades";
-import { enroll, reenroll, searchEnrollments, updateEnrollment, updateMonthlyPayment, updatePlatformAccess } from "@/lib/api/enrollments";
+import { enroll, reenroll, searchEnrollments, updateEnrollment, updateMonthlyPayment } from "@/lib/api/enrollments";
 import { listFeesByClass, subscribeAnnexFee } from "@/lib/api/billing";
 import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
 import { ApiError } from "@/lib/api/errors";
@@ -51,10 +51,6 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
   const [stopId, setStopId] = useState("");
   const [direction, setDirection] = useState<TransportDirection>("BOTH");
   const [wantsCanteen, setWantsCanteen] = useState(false);
-  // Frais annexe optionnel : accès de l'élève à la plateforme, décidé par le parent à l'inscription
-  // (modifiable ensuite). Si non coché, aucune facture de frais plateforme n'est jamais générée pour
-  // lui — sinon, elle est facturée séparément (jamais mêlée au montant de la mensualité elle-même).
-  const [wantsPlatformAccess, setWantsPlatformAccess] = useState(enrollment?.platformAccessOptIn ?? false);
   const [wantsMonthlyPayment, setWantsMonthlyPayment] = useState(enrollment?.monthlyPaymentOptIn ?? false);
   const routesQuery = useQuery(() => (open && !editing ? listRoutes() : Promise.resolve([])), [open, editing]);
   const stopsQuery = useQuery(
@@ -153,18 +149,18 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
     setSubmitting(true);
     const input = {
       studentId, classId: Number(effectiveClassId), academicYearId: yearId, type: effectiveType,
-      platformAccessOptIn: wantsPlatformAccess, monthlyPaymentOptIn: wantsMonthlyPayment,
+      // Activé automatiquement pour tout élève inscrit — retiré de la saisie manuelle (§retour
+      // comptable) : plus de checkbox à cocher à l'inscription, l'accès plateforme est désormais
+      // systématique.
+      platformAccessOptIn: true, monthlyPaymentOptIn: wantsMonthlyPayment,
     };
     try {
       let result = editing
         ? await updateEnrollment(enrollment!.id, input)
         : await (type === "RE_ENROLLMENT" ? reenroll(input) : enroll(input));
 
-      // En édition, le PUT ne modifie pas les choix plateforme/paiement mensuel (voir EnrollCommand
-      // côté backend) : on les ajuste séparément si l'utilisateur les a changés.
-      if (editing && wantsPlatformAccess !== (enrollment?.platformAccessOptIn ?? false)) {
-        result = await updatePlatformAccess(enrollment!.id, wantsPlatformAccess);
-      }
+      // En édition, le PUT ne modifie pas le choix paiement mensuel (voir EnrollCommand côté
+      // backend) : on l'ajuste séparément si l'utilisateur l'a changé.
       if (editing && wantsMonthlyPayment !== (enrollment?.monthlyPaymentOptIn ?? false)) {
         result = await updateMonthlyPayment(enrollment!.id, wantsMonthlyPayment);
       }
@@ -281,14 +277,6 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
             </p>
           )}
         </Field>
-
-        <div className="rounded-xl border border-gray-200 p-3">
-          <Checkbox
-            label="Accès de l'élève à la plateforme"
-            checked={wantsPlatformAccess}
-            onChange={() => setWantsPlatformAccess((v) => !v)}
-          />
-        </div>
 
         <div className="rounded-xl border border-gray-200 p-3">
           <Checkbox

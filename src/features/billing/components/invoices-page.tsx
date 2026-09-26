@@ -207,7 +207,7 @@ export default function InvoicesPage() {
             {invoices.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune facture.</TD></TR>}
             {invoices.map((inv) => (
               <TR key={inv.id}>
-                <TD className="text-gray-900">{studentName.get(inv.studentId) ?? `#${inv.studentId}`}</TD>
+                <TD className="text-gray-900">{studentName.get(inv.studentId) ?? `Élève archivé (#${inv.studentId})`}</TD>
                 <TD className="hidden text-sm text-gray-700 sm:table-cell">
                   {inv.periodLabel ?? "Inscription / frais"}
                   {(() => {
@@ -252,7 +252,7 @@ export default function InvoicesPage() {
                       studentId={inv.studentId}
                       buildMessage={async () => {
                         const { url } = await getInvoicePdf(inv.id);
-                        const name = studentName.get(inv.studentId) ?? "";
+                        const name = studentName.get(inv.studentId) ?? "l'élève";
                         const solde = inv.status === "PAID" ? "soldée" : `reste à payer : ${formatGNF(inv.remainingBalance ?? inv.totalAmount)}`;
                         return `Bonjour, voici la facture ${inv.reference} de ${name} (${solde}).${url ? ` ${url}` : ""}`;
                       }}
@@ -361,7 +361,7 @@ function InvoiceForm({ tenantId, academicYearId, fees, onCancel, onCreated }: {
   );
   const feeOptions: SearchableOption[] = useMemo(
     () => fees.map((f) => {
-      const label = `${FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
+      const label = `${f.type === "OTHER" && f.label ? f.label : FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
       return { value: String(f.id), trigger: label, label, searchText: label };
     }),
     [fees],
@@ -441,7 +441,7 @@ function BulkInvoiceForm({ tenantId, academicYearId, fees, onCancel, onDone }: {
   );
   const feeOptions: SearchableOption[] = useMemo(
     () => fees.map((f) => {
-      const label = `${FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
+      const label = `${f.type === "OTHER" && f.label ? f.label : FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
       return { value: String(f.id), trigger: label, label, searchText: label };
     }),
     [fees],

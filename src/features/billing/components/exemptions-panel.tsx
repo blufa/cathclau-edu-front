@@ -22,13 +22,14 @@ import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatDate, formatGNF } from "@/lib/format";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 const EMPTY: ExemptionInput = {
-  studentId: 0, type: "PARTIAL", percentage: null, amount: null, feeTypes: [], reason: "", startDate: null, endDate: null,
+  studentId: 0, type: "PARTIAL", percentage: null, amount: null, feeTypes: [], reason: "", startDate: null, endDate: null, staffBenefit: false,
 };
 
 export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
@@ -97,7 +98,10 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
             {items.map((e) => (
               <TR key={e.id}>
                 <TD className="font-medium text-slate-900">{studentName(e.studentId)}</TD>
-                <TD><Badge tone="blue">{EXEMPTION_TYPE_LABEL[e.type]}</Badge></TD>
+                <TD>
+                  <Badge tone="blue">{EXEMPTION_TYPE_LABEL[e.type]}</Badge>
+                  {e.staffBenefit && <Badge tone="indigo" className="ml-1.5">Avantage personnel</Badge>}
+                </TD>
                 <TD>{e.percentage != null ? `${e.percentage} %` : e.amount != null ? formatGNF(e.amount) : "—"}</TD>
                 <TD className="text-sm text-slate-600">
                   {e.feeTypes && e.feeTypes.length > 0 ? e.feeTypes.map((t) => FEE_TYPE_LABEL[t]).join(", ") : "Tous"}
@@ -144,6 +148,10 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
             <Input type="number" min={0} value={form.amount ?? ""} onChange={(e) => setForm({ ...form, amount: e.target.value === "" ? null : Number(e.target.value) })} />
           </Field>
           <FeeTypeMultiSelect value={form.feeTypes} onChange={(v) => setForm({ ...form, feeTypes: v })} />
+          <div className="flex items-center gap-3">
+            <Switch checked={form.staffBenefit ?? false} onChange={(checked) => setForm({ ...form, staffBenefit: checked })} ariaLabel="Avantage personnel" />
+            <span className="text-sm text-gray-700">Avantage personnel (retenue sur salaire du parent employé)</span>
+          </div>
           <Field>
             <Label>Motif</Label>
             <Textarea rows={2} value={form.reason ?? ""} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Raison de l'exonération…" />

@@ -1,74 +1,66 @@
-/** Expenses contracts mirrored from the backend expenses module. */
+/** Fiches de dépense mensuelles (§retour comptable, point 31) — remplace le budget annuel
+ * prévisionnel par une saisie directe des dépenses/recettes réellement engagées. */
+import type { FinancingMode } from "@/lib/types/budget";
 
-export type ExpenseStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "PAID";
-export type ExpensePaymentMode = "CASH" | "TRANSFER" | "MOBILE_MONEY" | "CHEQUE";
-
-export const EXPENSE_STATUS_LABEL: Record<ExpenseStatus, string> = {
-  DRAFT: "Brouillon",
-  SUBMITTED: "Soumise",
-  APPROVED: "Approuvée",
-  REJECTED: "Rejetée",
-  PAID: "Payée",
-};
-
-export const EXPENSE_PAYMENT_MODE_LABEL: Record<ExpensePaymentMode, string> = {
-  CASH: "Espèces",
-  TRANSFER: "Virement",
-  MOBILE_MONEY: "Mobile money",
-  CHEQUE: "Chèque",
-};
+export interface MonthlyExpenseSheet {
+  id: number;
+  tenantId: number | null;
+  label: string;
+  academicYear: string;
+  financingMode: FinancingMode | null;
+  financingAmount: string | null;
+  createdAt: string | null;
+  createdBy: number | null;
+  /** Null tant que la fiche est ouverte (modifiable) ; renseigné dès la clôture (verrouillée). */
+  closedAt: string | null;
+}
 
 export interface Expense {
   id: number;
   tenantId: number | null;
-  categoryId: number | null;
-  supplierId: number | null;
-  /** Ligne du budget annuel (AnnualBudget) sur laquelle la dépense s'impute — son "réalisé" se met
-   * alors à jour automatiquement au paiement. */
-  budgetLineId: number | null;
+  sheetId: number | null;
   label: string;
   amount: string;
-  currency: string;
+  /** Coché si la dépense était nécessaire (vs. confort/optionnel). */
+  necessary: boolean;
   expenseDate: string | null;
-  paymentMode: ExpensePaymentMode | null;
-  reference: string | null;
-  justificationUrl: string | null;
-  status: ExpenseStatus;
-  rejectionReason: string | null;
-  decidedBy: number | null;
   createdAt: string | null;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  paidAt: string | null;
 }
 
-export interface ExpenseInput {
-  categoryId?: number | null;
-  supplierId?: number | null;
-  budgetLineId?: number | null;
+export interface RevenueLine {
+  id: number;
+  tenantId: number | null;
+  sheetId: number | null;
+  label: string;
+  amount: string;
+  revenueDate: string | null;
+  createdAt: string | null;
+}
+
+export interface SheetDetail {
+  sheet: MonthlyExpenseSheet;
+  expenses: Expense[];
+  revenues: RevenueLine[];
+  totalExpenses: string;
+  totalRevenues: string;
+}
+
+export interface SheetInput {
+  label: string;
+  academicYear: string;
+  financingMode?: FinancingMode | null;
+  financingAmount?: number | null;
+}
+
+export interface ExpenseLineInput {
   label: string;
   amount: number;
-  currency?: string | null;
+  necessary: boolean;
   expenseDate?: string | null;
-  paymentMode?: ExpensePaymentMode | null;
-  reference?: string | null;
-  justificationUrl?: string | null;
 }
 
-export interface Supplier {
-  id: number;
-  tenantId: number | null;
-  name: string;
-  type: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  bankAccount: string | null;
-}
-
-export interface ExpenseCategory {
-  id: number;
-  tenantId: number | null;
-  name: string;
-  parentId: number | null;
+export interface RevenueLineInput {
+  label: string;
+  amount: number;
+  revenueDate?: string | null;
 }

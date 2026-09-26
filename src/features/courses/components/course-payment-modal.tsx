@@ -11,8 +11,10 @@ import type { PaymentStatus } from "@/lib/types/payment";
 import type { Course, CoursePurchase } from "@/lib/types/courses";
 
 const TERMINAL: PaymentStatus[] = ["SUCCEEDED", "FAILED", "REFUNDED"];
-const POLL_MS = 3000;
-const MAX_POLLS = 20;
+// Intervalle doublé (§retour comptable, point 18 — consommation de données excessive sur connexion
+// mobile) : même fenêtre d'attente totale (~60s), deux fois moins de requêtes réseau.
+const POLL_MS = 6000;
+const MAX_POLLS = 10;
 // Numéro générique — le portail Djomy recueille le vrai numéro payeur à l'étape suivante.
 const PAYER_NUMBER = "614324299";
 

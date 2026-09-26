@@ -373,6 +373,17 @@ function UserCreateForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
         <Input type="password" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
         {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
       </Field>
+      <Field>
+        <Label>Rôle <span className="text-error-500">*</span></Label>
+        <Select value={v.roleId} onChange={(e) => setValue("roleId", e.target.value)} aria-invalid={!!errors.roleId}>
+          <option value="">—</option>
+          {roles.map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
+        </Select>
+        {errors.roleId && <p className="text-xs text-error-600">{errors.roleId.message}</p>}
+        <p className="mt-1 text-xs text-gray-400">
+          Sans rôle, ce compte pourra se connecter mais n&apos;aura accès à rien.
+        </p>
+      </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>
           Annuler

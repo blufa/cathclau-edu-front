@@ -5,9 +5,13 @@ import type {
   EarlyPaymentDiscountRuleInput,
   Exemption,
   ExemptionInput,
+  ExemptionRule,
+  ExemptionRuleInput,
   FamilyDiscountRule,
   FamilyDiscountRuleInput,
   FeeType,
+  GenerateAllFeesInput,
+  GeneratedFeeInvoices,
   Installment,
   InstallmentInput,
   Invoice,
@@ -137,6 +141,13 @@ export function generateInvoicesBulk(tenantId: number | null, classId: number, f
   return api.post<Invoice[]>("/billing/invoices/generate-bulk", { tenantId, classId, feeId, academicYearId });
 }
 
+/** Génère en un seul appel toutes les factures des frais rattachés à la classe d'un élève, à
+ * l'inscription (§retour comptable, refonte inscription) — inscription, mensualités, cantine,
+ * examen... + transport si choisi. N'applique aucune remise ici : déjà fait côté serveur. */
+export function generateAllForEnrollment(input: GenerateAllFeesInput): Promise<GeneratedFeeInvoices[]> {
+  return api.post<GeneratedFeeInvoices[]>("/billing/enrollment-billing/generate-all", input);
+}
+
 /** Génère une facture par mois (échéance) d'un frais MENSUALITE pour un élève. */
 export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<Invoice[]> {
   return api.post<Invoice[]>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
@@ -148,6 +159,12 @@ export function applyInvoicePayment(id: number, amount: number): Promise<Invoice
 
 export function cancelInvoice(id: number): Promise<void> {
   return api.delete<void>(`/billing/invoices/${id}/cancel`);
+}
+
+/** Suppression physique — uniquement si la facture n'a encore reçu aucun paiement (§retour
+ * comptable, refonte inscription). Utiliser {@link cancelInvoice} sinon (garde l'historique). */
+export function deleteInvoice(id: number): Promise<void> {
+  return api.delete<void>(`/billing/invoices/${id}`);
 }
 
 export function getInvoiceByReference(reference: string): Promise<Invoice> {
@@ -166,6 +183,20 @@ export function grantExemption(input: ExemptionInput): Promise<Exemption> {
 }
 export function revokeExemption(id: number): Promise<Exemption> {
   return api.patch<Exemption>(`/billing/exemptions/${id}/revoquer`);
+}
+
+// ── Types d'exonération pré-configurés (catalogue réutilisable) ──────────────
+export function listExemptionRules(): Promise<ExemptionRule[]> {
+  return api.get<ExemptionRule[]>("/billing/exemption-rules");
+}
+export function createExemptionRule(input: ExemptionRuleInput): Promise<ExemptionRule> {
+  return api.post<ExemptionRule>("/billing/exemption-rules", input);
+}
+export function updateExemptionRule(id: number, input: ExemptionRuleInput): Promise<ExemptionRule> {
+  return api.put<ExemptionRule>(`/billing/exemption-rules/${id}`, input);
+}
+export function deleteExemptionRule(id: number): Promise<void> {
+  return api.delete<void>(`/billing/exemption-rules/${id}`);
 }
 
 // ── Staff child benefit policies ─────────────────────────────────────────────
