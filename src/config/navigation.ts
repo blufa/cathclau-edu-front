@@ -84,7 +84,7 @@ export const NAVIGATION: NavSection[] = [
         label: "Inscriptions & rentrée", icon: ClipboardList, module: "STUDENTS",
         children: [
           { label: "Inscriptions", href: "/enrollments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
-          { label: "Inscription groupée (fratrie)", href: "/enrollments/bulk-family", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
+          { label: "Nouvelle inscription", href: "/enrollments/bulk-family", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
           { label: "Réinscription (rentrée)", href: "/enrollments/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
           { label: "Mouvements & attente", href: "/enrollments/movements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
           { label: "Tableau de la rentrée", href: "/enrollments/overview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
@@ -101,9 +101,11 @@ export const NAVIGATION: NavSection[] = [
         ],
       },
       { label: "Guichet d'accueil", href: "/guichet", icon: Receipt, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], excludeRoles: ["PARENT"] },
-      // Pas de permission classe:* qui corresponde exactement à l'accès actuel (classe:manage
-      // exclut Secrétaire, classe:read inclut Enseignant) — laissé en rôles fixes pour l'instant.
-      { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], module: "ACADEMICS" },
+      // classe:read est aussi accordé à l'Enseignant (pour son propre usage, voir /my-classes) : on
+      // l'exclut ici pour ne pas dupliquer l'entrée de menu — mais tout autre rôle (ex. Comptable) à
+      // qui l'admin accorde classe:read voit maintenant bien cet item (avant : uniquement rôles fixes,
+      // la permission seule ne suffisait pas).
+      { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["classe:read"], excludeRoles: ["TEACHER"], module: "ACADEMICS" },
       { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["emploi:read"], excludeRoles: ["STUDENT"], module: "ACADEMICS" },
       // Page dédiée aux événements du calendrier (pas de gestion d'année scolaire, contrairement à
       // « Année scolaire & calendrier ») — seul écran auquel le responsable pédagogique a accès pour
@@ -157,23 +159,25 @@ export const NAVIGATION: NavSection[] = [
           // Vue jour par jour, tous canaux confondus, pour le contrôle mensuel du fondateur
           // (§angles morts comptables) — indépendante du fait que les frais soient réglés par tranche.
           { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], module: "PAYMENTS" },
-          { label: "Transactions & reçus", href: "/payments/transactions", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["transaction:read"], module: "PAYMENTS" },
+          // "Transactions & reçus" (§retour comptable, point 26) est masquée du menu — jugée
+          // redondante avec Paiements/Encaissements par jour pour l'usage courant — mais la page reste
+          // intacte et accessible par URL directe si besoin (même traitement que "Comptabilité").
           // Rapprochement de caisse (§angles morts comptables) : usage quotidien au guichet, contrairement
           // au reste de la section « Comptabilité » (masquée du menu, cf. plus bas) — reste visible ici.
-          { label: "Session de caisse", href: "/accounting/cashier-session", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
+          // Route déplacée sous /payments (§retour comptable, point 27) : elle vivait auparavant sous
+          // /accounting, dont le layout à onglets est différent de celui de Paiements — y naviguer
+          // depuis ici faisait perdre les onglets Paiements/Encaissements par jour/Transactions.
+          { label: "Session de caisse", href: "/payments/cashier-session", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
         ],
       },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
       // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
       // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).
-      {
-        label: "Budget & subventions", icon: PiggyBank,
-        children: [
-          { label: "Budget annuel", href: "/budget", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["budget:manage", "budget:approve"] },
-          { label: "Subventions", href: "/budget/grants", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["budget:manage"] },
-          { label: "Dépenses", href: "/budget/expenses", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["depense:create", "depense:approve"], module: "EXPENSES" },
-        ],
-      },
+      // Refonte du budget (§retour comptable, point 31) : remplace le sous-menu "Budget & subventions"
+      // (Budget annuel prévisionnel + Subventions + Dépenses à onglets) par un lien unique vers la
+      // nouvelle page de fiches de dépense mensuelles. "Budget annuel" (désormais /budget/annual) et
+      // "Subventions" (/budget/grants) restent intacts, juste plus mis en avant dans le menu.
+      { label: "Dépenses", href: "/budget", icon: PiggyBank, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["depense:create"], module: "EXPENSES" },
       { label: "Paie", href: "/payroll", icon: Banknote, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paie:manage"] },
     ],
   },

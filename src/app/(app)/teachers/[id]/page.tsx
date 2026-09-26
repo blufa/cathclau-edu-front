@@ -177,7 +177,6 @@ export default function TeacherDetailPage() {
     const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
     const dayOrder = ["LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"];
     const byDay = new Map(dayOrder.map((d) => [d, schedule.filter((s) => s.day === d).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))]));
-    const classesTaught = [...new Set(schedule.map((s) => s.classId))].map((id) => classLabel.get(id) ?? `#${id}`);
     const cols = dayOrder.map((d) => {
       const cells = (byDay.get(d) ?? []).map((s) => {
         const title = s.subjectId != null ? esc(subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : esc(s.label ?? "Heure creuse");
@@ -206,7 +205,6 @@ export default function TeacherDetailPage() {
       + `<div><span>Email</span>${esc(t.email ?? "—")}</div>`
       + `<div><span>Date d'embauche</span>${esc(t.hireDate ?? "—")}</div>`
       + `</div>`
-      + `<p class="list"><strong>Classes :</strong> ${classesTaught.length ? esc(classesTaught.join(", ")) : "—"}</p>`
       + `<p class="list"><strong>Matières :</strong> ${subjects.length ? esc(subjects.map((s) => subjectLabel.get(s.subjectId) ?? `#${s.subjectId}`).join(", ")) : "—"}</p>`
       + `<table><thead><tr>${dayOrder.map((d) => `<th>${DAY_LABEL[d] ?? d}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
       + `<script>window.onload=function(){window.print()}</script></body></html>`;

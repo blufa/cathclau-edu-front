@@ -12,8 +12,8 @@ import {
   previewFeeDeduction,
   updateFeeDeductionRule,
 } from "@/lib/api/payroll";
-import { listTeachers } from "@/lib/api/staff";
-import type { FeeDeduction, SalaryFeeDeductionRule, SalaryFeeDeductionRuleInput } from "@/lib/types/payroll";
+import { listEmployees, listTeachers } from "@/lib/api/staff";
+import type { FeeDeduction, PayslipEmployeeType, SalaryFeeDeductionRule, SalaryFeeDeductionRuleInput } from "@/lib/types/payroll";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -142,27 +142,37 @@ export function FeeDeductionPanel({ canWrite }: { canWrite: boolean }) {
   );
 }
 
-/** Lets the user preview the computed deduction for a given teacher. */
+/** Lets the user preview the computed deduction for a given staff member — enseignant OU personnel
+ * administratif/direction/soutien (§retour comptable : la retenue scolarité ne doit pas se limiter
+ * aux enseignants). */
 function PreviewCard() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
-  const [teacherId, setTeacherId] = useState<string>("");
+  const employees = useMemo(() => employeesQuery.data ?? [], [employeesQuery.data]);
+  const [staffKey, setStaffKey] = useState<string>("");
   const [result, setResult] = useState<FeeDeduction | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const teacherOptions: SearchableOption[] = useMemo(
-    () => teachers.map((t) => {
+  // Valeur encodée "TYPE:id" pour retrouver à la fois l'id et le référentiel (enseignant ou
+  // personnel) au moment de lancer la simulation.
+  const staffOptions: SearchableOption[] = useMemo(() => {
+    const teacherOptions = teachers.map((t): SearchableOption => {
       const label = `${t.firstName} ${t.lastName}`;
-      return { value: String(t.id), trigger: label, label, searchText: label };
-    }),
-    [teachers],
-  );
+      return { value: `TEACHER:${t.id}`, trigger: label, label, searchText: label };
+    });
+    const employeeOptions = employees.map((e): SearchableOption => {
+      const label = `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() || `Personnel #${e.id}`;
+      return { value: `${e.category}:${e.id}`, trigger: label, label, searchText: label };
+    });
+    return [...teacherOptions, ...employeeOptions];
+  }, [teachers, employees]);
 
-  async function run(id: number) {
+  async function run(employeeType: PayslipEmployeeType, id: number) {
     setLoading(true);
-    try { setResult(await previewFeeDeduction(id)); }
+    try { setResult(await previewFeeDeduction(id, employeeType)); }
     catch (err) { setResult(null); notifyError(err); } finally { setLoading(false); }
   }
 
@@ -175,9 +185,14 @@ function PreviewCard() {
         <div className="min-w-[240px]">
           <Label>Enseignant / membre du personnel</Label>
           <SearchableSelect
-            value={teacherId}
-            options={teacherOptions}
-            onChange={(id) => { setTeacherId(id); if (id) run(Number(id)); }}
+            value={staffKey}
+            options={staffOptions}
+            onChange={(v) => {
+              setStaffKey(v);
+              if (!v) return;
+              const [employeeType, id] = v.split(":");
+              run(employeeType as PayslipEmployeeType, Number(id));
+            }}
             triggerClassName="w-full justify-between px-3"
           />
         </div>

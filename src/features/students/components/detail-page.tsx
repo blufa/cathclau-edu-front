@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Receipt, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -29,6 +29,7 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EnrollModal } from "@/features/enrollments/components/enroll-modal";
 import { CollectFeeModal } from "@/features/billing/components/collect-fee-modal";
+import { StudentInvoicesPanel } from "@/features/billing/components/student-invoices-panel";
 import { CardSpotlight } from "@/components/ui/aceternity";
 import { StudentAttendanceStats } from "./attendance-stats";
 import { ParentsManager } from "./parents-manager";
@@ -100,6 +101,10 @@ export default function StudentDetailPage() {
   const currentEnrollment = (data?.enrollments ?? []).find(
     (e) => e.academicYearId === currentYearId && e.status === "VALIDATED",
   ) ?? [...(data?.enrollments ?? [])].reverse().find((e) => e.status === "VALIDATED");
+  // Classe de référence pour l'onglet Factures (affiché en premier, §retour comptable refonte
+  // inscription §5.7) : celle de l'inscription active, sinon la plus récente non annulée.
+  const activeClassId = currentEnrollment?.classId
+    ?? (data?.enrollments ?? []).find((e) => e.status !== "CANCELLED")?.classId;
   const classLabel = useMemo(
     () => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])),
     [classesQuery.data],
@@ -236,8 +241,9 @@ export default function StudentDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="infos">
+      <Tabs defaultValue="invoices">
         <TabsList>
+          <TabsTrigger value="invoices" icon={Receipt}>Factures</TabsTrigger>
           <TabsTrigger value="infos" icon={IdCard}>Infos</TabsTrigger>
           <TabsTrigger value="enrollments" icon={BookOpen}>
             Inscriptions
@@ -248,6 +254,18 @@ export default function StudentDetailPage() {
             Scolarité
           </TabsTrigger>
         </TabsList>
+
+        {/* Factures — affiché en premier (§retour comptable, refonte inscription §5.7) : c'est ce que
+            le comptable vient chercher en priorité sur la fiche d'un élève. */}
+        <TabsPanel value="invoices">
+          {tenantId == null ? (
+            <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
+              Réservé aux comptes d&apos;établissement.
+            </p>
+          ) : (
+            <StudentInvoicesPanel studentId={id} tenantId={tenantId} classId={activeClassId ?? undefined} onCollected={refetch} />
+          )}
+        </TabsPanel>
 
         {/* Infos */}
         <TabsPanel value="infos">
@@ -422,7 +440,6 @@ export default function StudentDetailPage() {
             {[
               { label: "Notes & évaluations", href: `/grading?student=${id}` },
               { label: "Bulletins", href: `/report-cards?student=${id}` },
-              { label: "Factures de l'élève", href: `/invoices?student=${id}` },
             ].map((l) => (
               <CardSpotlight key={l.href} className="transition hover:-translate-y-0.5 hover:shadow-sm">
                 <Link href={l.href} className="group block p-5">

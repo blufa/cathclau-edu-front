@@ -2,12 +2,17 @@ import { api } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
 import type { Parent, Student } from "@/lib/types/student";
 
-export type Relationship = "FATHER" | "MOTHER" | "GUARDIAN";
+export type Relationship = "FATHER" | "MOTHER" | "GUARDIAN" | "TUTRICE" | "TANTE" | "ONCLE" | "FRERE" | "SOEUR";
 
 export const RELATIONSHIP_LABEL: Record<Relationship, string> = {
   FATHER: "Père",
   MOTHER: "Mère",
   GUARDIAN: "Tuteur",
+  TUTRICE: "Tutrice",
+  TANTE: "Tante",
+  ONCLE: "Oncle",
+  FRERE: "Frère",
+  SOEUR: "Sœur",
 };
 
 export interface ParentInput {
@@ -71,6 +76,17 @@ export function getStudentParents(studentId: number): Promise<Parent[]> {
 /** Enfants (élèves) rattachés à un parent — pour l'encaissement groupé fratrie (§payments). */
 export function getParentChildren(parentId: number): Promise<Student[]> {
   return api.get<Student[]>(`/parents/${parentId}/students`);
+}
+
+export interface ParentStaffLink {
+  staffType: "TEACHER" | "EMPLOYEE";
+  staffId: number;
+}
+
+/** Ce parent est-il lié à un membre du personnel (§retour comptable, refonte inscription) — pour
+ * afficher que la remise personnel s'appliquera automatiquement. Null si aucun lien. */
+export function getParentStaffLink(parentId: number): Promise<ParentStaffLink | null> {
+  return api.get<ParentStaffLink | null>(`/parents/${parentId}/staff-link`);
 }
 
 export function linkParentToStudent(parentId: number, studentId: number, relationship: Relationship): Promise<void> {

@@ -126,7 +126,9 @@ export default function DisciplinePage() {
             {(q.data ?? []).length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucun incident.</TD></TR>}
             {(q.data ?? []).map((i) => (
               <TR key={i.id}>
-                <TD className="font-medium text-gray-900">{studentName.get(i.studentId) ?? `#${i.studentId}`}</TD>
+                {/* Élève archivé (parti) : l'incident reste dans l'historique disciplinaire, avec une
+                    mention explicite plutôt qu'un numéro brut (§retour comptable). */}
+                <TD className="font-medium text-gray-900">{studentName.get(i.studentId) ?? `Élève archivé (#${i.studentId})`}</TD>
                 <TD>{i.incidentDate}</TD>
                 <TD className="hidden sm:table-cell">{CATEGORY_LABEL[i.category]}</TD>
                 <TD><Badge tone={SEV_TONE[i.severity]}>{SEVERITY_LABEL[i.severity]}</Badge></TD>

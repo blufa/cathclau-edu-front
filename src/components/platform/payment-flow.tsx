@@ -14,8 +14,10 @@ import { formatGNF } from "@/lib/format";
 import { type PaymentStatus, type SubscriptionInvoice } from "@/lib/types/platform";
 
 const TERMINAL: PaymentStatus[] = ["SUCCESSFUL", "FAILED", "REFUNDED"];
-const POLL_MS = 3000;
-const MAX_POLLS = 20;
+// Intervalle doublé (§retour comptable, point 18 — consommation de données excessive sur connexion
+// mobile) : même fenêtre d'attente totale (~60s), deux fois moins de requêtes réseau.
+const POLL_MS = 6000;
+const MAX_POLLS = 10;
 // Fixed payer number used for all Djomy initiations (the portal collects the real payer).
 const PAYER_NUMBER = "614324299";
 

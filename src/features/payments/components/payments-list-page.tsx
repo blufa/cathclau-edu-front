@@ -61,7 +61,7 @@ export default function PaymentsListPage() {
   const studentName = useMemo(() => {
     const map = new Map<number, string>();
     (studentsQuery.data ?? []).forEach((s) => map.set(s.id, `${s.firstName} ${s.lastName}`));
-    return (id: number) => map.get(id) ?? `Élève #${id}`;
+    return (id: number) => map.get(id) ?? `Élève archivé (#${id})`;
   }, [studentsQuery.data]);
 
   // Filtre « Comptable » (rapprochement) — visible seulement pour les rôles qui supervisent les

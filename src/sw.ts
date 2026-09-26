@@ -28,6 +28,21 @@ const serwist = new Serwist({
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: [apiPassthrough, ...defaultCache],
+  // Page blanche au rechargement hors-ligne (§retour comptable, point 14) : les pages Next.js sont
+  // mises en cache à l'exécution (NetworkFirst, voir defaultCache) au fil de la navigation — mais
+  // une page jamais visitée en ligne, ou dont le cache a expiré, n'a rien à servir une fois hors
+  // ligne, et jusqu'ici l'échec réseau remontait tel quel (page blanche). Cette page de secours
+  // s'affiche à la place pour toute requête de NAVIGATION (rechargement/URL tapée) sans réponse
+  // disponible — pas pour les appels API (passthrough ci-dessus, jamais concerné) ni pour les
+  // requêtes RSC de navigation interne (déjà gérées par le routeur applicatif).
+  fallbacks: {
+    entries: [
+      {
+        url: "/offline.html",
+        matcher: ({ request }) => request.mode === "navigate",
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();
