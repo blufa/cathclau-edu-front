@@ -23,6 +23,12 @@ on:
         required: false
         type: string
 
+# Sans ça, le GITHUB_TOKEN par défaut du repo (souvent restreint en lecture seule au niveau repo/org)
+# n'a pas le droit de créer une Release — softprops/action-gh-release échoue avec 403 "Resource not
+# accessible by integration" (vécu en vrai lors du premier run de ce workflow).
+permissions:
+  contents: write
+
 jobs:
   version:
     runs-on: ubuntu-latest
