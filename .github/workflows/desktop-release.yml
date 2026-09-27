@@ -1,0 +1,151 @@
+name: Desktop release (Tauri)
+
+# Distinct du déploiement web (deploy.yml) : produit les installeurs Windows 32 bits ET 64 bits de
+# l'appli desktop (voir DEPLOY-DESKTOP.md), les signe pour l'auto-updater, génère latest.json et publie
+# le tout comme Release GitHub + (best effort) sur le VPS derrière https://ecole.jeccamtech.com/updates/.
+#
+# Déclenchement : pousser un tag "desktop-vX.Y.Z" (doit correspondre à la version dans package.json,
+# src-tauri/Cargo.toml et src-tauri/tauri.conf.json — vérifié ci-dessous, échoue sinon) — ou lancer
+# manuellement (workflow_dispatch) pour un test sans publier de vraie release.
+on:
+  push:
+    tags: ["desktop-v*"]
+  workflow_dispatch:
+
+# Sans ça, le GITHUB_TOKEN par défaut du repo (souvent restreint en lecture seule au niveau repo/org)
+# n'a pas le droit de créer une Release — softprops/action-gh-release échoue avec 403 "Resource not
+# accessible by integration" (vécu en vrai sur desktop-dev-build.yml, même cause ici).
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "::error::Tag desktop-v$TAG_VERSION ne correspond pas à package.json ($PKG_VERSION) — corrige l'un des deux avant de retaguer."
+              exit 1
+            fi
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: check-version
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: i686-pc-windows-msvc
+            arch: x86
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - run: npm ci
+
+      # NEXT_PUBLIC_API_BASE_URL/NEXT_PUBLIC_SITE_URL ne sont PAS fixés ici : scripts/build-desktop.mjs
+      # (appelé via beforeBuildCommand) les fixe lui-même sur la prod par défaut — seule source de
+      # vérité, pour ne jamais risquer un écart entre la CI et un build manuel local.
+      - name: Build (${{ matrix.arch }})
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --target ${{ matrix.target }}
+
+      - name: Générer/compléter latest.json (${{ matrix.arch }})
+        run: |
+          node scripts/generate-update-manifest.mjs `
+            ${{ needs.check-version.outputs.version }} `
+            https://ecole.jeccamtech.com/updates/${{ needs.check-version.outputs.version }} `
+            src-tauri/target/${{ matrix.target }}/release/bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-${{ matrix.arch }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: latest-json-${{ matrix.arch }}
+          path: latest.json
+
+  publish:
+    needs: [check-version, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: "desktop-windows-*", path: artifacts, merge-multiple: true }
+      - uses: actions/download-artifact@v4
+        with: { pattern: "latest-json-*", path: manifests }
+
+      - name: Fusionner les deux latest.json (x64 + x86)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const dirs = fs.readdirSync("manifests");
+            let merged = null;
+            for (const d of dirs) {
+              const m = JSON.parse(fs.readFileSync(`manifests/${d}/latest.json`, "utf8"));
+              merged = merged ? { ...merged, platforms: { ...merged.platforms, ...m.platforms } } : m;
+            }
+            fs.writeFileSync("latest.json", JSON.stringify(merged, null, 2));
+            console.log(JSON.stringify(merged, null, 2));
+          '
+
+      - name: Publier une Release GitHub (toujours — source de vérité)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ needs.check-version.outputs.version }}
+          files: |
+            artifacts/*
+            latest.json
+
+      # ── Publication sur le VPS (best effort) ─────────────────────────────────────────────────
+      # ATTENTION : chemin `/opt/lacaeducation/updates/` À CONFIRMER — jamais vérifié contre le vrai
+      # Caddyfile/docker-compose du VPS (voir DEPLOY-DESKTOP.md). Réutilise les mêmes secrets que
+      # deploy.yml (VPS_HOST/VPS_USER/VPS_SSH_KEY) puisque c'est le même serveur qui sert déjà
+      # https://ecole.jeccamtech.com. Si ce chemin n'est pas exposé publiquement par Caddy, cette étape
+      # copiera les fichiers sans effet visible tant que le Caddyfile n'est pas ajusté pour les servir.
+      - name: Copier les installeurs vers le VPS, dossier versionné (best effort)
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "artifacts/*"
+          target: "/opt/lacaeducation/updates/${{ needs.check-version.outputs.version }}"
+          strip_components: 1
+
+      # latest.json doit vivre à la RACINE de /updates (URL fixe interrogée par toutes les apps
+      # installées, voir plugins.updater.endpoints dans tauri.conf.json) — jamais dans le dossier
+      # versionné ci-dessus, qui ne contient que les installeurs téléchargeables.
+      - name: Publier latest.json à la racine du VPS (best effort)
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "latest.json"
+          target: "/opt/lacaeducation/updates"

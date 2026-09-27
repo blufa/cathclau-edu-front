@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Users } from "lucide-react";
-import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getParentChildren, listParents } from "@/lib/api/parents";
 import type { Parent } from "@/lib/types/student";
 import { Modal } from "@/components/ui/modal";
@@ -15,7 +15,10 @@ import { Reveal } from "@/components/public/reveal";
 
 /** Liste de tous les parents du tenant — cliquer sur un parent affiche tous ses enfants rattachés. */
 export default function ParentsListPage() {
-  const q = useQuery(() => listParents(), []);
+  // Aucune donnée "parents" n'était mise en cache hors-ligne (§retour comptable, guichet d'accueil) —
+  // `useCachedQuery` au lieu du hook maison sans cache : le filtrage est déjà 100% client (voir
+  // `parents` ci-dessous), la liste complète tient donc en un seul appel mis en cache IndexedDB.
+  const q = useCachedQuery("parents", listParents, []);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Parent | null>(null);
 
@@ -71,7 +74,7 @@ export default function ParentsListPage() {
 }
 
 function ParentChildren({ parent }: { parent: Parent }) {
-  const childrenQuery = useQuery(() => getParentChildren(parent.id), [parent.id]);
+  const childrenQuery = useCachedQuery(`parent-children:${parent.id}`, () => getParentChildren(parent.id), [parent.id]);
   const children = childrenQuery.data ?? [];
 
   return (

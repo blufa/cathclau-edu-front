@@ -1,0 +1,150 @@
+name: Desktop dev build (Tauri)
+
+# Variante de desktop-release.yml (voir DEPLOY-DESKTOP.md) pour TESTER un build desktop avant de le
+# promouvoir en prod : même pipeline (build Windows 64/32 bits, signature, latest.json), mais :
+#   - DESKTOP_ENV=dev → l'app pointe sur https://api-dev.ecole.jeccamtech.com (pas la prod)
+#   - --config src-tauri/tauri.dev.conf.json → identifiant/nom d'appli et endpoint auto-updater
+#     distincts de la prod (com.jeccamtech.ecole.dev, "Jeccam École (Dev)"), pour pouvoir installer un
+#     build dev SANS entrer en conflit avec une installation prod déjà présente sur le même poste, et
+#     pour que l'auto-updater de ce build dev vérifie https://dev.ecole.jeccamtech.com/updates/latest.json
+#     au lieu de la prod.
+#   - publication vers /opt/lacaeducation/updates-dev/ (dossier VPS séparé, jamais celui de la prod) —
+#     nécessite le bloc Caddy dev.ecole.jeccamtech.com { handle_path /updates/* { root * /srv/updates-dev } }
+#     et le montage docker-compose correspondant (voir DEPLOY-DESKTOP.md).
+#
+# Déclenchement MANUEL uniquement (workflow_dispatch) — pas à chaque push sur une branche dev : un
+# build+signature+publication Windows x64 ET x86 coûte des minutes CI significatives, à réserver au
+# moment où tu veux vraiment valider un build avant de le promouvoir en prod, pas à chaque commit.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branche ou commit à builder (vide = branche par défaut du repo)"
+        required: false
+        type: string
+
+# Sans ça, le GITHUB_TOKEN par défaut du repo (souvent restreint en lecture seule au niveau repo/org)
+# n'a pas le droit de créer une Release — softprops/action-gh-release échoue avec 403 "Resource not
+# accessible by integration" (vécu en vrai lors du premier run de ce workflow).
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - id: v
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: version
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: i686-pc-windows-msvc
+            arch: x86
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - run: npm ci
+
+      - name: Build (${{ matrix.arch }}, DESKTOP_ENV=dev)
+        env:
+          DESKTOP_ENV: dev
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --target ${{ matrix.target }} --config src-tauri/tauri.dev.conf.json
+
+      - name: Générer/compléter latest.json dev (${{ matrix.arch }})
+        run: |
+          node scripts/generate-update-manifest.mjs `
+            ${{ needs.version.outputs.version }} `
+            https://dev.ecole.jeccamtech.com/updates/${{ needs.version.outputs.version }} `
+            src-tauri/target/${{ matrix.target }}/release/bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-dev-windows-${{ matrix.arch }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: latest-json-dev-${{ matrix.arch }}
+          path: latest.json
+
+  publish:
+    needs: [version, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: "desktop-dev-windows-*", path: artifacts, merge-multiple: true }
+      - uses: actions/download-artifact@v4
+        with: { pattern: "latest-json-dev-*", path: manifests }
+
+      - name: Fusionner les deux latest.json (x64 + x86)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const dirs = fs.readdirSync("manifests");
+            let merged = null;
+            for (const d of dirs) {
+              const m = JSON.parse(fs.readFileSync(`manifests/${d}/latest.json`, "utf8"));
+              merged = merged ? { ...merged, platforms: { ...merged.platforms, ...m.platforms } } : m;
+            }
+            fs.writeFileSync("latest.json", JSON.stringify(merged, null, 2));
+            console.log(JSON.stringify(merged, null, 2));
+          '
+
+      # Tag/Release distincts de la prod ("desktop-dev-v..." vs "desktop-v...") — jamais interprétés
+      # comme une vraie release par desktop-tag.yml/desktop-release.yml (déclenchés sur "desktop-v*"
+      # uniquement), et marqués prerelease pour ne pas polluer la liste des vraies releases.
+      - name: Publier une Release GitHub dev (prerelease — build de test, pas pour un poste école)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-dev-v${{ needs.version.outputs.version }}-${{ github.run_number }}
+          prerelease: true
+          files: |
+            artifacts/*
+            latest.json
+
+      - name: Copier les installeurs vers le VPS, dossier dev versionné (best effort)
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "artifacts/*"
+          target: "/opt/lacaeducation/updates-dev/${{ needs.version.outputs.version }}"
+          strip_components: 1
+
+      - name: Publier latest.json dev à la racine du dossier dev du VPS (best effort)
+        continue-on-error: true
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "latest.json"
+          target: "/opt/lacaeducation/updates-dev"

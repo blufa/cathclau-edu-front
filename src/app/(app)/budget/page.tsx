@@ -6,7 +6,6 @@ import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import {
-  addExpenseLine,
   addRevenueLine,
   closeMonthlyExpenseSheet,
   createMonthlyExpenseSheet,
@@ -38,6 +37,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate, formatDateTime, formatGNF } from "@/lib/format";
+import { submitExpenseLineOfflineAware } from "@/lib/offline/submit-expense-line";
 
 export default function BudgetPage() {
   const { user } = useAuth();
@@ -98,7 +98,7 @@ export default function BudgetPage() {
       <Modal open={selectedId != null} onClose={() => setSelectedId(null)}
         title={sheets.find((s) => s.id === selectedId)?.label ?? "Fiche de dépense"} className="max-w-3xl">
         {selectedId != null && (
-          <SheetDetailView sheetId={selectedId} canWrite={canWrite}
+          <SheetDetailView sheetId={selectedId} canWrite={canWrite} tenantId={user?.tenantId ?? null}
             onSheetClosed={() => sheetsQuery.refetch()} />
         )}
       </Modal>
@@ -111,8 +111,8 @@ export default function BudgetPage() {
   );
 }
 
-function SheetDetailView({ sheetId, canWrite, onSheetClosed }: {
-  sheetId: number; canWrite: boolean; onSheetClosed: () => void;
+function SheetDetailView({ sheetId, canWrite, tenantId, onSheetClosed }: {
+  sheetId: number; canWrite: boolean; tenantId: number | null; onSheetClosed: () => void;
 }) {
   const detailQuery = useQuery(() => getMonthlyExpenseSheetDetail(sheetId), [sheetId]);
   const [addingExpense, setAddingExpense] = useState(false);
@@ -257,10 +257,22 @@ function SheetDetailView({ sheetId, canWrite, onSheetClosed }: {
           onCancel={() => { setAddingExpense(false); setEditingExpense(null); }}
           onDone={async (input) => {
             try {
-              if (editingExpense) await updateExpenseLine(editingExpense.id, input);
-              else await addExpenseLine(sheetId, input);
+              if (editingExpense) {
+                await updateExpenseLine(editingExpense.id, input);
+                setAddingExpense(false); setEditingExpense(null);
+                notifySuccess("Dépense mise à jour");
+                refresh();
+                return;
+              }
+              // Hors-ligne (desktop) : la dépense est mise en file locale et synchronisée au retour du
+              // réseau, au lieu d'échouer silencieusement (§retour comptable).
+              const attempt = await submitExpenseLineOfflineAware(tenantId, sheetId, input);
               setAddingExpense(false); setEditingExpense(null);
-              notifySuccess(editingExpense ? "Dépense mise à jour" : "Dépense ajoutée");
+              if (attempt.outcome === "queued-desktop") {
+                notifySuccess("Hors ligne : dépense enregistrée localement, sera synchronisée au retour du réseau");
+              } else {
+                notifySuccess("Dépense ajoutée");
+              }
               refresh();
             } catch (e) { notifyError(e); }
           }} />

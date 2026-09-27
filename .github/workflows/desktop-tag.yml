@@ -1,0 +1,49 @@
+name: Desktop auto-tag
+
+# Versionnage automatique de l'appli desktop : dès qu'un push sur `main` touche package.json (ex. après
+# avoir mergé une PR qui bump la version), vérifie que les 3 fichiers de version sont synchronisés puis
+# crée/pousse le tag `desktop-vX.Y.Z` s'il n'existe pas déjà. Ce tag déclenche automatiquement
+# desktop-release.yml (build + signature + publication) — aucune étape manuelle entre "merger le bump
+# de version" et "la release part en CI".
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier la cohérence des 3 fichiers de version
+        id: check
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          CARGO=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          CONF=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "package.json=$PKG  Cargo.toml=$CARGO  tauri.conf.json=$CONF"
+          if [ "$PKG" != "$CARGO" ] || [ "$PKG" != "$CONF" ]; then
+            echo "::error::Versions désynchronisées — package.json=$PKG Cargo.toml=$CARGO tauri.conf.json=$CONF. Corrige les 3 fichiers pour qu'ils correspondent avant de merger sur main."
+            exit 1
+          fi
+          echo "version=$PKG" >> "$GITHUB_OUTPUT"
+
+      - name: Créer et pousser le tag s'il n'existe pas déjà
+        run: |
+          TAG="desktop-v${{ steps.check.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG déjà présent — rien à publier (version pas encore bumpée depuis la dernière release)."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Desktop release ${{ steps.check.outputs.version }}"
+          git push origin "$TAG"
+          echo "Tag $TAG créé et poussé — desktop-release.yml va démarrer."

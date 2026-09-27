@@ -1,6 +1,10 @@
 import type { MetadataRoute } from "next";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
+// Contenu strictement statique (sans objet dans le build desktop — pas de "PWA installable" dans une
+// appli déjà installée) — nécessaire pour que `output: "export"` accepte cette route.
+export const dynamic = "force-static";
+
 /**
  * Web app manifest (installabilité mobile / "Ajouter à l'écran d'accueil"), généré à
  * /manifest.webmanifest. Icônes générées depuis src/app/icon.png par scripts/generate-pwa-icons.mjs.

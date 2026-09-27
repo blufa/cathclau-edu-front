@@ -1,32 +1,11 @@
-"use client";
+import EditBlogPostPage from "./edit-blog-post-client";
 
-import { useParams } from "next/navigation";
-import { RequireBlogAccess } from "@/components/platform/require-blog-access";
-import { BlogPostForm } from "@/components/platform/blog-post-form";
-import { getPostAdmin, updatePost } from "@/lib/api/blog";
-import { useQuery } from "@/hooks/use-query";
-import { Spinner } from "@/components/ui/spinner";
+// Nécessaire pour que `output: "export"` accepte cette route dynamique (build desktop uniquement,
+// voir next.config.ts, DESKTOP_BUILD) — voir teachers/[id]/page.tsx pour l'explication complète.
+export function generateStaticParams() {
+  return [{ id: "placeholder" }];
+}
 
-export default function EditBlogPostPage() {
-  const params = useParams<{ id: string }>();
-  const postId = Number(params.id);
-  const postQuery = useQuery(() => getPostAdmin(postId), [postId]);
-
-  return (
-    <RequireBlogAccess>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Modifier l&apos;article</h1>
-          <p className="text-sm text-slate-500">{postQuery.data?.title}</p>
-        </div>
-        {postQuery.loading && !postQuery.data ? (
-          <div className="flex justify-center py-16"><Spinner /></div>
-        ) : postQuery.data ? (
-          <BlogPostForm initial={postQuery.data} onSubmit={(input) => updatePost(postId, input)} />
-        ) : (
-          <p className="text-sm text-error-600">Article introuvable.</p>
-        )}
-      </div>
-    </RequireBlogAccess>
-  );
+export default function Page() {
+  return <EditBlogPostPage />;
 }
