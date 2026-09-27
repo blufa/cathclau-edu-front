@@ -1,0 +1,9 @@
+# Build Rust
+/target/
+
+# Schémas de capacités générés par la CLI Tauri au premier build — pas du code source.
+/gen/schemas/
+
+# Clé PRIVÉE de signature des mises à jour — ne JAMAIS committer (voir README section Updater).
+# Seule la clé PUBLIQUE (dans tauri.conf.json → plugins.updater.pubkey) est censée être versionnée.
+/keys/

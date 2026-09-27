@@ -20,6 +20,13 @@ function shareUrl(network: "facebook" | "twitter" | "whatsapp", url: string, tit
   return targets[network];
 }
 
+// Nécessaire pour que `output: "export"` accepte cette route dynamique (build desktop uniquement, voir
+// next.config.ts, DESKTOP_BUILD) — le site public/blog n'a de toute façon pas sa place dans l'appli
+// desktop (ERP interne à l'école), aucune page n'a donc besoin d'être réellement pré-rendue ici.
+export function generateStaticParams() {
+  return [{ slug: "placeholder" }];
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   try {

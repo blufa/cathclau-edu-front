@@ -2,9 +2,10 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, Plus, Trash2, X, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, Trash2, UploadCloud, X, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useAuth } from "@/providers/auth-provider";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import type { Classe } from "@/lib/types/academics";
 import { createStudent } from "@/lib/api/students";
@@ -26,6 +27,12 @@ import {
 } from "@/lib/types/billing";
 import type { EnrollmentType, Gender } from "@/lib/types/student";
 import type { Parent } from "@/lib/types/student";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { useNetworkStore } from "@/lib/offline/network-store";
+import {
+  queueOfflineEnrollment, type QueuedChild, type QueuedParent,
+} from "@/lib/offline/desktop-enrollment";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +48,9 @@ import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
-type ChildStatus = "pending" | "creating" | "done" | "error";
+// "queued" : mis en file locale automatiquement après un échec RÉSEAU (jamais un clic manuel) — sera
+// synchronisé tout seul au retour de la connexion (§retour comptable, file 100% automatique).
+type ChildStatus = "pending" | "creating" | "done" | "error" | "queued";
 
 interface ChildDraft {
   key: string;
@@ -60,6 +69,15 @@ interface ChildDraft {
   status: ChildStatus;
   error?: string;
   studentId?: number;
+  // Progression persistée étape par étape (§retour comptable, poste desktop) : sans ça, un échec
+  // réseau APRÈS la création de l'élève (ex. sur `enroll`) faisait tout recommencer au clic sur
+  // "Réessayer les échecs", y compris `createStudent` — créant un second élève en double à chaque
+  // nouvelle tentative. `processChildren` saute désormais les étapes déjà marquées faites ici.
+  parentLinked?: boolean;
+  enrolled?: boolean;
+  exemptionApplied?: boolean;
+  transportSubscribed?: boolean;
+  feesGenerated?: boolean;
   // Inscription ou réinscription (§retour comptable) : détermine quelle facture d'inscription générer
   // — jamais les deux, même si la classe a les deux frais configurés.
   enrollmentType: EnrollmentType;
@@ -114,6 +132,7 @@ type ParentMode = "new" | "existing" | "staff";
  * les autres, et seuls les enfants en échec peuvent être relancés.
  */
 export default function BulkFamilyEnrollmentPage() {
+  const { user } = useAuth();
   // ── Parent ──────────────────────────────────────────────────────────────
   const [parentMode, setParentMode] = useState<ParentMode>("new");
   const [parentSearch, setParentSearch] = useState("");
@@ -193,34 +212,95 @@ export default function BulkFamilyEnrollmentPage() {
     return null;
   }
 
+  /** Construit l'enfant tel qu'il doit être mis en file (progression déjà accomplie comprise) —
+   * utilisé aussi bien pour une mise en file "à froid" (aucune étape tentée) que pour un enfant
+   * interrompu en cours de route (voir `processChildren`). */
+  function toQueuedChild(child: ChildDraft, progress: Partial<QueuedChild> = {}): QueuedChild {
+    const rule = child.exemptionRuleId ? activeExemptionRules.find((r) => String(r.id) === child.exemptionRuleId) : undefined;
+    return {
+      key: child.key,
+      firstName: child.firstName.trim(), lastName: child.lastName.trim(), gender: child.gender,
+      birthDate: child.birthDate || null, address: child.address.trim() || null, phone: child.phone.trim() || null,
+      originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
+      repeating: child.repeating, classId: Number(child.classId), relationship: child.relationship,
+      enrollmentType: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
+      wantsTransport: child.wantsTransport, routeId: child.routeId ? Number(child.routeId) : null,
+      stopId: child.stopId ? Number(child.stopId) : null, direction: child.direction,
+      exemption: rule ? {
+        type: rule.type, percentage: rule.percentage != null ? Number(rule.percentage) : null,
+        amount: rule.amount != null ? Number(rule.amount) : null,
+        feeTypes: rule.feeTypes && rule.feeTypes.length > 0 ? rule.feeTypes : null,
+        reason: rule.label, staffBenefit: rule.staffBenefit,
+      } : null,
+      studentId: child.studentId ?? null, parentLinked: child.parentLinked ?? false,
+      enrolled: child.enrolled ?? false, exemptionApplied: child.exemptionApplied ?? false,
+      transportSubscribed: child.transportSubscribed ?? false, feesGenerated: child.feesGenerated ?? false,
+      done: false,
+      ...progress,
+    };
+  }
+
   /** Traite les enfants dont le statut n'est pas encore "done" — permet de relancer seulement les
-   * enfants en échec après un premier passage partiel, sans jamais recréer un enfant déjà réussi. */
+   * enfants en échec après un premier passage partiel, sans jamais recréer un enfant déjà réussi.
+   * RÉSUMABLE étape par étape (§retour comptable, poste desktop hors-ligne) : chaque étape persiste
+   * son résultat dans `ChildDraft` (via `updateChild`) dès qu'elle réussit, et est sautée si elle l'a
+   * déjà été lors d'une tentative précédente. Toute erreur RÉSEAU (jamais une erreur métier) bascule
+   * automatiquement l'enfant en file locale (`queueOfflineEnrollment`) — AUCUN clic manuel requis, la
+   * synchro du poste desktop la rejouera tout seule dès le retour du réseau (§retour comptable, file
+   * "100% automatique" demandée explicitement). */
   async function processChildren(parentId: number, targets: ChildDraft[]) {
+    const toQueue: QueuedChild[] = [];
     for (const child of targets) {
       updateChild(child.key, { status: "creating", error: undefined });
+      // Progression locale à CETTE tentative (pas la seule React state, qui reste figée sur l'ancienne
+      // valeur dans cette même itération) — permet de construire un instantané exact de l'enfant au
+      // moment précis où une coupure réseau surviendrait, quelle que soit l'étape en cours.
+      let studentId = child.studentId ?? null;
+      let parentLinked = child.parentLinked ?? false;
+      let enrolled = child.enrolled ?? false;
+      let exemptionApplied = child.exemptionApplied ?? false;
+      let transportSubscribed = child.transportSubscribed ?? false;
+      let feesGenerated = child.feesGenerated ?? false;
+      let generatedInvoices: GeneratedFeeInvoices[] = child.generatedInvoices ?? [];
+      let needsQueue = false;
+
       try {
-        const student = await createStudent({
-          firstName: child.firstName.trim(), lastName: child.lastName.trim(),
-          gender: child.gender, birthDate: child.birthDate || null,
-          address: child.address.trim() || null, phone: child.phone.trim() || null,
-          originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
-          repeating: child.repeating,
-        });
-        await linkParentToStudent(parentId, student.id, child.relationship);
-        await enroll({
-          studentId: student.id, classId: Number(child.classId), academicYearId: effectiveYearId!,
-          type: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
-        });
+        if (studentId == null) {
+          const student = await createStudent({
+            firstName: child.firstName.trim(), lastName: child.lastName.trim(),
+            gender: child.gender, birthDate: child.birthDate || null,
+            address: child.address.trim() || null, phone: child.phone.trim() || null,
+            originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
+            repeating: child.repeating,
+          });
+          studentId = student.id;
+          updateChild(child.key, { studentId });
+        }
+
+        if (!parentLinked) {
+          await linkParentToStudent(parentId, studentId, child.relationship);
+          parentLinked = true;
+          updateChild(child.key, { parentLinked: true });
+        }
+
+        if (!enrolled) {
+          await enroll({
+            studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
+            type: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
+          });
+          enrolled = true;
+          updateChild(child.key, { enrolled: true });
+        }
 
         // Exonération accordée AVANT la génération des factures (point 12/23) — pour qu'elle
         // s'applique dès la première facture, jamais après coup. Choisie dans le catalogue
         // pré-configuré (§retour comptable) : rien à ressaisir, juste le type sélectionné.
-        if (child.exemptionRuleId) {
+        if (child.exemptionRuleId && !exemptionApplied) {
           const rule = activeExemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
           if (rule) {
             try {
               await grantExemption({
-                studentId: student.id,
+                studentId,
                 type: rule.type,
                 percentage: rule.percentage != null ? Number(rule.percentage) : null,
                 amount: rule.amount != null ? Number(rule.amount) : null,
@@ -228,38 +308,75 @@ export default function BulkFamilyEnrollmentPage() {
                 reason: rule.label,
                 staffBenefit: rule.staffBenefit,
               });
-            } catch (err) { notifyError(err); }
+              exemptionApplied = true;
+              updateChild(child.key, { exemptionApplied: true });
+            } catch (err) {
+              if (isNetworkError(err) && isDesktop()) needsQueue = true;
+              else notifyError(err);
+            }
           }
         }
 
         // Transport (point 1) : l'abonnement déclenche lui-même la génération de ses factures
         // (comme à l'inscription classique) — indépendant de generate-all ci-dessous.
-        if (child.wantsTransport && child.routeId) {
+        if (child.wantsTransport && child.routeId && !transportSubscribed) {
           try {
             await subscribe({
               routeId: Number(child.routeId), stopId: child.stopId ? Number(child.stopId) : null,
-              studentId: student.id, direction: child.direction,
+              studentId, direction: child.direction,
             });
-          } catch (err) { notifyError(err); }
+            transportSubscribed = true;
+            updateChild(child.key, { transportSubscribed: true });
+          } catch (err) {
+            if (isNetworkError(err) && isDesktop()) needsQueue = true;
+            else notifyError(err);
+          }
         }
 
         // Génère en un seul appel toutes les factures des frais de la classe (inscription OU
         // réinscription selon le type choisi — jamais les deux —, mensualité, cantine si configurée,
         // examen...) — aucune remise recalculée ici, déjà appliquée côté serveur.
-        let generatedInvoices: GeneratedFeeInvoices[] = [];
-        try {
-          generatedInvoices = await generateAllForEnrollment({
-            studentId: student.id, classId: Number(child.classId), academicYearId: effectiveYearId!,
-            enrollmentType: child.enrollmentType, wantsTransport: false, transportFeeId: null,
-          });
-        } catch (err) { notifyError(err); }
+        if (!feesGenerated) {
+          try {
+            generatedInvoices = await generateAllForEnrollment({
+              studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
+              enrollmentType: child.enrollmentType, wantsTransport: false, transportFeeId: null,
+            });
+            feesGenerated = true;
+            updateChild(child.key, { feesGenerated: true });
+          } catch (err) {
+            if (isNetworkError(err) && isDesktop()) needsQueue = true;
+            else notifyError(err);
+          }
+        }
 
-        updateChild(child.key, {
-          status: "done", studentId: student.id, generatedInvoices,
-        });
+        if (needsQueue) {
+          toQueue.push(toQueuedChild(child, {
+            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
+          }));
+          updateChild(child.key, { status: "queued", studentId, generatedInvoices });
+        } else {
+          updateChild(child.key, { status: "done", studentId, generatedInvoices });
+        }
       } catch (err) {
-        updateChild(child.key, { status: "error", error: err instanceof Error ? err.message : "Échec" });
+        if (isNetworkError(err) && isDesktop()) {
+          toQueue.push(toQueuedChild(child, {
+            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
+          }));
+          updateChild(child.key, { status: "queued" });
+        } else {
+          updateChild(child.key, { status: "error", error: err instanceof Error ? err.message : "Échec" });
+        }
       }
+    }
+
+    if (toQueue.length > 0) {
+      await queueOfflineEnrollment(user?.tenantId ?? 0, effectiveYearId ?? 0, { id: parentId }, toQueue);
+      notifySuccess(
+        toQueue.length === 1
+          ? "Hors ligne : 1 enfant mis en attente, sera synchronisé automatiquement au retour du réseau"
+          : `Hors ligne : ${toQueue.length} enfants mis en attente, seront synchronisés automatiquement au retour du réseau`,
+      );
     }
   }
 
@@ -269,19 +386,58 @@ export default function BulkFamilyEnrollmentPage() {
     setRunning(true);
     setFinished(false);
     try {
+      const targets = children.filter((c) => c.status !== "done" && c.status !== "queued");
+      const needsParentCreation = (parentMode === "new" || parentMode === "staff") && selectedParent == null;
+
+      // Hors ligne dès le départ (§retour comptable) : jamais de tentative réseau vouée à l'échec —
+      // toute la soumission (parent à créer si besoin + tous les enfants) part directement en file,
+      // synchronisée automatiquement dès le retour du réseau, sans clic supplémentaire.
+      if (isDesktop() && !useNetworkStore.getState().online) {
+        const parentPayload: QueuedParent = needsParentCreation
+          ? {
+              id: null, firstName: newParent.firstName.trim(), lastName: newParent.lastName.trim(),
+              phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
+              occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
+              staffUserId: parentMode === "staff" ? (selectedStaff?.userId ?? null) : null,
+            }
+          : { id: selectedParent?.id ?? null };
+        await queueOfflineEnrollment(user?.tenantId ?? 0, effectiveYearId ?? 0, parentPayload, targets.map((c) => toQueuedChild(c)));
+        targets.forEach((c) => updateChild(c.key, { status: "queued" }));
+        notifySuccess("Hors ligne : inscription mise en attente, sera synchronisée automatiquement au retour du réseau");
+        return;
+      }
+
       let parentId = selectedParent?.id ?? null;
-      if ((parentMode === "new" || parentMode === "staff") && parentId == null) {
-        const created = await createParent({
-          firstName: newParent.firstName.trim(), lastName: newParent.lastName.trim(),
-          phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
-          occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
-        }, parentMode === "staff" ? (selectedStaff?.userId ?? null) : null);
-        parentId = created.id;
-        setSelectedParent(created);
-        setParentMode("existing");
+      if (needsParentCreation) {
+        try {
+          const created = await createParent({
+            firstName: newParent.firstName.trim(), lastName: newParent.lastName.trim(),
+            phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
+            occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
+          }, parentMode === "staff" ? (selectedStaff?.userId ?? null) : null);
+          parentId = created.id;
+          setSelectedParent(created);
+          setParentMode("existing");
+        } catch (err) {
+          if (isNetworkError(err) && isDesktop()) {
+            // Le réseau était présumé disponible mais la création du parent échoue quand même (coupure
+            // pile à ce moment) : même repli qu'une coupure détectée d'avance, ci-dessus.
+            const parentPayload: QueuedParent = {
+              id: null, firstName: newParent.firstName.trim(), lastName: newParent.lastName.trim(),
+              phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
+              occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
+              staffUserId: parentMode === "staff" ? (selectedStaff?.userId ?? null) : null,
+            };
+            await queueOfflineEnrollment(user?.tenantId ?? 0, effectiveYearId ?? 0, parentPayload, targets.map((c) => toQueuedChild(c)));
+            targets.forEach((c) => updateChild(c.key, { status: "queued" }));
+            notifySuccess("Hors ligne : inscription mise en attente, sera synchronisée automatiquement au retour du réseau");
+            return;
+          }
+          throw err;
+        }
       }
       if (parentId == null) throw new Error("Parent introuvable");
-      await processChildren(parentId, children.filter((c) => c.status !== "done"));
+      await processChildren(parentId, targets);
     } catch (err) {
       notifyError(err);
     } finally {
@@ -321,8 +477,11 @@ export default function BulkFamilyEnrollmentPage() {
   }
 
   const doneCount = children.filter((c) => c.status === "done").length;
+  const queuedCount = children.filter((c) => c.status === "queued").length;
   const errorCount = children.filter((c) => c.status === "error").length;
-  const allDone = children.every((c) => c.status === "done");
+  // "queued" compte comme réglé pour l'utilisateur (rien d'autre à faire, la synchro s'en charge
+  // automatiquement) — seule une vraie erreur métier ("error") appelle encore un geste manuel.
+  const allSettled = children.every((c) => c.status === "done" || c.status === "queued");
 
   return (
     <div className="space-y-6">
@@ -516,6 +675,9 @@ export default function BulkFamilyEnrollmentPage() {
           {finished && (
             <span>
               {doneCount} / {children.length} enfant(s) inscrit(s) avec succès
+              {queuedCount > 0 && (
+                <span className="text-amber-600"> — {queuedCount} en attente de synchronisation (automatique)</span>
+              )}
               {errorCount > 0 && <span className="text-error-600"> — {errorCount} en échec</span>}
             </span>
           )}
@@ -524,9 +686,11 @@ export default function BulkFamilyEnrollmentPage() {
           {finished && errorCount > 0 && (
             <Button variant="secondary" onClick={retryFailed} loading={running}>Réessayer les échecs</Button>
           )}
-          {allDone && finished ? (
+          {allSettled && finished ? (
             <Link href="/students">
-              <Button onClick={() => notifySuccess("Inscription(s) effectuée(s) avec succès")}>Voir les élèves</Button>
+              <Button onClick={() => notifySuccess(
+                queuedCount > 0 ? "Inscription(s) mise(s) en attente de synchronisation" : "Inscription(s) effectuée(s) avec succès",
+              )}>Voir les élèves</Button>
             </Link>
           ) : (
             <Button onClick={submit} loading={running} disabled={finished && !errorCount}>
@@ -553,7 +717,7 @@ function ChildCard({
   onRemove: () => void;
   onDeleteInvoice: (feeId: number, invoiceId: number, paidAmount: string | null) => void;
 }) {
-  const locked = running || child.status === "done";
+  const locked = running || child.status === "done" || child.status === "queued";
   const stopsQuery = useQuery(() => (child.routeId ? listStops(Number(child.routeId)) : Promise.resolve([])), [child.routeId]);
   const selectedExemptionRule = exemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
 
@@ -584,7 +748,7 @@ function ChildCard({
         <span className="text-xs font-medium text-gray-400">Enfant {index + 1}</span>
         <div className="flex items-center gap-2">
           <StatusBadge status={child.status} />
-          {!running && child.status !== "done" && canRemove && (
+          {!running && child.status !== "done" && child.status !== "queued" && canRemove && (
             <button onClick={onRemove} aria-label="Retirer" className="rounded-lg p-1 text-gray-400 hover:bg-error-50 hover:text-error-600">
               <Trash2 className="h-4 w-4" />
             </button>
@@ -792,6 +956,7 @@ function ChildCard({
 function StatusBadge({ status }: { status: ChildStatus }) {
   if (status === "creating") return <Badge tone="amber"><Loader2 className="mr-1 h-3 w-3 animate-spin" /> En cours</Badge>;
   if (status === "done") return <Badge tone="green"><CheckCircle2 className="mr-1 h-3 w-3" /> Inscrit</Badge>;
+  if (status === "queued") return <Badge tone="amber"><UploadCloud className="mr-1 h-3 w-3" /> En attente (auto)</Badge>;
   if (status === "error") return <Badge tone="red"><XCircle className="mr-1 h-3 w-3" /> Échec</Badge>;
   return null;
 }

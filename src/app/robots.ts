@@ -1,6 +1,10 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/site";
 
+// Contenu strictement statique (sans objet dans le build desktop, jamais crawlé) — nécessaire pour que
+// `output: "export"` accepte cette route (voir next.config.ts, DESKTOP_BUILD).
+export const dynamic = "force-static";
+
 /**
  * L'espace applicatif authentifié ((app)) n'a pas de préfixe d'URL commun (les groupes de routes
  * Next.js n'affectent pas l'URL) : on ne peut donc pas le lister ici de façon fiable/maintenable.

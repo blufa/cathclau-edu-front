@@ -221,7 +221,7 @@ export function MultiChildCollectModal({
         coverageLabel, monthsCount: selectedRows.length, remainingAfter, shares,
         academicYearId: selectedRows[0]?.invoice.academicYearId ?? null,
       });
-      if (attempt.outcome === "queued") {
+      if (attempt.outcome === "queued" || attempt.outcome === "queued-desktop") {
         notifySuccess("Encaissement enregistré hors-ligne — sera synchronisé automatiquement.");
         setSelected([]); setCustomAmounts({}); setMonthSelections({});
         return;

@@ -3,6 +3,10 @@ import { SITE_URL } from "@/lib/site";
 import { MODULE_DETAILS } from "@/lib/content/modules";
 import { listPublicPosts } from "@/lib/api/blog";
 
+// Contenu strictement statique (sans objet dans le build desktop, jamais crawlé) — nécessaire pour que
+// `output: "export"` accepte cette route (voir next.config.ts, DESKTOP_BUILD).
+export const dynamic = "force-static";
+
 const STATIC_ROUTES: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] }[] = [
   { path: "/", priority: 1, changeFrequency: "weekly" },
   { path: "/a-propos", priority: 0.6, changeFrequency: "monthly" },
