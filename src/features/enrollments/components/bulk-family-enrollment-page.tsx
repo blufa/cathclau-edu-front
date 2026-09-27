@@ -18,12 +18,9 @@ import { searchPreviousClasses, searchSchools } from "@/lib/api/directory";
 import { enroll } from "@/lib/api/enrollments";
 import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
-import { initiateGroupPayment } from "@/lib/api/payment";
-import type { PaymentChannel } from "@/lib/types/payment";
-import { PAYMENT_CHANNEL_LABEL } from "@/lib/types/payment";
 import {
   cancelInvoice, deleteInvoice, generateAllForEnrollment,
-  grantExemption, listExemptionRules, listFeesByClass,
+  grantExemption, listExemptionRules,
 } from "@/lib/api/billing";
 import {
   EXEMPTION_TYPE_LABEL, FEE_TYPE_LABEL, type ExemptionRule, type GeneratedFeeInvoices,
@@ -97,15 +94,6 @@ interface ChildDraft {
   // l'enfant doit être découpée en autant de factures que de mois d'école (généralement 9) pour que
   // chaque retenue corresponde à une facture précise, plutôt qu'une ou deux grosses tranches.
   monthlyPaymentOptIn: boolean;
-  // Encaissement initial (§retour comptable) : le comptable ne SAISIT rien — il coche parmi les frais
-  // déjà CONFIGURÉS pour la classe (montants connus d'avance, jamais tapés) ceux à régler tout de
-  // suite ; appliqué juste après la génération des factures, en réglant EN ENTIER chaque facture des
-  // frais cochés. Seul moyen d'inscrire ET encaisser un même élève en une seule fois hors-ligne (un
-  // élève inscrit hors-ligne n'existe nulle part ailleurs où chercher pour l'encaisser séparément tant
-  // qu'il n'est pas synchronisé — voir `guichet-page.tsx`, basé sur les élèves déjà connus du serveur).
-  payFeeIds: string[];
-  initialPaymentChannel: PaymentChannel;
-  paymentApplied?: boolean;
   // Résultats affichés après traitement.
   generatedInvoices?: GeneratedFeeInvoices[];
 }
@@ -120,20 +108,7 @@ function emptyChild(): ChildDraft {
     enrollmentType: "NEW",
     wantsTransport: false, routeId: "", stopId: "", direction: "BOTH",
     exemptionRuleId: "", monthlyPaymentOptIn: false,
-    payFeeIds: [], initialPaymentChannel: "CASH",
   };
-}
-
-/** Règle EN ENTIER (jamais partiellement — rien à saisir) toutes les factures générées pour les frais
- * cochés (`payFeeIds`) — un frais coché peut générer plusieurs factures (ex. mensualité en plusieurs
- * tranches) : toutes sont réglées. */
-function invoicesForCheckedFees(
-  generatedInvoices: GeneratedFeeInvoices[], payFeeIds: string[],
-): { invoiceId: number; amount: number }[] {
-  const feeIds = new Set(payFeeIds);
-  return generatedInvoices
-    .filter((g) => feeIds.has(String(g.fee.id)))
-    .flatMap((g) => g.invoices.map((inv) => ({ invoiceId: inv.id, amount: Number(inv.totalAmount) })));
 }
 
 const GENDER_OPTIONS: SearchableOption[] = [
@@ -260,10 +235,6 @@ export default function BulkFamilyEnrollmentPage() {
       studentId: child.studentId ?? null, parentLinked: child.parentLinked ?? false,
       enrolled: child.enrolled ?? false, exemptionApplied: child.exemptionApplied ?? false,
       transportSubscribed: child.transportSubscribed ?? false, feesGenerated: child.feesGenerated ?? false,
-      initialPayment: child.payFeeIds.length > 0
-        ? { feeIds: child.payFeeIds.map(Number), channel: child.initialPaymentChannel }
-        : null,
-      paymentApplied: child.paymentApplied ?? false,
       done: false,
       ...progress,
     };
@@ -290,7 +261,6 @@ export default function BulkFamilyEnrollmentPage() {
       let exemptionApplied = child.exemptionApplied ?? false;
       let transportSubscribed = child.transportSubscribed ?? false;
       let feesGenerated = child.feesGenerated ?? false;
-      let paymentApplied = child.paymentApplied ?? false;
       let generatedInvoices: GeneratedFeeInvoices[] = child.generatedInvoices ?? [];
       let needsQueue = false;
 
@@ -373,28 +343,7 @@ export default function BulkFamilyEnrollmentPage() {
               enrollmentType: child.enrollmentType, wantsTransport: false, transportFeeId: null,
             });
             feesGenerated = true;
-            updateChild(child.key, { feesGenerated: true, generatedInvoices });
-          } catch (err) {
-            if (isNetworkError(err) && isDesktop()) needsQueue = true;
-            else notifyError(err);
-          }
-        }
-
-        // Encaissement initial optionnel (§retour comptable) : réglé EN ENTIER sur les frais cochés —
-        // rien saisi par le comptable, tout vient de la configuration de la classe déjà connue. Seul
-        // moyen d'inscrire ET encaisser le même élève en un seul geste (voir `ChildDraft`).
-        if (child.payFeeIds.length > 0 && !paymentApplied && feesGenerated) {
-          try {
-            const shares = invoicesForCheckedFees(generatedInvoices, child.payFeeIds);
-            if (shares.length > 0) {
-              await initiateGroupPayment({
-                tenantId: user?.tenantId ?? null, studentId, channel: child.initialPaymentChannel,
-                coverageLabel: "Encaissement à l'inscription", monthsCount: shares.length,
-                remainingAfter: 0, shares, academicYearId: effectiveYearId,
-              });
-            }
-            paymentApplied = true;
-            updateChild(child.key, { paymentApplied: true });
+            updateChild(child.key, { feesGenerated: true });
           } catch (err) {
             if (isNetworkError(err) && isDesktop()) needsQueue = true;
             else notifyError(err);
@@ -403,7 +352,7 @@ export default function BulkFamilyEnrollmentPage() {
 
         if (needsQueue) {
           toQueue.push(toQueuedChild(child, {
-            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated, paymentApplied,
+            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
           }));
           updateChild(child.key, { status: "queued", studentId, generatedInvoices });
         } else {
@@ -412,7 +361,7 @@ export default function BulkFamilyEnrollmentPage() {
       } catch (err) {
         if (isNetworkError(err) && isDesktop()) {
           toQueue.push(toQueuedChild(child, {
-            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated, paymentApplied,
+            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
           }));
           updateChild(child.key, { status: "queued" });
         } else {
@@ -772,16 +721,6 @@ function ChildCard({
   const stopsQuery = useQuery(() => (child.routeId ? listStops(Number(child.routeId)) : Promise.resolve([])), [child.routeId]);
   const selectedExemptionRule = exemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
 
-  // Frais déjà configurés pour la classe choisie (montants connus d'avance, §retour comptable — rien à
-  // saisir) — même clé de cache que `student-invoices-panel.tsx` (`fees-class:${classId}`), donc déjà
-  // chaud hors-ligne si cette classe a été consultée en ligne avant. TRANSPORT exclu : ses factures se
-  // génèrent via l'abonnement séparé ci-dessus (`subscribe`), jamais via `generateAllForEnrollment`.
-  const feesQuery = useCachedQuery(
-    child.classId ? `fees-class:${child.classId}` : null,
-    () => listFeesByClass(Number(child.classId)), [child.classId],
-  );
-  const payableFees = (feesQuery.data ?? []).filter((f) => f.type !== "TRANSPORT");
-
   // École d'origine / dernière classe : suggestions depuis les valeurs déjà saisies sur la plateforme
   // (saisie libre toujours possible) — un champ par enfant, débouncé indépendamment.
   const [schoolOptions, setSchoolOptions] = useState<string[]>([]);
@@ -979,50 +918,6 @@ function ChildCard({
               />
             </div>
           )}
-
-          {payableFees.length > 0 && (
-            <Field>
-              <Label>Encaisser maintenant (optionnel — rien à saisir, montants déjà configurés)</Label>
-              <div className="space-y-1.5">
-                {payableFees.map((fee) => {
-                  const label = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
-                  const idStr = String(fee.id);
-                  return (
-                    <Checkbox
-                      key={fee.id}
-                      label={`${label} — ${formatGNF(fee.amount)}`}
-                      checked={child.payFeeIds.includes(idStr)}
-                      onChange={(e) => onUpdate({
-                        payFeeIds: e.target.checked
-                          ? [...child.payFeeIds, idStr]
-                          : child.payFeeIds.filter((id) => id !== idStr),
-                      })}
-                    />
-                  );
-                })}
-              </div>
-              <p className="mt-1 text-xs text-gray-400">
-                Chaque frais coché est réglé en entier juste après la génération des factures — seul
-                moyen d&apos;inscrire ET encaisser en une fois hors ligne.
-              </p>
-            </Field>
-          )}
-
-          {child.payFeeIds.length > 0 && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Field>
-                <Label>Canal</Label>
-                <Select
-                  value={child.initialPaymentChannel}
-                  onChange={(e) => onUpdate({ initialPaymentChannel: e.target.value as PaymentChannel })}
-                >
-                  {(["CASH", "ORANGE_MONEY", "BANK_CARD"] as PaymentChannel[]).map((c) => (
-                    <option key={c} value={c}>{PAYMENT_CHANNEL_LABEL[c]}</option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-          )}
         </div>
       )}
 
@@ -1051,14 +946,6 @@ function ChildCard({
                 </div>
               )))}
             </div>
-          )}
-          {child.payFeeIds.length > 0 && child.paymentApplied && (
-            <p className="text-xs text-success-600">
-              Paiement de {formatGNF(
-                invoicesForCheckedFees(child.generatedInvoices ?? [], child.payFeeIds)
-                  .reduce((s, x) => s + x.amount, 0),
-              )} encaissé ({PAYMENT_CHANNEL_LABEL[child.initialPaymentChannel]}).
-            </p>
           )}
         </div>
       )}
