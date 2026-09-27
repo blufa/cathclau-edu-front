@@ -54,8 +54,9 @@ export interface QueuedChild {
     staffBenefit: boolean;
   } | null;
   // Encaissement initial optionnel (§retour comptable) — voir ChildDraft dans
-  // bulk-family-enrollment-page.tsx pour le contexte complet.
-  initialPayment: { amount: number; channel: PaymentChannel } | null;
+  // bulk-family-enrollment-page.tsx pour le contexte complet. `feeIds` : frais cochés par le
+  // comptable, réglés EN ENTIER (rien saisi — montants déjà connus de la configuration de la classe).
+  initialPayment: { feeIds: number[]; channel: PaymentChannel } | null;
   // Progression (§retour comptable) : persistée après CHAQUE étape réussie pour qu'un cycle de
   // synchro interrompu (nouvelle coupure pendant la synchro elle-même) reprenne exactement là où il
   // s'était arrêté au cycle suivant, sans jamais recréer un élève déjà créé.
@@ -69,21 +70,16 @@ export interface QueuedChild {
   done: boolean;
 }
 
-/** Répartit un montant payé sur des factures, dans l'ordre, jusqu'à épuisement — même logique que
- * `allocatePayment` dans `bulk-family-enrollment-page.tsx` (dupliquée : modules indépendants, comme
- * le reste des files hors-ligne de ce dossier). */
-function allocatePayment(
-  invoices: { id: number; totalAmount: string }[], amount: number,
+/** Règle EN ENTIER toutes les factures des frais cochés — même logique que `invoicesForCheckedFees`
+ * dans `bulk-family-enrollment-page.tsx` (dupliquée : modules indépendants, comme le reste des files
+ * hors-ligne de ce dossier). */
+function invoicesForCheckedFees(
+  invoices: { id: number; feeId: number | null; totalAmount: string }[], feeIds: number[],
 ): { invoiceId: number; amount: number }[] {
-  let remaining = amount;
-  const shares: { invoiceId: number; amount: number }[] = [];
-  for (const inv of invoices) {
-    if (remaining <= 0) break;
-    const applied = Math.min(remaining, Number(inv.totalAmount));
-    if (applied > 0) shares.push({ invoiceId: inv.id, amount: applied });
-    remaining -= applied;
-  }
-  return shares;
+  const ids = new Set(feeIds);
+  return invoices
+    .filter((inv) => inv.feeId != null && ids.has(inv.feeId))
+    .map((inv) => ({ invoiceId: inv.id, amount: Number(inv.totalAmount) }));
 }
 
 interface OfflineEnrollmentRow {
@@ -234,7 +230,7 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
         if (child.initialPayment && !child.paymentApplied && child.feesGenerated) {
           try {
             const invoices = await listInvoicesByStudent(studentId);
-            const shares = allocatePayment(invoices, child.initialPayment.amount);
+            const shares = invoicesForCheckedFees(invoices, child.initialPayment.feeIds);
             if (shares.length > 0) {
               await initiateGroupPayment({
                 tenantId: row.etablissement_id, studentId, channel: child.initialPayment.channel,
