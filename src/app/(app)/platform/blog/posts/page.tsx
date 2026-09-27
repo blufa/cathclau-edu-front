@@ -109,7 +109,7 @@ function PostsTable() {
       align: "right",
       render: (p) => (
         <div className="flex justify-end gap-1">
-          <Button size="sm" variant="ghost" onClick={() => router.push(`/platform/blog/posts/${p.id}/edit`)}>Modifier</Button>
+          <Button size="sm" variant="ghost" onClick={() => router.push(`/platform/blog/posts/detail/edit?id=${p.id}`)}>Modifier</Button>
           <Button size="sm" variant="ghost" onClick={() => togglePublish(p)}>
             {p.status === "DRAFT" ? "Publier" : "Dépublier"}
           </Button>

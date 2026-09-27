@@ -143,7 +143,7 @@ export default function StudentsPage() {
       header: "Élève",
       accessor: (row) => `${row.student.firstName} ${row.student.lastName}`,
       render: (row) => (
-        <Link href={`/students/${row.student.id}`} className="group flex items-center gap-3">
+        <Link href={`/students/detail?id=${row.student.id}`} className="group flex items-center gap-3">
           {row.student.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={row.student.photo} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />

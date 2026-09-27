@@ -2,7 +2,7 @@
 
 import { Suspense } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, GraduationCap, School, Users } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { getDpeSchool } from "@/lib/api/dpe";
@@ -22,9 +22,8 @@ export default function DpeSchoolDetailPage() {
 }
 
 function DpeSchoolDetailContent() {
-  const params = useParams<{ id: string }>();
-  const tenantId = Number(params.id);
   const searchParams = useSearchParams();
+  const tenantId = Number(searchParams.get("id"));
   const prefectureId = searchParams.get("prefectureId") ? Number(searchParams.get("prefectureId")) : undefined;
   const { data, loading, error } = useQuery(() => getDpeSchool(tenantId, prefectureId), [tenantId, prefectureId]);
 

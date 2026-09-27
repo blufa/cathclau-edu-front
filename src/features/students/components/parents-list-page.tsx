@@ -98,7 +98,7 @@ function ParentChildren({ parent }: { parent: Parent }) {
             {children.map((c) => (
               <li key={c.id} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2">
                 <div>
-                  <Link href={`/students/${c.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+                  <Link href={`/students/detail?id=${c.id}`} className="text-sm font-medium text-brand-600 hover:underline">
                     {c.firstName} {c.lastName}
                   </Link>
                   <p className="text-xs text-gray-400">{c.studentNumber}</p>

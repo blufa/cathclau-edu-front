@@ -506,7 +506,7 @@ export default function TimetablePage() {
                       {mode === "class"
                         ? (s.teacherId ? (teacherName.get(s.teacherId) ?? `#${s.teacherId}`) : "—")
                         : (
-                          <Link href={`/classes/${s.schoolClassId}`} className="text-brand-600 hover:underline">
+                          <Link href={`/classes/detail?id=${s.schoolClassId}`} className="text-brand-600 hover:underline">
                             {classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`}
                           </Link>
                         )}

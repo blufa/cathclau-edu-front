@@ -137,7 +137,7 @@ export default function TeachersPage() {
       header: "Nom",
       accessor: (t) => `${t.firstName} ${t.lastName}`,
       render: (t) => (
-        <Link href={`/teachers/${t.id}`} className="font-medium text-brand-700 hover:underline">
+        <Link href={`/teachers/detail?id=${t.id}`} className="font-medium text-brand-700 hover:underline">
           {t.firstName} {t.lastName}
         </Link>
       ),

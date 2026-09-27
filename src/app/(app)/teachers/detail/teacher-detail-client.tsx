@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useNetworkStore } from "@/lib/offline/network-store";
@@ -72,8 +72,8 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function TeacherDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+  const searchParams = useSearchParams();
+  const id = Number(searchParams.get("id"));
 
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
@@ -352,7 +352,7 @@ export default function TeacherDetailPage() {
                     <ul className="space-y-2">
                       {classes.map((c) => (
                         <li key={c.id} className="text-sm">
-                          <Link href={`/classes/${c.id}`} className="font-medium text-brand-600 hover:underline">
+                          <Link href={`/classes/detail?id=${c.id}`} className="font-medium text-brand-600 hover:underline">
                             {c.label}
                           </Link>
                           {c.levelLabel && <span className="text-gray-500"> · {c.levelLabel}</span>}
@@ -419,7 +419,7 @@ export default function TeacherDetailPage() {
                         </TD>
                         <TD>{slot.subjectId != null ? (subjectLabel.get(slot.subjectId) ?? `#${slot.subjectId}`) : (slot.label ?? "Heure creuse")}</TD>
                         <TD>
-                          <Link href={`/classes/${slot.classId}`} className="text-brand-600 hover:underline">
+                          <Link href={`/classes/detail?id=${slot.classId}`} className="text-brand-600 hover:underline">
                             {classLabel.get(slot.classId) ?? `#${slot.classId}`}
                           </Link>
                         </TD>

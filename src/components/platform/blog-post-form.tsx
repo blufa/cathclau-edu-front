@@ -65,7 +65,7 @@ export function BlogPostForm({ initial, onSubmit }: BlogPostFormProps) {
     try {
       const saved = await onSubmit(buildInput());
       notifySuccess("Article enregistré");
-      if (!initial) router.replace(`/platform/blog/posts/${saved.id}/edit`);
+      if (!initial) router.replace(`/platform/blog/posts/detail/edit?id=${saved.id}`);
     } catch (err) {
       notifyError(err);
     } finally {

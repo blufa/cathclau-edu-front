@@ -79,7 +79,7 @@ function PrefecturesTable() {
             {(data ?? []).map((p) => (
               <TR key={p.id}>
                 <TD className="font-medium">
-                  <Link href={`/platform/prefectures/${p.id}`} className="text-brand-600 hover:underline">{p.nom}</Link>
+                  <Link href={`/platform/prefectures/detail?id=${p.id}`} className="text-brand-600 hover:underline">{p.nom}</Link>
                 </TD>
                 <TD>{p.type}</TD>
                 <TD>{p.region ?? "—"}</TD>

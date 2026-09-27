@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,8 +45,8 @@ export default function TenantDetailPage() {
 }
 
 function TenantDetail() {
-  const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+  const searchParams = useSearchParams();
+  const id = Number(searchParams.get("id"));
   const router = useRouter();
   const [editing, setEditing] = useState(false);
 

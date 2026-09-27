@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Receipt, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
@@ -61,8 +61,8 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function StudentDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+  const searchParams = useSearchParams();
+  const id = Number(searchParams.get("id"));
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["inscription:create"]);
