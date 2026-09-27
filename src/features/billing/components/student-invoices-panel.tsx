@@ -612,7 +612,7 @@ function InvoiceCollect({
         shares,
         academicYearId: selectedInvoices[0]?.academicYearId ?? null,
       });
-      if (attempt.outcome === "queued") {
+      if (attempt.outcome === "queued" || attempt.outcome === "queued-desktop") {
         // Réseau indisponible : encaissement guichet enregistré localement, sera rejoué automatiquement
         // au retour de la connexion (voir le bandeau hors-ligne et la section « reçus provisoires »).
         notifySuccess("Encaissement enregistré hors-ligne — sera synchronisé automatiquement.");

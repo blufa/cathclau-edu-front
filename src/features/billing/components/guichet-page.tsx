@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Printer, Search, User } from "lucide-react";
-import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { searchStudentsSummary } from "@/lib/api/students";
+import { useStudentsSummaryQuery } from "@/features/students/hooks/use-students";
 import { listInvoicesByStudent } from "@/lib/api/billing";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { INVOICE_STATUS_LABEL, type Invoice } from "@/lib/types/billing";
@@ -41,10 +40,11 @@ export default function GuichetPage() {
   }, [query]);
 
   // Liste des élèves (nom, classe, parent principal) — toujours affichée, filtrée par la recherche.
-  const listQuery = useQuery(
-    () => searchStudentsSummary({ search: debounced || undefined, page, size: PAGE_SIZE }),
-    [debounced, page],
-  );
+  // `useStudentsSummaryQuery` (TanStack Query) au lieu du hook maison sans cache : passe par le
+  // persister global IndexedDB (§retour comptable, guichet d'accueil hors-ligne) — une recherche déjà
+  // faite en ligne reste consultable hors connexion, ce qui n'était pas le cas avant (écran central du
+  // guichet, cassé hors-ligne : chaque frappe écrasait les résultats par une erreur réseau).
+  const listQuery = useStudentsSummaryQuery({ search: debounced || undefined, page, size: PAGE_SIZE });
   const rows = listQuery.data?.content ?? [];
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
@@ -117,7 +117,7 @@ export default function GuichetPage() {
       </div>
 
       {!selected && (
-        listQuery.loading ? (
+        listQuery.isLoading ? (
           <div className="flex justify-center py-12"><Spinner /></div>
         ) : rows.length === 0 ? (
           <p className="rounded-xl bg-gray-50 px-4 py-10 text-center text-sm text-gray-400">Aucun élève trouvé.</p>

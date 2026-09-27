@@ -84,6 +84,11 @@ export interface GroupPaymentInput {
   /** Clé d'idempotence (mode hors-ligne, lib/offline/) : rejouer avec la même clé après une coupure
    * réseau renvoie le paiement déjà créé côté serveur au lieu d'en créer un second. */
   idempotencyKey?: string;
+  /** Encaissement hors-ligne (desktop) rejoué à la synchro (§retour comptable) : qui a RÉELLEMENT
+   * encaissé et QUAND — peut différer de l'utilisateur/l'heure de CET appel réseau (rejoué après
+   * coupure, parfois sous une session différente). Absent pour un encaissement en ligne classique. */
+  collectedByUserId?: number | null;
+  paidAt?: string | null;
 }
 
 /**

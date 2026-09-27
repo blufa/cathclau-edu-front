@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Template vendored as source material for the admin redesign — not part of the app build.
     "free-nextjs-admin-dashboard-main/**",
+    // Sortie de compilation Rust/Tauri (générée, jamais commitée — voir src-tauri/.gitignore).
+    "src-tauri/target/**",
+    "src-tauri/gen/**",
   ]),
 ]);
 
