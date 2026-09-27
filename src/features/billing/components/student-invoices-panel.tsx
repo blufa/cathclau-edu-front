@@ -8,10 +8,14 @@ import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObject
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
-import { type PaymentChannel } from "@/lib/types/payment";
+import { PAYMENT_CHANNEL_LABEL, type PaymentChannel } from "@/lib/types/payment";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
 import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
 import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import {
+  getPendingOfflinePaymentsForStudent, type PendingOfflinePaymentGroup,
+} from "@/lib/offline/desktop-payments";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,6 +37,18 @@ const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
 ];
 
 const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
+
+/** Génération de facture (tranches, frais annexe, transport) : jamais mise en file hors-ligne
+ * (montants/remises calculés côté serveur, imprévisibles côté client de façon fiable) — juste un
+ * message clair au lieu d'une erreur générique quand la cause est une coupure réseau, pour que le
+ * comptable sache qu'il faut réessayer une fois reconnecté plutôt que de penser à une vraie panne. */
+function notifyGenerationError(err: unknown) {
+  if (isNetworkError(err)) {
+    notifyError(err, "Hors ligne : impossible de générer cette facture maintenant — réessayez une fois reconnecté.");
+  } else {
+    notifyError(err);
+  }
+}
 
 /** Ordre d'affichage naturel du guichet : inscription/réinscription d'abord, puis la scolarité
  * (tranches, triées chronologiquement), puis les frais annexes (transport, cantine, examen…). */
@@ -64,8 +80,19 @@ export function StudentInvoicesPanel({
   const receipts = (payments.data ?? []).filter((p) => p.status === "SUCCEEDED");
   const monthlyFee = (fees.data ?? []).find((f) => f.type === "MONTHLY");
   // Encaissements guichet enregistrés hors-ligne pour cet élève, pas encore synchronisés (§payments —
-  // mode hors-ligne) : pas de vrai reçu serveur tant qu'ils n'ont pas atteint le backend.
+  // mode hors-ligne) : pas de vrai reçu serveur tant qu'ils n'ont pas atteint le backend. Web
+  // uniquement (file Dexie) — voir `desktopPendingPayments` juste en dessous pour l'équivalent desktop
+  // (SQLite), `useSyncQueueStore` ne reflétant jamais cette file-là.
   const queuedPayments = useSyncQueueStore((s) => s.items).filter((i) => i.studentIds.includes(studentId));
+
+  const [desktopPendingPayments, setDesktopPendingPayments] = useState<PendingOfflinePaymentGroup[]>([]);
+  useEffect(() => {
+    if (!isDesktop()) return;
+    let active = true;
+    getPendingOfflinePaymentsForStudent(studentId).then((groups) => { if (active) setDesktopPendingPayments(groups); }).catch(() => {});
+    return () => { active = false; };
+    // Re-vérifié après chaque rafraîchissement des factures (après un encaissement, une synchro...).
+  }, [studentId, q.data]);
 
   // Frais réglables en tranches (§billing) : la scolarité (MONTHLY) et, comme elle, la cantine
   // (CANTEEN) — le transport (TRANSPORT) reste géré séparément via son propre abonnement par ligne.
@@ -195,7 +222,7 @@ export function StudentInvoicesPanel({
       setAddingFee(false);
       setSelectedFeeId("");
       q.refetch();
-    } catch (err) { notifyError(err); } finally { setCreatingInvoice(false); }
+    } catch (err) { notifyGenerationError(err); } finally { setCreatingInvoice(false); }
   }
 
   async function subscribeTransport() {
@@ -208,7 +235,7 @@ export function StudentInvoicesPanel({
       setRouteId(""); setStopId("");
       subscriptionsQuery.refetch();
       q.refetch();
-    } catch (err) { notifyError(err); } finally { setSubscribingTransport(false); }
+    } catch (err) { notifyGenerationError(err); } finally { setSubscribingTransport(false); }
   }
 
   const monthlyUngenerated = ungeneratedRecurringFees.find((f) => f.type === "MONTHLY");
@@ -220,7 +247,7 @@ export function StudentInvoicesPanel({
       const label = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
       notifySuccess(created.length > 0 ? `${created.length} tranche(s) de « ${label} » générée(s)` : `Tranches de « ${label} » déjà générées`);
       q.refetch();
-    } catch (err) { notifyError(err); } finally { setGeneratingFeeId(null); }
+    } catch (err) { notifyGenerationError(err); } finally { setGeneratingFeeId(null); }
   }
 
   // Auto-génère les tranches de mensualité dès l'affichage (utile juste après une inscription) : la
@@ -262,6 +289,27 @@ export function StudentInvoicesPanel({
         <p>Date : ${new Date(entry.createdAt).toLocaleString("fr-FR")}</p>
         <p>Détail : ${entry.input.coverageLabel}</p>
         <p>Montant : ${formatGNF(total)}</p>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
+  /** Équivalent desktop de {@link printProvisionalReceipt} — même principe (bloc minimal imprimable,
+   * remis au parent tout de suite), lisant la file SQLite locale au lieu de la file Dexie web. */
+  function printProvisionalReceiptDesktop(group: PendingOfflinePaymentGroup) {
+    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
+    if (!w) return;
+    const channelLabel = PAYMENT_CHANNEL_LABEL[group.modePaiement as PaymentChannel] ?? group.modePaiement;
+    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
+      <body>
+        <h1>Reçu PROVISOIRE</h1>
+        <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
+        <p>Date : ${new Date(group.datePaiement).toLocaleString("fr-FR")}</p>
+        <p>Mode : ${channelLabel}</p>
+        <p>Montant : ${formatGNF(group.total)}</p>
       </body></html>`);
     w.document.close();
     w.focus();
@@ -428,6 +476,26 @@ export function StudentInvoicesPanel({
                   </span>
                   <button type="button"
                     onClick={() => printProvisionalReceipt(entry)}
+                    className="inline-flex items-center gap-1 text-xs text-warning-700 hover:underline">
+                    <ReceiptIcon className="h-4 w-4" /> Reçu provisoire
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {desktopPendingPayments.length > 0 && (
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <p className="text-xs font-medium text-warning-700">
+                Reçus provisoires (hors-ligne — en attente de synchronisation)
+              </p>
+              {desktopPendingPayments.map((group) => (
+                <div key={`${group.datePaiement}:${group.modePaiement}`} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-600">
+                    {new Date(group.datePaiement).toLocaleString("fr-FR")} · {formatGNF(group.total)}
+                  </span>
+                  <button type="button"
+                    onClick={() => printProvisionalReceiptDesktop(group)}
                     className="inline-flex items-center gap-1 text-xs text-warning-700 hover:underline">
                     <ReceiptIcon className="h-4 w-4" /> Reçu provisoire
                   </button>
