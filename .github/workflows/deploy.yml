@@ -83,5 +83,8 @@ jobs:
             cd /opt/lacaeducation
             ENV=${{ needs.setup.outputs.env }}
             docker compose --env-file .env.$ENV -p laca-$ENV pull frontend
-            docker compose --env-file .env.$ENV -p laca-$ENV up -d frontend
+            # --force-recreate : sans ça, `up -d` peut garder l'ancien conteneur même si le tag pointe
+            # maintenant vers une image différente (même bug vécu côté backend, voir deploy.yml du
+            # dépôt backend) — touche dev ET prod, à chaque déploiement, silencieusement.
+            docker compose --env-file .env.$ENV -p laca-$ENV up -d --force-recreate frontend
             docker image prune -f
