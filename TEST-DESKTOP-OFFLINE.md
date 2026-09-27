@@ -115,80 +115,136 @@ du dépôt backend). C'est la seule des trois options qui parle à `localhost` �
 
 ---
 
-## Scénario de test — mode desktop hors-ligne
+## Plan de test — bootstrap SQLite, hors-ligne, synchronisation
 
 **Prérequis** : un compte comptable réel (rôle ACCOUNTANT ou SCHOOL_ADMIN) avec un numéro de téléphone
 personnel renseigné sur son profil, un élève déjà inscrit avec au moins une facture impayée (ex.
 cantine, pour tester un "reste à payer" non vide).
 
-### Phase 0 — Premier lancement (en ligne)
+### Accéder à la base SQLite locale (pour vérifier, pas juste à l'œil dans l'UI)
 
-1. Installer, lancer, se connecter une fois en ligne.
-2. Vérifier que le bootstrap tourne (léger délai) : aller sur `/classes`, `/students` → les données
-   s'affichent normalement.
+L'appli desktop stocke sa base dans le dossier de données de l'identifiant Tauri utilisé au build :
 
-### Phase 1 — Couper le réseau
+| Build | Chemin macOS |
+|---|---|
+| Dev (`com.jeccamtech.ecole.dev`) | `~/Library/Application Support/com.jeccamtech.ecole.dev/jeccam-ecole.db` |
+| Prod (`com.jeccamtech.ecole`) | `~/Library/Application Support/com.jeccamtech.ecole/jeccam-ecole.db` |
 
+Sur Windows : `%APPDATA%\com.jeccamtech.ecole(.dev)\jeccam-ecole.db`.
+
+**Fermez l'appli avant d'ouvrir la base** (SQLite garde un verrou tant qu'un processus l'a ouverte —
+sinon `sqlite3` peut lire des données pas encore flushées depuis le WAL). Exemple de consultation :
+
+```bash
+sqlite3 ~/Library/Application\ Support/com.jeccamtech.ecole.dev/jeccam-ecole.db \
+  ".tables" \
+  "SELECT COUNT(*) FROM classes;" \
+  "SELECT COUNT(*) FROM eleves;"
+```
+
+---
+
+## Partie A — Bootstrap : la copie serveur → SQLite au premier lancement
+
+1. Installer, lancer, se connecter une fois **en ligne**. Attendre quelques secondes (le bootstrap
+   tourne en tâche de fond, sans bloquer l'affichage).
+2. Fermer l'appli, ouvrir la base SQLite (commande ci-dessus), lister les tables (`.tables`) → vérifier
+   la présence de : `classes`, `eleves`, `frais_scolaires`, `factures`, `enseignants`, `matieres`,
+   `classe_matieres`, `emploi_du_temps`, `fiches_depense`, `annees_scolaires`, `niveaux`, `salles`,
+   `evaluations` (le référentiel en lecture) + les tables `*_offline` (files d'attente, vides au
+   premier lancement).
+3. Comparer un comptage avec la réalité connue de l'école, par exemple :
+   ```bash
+   sqlite3 jeccam-ecole.db "SELECT COUNT(*) FROM eleves;"
+   ```
+   → doit correspondre (à peu près, selon les filtres du bootstrap) au nombre d'élèves actifs vus sur
+   `/students` en ligne.
+4. Relancer l'appli hors ligne (Wi-Fi coupé avant l'ouverture) → `/classes` et `/students` doivent
+   s'afficher immédiatement depuis ce miroir local, sans écran vide ni erreur.
+
+**Ce que ça valide** : que `pullReferenceData` (`desktop-reference-sync.ts`) a bien tourné et rempli la
+base au lieu de silencieusement échouer ou de ne rien copier.
+
+---
+
+## Partie B — Comportement hors-ligne (couper le réseau, garder l'appli ouverte)
+
+### B0 — Couper le réseau
 Wi-Fi off (ou câble débranché) — **garder l'appli ouverte**, ne pas la relancer.
 
-### Phase 2 — Session de caisse
-
-3. `/payments/cashier-session` → « Ouvrir ma caisse » → badge **« Hors ligne — pas encore
+### B1 — Session de caisse
+1. `/payments/cashier-session` → « Ouvrir ma caisse » → badge **« Hors ligne — pas encore
    synchronisée »**, total à 0 GNF.
+2. Vérifier en base : `SELECT * FROM caisse_sessions_offline WHERE synced = 0;` → une ligne, `fermee_le`
+   NULL.
 
-### Phase 3 — Nouvelle inscription (parent + enfant)
-
-4. `/enrollments/bulk-family` → remplir un nouveau parent + un enfant (classe, une exonération si vous
+### B2 — Nouvelle inscription (parent + enfant)
+3. `/enrollments/bulk-family` → remplir un nouveau parent + un enfant (classe, une exonération si vous
    en avez une configurée) → « Inscrire ».
-5. Vérifier badge **« En attente (auto) »** immédiat (pas de tentative réseau visible, pas de badge
-   « Échec »).
+4. Badge **« En attente (auto) »** immédiat (pas de tentative réseau visible, pas de badge « Échec »).
+5. Vérifier en base : `SELECT * FROM inscriptions_offline WHERE synced = 0;` → une ligne, `enfants_json`
+   contient bien les infos saisies.
 
-### Phase 4 — Encaissement (guichet)
-
-6. `/guichet` → rechercher un élève **déjà connu** (recherché/vu en ligne avant la coupure) → vérifier
-   que la recherche fonctionne toujours (cache).
+### B3 — Encaissement (guichet)
+6. `/guichet` → rechercher un élève **déjà connu** (recherché/vu en ligne avant la coupure) → la
+   recherche doit continuer à fonctionner (cache).
 7. Encaisser un paiement CASH pour cet élève (facture existante, pas celui qu'on vient d'inscrire
    hors-ligne — celui-là n'existe pas encore côté serveur).
-8. Retour sur `/payments/cashier-session` → le total encaissé doit avoir augmenté du montant payé.
+8. `/payments/cashier-session` → le total encaissé a augmenté du montant payé.
+9. Vérifier en base : `SELECT * FROM encaissements_offline WHERE synced = 0;` → une ligne.
 
-### Phase 5 — Dépense
+### B4 — Dépense
+10. `/budget` → ouvrir une fiche ouverte → ajouter une dépense → message **« Hors ligne : dépense
+    enregistrée localement »** (pas d'erreur).
+11. Vérifier en base : `SELECT * FROM depenses_offline WHERE synced = 0;` → une ligne.
 
-9. `/budget` → ouvrir une fiche ouverte → ajouter une dépense → message **« Hors ligne : dépense
-   enregistrée localement »** (pas d'erreur).
-
-### Phase 6 — Lecture hors-ligne
-
-10. `/classes`, `/parents`, `/payments` (liste), `/payments/reports/daily` → tout doit s'afficher depuis
+### B5 — Lecture hors-ligne (référentiel)
+12. `/classes`, `/parents`, `/payments` (liste), `/payments/reports/daily` → tout doit s'afficher depuis
     le cache (pas de page vide/erreur), à condition d'avoir été visité au moins une fois en ligne avant.
 
-### Phase 7 — Clôturer la caisse
-
-11. `/payments/cashier-session` → « Clôturer ma caisse », saisir un comptant physique → message succès
+### B6 — Clôturer la caisse
+13. `/payments/cashier-session` → « Clôturer ma caisse », saisir un comptant physique → message succès
     hors-ligne, l'écran repasse à « Aucune session ouverte ».
+14. Vérifier en base : la ligne de `caisse_sessions_offline` de B1 a maintenant `fermee_le` renseigné,
+    toujours `synced = 0`.
 
-### Phase 8 — Test de résilience (coupure en cours d'inscription)
+### B7 — Résilience (coupure en cours d'inscription)
+15. Réseau toujours coupé, lancer une **deuxième** inscription à 2 enfants → couper le réseau juste
+    après le 1er enfant marqué « Inscrit » (simulé : refaites l'inscription en 2 temps) → vérifier que
+    seul le 2e passe en « En attente (auto) », le 1er reste « Inscrit » (jamais retraité, pas de
+    doublon en base).
 
-12. Réseau toujours coupé (ou remis puis recoupé), lancer une **deuxième** inscription à 2 enfants →
-    couper le réseau juste après le 1er enfant marqué « Inscrit » → vérifier que seul le 2e passe en
-    « En attente (auto) », le 1er reste « Inscrit » (jamais retraité).
+---
 
-### Phase 9 — Reconnexion et vérification de la synchro
+## Partie C — Synchronisation (reconnexion)
 
-13. Réseau remis → attendre quelques secondes (déclenchement sur l'événement `online`) ou max 15 min
-    (filet de sécurité).
-14. Vérifier dans `/students` : le nouvel élève de la Phase 3 existe, **une seule fois** (pas de
-    doublon), bien lié au parent, inscrit dans la bonne classe, avec ses factures générées et son
-    exonération appliquée.
-15. Vérifier que le parent a reçu un SMS de confirmation de paiement (Phase 4) **et** que le comptable
-    (celui qui a physiquement encaissé) a reçu le même SMS.
-16. Télécharger le reçu PDF du paiement Phase 4 → vérifier : champ « Date de paiement » = heure réelle
-    de l'encaissement (pas l'heure de la reconnexion), pas de cadre de signature, tout sur une seule
-    page.
-17. `/payments/cashier-session` → historique des clôtures → la session Phase 2/7 apparaît avec le bon
-    total système (recalculé serveur, filtré CASH uniquement) et l'écart correct.
-18. `/budget` → la dépense de la Phase 5 est bien arrivée sur le serveur.
+16. Réseau remis → attendre quelques secondes (déclenchement sur l'événement `online`) ou max 15 min
+    (filet de sécurité, voir `desktop-sync.ts`).
+17. Rouvrir la base SQLite (appli fermée) → **toutes** les lignes des tables `*_offline` touchées en
+    Partie B doivent être passées à `synced = 1` :
+    ```bash
+    sqlite3 jeccam-ecole.db \
+      "SELECT synced, COUNT(*) FROM caisse_sessions_offline GROUP BY synced;" \
+      "SELECT synced, COUNT(*) FROM inscriptions_offline GROUP BY synced;" \
+      "SELECT synced, COUNT(*) FROM encaissements_offline GROUP BY synced;" \
+      "SELECT synced, COUNT(*) FROM depenses_offline GROUP BY synced;"
+    ```
+    Toute ligne encore à `synced = 0` avec `tentatives > 0` → regarder `derniere_erreur` dans la même
+    table pour savoir pourquoi.
+18. Côté serveur (web ou API), vérifier :
+    - `/students` : le nouvel élève de B2 existe **une seule fois** (pas de doublon), bien lié au
+      parent, inscrit dans la bonne classe, avec ses factures générées et son exonération appliquée.
+    - Le parent a reçu un SMS de confirmation de paiement (B3) **et** le comptable qui a physiquement
+      encaissé a reçu le même SMS.
+    - Le reçu PDF du paiement B3 : champ « Date de paiement » = heure réelle de l'encaissement (pas
+      l'heure de la reconnexion), pas de cadre de signature, tout sur une seule page.
+    - `/payments/cashier-session` → historique des clôtures → la session B1/B6 apparaît avec le bon
+      total système (recalculé serveur, filtré CASH uniquement) et l'écart correct.
+    - `/budget` → la dépense de B4 est bien arrivée sur le serveur.
 
-### Phase 10 — Si vous testez le build dev spécifiquement
+---
+
+## Si vous testez le build dev spécifiquement (auto-updater)
 
 19. Bumper la version, relancer `desktop-dev-build.yml`, vérifier que l'install dev déjà en place
     détecte la mise à jour (checke bien `dev.ecole.jeccamtech.com/updates/latest.json`, pas la prod).

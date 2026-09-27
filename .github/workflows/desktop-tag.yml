@@ -13,6 +13,11 @@ on:
 
 permissions:
   contents: write
+  # Nécessaire pour déclencher desktop-release.yml nous-mêmes à la fin (voir dernière étape) — un tag
+  # poussé avec le GITHUB_TOKEN par défaut ne déclenche JAMAIS un autre workflow écoutant `push: tags`
+  # (anti-boucle-infinie, comportement voulu par GitHub) : desktop-release.yml ne démarrait donc jamais
+  # tout seul malgré le tag bien créé et poussé (vécu en vrai).
+  actions: write
 
 jobs:
   tag:
@@ -46,4 +51,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Desktop release ${{ steps.check.outputs.version }}"
           git push origin "$TAG"
-          echo "Tag $TAG créé et poussé — desktop-release.yml va démarrer."
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "Tag $TAG créé et poussé."
+
+      - name: Déclencher desktop-release.yml sur ce tag (le push seul ne suffit pas, voir ci-dessus)
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run desktop-release.yml --ref "$TAG"

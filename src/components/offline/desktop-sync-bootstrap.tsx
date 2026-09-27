@@ -6,6 +6,7 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { isDesktop } from "@/lib/offline/desktop-runtime";
 import { wireDesktopSyncTriggers, type DesktopSyncContext } from "@/lib/offline/desktop-sync";
+import { checkForDesktopUpdate } from "@/lib/offline/desktop-updater";
 
 /**
  * Branche la synchronisation SQLite desktop — équivalent de `wireSyncTriggers()` (Dexie, web) monté
@@ -31,6 +32,7 @@ export function DesktopSyncBootstrap() {
   useEffect(() => {
     if (!isDesktop()) return;
     wireDesktopSyncTriggers(() => ctxRef.current);
+    void checkForDesktopUpdate();
   }, []);
 
   return null;
