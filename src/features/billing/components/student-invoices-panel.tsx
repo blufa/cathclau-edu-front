@@ -25,6 +25,7 @@ import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 
@@ -277,9 +278,7 @@ export function StudentInvoicesPanel({
    * bloc minimal ouvert dans une fenêtre dédiée, remis au parent séance tenante. */
   function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
     const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
-    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+    printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
       <style>body{font-family:sans-serif;padding:24px;color:#111}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
@@ -290,18 +289,13 @@ export function StudentInvoicesPanel({
         <p>Détail : ${entry.input.coverageLabel}</p>
         <p>Montant : ${formatGNF(total)}</p>
       </body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
   }
 
   /** Équivalent desktop de {@link printProvisionalReceipt} — même principe (bloc minimal imprimable,
    * remis au parent tout de suite), lisant la file SQLite locale au lieu de la file Dexie web. */
   function printProvisionalReceiptDesktop(group: PendingOfflinePaymentGroup) {
-    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
-    if (!w) return;
     const channelLabel = PAYMENT_CHANNEL_LABEL[group.modePaiement as PaymentChannel] ?? group.modePaiement;
-    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+    printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
       <style>body{font-family:sans-serif;padding:24px;color:#111}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
@@ -311,9 +305,6 @@ export function StudentInvoicesPanel({
         <p>Mode : ${channelLabel}</p>
         <p>Montant : ${formatGNF(group.total)}</p>
       </body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
   }
 
   return (

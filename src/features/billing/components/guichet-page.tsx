@@ -17,7 +17,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
-import { notifyError } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { getBranding } from "@/lib/branding";
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
@@ -92,11 +92,8 @@ export default function GuichetPage() {
       + `<table><thead><tr><th>Référence</th><th>Période</th><th class="right">Montant total</th><th class="right">Reste dû</th></tr></thead>`
       + `<tbody>${rows}</tbody></table>`
       + `<p class="total">Solde total restant dû : ${esc(formatGNF(balance))}</p>`
-      + `<script>window.onload=function(){window.print()}</script></body></html>`;
-    const w = window.open("", "_blank", "width=800,height=900");
-    if (!w) { notifyError("Autorisez les pop-ups pour imprimer le reçu."); return; }
-    w.document.write(html);
-    w.document.close();
+      + `</body></html>`;
+    printHtmlDocument(html);
   }
 
   return (

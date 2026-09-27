@@ -41,6 +41,73 @@ function collectStylesheets(): { links: string[]; inlineCss: string } {
   return { links: [...new Set(links)], inlineCss: parts.join("\n") };
 }
 
+/**
+ * Imprime un document HTML autonome (déjà généré en chaîne, styles inline compris — reçus, relevés,
+ * convocations…) via la même technique d'iframe cachée que {@link printNode}, plutôt que
+ * `window.open("", "_blank", ...)` + `document.write` + `.print()`.
+ *
+ * Pourquoi : dans le webview desktop (Tauri), `window.open` ne crée pas une vraie fenêtre séparée avec
+ * ses propres contrôles — il finissait par remplacer TOUTE la fenêtre de l'appli par le contenu à
+ * imprimer, sans bouton retour ni aucun moyen de revenir à l'écran précédent (le webview Tauri n'a pas
+ * de chrome de navigateur). Une iframe cachée reste dans la page courante : rien ne prend l'écran, et
+ * `iframe.remove()` nettoie tout juste après l'impression — fonctionne identiquement sur web et desktop.
+ */
+export function printHtmlDocument(html: string) {
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.top = "0";
+  iframe.style.left = "-10000px";
+  iframe.style.width = "800px";
+  iframe.style.height = "600px";
+  iframe.style.border = "0";
+  iframe.setAttribute("aria-hidden", "true");
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument;
+  if (!doc) {
+    iframe.remove();
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  let settled = false;
+  function triggerPrint() {
+    if (settled) return;
+    settled = true;
+    const win = iframe.contentWindow;
+    if (win) {
+      win.focus();
+      win.print();
+    }
+    setTimeout(() => iframe.remove(), 500);
+  }
+
+  // Filet de sécurité identique à `printNode` : attend les images éventuelles (logo, photo…) avant
+  // d'imprimer, avec un timeout de repli si l'une d'elles ne charge jamais.
+  const images = Array.from(doc.images);
+  if (images.length === 0) {
+    triggerPrint();
+    return;
+  }
+  let remaining = images.length;
+  images.forEach((img) => {
+    if (img.complete) {
+      remaining -= 1;
+      return;
+    }
+    const onSettle = () => {
+      remaining -= 1;
+      if (remaining <= 0) triggerPrint();
+    };
+    img.addEventListener("load", onSettle, { once: true });
+    img.addEventListener("error", onSettle, { once: true });
+  });
+  if (remaining <= 0) triggerPrint();
+  setTimeout(triggerPrint, 1500);
+}
+
 export function printNode(node: HTMLElement) {
   const iframe = document.createElement("iframe");
   // Taille réelle (non nulle) exigée pour que la mise en page interne (largeurs, flex…) se calcule

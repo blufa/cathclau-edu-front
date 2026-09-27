@@ -46,6 +46,7 @@ import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 
 const AUTO_VARS = new Set(["date", "reference", "logo", "signature", "cachet", "watermark"]);
 
@@ -61,10 +62,7 @@ function extractVars(...htmls: (string | null | undefined)[]): string[] {
 }
 
 function printHtml(html: string) {
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) { notifyError("Autorisez les pop-ups pour imprimer / exporter en PDF."); return; }
-  w.document.write(html + "<script>window.onload=function(){window.print()}<\/script>");
-  w.document.close();
+  printHtmlDocument(html);
 }
 function downloadWord(html: string, name: string) {
   const blob = new Blob(["﻿" + html], { type: "application/msword" });

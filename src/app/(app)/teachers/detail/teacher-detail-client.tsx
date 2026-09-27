@@ -29,6 +29,7 @@ import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { formatGNF } from "@/lib/format";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
@@ -207,11 +208,8 @@ export default function TeacherDetailPage() {
       + `</div>`
       + `<p class="list"><strong>Matières :</strong> ${subjects.length ? esc(subjects.map((s) => subjectLabel.get(s.subjectId) ?? `#${s.subjectId}`).join(", ")) : "—"}</p>`
       + `<table><thead><tr>${dayOrder.map((d) => `<th>${DAY_LABEL[d] ?? d}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
-      + `<script>window.onload=function(){window.print()}</script></body></html>`;
-    const w = window.open("", "_blank", "width=1100,height=800");
-    if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
-    w.document.write(html);
-    w.document.close();
+      + `</body></html>`;
+    printHtmlDocument(html);
   }
 
   return (

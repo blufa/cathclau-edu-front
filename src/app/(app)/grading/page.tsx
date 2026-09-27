@@ -74,6 +74,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 
 export default function GradingPage() {
   const { user } = useAuth();
@@ -283,9 +284,7 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
         })
         .join("");
       const subject = subjectLabel.get(group.subjectId) ?? `#${group.subjectId}`;
-      const w = window.open("", "_blank", "width=920,height=900");
-      if (!w) { notifyError("Autorisez les pop-ups pour imprimer."); return; }
-      w.document.write(
+      printHtmlDocument(
         `<!doctype html><html><head><meta charset="utf-8"><title>Relevé mensuel — ${subject}</title>`
         + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
         + `h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#475569;font-size:13px;margin-bottom:16px}`
@@ -294,9 +293,8 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
         + `<h1>RELEVÉ MENSUEL DE NOTES</h1><div class="sub">${subject} — ${monthLabelOf(group.monthKey)} — ${className || ""}</div>`
         + `<table><thead><tr><th>N°</th><th>Matricule</th><th>Nom & prénom</th>${evalCols}<th style="text-align:center">Moyenne /20</th></tr></thead>`
         + `<tbody>${rows}</tbody></table>`
-        + `<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`,
+        + `</body></html>`,
       );
-      w.document.close();
     } catch (err) { notifyError(err); }
   }
 
