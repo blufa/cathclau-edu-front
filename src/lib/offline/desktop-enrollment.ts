@@ -2,9 +2,11 @@ import { createStudent } from "@/lib/api/students";
 import { createParent, linkParentToStudent, type Relationship } from "@/lib/api/parents";
 import { enroll } from "@/lib/api/enrollments";
 import { subscribe } from "@/lib/api/transport";
-import { grantExemption, generateAllForEnrollment } from "@/lib/api/billing";
+import { grantExemption, generateAllForEnrollment, listInvoicesByStudent } from "@/lib/api/billing";
+import { initiateGroupPayment } from "@/lib/api/payment";
 import type { EnrollmentType, Gender } from "@/lib/types/student";
 import type { ExemptionType, FeeType } from "@/lib/types/billing";
+import type { PaymentChannel } from "@/lib/types/payment";
 import type { TransportDirection } from "@/lib/types/transport";
 import { getDesktopDb } from "./desktop-db";
 
@@ -51,6 +53,9 @@ export interface QueuedChild {
     reason: string;
     staffBenefit: boolean;
   } | null;
+  // Encaissement initial optionnel (§retour comptable) — voir ChildDraft dans
+  // bulk-family-enrollment-page.tsx pour le contexte complet.
+  initialPayment: { amount: number; channel: PaymentChannel } | null;
   // Progression (§retour comptable) : persistée après CHAQUE étape réussie pour qu'un cycle de
   // synchro interrompu (nouvelle coupure pendant la synchro elle-même) reprenne exactement là où il
   // s'était arrêté au cycle suivant, sans jamais recréer un élève déjà créé.
@@ -60,7 +65,25 @@ export interface QueuedChild {
   exemptionApplied: boolean;
   transportSubscribed: boolean;
   feesGenerated: boolean;
+  paymentApplied: boolean;
   done: boolean;
+}
+
+/** Répartit un montant payé sur des factures, dans l'ordre, jusqu'à épuisement — même logique que
+ * `allocatePayment` dans `bulk-family-enrollment-page.tsx` (dupliquée : modules indépendants, comme
+ * le reste des files hors-ligne de ce dossier). */
+function allocatePayment(
+  invoices: { id: number; totalAmount: string }[], amount: number,
+): { invoiceId: number; amount: number }[] {
+  let remaining = amount;
+  const shares: { invoiceId: number; amount: number }[] = [];
+  for (const inv of invoices) {
+    if (remaining <= 0) break;
+    const applied = Math.min(remaining, Number(inv.totalAmount));
+    if (applied > 0) shares.push({ invoiceId: inv.id, amount: applied });
+    remaining -= applied;
+  }
+  return shares;
 }
 
 interface OfflineEnrollmentRow {
@@ -202,6 +225,26 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
             child.feesGenerated = true;
             await persistChildren();
           } catch { /* non bloquant, comme en ligne */ }
+        }
+
+        // Encaissement initial optionnel (§retour comptable) : relit les factures réelles du serveur
+        // (plutôt que de garder en mémoire le retour de generateAllForEnrollment) pour couvrir aussi
+        // le cas d'une synchro reprise après coupure PENDANT cette étape lors d'un cycle précédent —
+        // feesGenerated peut déjà être true sans qu'on ait gardé la liste localement.
+        if (child.initialPayment && !child.paymentApplied && child.feesGenerated) {
+          try {
+            const invoices = await listInvoicesByStudent(studentId);
+            const shares = allocatePayment(invoices, child.initialPayment.amount);
+            if (shares.length > 0) {
+              await initiateGroupPayment({
+                tenantId: row.etablissement_id, studentId, channel: child.initialPayment.channel,
+                coverageLabel: "Encaissement à l'inscription", monthsCount: shares.length,
+                remainingAfter: 0, shares, academicYearId: row.annee_scolaire_id,
+              });
+            }
+            child.paymentApplied = true;
+            await persistChildren();
+          } catch { /* non bloquant, comme en ligne — l'inscription elle-même n'est jamais retenue */ }
         }
 
         child.done = true;

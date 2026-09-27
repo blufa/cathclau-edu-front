@@ -18,6 +18,9 @@ import { searchPreviousClasses, searchSchools } from "@/lib/api/directory";
 import { enroll } from "@/lib/api/enrollments";
 import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
+import { initiateGroupPayment } from "@/lib/api/payment";
+import type { PaymentChannel } from "@/lib/types/payment";
+import { PAYMENT_CHANNEL_LABEL } from "@/lib/types/payment";
 import {
   cancelInvoice, deleteInvoice, generateAllForEnrollment,
   grantExemption, listExemptionRules,
@@ -37,7 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, Input, Label } from "@/components/ui/input";
+import { Field, Input, Label, MoneyInput } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -94,6 +97,15 @@ interface ChildDraft {
   // l'enfant doit être découpée en autant de factures que de mois d'école (généralement 9) pour que
   // chaque retenue corresponde à une facture précise, plutôt qu'une ou deux grosses tranches.
   monthlyPaymentOptIn: boolean;
+  // Encaissement initial (§retour comptable) : optionnel, appliqué juste après la génération des
+  // factures — sur les factures dans l'ordre généré, jusqu'à épuisement du montant saisi. Seul moyen
+  // d'inscrire ET encaisser un même élève en une seule fois hors-ligne (un élève inscrit hors-ligne
+  // n'existe nulle part ailleurs où chercher pour l'encaisser séparément tant qu'il n'est pas
+  // synchronisé — voir `guichet-page.tsx`, basé sur les élèves déjà connus du serveur).
+  wantsInitialPayment: boolean;
+  initialPaymentAmount: string;
+  initialPaymentChannel: PaymentChannel;
+  paymentApplied?: boolean;
   // Résultats affichés après traitement.
   generatedInvoices?: GeneratedFeeInvoices[];
 }
@@ -108,7 +120,24 @@ function emptyChild(): ChildDraft {
     enrollmentType: "NEW",
     wantsTransport: false, routeId: "", stopId: "", direction: "BOTH",
     exemptionRuleId: "", monthlyPaymentOptIn: false,
+    wantsInitialPayment: false, initialPaymentAmount: "", initialPaymentChannel: "CASH",
   };
+}
+
+/** Répartit un montant payé sur des factures, dans l'ordre, jusqu'à épuisement — même logique
+ * qu'un encaissement groupé classique (voir `submit-group-payment.ts`). */
+function allocatePayment(
+  invoices: { id: number; totalAmount: string }[], amount: number,
+): { invoiceId: number; amount: number }[] {
+  let remaining = amount;
+  const shares: { invoiceId: number; amount: number }[] = [];
+  for (const inv of invoices) {
+    if (remaining <= 0) break;
+    const applied = Math.min(remaining, Number(inv.totalAmount));
+    if (applied > 0) shares.push({ invoiceId: inv.id, amount: applied });
+    remaining -= applied;
+  }
+  return shares;
 }
 
 const GENDER_OPTIONS: SearchableOption[] = [
@@ -235,6 +264,10 @@ export default function BulkFamilyEnrollmentPage() {
       studentId: child.studentId ?? null, parentLinked: child.parentLinked ?? false,
       enrolled: child.enrolled ?? false, exemptionApplied: child.exemptionApplied ?? false,
       transportSubscribed: child.transportSubscribed ?? false, feesGenerated: child.feesGenerated ?? false,
+      initialPayment: child.wantsInitialPayment && Number(child.initialPaymentAmount) > 0
+        ? { amount: Number(child.initialPaymentAmount), channel: child.initialPaymentChannel }
+        : null,
+      paymentApplied: child.paymentApplied ?? false,
       done: false,
       ...progress,
     };
@@ -261,6 +294,7 @@ export default function BulkFamilyEnrollmentPage() {
       let exemptionApplied = child.exemptionApplied ?? false;
       let transportSubscribed = child.transportSubscribed ?? false;
       let feesGenerated = child.feesGenerated ?? false;
+      let paymentApplied = child.paymentApplied ?? false;
       let generatedInvoices: GeneratedFeeInvoices[] = child.generatedInvoices ?? [];
       let needsQueue = false;
 
@@ -343,7 +377,29 @@ export default function BulkFamilyEnrollmentPage() {
               enrollmentType: child.enrollmentType, wantsTransport: false, transportFeeId: null,
             });
             feesGenerated = true;
-            updateChild(child.key, { feesGenerated: true });
+            updateChild(child.key, { feesGenerated: true, generatedInvoices });
+          } catch (err) {
+            if (isNetworkError(err) && isDesktop()) needsQueue = true;
+            else notifyError(err);
+          }
+        }
+
+        // Encaissement initial optionnel (§retour comptable) : appliqué juste après, sur les factures
+        // fraîchement générées, dans l'ordre, jusqu'à épuisement du montant saisi — seul moyen
+        // d'inscrire ET encaisser le même élève en un seul geste (voir commentaire sur `ChildDraft`).
+        if (child.wantsInitialPayment && Number(child.initialPaymentAmount) > 0 && !paymentApplied && feesGenerated) {
+          try {
+            const invoices = generatedInvoices.flatMap((g) => g.invoices);
+            const shares = allocatePayment(invoices, Number(child.initialPaymentAmount));
+            if (shares.length > 0) {
+              await initiateGroupPayment({
+                tenantId: user?.tenantId ?? null, studentId, channel: child.initialPaymentChannel,
+                coverageLabel: "Encaissement à l'inscription", monthsCount: shares.length,
+                remainingAfter: 0, shares, academicYearId: effectiveYearId,
+              });
+            }
+            paymentApplied = true;
+            updateChild(child.key, { paymentApplied: true });
           } catch (err) {
             if (isNetworkError(err) && isDesktop()) needsQueue = true;
             else notifyError(err);
@@ -352,7 +408,7 @@ export default function BulkFamilyEnrollmentPage() {
 
         if (needsQueue) {
           toQueue.push(toQueuedChild(child, {
-            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
+            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated, paymentApplied,
           }));
           updateChild(child.key, { status: "queued", studentId, generatedInvoices });
         } else {
@@ -361,7 +417,7 @@ export default function BulkFamilyEnrollmentPage() {
       } catch (err) {
         if (isNetworkError(err) && isDesktop()) {
           toQueue.push(toQueuedChild(child, {
-            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
+            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated, paymentApplied,
           }));
           updateChild(child.key, { status: "queued" });
         } else {
@@ -918,6 +974,41 @@ function ChildCard({
               />
             </div>
           )}
+
+          <Field>
+            <Checkbox
+              label="Encaisser un paiement maintenant"
+              checked={child.wantsInitialPayment}
+              onChange={(e) => onUpdate({ wantsInitialPayment: e.target.checked })}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Optionnel — appliqué juste après la génération des factures, sur celles-ci dans l&apos;ordre,
+              jusqu&apos;à épuisement du montant. Seul moyen d&apos;inscrire ET encaisser en une fois hors ligne.
+            </p>
+          </Field>
+
+          {child.wantsInitialPayment && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Field>
+                <Label>Montant encaissé</Label>
+                <MoneyInput
+                  value={child.initialPaymentAmount}
+                  onValueChange={(n) => onUpdate({ initialPaymentAmount: String(n) })}
+                />
+              </Field>
+              <Field>
+                <Label>Canal</Label>
+                <Select
+                  value={child.initialPaymentChannel}
+                  onChange={(e) => onUpdate({ initialPaymentChannel: e.target.value as PaymentChannel })}
+                >
+                  {(["CASH", "ORANGE_MONEY", "BANK_CARD"] as PaymentChannel[]).map((c) => (
+                    <option key={c} value={c}>{PAYMENT_CHANNEL_LABEL[c]}</option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          )}
         </div>
       )}
 
@@ -946,6 +1037,11 @@ function ChildCard({
                 </div>
               )))}
             </div>
+          )}
+          {child.wantsInitialPayment && child.paymentApplied && (
+            <p className="text-xs text-success-600">
+              Paiement de {formatGNF(child.initialPaymentAmount)} encaissé ({PAYMENT_CHANNEL_LABEL[child.initialPaymentChannel]}).
+            </p>
           )}
         </div>
       )}
