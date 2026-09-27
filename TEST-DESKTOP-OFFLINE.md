@@ -178,12 +178,16 @@ Wi-Fi off (ou câble débranché) — **garder l'appli ouverte**, ne pas la rela
 2. Vérifier en base : `SELECT * FROM caisse_sessions_offline WHERE synced = 0;` → une ligne, `fermee_le`
    NULL.
 
-### B2 — Nouvelle inscription (parent + enfant)
+### B2 — Nouvelle inscription (parent + enfant + encaissement en une fois)
 3. `/enrollments/bulk-family` → remplir un nouveau parent + un enfant (classe, une exonération si vous
-   en avez une configurée) → « Inscrire ».
+   en avez une configurée) → cocher **« Encaisser un paiement maintenant »**, saisir un montant et un
+   canal (ex. CASH) → « Inscrire ».
 4. Badge **« En attente (auto) »** immédiat (pas de tentative réseau visible, pas de badge « Échec »).
 5. Vérifier en base : `SELECT * FROM inscriptions_offline WHERE synced = 0;` → une ligne, `enfants_json`
-   contient bien les infos saisies.
+   contient bien les infos saisies **et** l'objet `initialPayment` (montant/canal).
+
+*(Après synchro — voir Partie C — vérifier que l'élève a bien une facture réglée par ce paiement
+initial, sans avoir eu besoin de repasser par le guichet séparément.)*
 
 ### B3 — Encaissement (guichet)
 6. `/guichet` → rechercher un élève **déjà connu** (recherché/vu en ligne avant la coupure) → la
@@ -234,6 +238,8 @@ Wi-Fi off (ou câble débranché) — **garder l'appli ouverte**, ne pas la rela
 18. Côté serveur (web ou API), vérifier :
     - `/students` : le nouvel élève de B2 existe **une seule fois** (pas de doublon), bien lié au
       parent, inscrit dans la bonne classe, avec ses factures générées et son exonération appliquée.
+    - Fiche élève de B2 → l'onglet factures montre le paiement initial appliqué (facture(s) marquée(s)
+      payée/partielle selon le montant saisi, statut PAYÉE si le montant couvrait tout).
     - Le parent a reçu un SMS de confirmation de paiement (B3) **et** le comptable qui a physiquement
       encaissé a reçu le même SMS.
     - Le reçu PDF du paiement B3 : champ « Date de paiement » = heure réelle de l'encaissement (pas
