@@ -84,7 +84,7 @@ async function main() {
   const outPath = path.join(root, "latest.json");
   let manifest = {
     version,
-    notes: `Mise à jour Jeccam École ${version}`,
+    notes: `Mise à jour Jeccam Edu ${version}`,
     pub_date: new Date().toISOString(),
     platforms: {},
   };
