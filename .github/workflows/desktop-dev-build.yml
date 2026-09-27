@@ -4,7 +4,7 @@ name: Desktop dev build (Tauri)
 # promouvoir en prod : même pipeline (build Windows 64/32 bits, signature, latest.json), mais :
 #   - DESKTOP_ENV=dev → l'app pointe sur https://api-dev.ecole.jeccamtech.com (pas la prod)
 #   - --config src-tauri/tauri.dev.conf.json → identifiant/nom d'appli et endpoint auto-updater
-#     distincts de la prod (com.jeccamtech.ecole.dev, "Jeccam École (Dev)"), pour pouvoir installer un
+#     distincts de la prod (com.jeccamtech.ecole.dev, "Jeccam Edu Dev"), pour pouvoir installer un
 #     build dev SANS entrer en conflit avec une installation prod déjà présente sur le même poste, et
 #     pour que l'auto-updater de ce build dev vérifie https://dev.ecole.jeccamtech.com/updates/latest.json
 #     au lieu de la prod.

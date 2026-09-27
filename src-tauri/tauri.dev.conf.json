@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Jeccam École (Dev)",
+  "productName": "Jeccam Edu Dev",
   "identifier": "com.jeccamtech.ecole.dev",
   "app": {
     "windows": [
