@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, CalendarDays, PartyPopper } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears } from "@/lib/api/academics";
@@ -26,8 +26,8 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function CalendarPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE");
-  const canWriteSchoolEvents = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "RESPONSABLE_PEDAGOGIQUE") || hasAnyPermission(user, ["evenement:manage"]);
+  const canWriteSchoolEvents = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["evenement:manage"]);
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = yearsQuery.data ?? [];
   const cy = years.find((y) => y.current) ?? years[0];
