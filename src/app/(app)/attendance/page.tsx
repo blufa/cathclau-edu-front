@@ -171,8 +171,8 @@ function ExpandToggle({ expanded, onClick }: { expanded: boolean; onClick: () =>
 export default function AttendancePage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY") || hasAnyPermission(user, ["presence:create"]);
-  const canManageStaff = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
-  const canManageSettings = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const canManageStaff = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["presence:create"]);
+  const canManageSettings = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["presence:update"]);
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);

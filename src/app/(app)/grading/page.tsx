@@ -79,7 +79,7 @@ import { printHtmlDocument } from "@/lib/print-node";
 export default function GradingPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["evaluation:create"]);
-  const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY");
+  const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["examen:manage"]);
   // Only admins/directors may modify an already-entered grade; teachers can only enter new ones.
   const canEditExisting = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["note:unlock"]);
 

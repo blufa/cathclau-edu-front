@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Wallet } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { listUsers } from "@/lib/api/iam";
 import {
   closeCashierSession,
@@ -31,7 +31,7 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function CashierSessionPage() {
   const { user } = useAuth();
-  const canOperate = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
+  const canOperate = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["paiement:create"]);
   // La direction voit les sessions de tous les comptables (supervision) ; un comptable ne voit que les siennes.
   const canSeeAllHistory = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
 
