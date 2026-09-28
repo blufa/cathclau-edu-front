@@ -40,11 +40,24 @@ export function SearchableSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // Bascule le menu au-dessus du champ quand il n'y a pas assez de place en dessous (ex. dernier champ
+  // d'une carte proche du bas de l'écran) — sans ça, un ancêtre `overflow-hidden` (ex. Card) peut rogner
+  // le menu qui déborde vers le bas, le rendant invisible plutôt que de simplement s'ouvrir vers le
+  // haut comme n'importe quel menu déroulant "intelligent". PANEL_HEIGHT_ESTIMATE ~ hauteur réelle du
+  // panneau (recherche + max-h-72) : pas besoin de la mesurer après coup, une petite marge suffit.
+  const PANEL_HEIGHT_ESTIMATE = 300;
+  const [dropUp, setDropUp] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    if (rootRef.current) {
+      const rect = rootRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setDropUp(spaceBelow < PANEL_HEIGHT_ESTIMATE && spaceAbove > spaceBelow);
+    }
     function onClickOutside(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
@@ -89,7 +102,8 @@ export function SearchableSelect({
       {open && (
         <div
           className={cn(
-            "absolute z-50 mt-1.5 max-h-72 w-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-theme-lg",
+            "absolute z-50 max-h-72 w-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-theme-lg",
+            dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5",
             panelClassName,
           )}
         >

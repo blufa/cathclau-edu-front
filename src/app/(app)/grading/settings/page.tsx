@@ -3,7 +3,7 @@
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { SlidersHorizontal, Timer, ListChecks, Ban, GitBranch } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { GradingScalePanel } from "@/components/grading/grading-scale-panel";
 import { SessionSettingsPanel } from "@/components/grading/session-settings-panel";
 import { AssessmentTypesPanel } from "@/components/grading/assessment-types-panel";
@@ -12,7 +12,7 @@ import { DecisionRulesPanel } from "@/components/grading/decision-rules-panel";
 
 export default function GradingSettingsPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE") || hasAnyPermission(user, ["parametrage_notes:manage"]);
 
   return (
     <div className="space-y-5">

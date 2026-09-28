@@ -40,6 +40,7 @@ import { MoveScheduleForWeekForm } from "@/components/timetable/move-schedule-fo
 import { TimetableGrid } from "@/components/timetable/timetable-grid";
 import { TeacherLateSmsButton } from "@/components/timetable/teacher-late-sms-button";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { cn } from "@/lib/utils";
 
 const DAYS: { key: JourSemaine; label: string }[] = [
@@ -254,11 +255,8 @@ export default function TimetablePage() {
       + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}@media print{body{padding:0}}</style>`
       + `</head><body><h1>Emploi du temps — ${esc(heading)}</h1><div class="sub">${new Date().toLocaleDateString("fr-FR")}</div>`
       + `<table><thead><tr>${DAYS.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
-      + `<script>window.onload=function(){window.print()}</script></body></html>`;
-    const w = window.open("", "_blank", "width=1100,height=800");
-    if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
-    w.document.write(html);
-    w.document.close();
+      + `</body></html>`;
+    printHtmlDocument(html);
   }
 
   /** Un seul document paysage, une classe par page — regroupe l'emploi du temps de toutes les
@@ -294,11 +292,8 @@ export default function TimetablePage() {
         + `th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
         + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
         + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}@media print{.page{padding:0 0 24px}}</style>`
-        + `</head><body>${perClass.join("")}<script>window.onload=function(){window.print()}</script></body></html>`;
-      const w = window.open("", "_blank", "width=1200,height=800");
-      if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
-      w.document.write(html);
-      w.document.close();
+        + `</head><body>${perClass.join("")}</body></html>`;
+      printHtmlDocument(html);
     } catch (err) {
       notifyError(err);
     } finally {
@@ -506,7 +501,7 @@ export default function TimetablePage() {
                       {mode === "class"
                         ? (s.teacherId ? (teacherName.get(s.teacherId) ?? `#${s.teacherId}`) : "—")
                         : (
-                          <Link href={`/classes/${s.schoolClassId}`} className="text-brand-600 hover:underline">
+                          <Link href={`/classes/detail?id=${s.schoolClassId}`} className="text-brand-600 hover:underline">
                             {classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`}
                           </Link>
                         )}

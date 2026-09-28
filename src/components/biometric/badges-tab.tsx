@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 
 function qrUrl(data: string, size = 220) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
@@ -55,9 +56,7 @@ export function BadgesTab() {
 
   function printBadge() {
     if (!badge) return;
-    const w = window.open("", "_blank", "width=420,height=560");
-    if (!w) { notifyError("Autorisez les pop-ups pour imprimer."); return; }
-    w.document.write(
+    printHtmlDocument(
       `<!doctype html><html><head><meta charset="utf-8"><title>Badge</title>`
       + `<style>body{font-family:system-ui,Arial,sans-serif;display:flex;justify-content:center;padding:24px}`
       + `.b{width:320px;border:1px solid #cbd5e1;border-radius:16px;padding:18px;text-align:center}`
@@ -69,9 +68,8 @@ export function BadgesTab() {
       + `<div class="id">${badge.externalUserId}</div>`
       + (yearLabel ? `<div class="v">Valide : ${yearLabel}</div>` : "")
       + `</div>`
-      + `<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`
+      + `</body></html>`
     );
-    w.document.close();
   }
 
   return (

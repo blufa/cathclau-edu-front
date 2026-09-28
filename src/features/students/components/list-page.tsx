@@ -9,7 +9,8 @@ import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
-import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch } from "@/lib/api/billing";
+import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch, listExemptions } from "@/lib/api/billing";
+import type { Exemption } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -86,6 +87,23 @@ export default function StudentsPage() {
     [staffCoverageQuery.data],
   );
 
+  // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
+  // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
+  // §billing/Exonérations). Un élève peut avoir plusieurs exonérations (une par type de frais) : on
+  // n'affiche que la plus avantageuse (le plus haut pourcentage), le motif complet reste en info-bulle.
+  const exemptionsQuery = useQuery(() => listExemptions(), []);
+  const exemptionByStudentId = useMemo(() => {
+    const map = new Map<number, Exemption>();
+    for (const e of exemptionsQuery.data ?? []) {
+      if (!e.active) continue;
+      const pct = e.percentage != null ? Number(e.percentage) : e.type === "TOTAL" ? 100 : 0;
+      const current = map.get(e.studentId);
+      const currentPct = current ? (current.percentage != null ? Number(current.percentage) : current.type === "TOTAL" ? 100 : 0) : -1;
+      if (!current || pct > currentPct) map.set(e.studentId, e);
+    }
+    return map;
+  }, [exemptionsQuery.data]);
+
   // Quota: limit from the current plan, consumed approximated by the total student count.
   const studentLimit = plan?.studentLimit ?? null;
   const consumedStudents = data?.totalElements ?? 0;
@@ -143,7 +161,7 @@ export default function StudentsPage() {
       header: "Élève",
       accessor: (row) => `${row.student.firstName} ${row.student.lastName}`,
       render: (row) => (
-        <Link href={`/students/${row.student.id}`} className="group flex items-center gap-3">
+        <Link href={`/students/detail?id=${row.student.id}`} className="group flex items-center gap-3">
           {row.student.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={row.student.photo} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
@@ -166,6 +184,18 @@ export default function StudentsPage() {
               title={staffCoverageByStudentId.get(row.student.id)?.policyLabel ?? "Enfant de personnel pris en charge par l'école"}
             >
               Enfant de personnel −{staffCoverageByStudentId.get(row.student.id)?.coveragePercent}%
+            </Badge>
+          )}
+          {exemptionByStudentId.has(row.student.id) && (
+            <Badge
+              tone={exemptionByStudentId.get(row.student.id)?.type === "TOTAL" ? "green" : exemptionByStudentId.get(row.student.id)?.type === "EXCEPTIONAL" ? "blue" : "amber"}
+              title={exemptionByStudentId.get(row.student.id)?.reason ?? undefined}
+            >
+              {exemptionByStudentId.get(row.student.id)?.type === "TOTAL"
+                ? "Exonéré 100%"
+                : exemptionByStudentId.get(row.student.id)?.percentage != null
+                  ? `Exonéré ${exemptionByStudentId.get(row.student.id)?.percentage}%`
+                  : "Remise exceptionnelle"}
             </Badge>
           )}
         </Link>

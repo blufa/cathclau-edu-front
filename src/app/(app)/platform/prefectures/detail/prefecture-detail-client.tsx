@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@/hooks/use-query";
 import {
   assignSchoolToPrefecture,
@@ -35,8 +35,8 @@ export default function PrefectureDetailPage() {
 }
 
 function PrefectureDetail() {
-  const params = useParams<{ id: string }>();
-  const prefectureId = Number(params.id);
+  const searchParams = useSearchParams();
+  const prefectureId = Number(searchParams.get("id"));
 
   const prefectureQuery = useQuery(() => getPrefecture(prefectureId), [prefectureId]);
   const schoolsQuery = useQuery(() => listPrefectureSchools(prefectureId), [prefectureId]);

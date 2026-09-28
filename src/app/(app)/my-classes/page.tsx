@@ -96,7 +96,7 @@ export default function MyClassesPage() {
                       {b.students.map((s) => (
                         <TR key={s.id}>
                           <TD className="font-medium text-slate-900">
-                            <Link href={`/students/${s.id}`} className="hover:text-brand-700 hover:underline">{s.firstName} {s.lastName}</Link>
+                            <Link href={`/students/detail?id=${s.id}`} className="hover:text-brand-700 hover:underline">{s.firstName} {s.lastName}</Link>
                           </TD>
                           <TD className="font-mono text-xs text-slate-600">{s.studentNumber}</TD>
                           <TD className="text-slate-500">{s.email ?? "—"}</TD>

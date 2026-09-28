@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOf
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { searchStudents } from "@/lib/api/students";
 import { listTeachers, listEmployees } from "@/lib/api/staff";
 import { getStudentParents } from "@/lib/api/parents";
@@ -91,7 +91,7 @@ export default function AttendanceScanPage() {
   const tenantId = user?.tenantId ?? null;
   // L'enseignant ne doit jamais pouvoir scanner (ni lui-même ni les élèves) — retiré volontairement.
   // TODO : ajouter le rôle SURVEILLANT une fois créé (rôle prévu pour la surveillance/scan).
-  const canScan = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "STUDENT");
+  const canScan = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "STUDENT") || hasAnyPermission(user, ["presence:create"]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);

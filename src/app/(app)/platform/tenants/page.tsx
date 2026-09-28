@@ -100,7 +100,7 @@ function TenantsTable() {
       header: "École",
       accessor: (t) => t.schoolName,
       render: (t) => (
-        <Link href={`/platform/tenants/${t.id}`} className="font-medium text-brand-700 hover:underline">
+        <Link href={`/platform/tenants/detail?id=${t.id}`} className="font-medium text-brand-700 hover:underline">
           {t.schoolName}
         </Link>
       ),

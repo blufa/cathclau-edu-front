@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useNetworkStore } from "@/lib/offline/network-store";
@@ -29,6 +29,7 @@ import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { formatGNF } from "@/lib/format";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
@@ -72,8 +73,8 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function TeacherDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+  const searchParams = useSearchParams();
+  const id = Number(searchParams.get("id"));
 
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
@@ -207,11 +208,8 @@ export default function TeacherDetailPage() {
       + `</div>`
       + `<p class="list"><strong>Matières :</strong> ${subjects.length ? esc(subjects.map((s) => subjectLabel.get(s.subjectId) ?? `#${s.subjectId}`).join(", ")) : "—"}</p>`
       + `<table><thead><tr>${dayOrder.map((d) => `<th>${DAY_LABEL[d] ?? d}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
-      + `<script>window.onload=function(){window.print()}</script></body></html>`;
-    const w = window.open("", "_blank", "width=1100,height=800");
-    if (!w) { notifyError("Autorisez les pop-ups pour imprimer / télécharger."); return; }
-    w.document.write(html);
-    w.document.close();
+      + `</body></html>`;
+    printHtmlDocument(html);
   }
 
   return (
@@ -352,7 +350,7 @@ export default function TeacherDetailPage() {
                     <ul className="space-y-2">
                       {classes.map((c) => (
                         <li key={c.id} className="text-sm">
-                          <Link href={`/classes/${c.id}`} className="font-medium text-brand-600 hover:underline">
+                          <Link href={`/classes/detail?id=${c.id}`} className="font-medium text-brand-600 hover:underline">
                             {c.label}
                           </Link>
                           {c.levelLabel && <span className="text-gray-500"> · {c.levelLabel}</span>}
@@ -419,7 +417,7 @@ export default function TeacherDetailPage() {
                         </TD>
                         <TD>{slot.subjectId != null ? (subjectLabel.get(slot.subjectId) ?? `#${slot.subjectId}`) : (slot.label ?? "Heure creuse")}</TD>
                         <TD>
-                          <Link href={`/classes/${slot.classId}`} className="text-brand-600 hover:underline">
+                          <Link href={`/classes/detail?id=${slot.classId}`} className="text-brand-600 hover:underline">
                             {classLabel.get(slot.classId) ?? `#${slot.classId}`}
                           </Link>
                         </TD>

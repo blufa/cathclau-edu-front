@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { RequireBlogAccess } from "@/components/platform/require-blog-access";
 import { BlogPostForm } from "@/components/platform/blog-post-form";
 import { getPostAdmin, updatePost } from "@/lib/api/blog";
@@ -8,8 +8,8 @@ import { useQuery } from "@/hooks/use-query";
 import { Spinner } from "@/components/ui/spinner";
 
 export default function EditBlogPostPage() {
-  const params = useParams<{ id: string }>();
-  const postId = Number(params.id);
+  const searchParams = useSearchParams();
+  const postId = Number(searchParams.get("id"));
   const postQuery = useQuery(() => getPostAdmin(postId), [postId]);
 
   return (

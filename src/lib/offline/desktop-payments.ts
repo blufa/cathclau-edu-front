@@ -100,3 +100,31 @@ export async function countPendingOfflineEncaissements(): Promise<number> {
   );
   return rows[0]?.n ?? 0;
 }
+
+export interface PendingOfflinePaymentGroup {
+  datePaiement: string;
+  modePaiement: string;
+  total: number;
+  count: number;
+}
+
+/** Encaissements hors-ligne en attente pour UN élève, regroupés par transaction (même `date_paiement`
+ * exacte = même règlement groupé initial, voir `submit-group-payment.ts` — une part par facture, mais
+ * toutes les parts d'un même règlement partagent la même date). Sert à afficher un reçu provisoire
+ * imprimable côté desktop — `useSyncQueueStore` (Dexie) ne reflète JAMAIS la file SQLite desktop, donc
+ * sans cette fonction, aucun reçu provisoire n'était possible pour un encaissement fait sur ce poste
+ * (§retour comptable : "générer la facture et imprimer... doit être en local sans interruption"). */
+export async function getPendingOfflinePaymentsForStudent(studentId: number): Promise<PendingOfflinePaymentGroup[]> {
+  const db = await getDesktopDb();
+  const rows = await db.select<{ date_paiement: string; mode_paiement: string; total: number; count: number }[]>(
+    `SELECT date_paiement, mode_paiement, SUM(montant) AS total, COUNT(*) AS count
+     FROM encaissements_offline
+     WHERE eleve_id = $1 AND synced = 0
+     GROUP BY date_paiement, mode_paiement
+     ORDER BY date_paiement DESC`,
+    [studentId],
+  );
+  return rows.map((r) => ({
+    datePaiement: r.date_paiement, modePaiement: r.mode_paiement, total: r.total, count: r.count,
+  }));
+}

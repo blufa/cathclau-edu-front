@@ -227,11 +227,14 @@ export interface SubsidyStats {
   activeExemptionsCount: number;
   totalExemptions: number;
   partialExemptions: number;
-  familyDiscountAmount: string;
-  familyDiscountInvoiceCount: number;
-  familyDiscountInvoicePaidCount: number;
+  /** Montant réellement déduit via une exonération/avantage personnel (accordé par le comptable à
+   * l'inscription) — plus la détection automatique par fratrie, retirée du calcul. */
+  exemptionDiscountAmount: string;
+  exemptionDiscountInvoiceCount: number;
+  exemptionDiscountInvoicePaidCount: number;
   studentsFullySettledMonthlyFees: number;
-  estimatedEarlyPaymentSavings: string;
+  /** Montant réellement déduit via la remise "paiement anticipé" — remise réelle, pas une estimation. */
+  earlyPaymentDiscountApplied: string;
 }
 export interface FounderAlert {
   level: "INFO" | "WARNING" | "CRITICAL";

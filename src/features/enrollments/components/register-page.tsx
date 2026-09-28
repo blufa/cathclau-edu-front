@@ -314,7 +314,7 @@ export default function EnrollmentsPage() {
                   </TD>
                 )}
                 <TD>
-                  <Link href={`/students/${e.studentId}`} className="font-medium text-indigo-600 hover:underline">
+                  <Link href={`/students/detail?id=${e.studentId}`} className="font-medium text-indigo-600 hover:underline">
                     {studentName.get(e.studentId) ?? `#${e.studentId}`}
                   </Link>
                 </TD>
