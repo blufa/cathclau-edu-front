@@ -7,7 +7,7 @@ import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObject
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
-import { FEE_TYPE_LABEL, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
+import { FEE_TYPE_LABEL, type ExemptedPeriod, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
 import { PAYMENT_CHANNEL_LABEL, type PaymentChannel } from "@/lib/types/payment";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
 import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
@@ -241,12 +241,29 @@ export function StudentInvoicesPanel({
 
   const monthlyUngenerated = ungeneratedRecurringFees.find((f) => f.type === "MONTHLY");
 
+  // Échéances entièrement couvertes par une exonération 100% (§billing, retour comptable) : le serveur
+  // ne crée alors AUCUNE facture pour elles (voir generateMonthlyInvoices) — réévaluées à chaque appel
+  // de generateMonths (donc à chaque montage tant que le frais reste "non généré", voir l'effet
+  // ci-dessous), pour qu'une exonération accordée/révoquée en cours d'année soit reflétée sans action
+  // manuelle. Gardées par feeId pour ne jamais mélanger scolarité et cantine.
+  const [exemptedPeriodsByFeeId, setExemptedPeriodsByFeeId] = useState<Record<number, ExemptedPeriod[]>>({});
+  const exemptedPeriods = Object.values(exemptedPeriodsByFeeId).flat();
+
   async function generateMonths(fee: SchoolFee) {
     setGeneratingFeeId(fee.id);
     try {
-      const created = await generateMonthlyInvoices(tenantId, studentId, fee.id);
+      const result = await generateMonthlyInvoices(tenantId, studentId, fee.id);
+      setExemptedPeriodsByFeeId((prev) => ({ ...prev, [fee.id]: result.exemptedPeriods }));
       const label = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
-      notifySuccess(created.length > 0 ? `${created.length} tranche(s) de « ${label} » générée(s)` : `Tranches de « ${label} » déjà générées`);
+      const createdCount = result.created.length;
+      const exemptedCount = result.exemptedPeriods.length;
+      notifySuccess(
+        createdCount > 0
+          ? `${createdCount} tranche(s) de « ${label} » générée(s)${exemptedCount > 0 ? ` (+ ${exemptedCount} exonérée(s) 100%)` : ""}`
+          : exemptedCount > 0
+            ? `« ${label} » entièrement exonérée (${exemptedCount} échéance(s))`
+            : `Tranches de « ${label} » déjà générées`,
+      );
       q.refetch();
     } catch (err) { notifyGenerationError(err); } finally { setGeneratingFeeId(null); }
   }
@@ -322,9 +339,10 @@ export function StudentInvoicesPanel({
         </p>
       ) : (
         <div className="space-y-5">
-          {payable.length > 0 && (
+          {(payable.length > 0 || exemptedPeriods.length > 0) && (
             <InvoiceCollect
               invoices={payable}
+              exemptedPeriods={exemptedPeriods}
               labelFor={labelFor}
               coveredMonthsByInvoiceId={coveredMonthsByInvoiceId}
               monthlyFeeId={monthlyFee?.id ?? null}
@@ -421,7 +439,7 @@ export function StudentInvoicesPanel({
             );
           })}
 
-          {payable.length === 0 && ungeneratedRecurringFees.length === 0 && (
+          {payable.length === 0 && exemptedPeriods.length === 0 && ungeneratedRecurringFees.length === 0 && (
             <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
               Toutes les factures sont soldées.
             </p>
@@ -510,9 +528,13 @@ export function StudentInvoicesPanel({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
+  invoices, exemptedPeriods, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
+  /** Échéances exonérées à 100% (§billing) : jamais cochables/encaissables, affichées dans la même
+   * liste que les vraies factures pour que le comptable ne les prenne jamais pour un simple oubli de
+   * génération. */
+  exemptedPeriods: ExemptedPeriod[];
   labelFor: (inv: Invoice) => string;
   /** Mois "YYYY-MM" couverts par CETTE facture précisément (id de facture → mois) — un seul mois pour
    * une facture éclatée « paiement par mois », tous les mois de la tranche pour une facture groupée. */
@@ -780,6 +802,17 @@ function InvoiceCollect({
             </div>
           );
         })}
+        {exemptedPeriods.map((p) => (
+          <div key={`exempted-${p.installmentId}-${p.periodLabel}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 opacity-70">
+            <span className="text-sm text-slate-500 line-through decoration-slate-300">{p.periodLabel}</span>
+            <span
+              className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700"
+              title={p.discountReason ?? undefined}
+            >
+              Exonéré 100%
+            </span>
+          </div>
+        ))}
       </div>
 
       {wholeYear && discountQuery.loading && (

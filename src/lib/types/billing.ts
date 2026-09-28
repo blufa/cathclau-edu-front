@@ -76,6 +76,22 @@ export interface InstallmentInput {
   months?: string[];
 }
 
+/** Échéance non facturée parce qu'entièrement couverte par une exonération/avantage personnel
+ * (§billing) — aucune Invoice n'existe pour elle côté serveur ; à afficher comme une ligne
+ * "Exonéré 100%" au même endroit que les vraies factures, jamais cochable/encaissable. */
+export interface ExemptedPeriod {
+  installmentId: number;
+  periodLabel: string;
+  discountReason: string | null;
+}
+
+/** Réponse de {@link generateMonthlyInvoices} : les factures réellement créées, et les échéances
+ * couvertes à 100% par une exonération pour lesquelles aucune facture n'a été générée. */
+export interface GenerateMonthlyResult {
+  created: Invoice[];
+  exemptedPeriods: ExemptedPeriod[];
+}
+
 /** CANCELLED : facture annulée sans effet financier (ex. mensualités d'une ancienne classe après un
  * transfert), conservée pour l'historique mais plus jamais comptée dans le facturé/impayé. */
 export type InvoiceStatus = "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
