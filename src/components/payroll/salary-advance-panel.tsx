@@ -21,6 +21,7 @@ import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { openPdfInApp } from "@/lib/open-pdf";
 import { formatGNF } from "@/lib/format";
 
 const STATUS_TONE: Record<SalaryAdvance["status"], "gray" | "indigo" | "green"> = {
@@ -106,7 +107,7 @@ export function SalaryAdvancePanel() {
   }
 
   async function downloadVoucher(a: SalaryAdvance) {
-    try { window.open(await getSalaryAdvanceVoucherPdfObjectUrl(a.id), "_blank"); }
+    try { openPdfInApp(await getSalaryAdvanceVoucherPdfObjectUrl(a.id), "Bon d'avance"); }
     catch (err) { notifyError(err); }
   }
 

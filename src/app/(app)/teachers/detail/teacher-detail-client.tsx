@@ -30,6 +30,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
+import { openPdfInApp } from "@/lib/open-pdf";
 import { formatGNF } from "@/lib/format";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
@@ -143,7 +144,7 @@ export default function TeacherDetailPage() {
   async function downloadLatenessReport() {
     setLatenessPdfLoading(true);
     try {
-      window.open(await getTeacherLatenessReportPdfObjectUrl(id, latenessFrom, latenessTo), "_blank");
+      openPdfInApp(await getTeacherLatenessReportPdfObjectUrl(id, latenessFrom, latenessTo), "Rapport des retards");
     } catch (err) {
       notifyError(err);
     } finally {
@@ -469,7 +470,7 @@ export default function TeacherDetailPage() {
                               variant="ghost"
                               onClick={async () => {
                                 try {
-                                  window.open(await getPayslipPdfObjectUrl(p.id), "_blank");
+                                  openPdfInApp(await getPayslipPdfObjectUrl(p.id), "Fiche de paie");
                                 } catch (err) {
                                   notifyError(err);
                                 }

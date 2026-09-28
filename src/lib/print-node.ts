@@ -1,92 +1,57 @@
 /**
- * Imprime un nœud DOM isolément (ex. un badge/carte affiché dans une modale) via une iframe cachée,
- * plutôt que la technique `visibility:hidden` sur tout le document.
+ * Impression isolée (badge/carte déjà rendu, ou document HTML généré en chaîne — reçus, relevés,
+ * convocations…) en injectant le contenu dans le document PRINCIPAL, masqué (`display:none`) sauf
+ * pendant l'impression (`@media print`), puis `window.print()` sur la fenêtre principale elle-même.
  *
- * Pourquoi : le badge est rendu à l'intérieur d'une modale (portail Mantine avec sa propre pile de
- * positionnement/z-index). Basculer `visibility` sur `*` puis forcer `position:fixed` sur le badge
- * dépend du « containing block » de ses ancêtres — imprévisible selon la structure de la modale et le
- * navigateur, ce qui pouvait produire une page d'impression vide. Cloner le nœud dans une iframe
- * indépendante évite complètement ce problème.
- */
-
-/**
- * Repère les feuilles de style déjà chargées (Tailwind compilé, Mantine, branding) pour les
- * reproduire dans l'iframe — en deux groupes :
- * - `links` : URL des feuilles externes (`<link rel="stylesheet">`), à recharger telles quelles via de
- *   vrais `<link>` dans l'iframe. **Ne pas** les sérialiser via `cssRules`/`cssText` : sur cette
- *   application, la lecture de `sheet.cssRules` échoue silencieusement (ou ne renvoie qu'une poignée de
- *   règles) pour une partie des feuilles Tailwind compilées selon le navigateur/la façon dont elles ont
- *   été chargées — ce qui produisait un badge quasi sans style à l'impression (constaté : `<style>`
- *   final ne contenant presque aucune règle). Laisser le navigateur RE-TÉLÉCHARGER et parser lui-même
- *   le fichier CSS original est fiable dans tous les cas, contrairement à sa reconstruction manuelle.
- * - `inlineCss` : texte des feuilles SANS URL (`<style>` injectés directement, ex. CSS-in-JS), pour
- *   lesquelles il n'y a pas de fichier à relier — celles-ci restent sérialisées via `cssText`.
- */
-function collectStylesheets(): { links: string[]; inlineCss: string } {
-  const links: string[] = [];
-  const parts: string[] = [];
-  for (const sheet of Array.from(document.styleSheets)) {
-    if (sheet.href) {
-      links.push(sheet.href);
-      continue;
-    }
-    try {
-      const rules = sheet.cssRules;
-      if (!rules) continue;
-      for (const rule of Array.from(rules)) parts.push(rule.cssText);
-    } catch {
-      // Feuille cross-origin sans URL exploitable : lecture de cssRules bloquée, on l'ignore.
-    }
-  }
-  return { links: [...new Set(links)], inlineCss: parts.join("\n") };
-}
-
-/**
- * Imprime un document HTML autonome (déjà généré en chaîne, styles inline compris — reçus, relevés,
- * convocations…) via la même technique d'iframe cachée que {@link printNode}, plutôt que
- * `window.open("", "_blank", ...)` + `document.write` + `.print()`.
+ * Pourquoi ni iframe cachée, ni `window.open` :
+ * - `window.open("", "_blank", ...)` : dans le webview desktop (Tauri), ça ne crée pas une vraie
+ *   fenêtre séparée — ça remplace TOUTE la fenêtre de l'appli par le contenu à imprimer, sans bouton
+ *   retour (le webview Tauri n'a pas de chrome de navigateur).
+ * - Iframe cachée + `iframe.contentWindow.print()` (technique utilisée ici auparavant) : fonctionne en
+ *   navigateur web mais ne déclenche RIEN dans le webview desktop (Tauri) — `iframe.contentWindow.print()`
+ *   est un no-op silencieux dans son moteur, contrairement à `window.print()` sur la fenêtre principale,
+ *   qui lui fonctionne (bug connu : https://github.com/tauri-apps/tauri/issues/13451).
  *
- * Pourquoi : dans le webview desktop (Tauri), `window.open` ne crée pas une vraie fenêtre séparée avec
- * ses propres contrôles — il finissait par remplacer TOUTE la fenêtre de l'appli par le contenu à
- * imprimer, sans bouton retour ni aucun moyen de revenir à l'écran précédent (le webview Tauri n'a pas
- * de chrome de navigateur). Une iframe cachée reste dans la page courante : rien ne prend l'écran, et
- * `iframe.remove()` nettoie tout juste après l'impression — fonctionne identiquement sur web et desktop.
+ * D'où cette troisième approche, qui marche identiquement sur web et desktop : le contenu à imprimer
+ * est un vrai enfant du document principal (donc `window.print()` dessus fonctionne partout), juste
+ * masqué en temps normal et le seul élément visible pendant l'impression.
  */
-export function printHtmlDocument(html: string) {
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.top = "0";
-  iframe.style.left = "-10000px";
-  iframe.style.width = "800px";
-  iframe.style.height = "600px";
-  iframe.style.border = "0";
-  iframe.setAttribute("aria-hidden", "true");
-  document.body.appendChild(iframe);
+function printInMainDocument(innerHtml: string, extraPrintCss: string) {
+  const root = document.createElement("div");
+  root.id = "app-print-root";
+  root.innerHTML = innerHtml;
+  document.body.appendChild(root);
 
-  const doc = iframe.contentDocument;
-  if (!doc) {
-    iframe.remove();
-    return;
-  }
-  doc.open();
-  doc.write(html);
-  doc.close();
+  const style = document.createElement("style");
+  style.textContent = `
+    @media print {
+      body > :not(#app-print-root) { display: none !important; }
+      #app-print-root { display: block !important; }
+      ${extraPrintCss}
+    }
+  `;
+  document.head.appendChild(style);
 
   let settled = false;
-  function triggerPrint() {
+  function cleanup() {
     if (settled) return;
     settled = true;
-    const win = iframe.contentWindow;
-    if (win) {
-      win.focus();
-      win.print();
-    }
-    setTimeout(() => iframe.remove(), 500);
+    root.remove();
+    style.remove();
+    window.removeEventListener("afterprint", cleanup);
   }
 
-  // Filet de sécurité identique à `printNode` : attend les images éventuelles (logo, photo…) avant
-  // d'imprimer, avec un timeout de repli si l'une d'elles ne charge jamais.
-  const images = Array.from(doc.images);
+  function triggerPrint() {
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+    // Filet de sécurité : certains OS/imprimantes virtuelles ne déclenchent jamais `afterprint`
+    // (ex. annulation de la boîte de dialogue système) — sans lui, le nœud resterait dans le DOM.
+    setTimeout(cleanup, 10000);
+  }
+
+  // Attend le chargement des images éventuelles (photo, logo, QR) avant d'imprimer — sinon la première
+  // impression peut sortir incomplète ; filet de sécurité si l'une d'elles ne charge jamais.
+  const images = Array.from(root.querySelectorAll("img"));
   if (images.length === 0) {
     triggerPrint();
     return;
@@ -108,78 +73,27 @@ export function printHtmlDocument(html: string) {
   setTimeout(triggerPrint, 1500);
 }
 
+/**
+ * Imprime un document HTML autonome (déjà généré en chaîne, styles inline compris — reçus, relevés,
+ * convocations…). Les styles embarqués dans le document (`<style>`) sont extraits et posés dans
+ * `@media print` (ne s'appliquent donc jamais au reste de l'appli), le `<body>` devient le contenu
+ * visible à l'impression.
+ */
+export function printHtmlDocument(html: string) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const extraCss = Array.from(doc.querySelectorAll("style")).map((s) => s.textContent ?? "").join("\n");
+  printInMainDocument(doc.body?.innerHTML ?? "", extraCss);
+}
+
+/**
+ * Imprime un nœud DOM isolément (ex. un badge/carte affiché dans une modale) — pas besoin de recharger
+ * de feuilles de style : le clone reste dans le document principal, où elles sont déjà chargées.
+ */
 export function printNode(node: HTMLElement) {
-  const iframe = document.createElement("iframe");
-  // Taille réelle (non nulle) exigée pour que la mise en page interne (largeurs, flex…) se calcule
-  // correctement — une iframe 0×0 rend son contenu à une largeur de 0 et imprime une page vide. On la
-  // sort simplement de l'écran visible plutôt que de la réduire à rien.
-  iframe.style.position = "fixed";
-  iframe.style.top = "0";
-  iframe.style.left = "-10000px";
-  iframe.style.width = "800px";
-  iframe.style.height = "600px";
-  iframe.style.border = "0";
-  iframe.setAttribute("aria-hidden", "true");
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument;
-  if (!doc) {
-    iframe.remove();
-    return;
-  }
-
-  const { links, inlineCss } = collectStylesheets();
-  const linkTags = links.map((href) => `<link rel="stylesheet" href="${href}">`).join("");
-
   // Une seule page pour recto + verso (imprimés côte à côte par le composant badge lui-même via
   // `print:flex-row`) : le badge est destiné à être imprimé sur papier bristol puis plastifié/découpé à
   // la main, pas sur une imprimante à cartes PVC dédiée avec pagination automatique. `size: auto` laisse
-  // le format papier réel choisi dans le dialogue d'impression (A4, Letter…), sans forcer une deuxième
-  // page comme le faisait l'ancien `print:break-after-page`.
-  doc.open();
-  doc.write(
-    `<!DOCTYPE html><html><head>${linkTags}<style>${inlineCss}` +
-      `@page{size:auto;margin:8mm;}</style></head>` +
-      `<body style="margin:0;padding:0;display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:6mm;">${node.outerHTML}</body></html>`,
-  );
-  doc.close();
-
-  let settled = false;
-  function triggerPrint() {
-    if (settled) return;
-    settled = true;
-    const win = iframe.contentWindow;
-    if (win) {
-      win.focus();
-      win.print();
-    }
-    setTimeout(() => iframe.remove(), 500);
-  }
-
-  // Attend le chargement des feuilles de style ET des images clonées (photo, logo, QR) avant
-  // d'imprimer — sans quoi le badge peut sortir sans styles (feuilles pas encore chargées) ou
-  // incomplet (images pas encore chargées) ; filet de sécurité si l'un d'eux ne charge jamais.
-  const styleLinks = Array.from(doc.querySelectorAll("link[rel=stylesheet]"));
-  const images = Array.from(doc.images);
-  const pending = [...styleLinks, ...images];
-  if (pending.length === 0) {
-    triggerPrint();
-    return;
-  }
-  let remaining = pending.length;
-  pending.forEach((el) => {
-    const isLoadedImage = el instanceof HTMLImageElement && el.complete;
-    if (isLoadedImage) {
-      remaining -= 1;
-    } else {
-      const onSettle = () => {
-        remaining -= 1;
-        if (remaining <= 0) triggerPrint();
-      };
-      el.addEventListener("load", onSettle, { once: true });
-      el.addEventListener("error", onSettle, { once: true });
-    }
-  });
-  if (remaining <= 0) triggerPrint();
-  setTimeout(triggerPrint, 1500);
+  // le format papier réel choisi dans le dialogue d'impression (A4, Letter…).
+  const wrapper = `<div style="display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:6mm;">${node.outerHTML}</div>`;
+  printInMainDocument(wrapper, "@page { size: auto; margin: 8mm; }");
 }

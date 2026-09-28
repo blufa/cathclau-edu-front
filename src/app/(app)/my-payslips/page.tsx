@@ -16,6 +16,7 @@ import { Reveal } from "@/components/public/reveal";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatDate, formatGNF } from "@/lib/format";
 import { notifyError } from "@/lib/feedback";
+import { openPdfInApp } from "@/lib/open-pdf";
 
 const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = {
   DRAFT: "gray", VALIDATED: "indigo", PAID: "green",
@@ -23,7 +24,7 @@ const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = {
 
 async function openPdf(id: number) {
   try {
-    window.open(await getMyPayslipPdfObjectUrl(id), "_blank");
+    openPdfInApp(await getMyPayslipPdfObjectUrl(id), "Fiche de paie");
   } catch (e) {
     notifyError(e);
   }

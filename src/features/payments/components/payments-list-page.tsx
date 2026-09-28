@@ -20,6 +20,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { openPdfInApp } from "@/lib/open-pdf";
 import { formatGNF } from "@/lib/format";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 import {
@@ -97,7 +98,7 @@ export default function PaymentsListPage() {
   async function receipt(p: Payment) {
     try {
       const res = await downloadReceiptMutation.mutateAsync(p.id);
-      if (res.url) window.open(res.url, "_blank");
+      if (res.url) openPdfInApp(res.url, "Reçu");
       else notifySuccess("Reçu en génération, réessayez dans un instant.");
     } catch (err) {
       notifyError(err);

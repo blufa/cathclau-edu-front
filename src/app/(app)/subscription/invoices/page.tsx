@@ -12,6 +12,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { InvoiceStatusBadge } from "@/components/platform/status-badge";
 import { formatDate, formatGNF } from "@/lib/format";
 import { notifyError } from "@/lib/feedback";
+import { openPdfInApp } from "@/lib/open-pdf";
 import { BILLING_PERIOD_LABEL, INVOICE_STATUS_LABEL } from "@/lib/platform-labels";
 import { INVOICE_STATUSES, type InvoiceStatus, type SubscriptionInvoice } from "@/lib/types/platform";
 
@@ -27,7 +28,7 @@ export default function SubscriptionInvoicesPage() {
   async function openPdf(inv: SubscriptionInvoice) {
     try {
       const { pdfUrl } = await getInvoicePdfUrl(inv.id);
-      if (pdfUrl) window.open(pdfUrl, "_blank", "noopener");
+      if (pdfUrl) openPdfInApp(pdfUrl, `Facture ${inv.reference}`);
       else notifyError(new Error("PDF en cours de génération"), "PDF en cours de génération, réessayez.");
     } catch (err) {
       notifyError(err, "PDF indisponible (génération en cours).");
