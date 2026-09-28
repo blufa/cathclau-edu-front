@@ -7,11 +7,15 @@ import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObject
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
-import { FEE_TYPE_LABEL, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
-import { type PaymentChannel } from "@/lib/types/payment";
+import { FEE_TYPE_LABEL, type ExemptedPeriod, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
+import { PAYMENT_CHANNEL_LABEL, type PaymentChannel } from "@/lib/types/payment";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
 import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
 import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import {
+  getPendingOfflinePaymentsForStudent, type PendingOfflinePaymentGroup,
+} from "@/lib/offline/desktop-payments";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +25,7 @@ import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 
@@ -33,6 +38,18 @@ const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
 ];
 
 const remainingOf = (inv: Invoice) => Number(inv.remainingBalance ?? inv.totalAmount);
+
+/** Génération de facture (tranches, frais annexe, transport) : jamais mise en file hors-ligne
+ * (montants/remises calculés côté serveur, imprévisibles côté client de façon fiable) — juste un
+ * message clair au lieu d'une erreur générique quand la cause est une coupure réseau, pour que le
+ * comptable sache qu'il faut réessayer une fois reconnecté plutôt que de penser à une vraie panne. */
+function notifyGenerationError(err: unknown) {
+  if (isNetworkError(err)) {
+    notifyError(err, "Hors ligne : impossible de générer cette facture maintenant — réessayez une fois reconnecté.");
+  } else {
+    notifyError(err);
+  }
+}
 
 /** Ordre d'affichage naturel du guichet : inscription/réinscription d'abord, puis la scolarité
  * (tranches, triées chronologiquement), puis les frais annexes (transport, cantine, examen…). */
@@ -64,8 +81,19 @@ export function StudentInvoicesPanel({
   const receipts = (payments.data ?? []).filter((p) => p.status === "SUCCEEDED");
   const monthlyFee = (fees.data ?? []).find((f) => f.type === "MONTHLY");
   // Encaissements guichet enregistrés hors-ligne pour cet élève, pas encore synchronisés (§payments —
-  // mode hors-ligne) : pas de vrai reçu serveur tant qu'ils n'ont pas atteint le backend.
+  // mode hors-ligne) : pas de vrai reçu serveur tant qu'ils n'ont pas atteint le backend. Web
+  // uniquement (file Dexie) — voir `desktopPendingPayments` juste en dessous pour l'équivalent desktop
+  // (SQLite), `useSyncQueueStore` ne reflétant jamais cette file-là.
   const queuedPayments = useSyncQueueStore((s) => s.items).filter((i) => i.studentIds.includes(studentId));
+
+  const [desktopPendingPayments, setDesktopPendingPayments] = useState<PendingOfflinePaymentGroup[]>([]);
+  useEffect(() => {
+    if (!isDesktop()) return;
+    let active = true;
+    getPendingOfflinePaymentsForStudent(studentId).then((groups) => { if (active) setDesktopPendingPayments(groups); }).catch(() => {});
+    return () => { active = false; };
+    // Re-vérifié après chaque rafraîchissement des factures (après un encaissement, une synchro...).
+  }, [studentId, q.data]);
 
   // Frais réglables en tranches (§billing) : la scolarité (MONTHLY) et, comme elle, la cantine
   // (CANTEEN) — le transport (TRANSPORT) reste géré séparément via son propre abonnement par ligne.
@@ -195,7 +223,7 @@ export function StudentInvoicesPanel({
       setAddingFee(false);
       setSelectedFeeId("");
       q.refetch();
-    } catch (err) { notifyError(err); } finally { setCreatingInvoice(false); }
+    } catch (err) { notifyGenerationError(err); } finally { setCreatingInvoice(false); }
   }
 
   async function subscribeTransport() {
@@ -208,19 +236,36 @@ export function StudentInvoicesPanel({
       setRouteId(""); setStopId("");
       subscriptionsQuery.refetch();
       q.refetch();
-    } catch (err) { notifyError(err); } finally { setSubscribingTransport(false); }
+    } catch (err) { notifyGenerationError(err); } finally { setSubscribingTransport(false); }
   }
 
   const monthlyUngenerated = ungeneratedRecurringFees.find((f) => f.type === "MONTHLY");
 
+  // Échéances entièrement couvertes par une exonération 100% (§billing, retour comptable) : le serveur
+  // ne crée alors AUCUNE facture pour elles (voir generateMonthlyInvoices) — réévaluées à chaque appel
+  // de generateMonths (donc à chaque montage tant que le frais reste "non généré", voir l'effet
+  // ci-dessous), pour qu'une exonération accordée/révoquée en cours d'année soit reflétée sans action
+  // manuelle. Gardées par feeId pour ne jamais mélanger scolarité et cantine.
+  const [exemptedPeriodsByFeeId, setExemptedPeriodsByFeeId] = useState<Record<number, ExemptedPeriod[]>>({});
+  const exemptedPeriods = Object.values(exemptedPeriodsByFeeId).flat();
+
   async function generateMonths(fee: SchoolFee) {
     setGeneratingFeeId(fee.id);
     try {
-      const created = await generateMonthlyInvoices(tenantId, studentId, fee.id);
+      const result = await generateMonthlyInvoices(tenantId, studentId, fee.id);
+      setExemptedPeriodsByFeeId((prev) => ({ ...prev, [fee.id]: result.exemptedPeriods }));
       const label = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
-      notifySuccess(created.length > 0 ? `${created.length} tranche(s) de « ${label} » générée(s)` : `Tranches de « ${label} » déjà générées`);
+      const createdCount = result.created.length;
+      const exemptedCount = result.exemptedPeriods.length;
+      notifySuccess(
+        createdCount > 0
+          ? `${createdCount} tranche(s) de « ${label} » générée(s)${exemptedCount > 0 ? ` (+ ${exemptedCount} exonérée(s) 100%)` : ""}`
+          : exemptedCount > 0
+            ? `« ${label} » entièrement exonérée (${exemptedCount} échéance(s))`
+            : `Tranches de « ${label} » déjà générées`,
+      );
       q.refetch();
-    } catch (err) { notifyError(err); } finally { setGeneratingFeeId(null); }
+    } catch (err) { notifyGenerationError(err); } finally { setGeneratingFeeId(null); }
   }
 
   // Auto-génère les tranches de mensualité dès l'affichage (utile juste après une inscription) : la
@@ -250,9 +295,7 @@ export function StudentInvoicesPanel({
    * bloc minimal ouvert dans une fenêtre dédiée, remis au parent séance tenante. */
   function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
     const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
-    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+    printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
       <style>body{font-family:sans-serif;padding:24px;color:#111}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
@@ -263,9 +306,22 @@ export function StudentInvoicesPanel({
         <p>Détail : ${entry.input.coverageLabel}</p>
         <p>Montant : ${formatGNF(total)}</p>
       </body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
+  }
+
+  /** Équivalent desktop de {@link printProvisionalReceipt} — même principe (bloc minimal imprimable,
+   * remis au parent tout de suite), lisant la file SQLite locale au lieu de la file Dexie web. */
+  function printProvisionalReceiptDesktop(group: PendingOfflinePaymentGroup) {
+    const channelLabel = PAYMENT_CHANNEL_LABEL[group.modePaiement as PaymentChannel] ?? group.modePaiement;
+    printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
+      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
+      <body>
+        <h1>Reçu PROVISOIRE</h1>
+        <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
+        <p>Date : ${new Date(group.datePaiement).toLocaleString("fr-FR")}</p>
+        <p>Mode : ${channelLabel}</p>
+        <p>Montant : ${formatGNF(group.total)}</p>
+      </body></html>`);
   }
 
   return (
@@ -283,9 +339,10 @@ export function StudentInvoicesPanel({
         </p>
       ) : (
         <div className="space-y-5">
-          {payable.length > 0 && (
+          {(payable.length > 0 || exemptedPeriods.length > 0) && (
             <InvoiceCollect
               invoices={payable}
+              exemptedPeriods={exemptedPeriods}
               labelFor={labelFor}
               coveredMonthsByInvoiceId={coveredMonthsByInvoiceId}
               monthlyFeeId={monthlyFee?.id ?? null}
@@ -382,7 +439,7 @@ export function StudentInvoicesPanel({
             );
           })}
 
-          {payable.length === 0 && ungeneratedRecurringFees.length === 0 && (
+          {payable.length === 0 && exemptedPeriods.length === 0 && ungeneratedRecurringFees.length === 0 && (
             <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
               Toutes les factures sont soldées.
             </p>
@@ -435,6 +492,26 @@ export function StudentInvoicesPanel({
               ))}
             </div>
           )}
+
+          {desktopPendingPayments.length > 0 && (
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <p className="text-xs font-medium text-warning-700">
+                Reçus provisoires (hors-ligne — en attente de synchronisation)
+              </p>
+              {desktopPendingPayments.map((group) => (
+                <div key={`${group.datePaiement}:${group.modePaiement}`} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-600">
+                    {new Date(group.datePaiement).toLocaleString("fr-FR")} · {formatGNF(group.total)}
+                  </span>
+                  <button type="button"
+                    onClick={() => printProvisionalReceiptDesktop(group)}
+                    className="inline-flex items-center gap-1 text-xs text-warning-700 hover:underline">
+                    <ReceiptIcon className="h-4 w-4" /> Reçu provisoire
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -451,9 +528,13 @@ export function StudentInvoicesPanel({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
+  invoices, exemptedPeriods, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
+  /** Échéances exonérées à 100% (§billing) : jamais cochables/encaissables, affichées dans la même
+   * liste que les vraies factures pour que le comptable ne les prenne jamais pour un simple oubli de
+   * génération. */
+  exemptedPeriods: ExemptedPeriod[];
   labelFor: (inv: Invoice) => string;
   /** Mois "YYYY-MM" couverts par CETTE facture précisément (id de facture → mois) — un seul mois pour
    * une facture éclatée « paiement par mois », tous les mois de la tranche pour une facture groupée. */
@@ -721,6 +802,17 @@ function InvoiceCollect({
             </div>
           );
         })}
+        {exemptedPeriods.map((p) => (
+          <div key={`exempted-${p.installmentId}-${p.periodLabel}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 opacity-70">
+            <span className="text-sm text-slate-500 line-through decoration-slate-300">{p.periodLabel}</span>
+            <span
+              className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700"
+              title={p.discountReason ?? undefined}
+            >
+              Exonéré 100%
+            </span>
+          </div>
+        ))}
       </div>
 
       {wholeYear && discountQuery.loading && (

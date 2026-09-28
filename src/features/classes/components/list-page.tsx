@@ -125,7 +125,7 @@ export default function ClassesListPage() {
       header: "Classe",
       accessor: (c) => c.label,
       render: (c) => (
-        <Link href={`/classes/${c.id}`} className="font-medium text-brand-700 hover:underline">
+        <Link href={`/classes/detail?id=${c.id}`} className="font-medium text-brand-700 hover:underline">
           {c.label}
         </Link>
       ),

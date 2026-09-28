@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Send, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listUsers } from "@/lib/api/iam";
@@ -54,7 +54,7 @@ const DELIVERY_TONE: Record<DeliveryStatus, "amber" | "green" | "red"> = { PENDI
 export default function CommunicationsPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canSend = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER");
+  const canSend = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER") || hasAnyPermission(user, ["communication:send"]);
 
   const [channel, setChannel] = useState<CommunicationChannel | "">("");
   const q = useQuery(() => (tenantId ? listCommunicationsByTenant(tenantId) : Promise.resolve([])), [tenantId]);

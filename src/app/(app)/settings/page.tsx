@@ -5,7 +5,7 @@ import { Building2, Hash, Palette, Wallet } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { useAuth } from "@/providers/auth-provider";
 import { useBranding } from "@/providers/branding-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { updateTenantBranding } from "@/lib/api/branding";
 import { getSchoolProfile, updateSchoolProfile, type SchoolProfile } from "@/lib/api/platform";
 import { applyBrandColor } from "@/lib/branding/palette";
@@ -38,8 +38,8 @@ function previewMatricule(format: string | null, digits: number | null): string 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { branding, refresh } = useBranding();
-  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
-  const canEditInfo = hasRole(user, "SCHOOL_ADMIN");
+  const canEdit = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["ecole:profil"]);
+  const canEditInfo = hasRole(user, "SCHOOL_ADMIN") || hasAnyPermission(user, ["ecole:profil"]);
   const tenantId = user?.tenantId ?? null;
 
   if (!tenantId) {

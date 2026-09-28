@@ -73,7 +73,7 @@ function DpeDashboardContent() {
                     {(data?.schools ?? []).map((s) => (
                       <TR key={s.tenantId}>
                         <TD className="font-medium">
-                          <Link href={`/dpe/schools/${s.tenantId}${prefectureId ? `?prefectureId=${prefectureId}` : ""}`} className="text-brand-600 hover:underline">
+                          <Link href={`/dpe/schools/detail?id=${s.tenantId}${prefectureId ? `&prefectureId=${prefectureId}` : ""}`} className="text-brand-600 hover:underline">
                             {s.schoolName}
                           </Link>
                         </TD>

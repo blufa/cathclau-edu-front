@@ -566,14 +566,14 @@ export default function FounderDashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Exonérations actives" value={founder?.subsidy.activeExemptionsCount ?? 0} icon={Users} accent="indigo"
+            <StatCard title="Exonérations actives" value={(founder?.subsidy.totalExemptions ?? 0) + (founder?.subsidy.partialExemptions ?? 0)} icon={Users} accent="indigo"
               hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s), ${founder?.subsidy.partialExemptions ?? 0} partielle(s)`} />
-            <StatCard title="Remises fratrie appliquées" value={formatGNF(founder?.subsidy.familyDiscountAmount)} icon={Wallet} accent="teal"
-              hint={`${founder?.subsidy.familyDiscountInvoiceCount ?? 0} facture(s), dont ${founder?.subsidy.familyDiscountInvoicePaidCount ?? 0} encaissée(s)`} />
+            <StatCard title="Remises exonérations appliquées" value={formatGNF(founder?.subsidy.exemptionDiscountAmount)} icon={Wallet} accent="teal"
+              hint={`${founder?.subsidy.exemptionDiscountInvoiceCount ?? 0} facture(s), dont ${founder?.subsidy.exemptionDiscountInvoicePaidCount ?? 0} encaissée(s)`} />
             <StatCard title="Élèves à jour sur l'année" value={founder?.subsidy.studentsFullySettledMonthlyFees ?? 0} icon={Award} accent="emerald"
               hint="Toutes les mensualités payées" />
-            <StatCard title="Économie estimée (paiement anticipé)" value={formatGNF(founder?.subsidy.estimatedEarlyPaymentSavings)} icon={Banknote} accent="rose"
-              hint="Estimation à 5 % — aucune remise réelle appliquée aujourd'hui" />
+            <StatCard title="Remise paiement anticipé appliquée" value={formatGNF(founder?.subsidy.earlyPaymentDiscountApplied)} icon={Banknote} accent="rose"
+              hint="Montant réellement déduit — paiement de toute la scolarité en un coup" />
           </div>
         )}
       </section>

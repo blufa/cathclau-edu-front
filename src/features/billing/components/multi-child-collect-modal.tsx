@@ -20,6 +20,7 @@ import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { printHtmlDocument } from "@/lib/print-node";
 import { FileText } from "lucide-react";
 
 const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
@@ -183,9 +184,7 @@ export function MultiChildCollectModal({
    * CollectFeeModal.printProvisionalReceipt (même logique, dupliquée : deux écrans indépendants). */
   function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
     const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
-    const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=560");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>Reçu provisoire</title>
+    printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
       <style>body{font-family:sans-serif;padding:24px;color:#111}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
@@ -196,9 +195,6 @@ export function MultiChildCollectModal({
         <p>Détail : ${entry.input.coverageLabel}</p>
         <p>Montant : ${formatGNF(total)}</p>
       </body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
   }
 
   async function collect() {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClassStudents, getEnrollmentCount, listLevels, listRooms, setClassRepresentative } from "@/lib/api/academics";
@@ -18,8 +18,8 @@ import { useClassQuery } from "../hooks/use-classes";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function ClassDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = Number(params.id);
+  const searchParams = useSearchParams();
+  const id = Number(searchParams.get("id"));
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["classe:manage"]);
@@ -194,7 +194,7 @@ export default function ClassDetailPage() {
                   <TR key={s.id}>
                     <TD className="font-mono text-xs">{s.studentNumber}</TD>
                     <TD>
-                      <Link href={`/students/${s.id}`} className="font-medium text-brand-600 hover:underline">
+                      <Link href={`/students/detail?id=${s.id}`} className="font-medium text-brand-600 hover:underline">
                         {s.firstName} {s.lastName}
                       </Link>
                     </TD>

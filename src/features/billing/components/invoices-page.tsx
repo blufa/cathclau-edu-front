@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
@@ -51,7 +51,7 @@ function genRef(prefix: string): string {
 export default function InvoicesPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["facture:create", "paiement:create"]);
 
   // Arrivée depuis la fiche élève (onglet Scolarité → « Factures de l'élève ») : pré-filtre sur cet
   // élève au lieu d'atterrir sur la liste complète de tous les élèves — sans ça, `?student=` était

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { PlayCircle, ArrowRight, Undo2, AlertTriangle, CheckCircle2, History, Award } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listPeriods, listSubjects } from "@/lib/api/academics";
@@ -41,7 +41,7 @@ const STAGE_ORDER: WorkflowStage[] = [
 export default function ValidationPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canAct = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER");
+  const canAct = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER") || hasAnyPermission(user, ["bulletin:generate", "bulletin:publish"]);
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Coins, Plus } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import {
   createFund,
   updateFund,
@@ -30,8 +30,8 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
 export default function PettyCashPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY");
-  const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT");
+  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["petite_caisse:enregistrer"]);
+  const canManage = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["petite_caisse:manage"]);
 
   const fundsQuery = useQuery(listFunds, []);
   const funds = useMemo(() => fundsQuery.data ?? [], [fundsQuery.data]);

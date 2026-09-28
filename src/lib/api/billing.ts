@@ -12,6 +12,7 @@ import type {
   FeeType,
   GenerateAllFeesInput,
   GeneratedFeeInvoices,
+  GenerateMonthlyResult,
   Installment,
   InstallmentInput,
   Invoice,
@@ -148,9 +149,10 @@ export function generateAllForEnrollment(input: GenerateAllFeesInput): Promise<G
   return api.post<GeneratedFeeInvoices[]>("/billing/enrollment-billing/generate-all", input);
 }
 
-/** Génère une facture par mois (échéance) d'un frais MENSUALITE pour un élève. */
-export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<Invoice[]> {
-  return api.post<Invoice[]>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
+/** Génère une facture par mois (échéance) d'un frais MENSUALITE pour un élève — les échéances
+ * couvertes à 100% par une exonération n'ont pas de facture créée, voir `exemptedPeriods`. */
+export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<GenerateMonthlyResult> {
+  return api.post<GenerateMonthlyResult>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
 }
 
 export function applyInvoicePayment(id: number, amount: number): Promise<Invoice> {

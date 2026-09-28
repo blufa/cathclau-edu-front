@@ -248,3 +248,25 @@ Wi-Fi off (ou câble débranché) — **garder l'appli ouverte**, ne pas la rela
 
 19. Bumper la version, relancer `desktop-dev-build.yml`, vérifier que l'install dev déjà en place
     détecte la mise à jour (checke bien `dev.ecole.jeccamtech.com/updates/latest.json`, pas la prod).
+
+---
+
+## Partie D — Navigation vers une fiche détail & impression (régressions trouvées en test dev réel)
+
+Deux bugs propres au build packagé (`output: export`) — invisibles avec `tauri:dev`, qui tourne en
+serveur vivant. Corrigés : routes détail passées d'un segment dynamique `[id]` à une route statique
+unique + `?id=` (ex. `/students/detail?id=62`), et remplacement de `window.open("", "_blank", ...)` par
+une iframe cachée (`printHtmlDocument`) pour tout document imprimé.
+
+20. Ouvrir n'importe quelle liste (`/students`, `/classes`, `/teachers`, `/dpe/schools`,
+    `/platform/tenants`, `/platform/prefectures`) → cliquer sur un élément **réel** (pas le premier de
+    la liste par hasard, un id quelconque) → la fiche détail doit s'ouvrir normalement. Avant le fix :
+    « asset not found: students/1 » (ou équivalent) sur tout id réel dans le binaire packagé.
+21. Depuis une fiche élève → onglet Factures → cocher une facture → encaisser → cliquer « Reçu
+    provisoire » (ou, en ligne, « Imprimer ») : la boîte de dialogue d'impression système s'ouvre
+    **par-dessus** la fenêtre de l'appli, qui reste visible et utilisable derrière — pas d'écran blanc
+    plein cadre sans bouton retour. Annuler l'impression doit ramener directement à l'écran normal de
+    l'appli, sans rien à fermer.
+22. Refaire l'étape 21 pour au moins un autre document généré : relevé mensuel de notes (`/grading`),
+    emploi du temps (`/timetable` → « Imprimer »), fiche enseignant (`/teachers/detail?id=...` →
+    « Imprimer »), badge QR (`/directory` ou équivalent kiosque biométrique → onglet Badges).

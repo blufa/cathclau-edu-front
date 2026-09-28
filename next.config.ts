@@ -4,10 +4,12 @@ import withSerwistInit from "@serwist/next";
 // UNIQUEMENT le flag manuel `NEXT_OUTPUT_EXPORT=1`, posé par scripts/build-desktop.mjs (voir
 // package.json → build:desktop) — jamais `TAURI_ENV_PLATFORM` : cette variable est posée par la CLI
 // Tauri aussi bien pour `tauri build` QUE pour `tauri dev` (`beforeDevCommand`), et `output: "export"`
-// interdit toute route dynamique dont l'id réel n'a pas été pré-généré (voir generateStaticParams
-// "placeholder" sur students/[id] etc.) — un bug vécu en vrai : `npm run tauri:dev` plantait sur
-// n'importe quelle fiche élève réelle (ex. /students/62) avec une 500 "missing param ... required with
-// output: export", alors que le serveur de dev doit au contraire résoudre N'IMPORTE QUEL id librement.
+// ne sait pré-générer AUCUN fichier pour un id inconnu au build. Les fiches détail (élève, classe,
+// enseignant, tenant...) utilisent donc une route statique unique (`students/detail`, jamais
+// `students/[id]`) avec l'id lu via `?id=` (`useSearchParams`) plutôt qu'un segment dynamique — voir
+// `students/detail/page.tsx`. Un bug vécu en vrai avec l'ancienne approche par segment dynamique :
+// même avec un `generateStaticParams` "placeholder", ouvrir une vraie fiche (`/students/62`) donnait
+// "asset not found" dans le binaire packagé (seul `students/placeholder/` existe sur disque).
 const DESKTOP_BUILD = process.env.NEXT_OUTPUT_EXPORT === "1";
 
 const withSerwist = withSerwistInit({
