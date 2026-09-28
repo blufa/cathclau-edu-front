@@ -69,6 +69,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { openPdfInApp } from "@/lib/open-pdf";
 import { formatGNF } from "@/lib/format";
 
 const STATUS_TONE: Record<Payslip["status"], "gray" | "indigo" | "green"> = { DRAFT: "gray", VALIDATED: "indigo", PAID: "green" };
@@ -267,7 +268,7 @@ function PayslipsTab() {
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setLinesFor(p)}>Détails</Button>
-                    <Button size="sm" variant="ghost" onClick={async () => { try { window.open(await getPayslipPdfObjectUrl(p.id), "_blank"); } catch (e) { notifyError(e); } }}>PDF</Button>
+                    <Button size="sm" variant="ghost" onClick={async () => { try { openPdfInApp(await getPayslipPdfObjectUrl(p.id), "Fiche de paie"); } catch (e) { notifyError(e); } }}>PDF</Button>
                     {p.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => act(approvePayslip(p.id))}>Valider</Button>}
                     {p.status === "VALIDATED" && <Button size="sm" variant="ghost" onClick={() => act(payPayslip(p.id))}>Payer</Button>}
                     {p.status === "DRAFT" && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(p)}>Suppr.</Button>}
