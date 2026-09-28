@@ -75,6 +75,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
+import { openPdfInApp } from "@/lib/open-pdf";
 
 export default function GradingPage() {
   const { user } = useAuth();
@@ -450,8 +451,7 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
   }
   async function convocation(e: Exam) {
     try {
-      // Flux backend (blob local) — s'ouvre dans un nouvel onglet sans dépendre de Cloudinary.
-      window.open(await getExamConvocationObjectUrl(e.id), "_blank");
+      openPdfInApp(await getExamConvocationObjectUrl(e.id), "Convocation");
     } catch (err) { notifyError(err); }
   }
   function handleDelete(e: Exam) {
@@ -666,7 +666,7 @@ function ReportCardsTab({ classId, yearId, canManage }: { classId: number; yearI
   }
   async function pdf(c: ReportCard) {
     try {
-      window.open(await getReportCardPdfObjectUrl(c.id), "_blank");
+      openPdfInApp(await getReportCardPdfObjectUrl(c.id), "Bulletin");
     } catch (err) { notifyError(err); }
   }
 

@@ -10,6 +10,7 @@ import { BrandingProvider } from "@/providers/branding-provider";
 import { SubscriptionBanner } from "@/components/platform/subscription-banner";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { DesktopSyncBootstrap } from "@/components/offline/desktop-sync-bootstrap";
+import { GlobalPdfPreview } from "@/components/offline/global-pdf-preview";
 import { cn } from "@/lib/utils";
 
 const HEADER_HEIGHT = 64;
@@ -52,6 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <SubscriptionBanner />
               <OfflineBanner />
               <DesktopSyncBootstrap />
+              <GlobalPdfPreview />
               {children}
             </div>
           </main>
