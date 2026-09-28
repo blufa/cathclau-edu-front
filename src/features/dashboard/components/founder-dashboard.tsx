@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Award,
-  Banknote,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -25,7 +24,7 @@ import { getAbandonedStudents, getFounderDashboard, getHrDashboard } from "@/lib
 import { listEmployees, listTeachers } from "@/lib/api/staff";
 import { listPayslips } from "@/lib/api/payroll";
 import { listCommunicationsByTenant } from "@/lib/api/communication";
-import { checkOverdueInstallmentsNow, listInvoicesByTenant } from "@/lib/api/billing";
+import { checkOverdueInstallmentsNow } from "@/lib/api/billing";
 import { searchStudents } from "@/lib/api/students";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
@@ -62,9 +61,6 @@ export default function FounderDashboard() {
   const tenantId = user?.tenantId ?? null;
 
   const expensesQuery = useQuery(() => listExpenses(), []);
-  // Factures émises (peu importe si déjà réglées) — pour « Bénéfice du mois », qui reflète le
-  // bénéfice PRÉVISIONNEL du mois (facturé, pas seulement encaissé), voir plus bas.
-  const invoicesQuery = useQuery(() => (tenantId ? listInvoicesByTenant(tenantId) : Promise.resolve([])), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, () => listTeachers(), [tenantId]);
   const employeesQuery = useCachedQuery(tenantId ? `employees-all:${tenantId}` : null, () => listEmployees(), [tenantId]);
   const now0 = new Date();
@@ -77,7 +73,7 @@ export default function FounderDashboard() {
   const communicationsQuery = useQuery(() => (tenantId ? listCommunicationsByTenant(tenantId) : Promise.resolve([])), [tenantId]);
   // Fiches de paie enseignants du mois — pour distinguer qui est déjà payé de qui ne l'est pas encore.
   const payslipsQuery = useQuery(() => listPayslips(), []);
-  const loading = expensesQuery.loading || invoicesQuery.loading;
+  const loading = expensesQuery.loading;
 
   // Le job de relance des échéances en retard ne tourne automatiquement qu'une fois par jour à 6h —
   // ce bouton permet de le déclencher tout de suite (utile en test, ou si le serveur n'a pas tourné en
@@ -102,20 +98,6 @@ export default function FounderDashboard() {
   const teacherSpecializationById = new Map((teachersQuery.data ?? []).map((t) => [t.id, t.specialization]));
   const hrByTeacherId = new Map((hrQuery.data?.teachers ?? []).map((t) => [t.teacherId, t]));
 
-  // Facturé du mois (toutes les factures ÉMISES ce mois-ci, payées ou non) — c'est ce chiffre, pas
-  // l'encaissé, qui entre dans le bénéfice PRÉVISIONNEL du mois (voir monthlyProfit plus bas).
-  const invoicedByMonth = new Map<string, number>();
-  for (const i of invoicesQuery.data ?? []) {
-    if (i.status === "CANCELLED" || !i.issueDate) continue;
-    const key = i.issueDate.slice(0, 7);
-    invoicedByMonth.set(key, (invoicedByMonth.get(key) ?? 0) + Number(i.totalAmount));
-  }
-  const expensesByMonth = new Map<string, number>();
-  for (const e of expenses) {
-    const key = (e.expenseDate ?? "").slice(0, 7);
-    if (!key) continue;
-    expensesByMonth.set(key, (expensesByMonth.get(key) ?? 0) + Number(e.amount));
-  }
   const currentMonthKey = `${now0.getFullYear()}-${String(now0.getMonth() + 1).padStart(2, "0")}`;
 
   // SMS de relance de recouvrement envoyés ce mois (motif PAYMENT_DUE, canal SMS uniquement).
@@ -182,29 +164,6 @@ export default function FounderDashboard() {
   );
   const abandonedStudents = abandonedQuery.data ?? [];
 
-  // Masse salariale RÉELLEMENT payée (fiches au statut PAID, jamais une projection théorique comme
-  // founder.payroll) — mais comptée sur le mois de la PÉRIODE TRAVAILLÉE (`periodStart`), pas sur le
-  // mois où l'argent est physiquement sorti (`paidAt`) : la paie se fait traditionnellement entre le
-  // 30 du mois et le 5 du mois suivant (peu importe aussi le jour où la fiche a été générée), donc un
-  // salaire de mars réglé le 5 avril doit rester une charge de mars, jamais glisser sur le bénéfice
-  // d'avril — recettes/dépenses restent, elles, en base caisse (leur date réelle), seule la masse
-  // salariale suit ici la période qu'elle couvre.
-  const payrollPaidByMonth = new Map<string, number>();
-  for (const p of payslipsQuery.data ?? []) {
-    if (p.status !== "PAID" || !p.periodStart) continue;
-    const key = p.periodStart.slice(0, 7);
-    payrollPaidByMonth.set(key, (payrollPaidByMonth.get(key) ?? 0) + Number(p.netSalary));
-  }
-
-  // Bénéfice PRÉVISIONNEL du mois : facturé du mois (toutes les factures émises ce mois, encaissées
-  // ou non) − dépenses du mois − masse salariale réellement payée (enseignants + personnel) — le seul
-  // chiffre de rentabilité qui se réinitialise chaque mois (« Dépenses totales » ci-dessous reste
-  // cumulatif depuis toujours). Volontairement basé sur le FACTURÉ et non l'encaissé : un parent qui
-  // paie en retard ne doit pas faire disparaître le bénéfice attendu du mois où la facture a été émise.
-  const monthlyProfit = (invoicedByMonth.get(currentMonthKey) ?? 0)
-    - (expensesByMonth.get(currentMonthKey) ?? 0)
-    - (payrollPaidByMonth.get(currentMonthKey) ?? 0);
-
   // Coût des retards/départs anticipés des enseignants : écart entre la masse salariale théorique
   // (projetée depuis l'emploi du temps) et la masse salariale réelle (heures effectivement
   // réalisées, cahier de textes) — positif = économisé sur des heures non réalisées.
@@ -232,18 +191,15 @@ export default function FounderDashboard() {
       </Reveal>
 
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <StatCardSkeleton /><StatCardSkeleton />
         </div>
       ) : (
         <Reveal y={12}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <StatCard title="Élèves dans l'école" value={studentsCountQuery.data ?? 0} icon={GraduationCap} accent="indigo" />
             <StatCard title="Dépenses totales" value={formatGNF(totalExpenses)} icon={TrendingDown} accent="rose"
               hint="Dépenses payées, toutes catégories (toutes périodes confondues)" />
-            <StatCard title="Bénéfice du mois" value={formatGNF(monthlyProfit)} icon={monthlyProfit >= 0 ? Award : Banknote}
-              accent={monthlyProfit >= 0 ? "emerald" : "rose"}
-              hint="Prévisionnel : facturé du mois − dépenses du mois − salaires versés (mois de travail, pas de virement)" />
           </div>
         </Reveal>
       )}
@@ -563,17 +519,15 @@ export default function FounderDashboard() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Élèves pris en charge</h2>
         {founderQuery.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard title="Exonérations actives" value={(founder?.subsidy.totalExemptions ?? 0) + (founder?.subsidy.partialExemptions ?? 0)} icon={Users} accent="indigo"
               hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s), ${founder?.subsidy.partialExemptions ?? 0} partielle(s)`} />
             <StatCard title="Remises exonérations appliquées" value={formatGNF(founder?.subsidy.exemptionDiscountAmount)} icon={Wallet} accent="teal"
               hint={`${founder?.subsidy.exemptionDiscountInvoiceCount ?? 0} facture(s), dont ${founder?.subsidy.exemptionDiscountInvoicePaidCount ?? 0} encaissée(s)`} />
             <StatCard title="Élèves à jour sur l'année" value={founder?.subsidy.studentsFullySettledMonthlyFees ?? 0} icon={Award} accent="emerald"
               hint="Toutes les mensualités payées" />
-            <StatCard title="Remise paiement anticipé appliquée" value={formatGNF(founder?.subsidy.earlyPaymentDiscountApplied)} icon={Banknote} accent="rose"
-              hint="Montant réellement déduit — paiement de toute la scolarité en un coup" />
           </div>
         )}
       </section>
