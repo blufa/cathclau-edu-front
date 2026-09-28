@@ -636,7 +636,12 @@ export default function BulkFamilyEnrollmentPage() {
         </CardBody>
       </Card>
 
-      <Card>
+      {/* overflow-visible (au lieu du overflow-hidden par défaut de Card) : sans ça, la liste déroulante
+          "Exonération" (positionnée en `absolute` sous son champ, voir SearchableSelect) est rognée dès
+          qu'elle s'ouvre près du bas de cette carte — typique du dernier enfant de la liste, dont les
+          derniers champs sont proches du bord inférieur. Rien d'autre dans cette carte ne dépend du
+          rognage (pas d'image/couleur qui déborderait des coins arrondis), donc aucun effet de bord. */}
+      <Card className="overflow-visible">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>Enfants ({children.length})</CardTitle>
           <div className="w-56">
