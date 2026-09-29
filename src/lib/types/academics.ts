@@ -205,6 +205,10 @@ export interface ClasseMatiere {
   specialty: boolean;
 }
 
+/** HOLIDAY = jour férié, toujours payé automatiquement. OTHER = kermesse/sortie/entraînement... la
+ * direction choisit explicitement quels enseignants touchés sont payés (voir school-events-panel). */
+export type SchoolEventType = "HOLIDAY" | "OTHER";
+
 /** Événement école (kermesse, match, entraînement...) qui empêche les élèves de suivre le cours sur
  * une période — les enseignants dont un créneau tombe dans cette période restent payés (§payroll). */
 export interface SchoolEvent {
@@ -217,6 +221,7 @@ export interface SchoolEvent {
   startTime: string | null;
   endTime: string | null;
   reason: string | null;
+  type: SchoolEventType;
 }
 
 export interface SchoolEventInput {
@@ -226,6 +231,13 @@ export interface SchoolEventInput {
   startTime?: string | null;
   endTime?: string | null;
   reason?: string | null;
+  type: SchoolEventType;
+}
+
+/** Enseignant dont un créneau récurrent est touché par l'événement, avec son statut de crédit actuel. */
+export interface SchoolEventTouchedTeacher {
+  teacherId: number;
+  credited: boolean;
 }
 
 /** Roster projection from GET /classes/{id}/students. */

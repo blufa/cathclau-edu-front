@@ -1,19 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
-import { createSchoolEvent, deleteSchoolEvent, listSchoolEvents } from "@/lib/api/academics";
-import type { SchoolEvent, SchoolEventInput } from "@/lib/types/academics";
+import {
+  createSchoolEvent, deleteSchoolEvent, listSchoolEvents,
+  listSchoolEventTouchedTeachers, setSchoolEventCreditedTeachers,
+} from "@/lib/api/academics";
+import { listTeachers } from "@/lib/api/staff";
+import type { SchoolEvent, SchoolEventInput, SchoolEventType } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
-const EMPTY: SchoolEventInput = { label: "", startDate: "", endDate: "", startTime: "", endTime: "", reason: "" };
+const EMPTY: SchoolEventInput = { label: "", startDate: "", endDate: "", startTime: "", endTime: "", reason: "", type: "OTHER" };
+
+const TYPE_LABEL: Record<SchoolEventType, string> = {
+  HOLIDAY: "Jour férié (chômé et payé — toujours payé automatiquement)",
+  OTHER: "Autre événement (kermesse, sortie, entraînement... la direction choisit les enseignants payés)",
+};
 
 /**
  * Événements école (kermesse, match, entraînement...) décidés par le fondateur/la direction : les
@@ -25,6 +36,7 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<SchoolEventInput>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [creditEvent, setCreditEvent] = useState<SchoolEvent | null>(null);
 
   function openCreate() { setForm(EMPTY); setOpen(true); }
 
@@ -76,20 +88,35 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
         ) : (
           <Table>
             <THead>
-              <TR><TH>Intitulé</TH><TH>Dates</TH><TH>Horaires</TH><TH>Motif</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
+              <TR><TH>Intitulé</TH><TH>Type</TH><TH>Dates</TH><TH>Horaires</TH><TH>Motif</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
             </THead>
             <TBody>
               {items.map((e) => (
                 <TR key={e.id}>
                   <TD className="font-medium text-gray-900">{e.label}</TD>
+                  <TD>
+                    {e.type === "HOLIDAY" ? (
+                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Jour férié</span>
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Événement école</span>
+                    )}
+                  </TD>
                   <TD>{e.startDate}{e.endDate !== e.startDate ? ` → ${e.endDate}` : ""}</TD>
                   <TD className="text-sm text-gray-600">{e.startTime && e.endTime ? `${e.startTime} – ${e.endTime}` : "Journée entière"}</TD>
                   <TD className="text-sm text-gray-500">{e.reason ?? "—"}</TD>
                   {canWrite && (
                     <TD className="text-right">
-                      <button onClick={() => remove(e)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex justify-end gap-1">
+                        {e.type === "OTHER" && (
+                          <button onClick={() => setCreditEvent(e)} aria-label="Choisir les enseignants payés"
+                            className="rounded-lg p-1.5 text-gray-500 hover:bg-brand-50 hover:text-brand-600">
+                            <Users className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button onClick={() => remove(e)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </TD>
                   )}
                 </TR>
@@ -104,6 +131,19 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
           <Field>
             <Label>Intitulé <span className="text-error-500">*</span></Label>
             <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex. Kermesse annuelle" />
+          </Field>
+          <Field>
+            <Label>Type <span className="text-error-500">*</span></Label>
+            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as SchoolEventType })}>
+              {(Object.entries(TYPE_LABEL) as [SchoolEventType, string][]).map(([type, label]) => (
+                <option key={type} value={type}>{label}</option>
+              ))}
+            </Select>
+            {form.type === "OTHER" && (
+              <p className="mt-1 text-xs text-gray-400">
+                Après création, choisissez quels enseignants touchés par cet événement sont payés (icône <Users className="inline h-3 w-3" /> dans la liste).
+              </p>
+            )}
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
@@ -136,6 +176,81 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
           </div>
         </div>
       </Modal>
+
+      {creditEvent && (
+        <CreditedTeachersModal event={creditEvent} onClose={() => setCreditEvent(null)} onSaved={() => q.refetch()} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Pour un événement OTHER (kermesse, sortie...), la direction choisit enseignant par enseignant
+ * lesquels, parmi ceux dont un créneau est touché, sont considérés comme ayant fait cours (payés) —
+ * un jour férié n'a pas besoin de ce choix, toujours payé automatiquement (voir PayrollService).
+ */
+function CreditedTeachersModal({
+  event, onClose, onSaved,
+}: {
+  event: SchoolEvent;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const touchedQ = useQuery(() => listSchoolEventTouchedTeachers(event.id), [event.id]);
+  const teachersQ = useQuery(listTeachers, []);
+  const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const touched = touchedQ.data ?? [];
+  const teacherNames = new Map((teachersQ.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`]));
+  const current = selected ?? new Set(touched.filter((t) => t.credited).map((t) => t.teacherId));
+
+  function toggle(teacherId: number) {
+    const next = new Set(current);
+    if (next.has(teacherId)) next.delete(teacherId); else next.add(teacherId);
+    setSelected(next);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await setSchoolEventCreditedTeachers(event.id, Array.from(current));
+      notifySuccess("Enseignants payés mis à jour.");
+      onSaved();
+      onClose();
+    } catch (err) { notifyError(err); } finally { setSaving(false); }
+  }
+
+  const loading = touchedQ.loading || teachersQ.loading;
+
+  return (
+    <Modal open onClose={onClose} title={`Enseignants payés — ${event.label}`}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          Parmi les enseignants dont un créneau tombe dans cet événement, cochez ceux que la direction
+          considère comme ayant fait cours (payés sur ces heures). Les autres ne sont pas payés pour ce créneau.
+        </p>
+        {loading ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : touched.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-400">Aucun enseignant n&apos;a de créneau touché par cet événement.</p>
+        ) : (
+          <div className="max-h-80 space-y-1.5 overflow-y-auto rounded-lg border border-gray-200 p-3">
+            {touched.map((t) => (
+              <Checkbox
+                key={t.teacherId}
+                label={teacherNames.get(t.teacherId) ?? `Enseignant #${t.teacherId}`}
+                checked={current.has(t.teacherId)}
+                onChange={() => toggle(t.teacherId)}
+              />
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button onClick={save} disabled={saving || loading}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
