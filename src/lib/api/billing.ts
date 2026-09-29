@@ -34,6 +34,10 @@ export function listFeesByClass(classId: number): Promise<SchoolFee[]> {
   return api.get<SchoolFee[]>(`/billing/fees/class/${classId}`);
 }
 
+export function listFeesByRoute(routeId: number): Promise<SchoolFee[]> {
+  return api.get<SchoolFee[]>(`/billing/fees/route/${routeId}`);
+}
+
 export function createFee(input: SchoolFeeInput): Promise<SchoolFee> {
   return api.post<SchoolFee>("/billing/fees", input);
 }
@@ -153,6 +157,13 @@ export function generateAllForEnrollment(input: GenerateAllFeesInput): Promise<G
  * couvertes à 100% par une exonération n'ont pas de facture créée, voir `exemptedPeriods`. */
 export function generateMonthlyInvoices(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<GenerateMonthlyResult> {
   return api.post<GenerateMonthlyResult>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
+}
+
+/** Génère UNE SEULE échéance (la plus ancienne pas encore facturée) au lieu de toutes comme
+ * `generateMonthlyInvoices` — sert au transport (§billing), facturé au mois, à la demande, jamais à
+ * l'avance pour toute l'année. `undefined` si tout est déjà facturé (204, rien à générer). */
+export function generateNextInstallment(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<Invoice | undefined> {
+  return api.post<Invoice | undefined>("/billing/invoices/generate-next-installment", { tenantId, studentId, feeId, academicYearId });
 }
 
 export function applyInvoicePayment(id: number, amount: number): Promise<Invoice> {

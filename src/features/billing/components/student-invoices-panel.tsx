@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, generateMonthlyInvoices, generateNextInstallment, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -199,7 +199,8 @@ export function StudentInvoicesPanel({
   // Abonnement transport à la demande (§billing) : un parent peut décider de s'abonner au moment de
   // l'inscription OU plus tard, en payant les frais scolaires — mêmes options que l'inscription.
   const subscriptionsQuery = useQuery(() => listSubscriptions({ studentId }), [studentId]);
-  const hasActiveTransport = (subscriptionsQuery.data ?? []).some((s) => s.status === "ACTIVE");
+  const activeSubscription = (subscriptionsQuery.data ?? []).find((s) => s.status === "ACTIVE");
+  const hasActiveTransport = activeSubscription != null;
   const routesQuery = useQuery(() => (!hasActiveTransport ? listRoutes() : Promise.resolve([])), [hasActiveTransport]);
   const [wantsTransport, setWantsTransport] = useState(false);
   const [routeId, setRouteId] = useState("");
@@ -210,6 +211,26 @@ export function StudentInvoicesPanel({
     () => (routeId ? listStops(Number(routeId)) : Promise.resolve([])),
     [routeId],
   );
+
+  // Transport facturé au mois, à la demande (§billing, retour comptable) : jamais toute l'année d'un
+  // coup à la souscription — le frais de la ligne est résolu ici pour pouvoir facturer précisément le
+  // prochain mois non encore réglé quand le parent vient payer, un mois à la fois.
+  const routeFeeQuery = useQuery(
+    () => (activeSubscription ? listFeesByRoute(activeSubscription.routeId) : Promise.resolve([])),
+    [activeSubscription?.routeId],
+  );
+  const transportFee = (routeFeeQuery.data ?? []).find((f) => f.type === "TRANSPORT");
+  const [generatingTransportMonth, setGeneratingTransportMonth] = useState(false);
+
+  async function generateTransportMonth() {
+    if (!transportFee) return;
+    setGeneratingTransportMonth(true);
+    try {
+      const inv = await generateNextInstallment(tenantId, studentId, transportFee.id, all[0]?.academicYearId ?? null);
+      notifySuccess(inv ? `Transport « ${inv.periodLabel ?? "mois en cours"} » facturé — prêt à encaisser` : "Transport déjà facturé pour toutes les échéances configurées");
+      q.refetch();
+    } catch (err) { notifyGenerationError(err); } finally { setGeneratingTransportMonth(false); }
+  }
 
   function refetchAll() { q.refetch(); payments.refetch(); onCollected(); }
 
@@ -231,7 +252,7 @@ export function StudentInvoicesPanel({
     setSubscribingTransport(true);
     try {
       await subscribe({ routeId: Number(routeId), stopId: stopId ? Number(stopId) : null, studentId, direction });
-      notifySuccess("Élève abonné au transport — les factures se génèrent selon le frais de la ligne");
+      notifySuccess("Élève abonné au transport — facturez chaque mois utilisé depuis cette fiche, quand le parent vient payer");
       setWantsTransport(false);
       setRouteId(""); setStopId("");
       subscriptionsQuery.refetch();
@@ -386,6 +407,26 @@ export function StudentInvoicesPanel({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Transport déjà abonné : facturé au mois, à la demande (§billing, retour comptable) — un
+              mois non pris n'est jamais une facture impayée, jamais de relance injustifiée. Le
+              comptable clique ici seulement quand le parent vient payer le mois en cours. */}
+          {hasActiveTransport && (
+            <div className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">
+                Abonné au transport — factures générées uniquement quand le parent vient payer, mois par mois.
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={generateTransportMonth}
+                loading={generatingTransportMonth}
+                disabled={!transportFee}
+              >
+                Facturer le transport de ce mois
+              </Button>
             </div>
           )}
 
