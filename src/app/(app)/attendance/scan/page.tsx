@@ -24,6 +24,7 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { IdBadge } from "@/components/cards/id-badge";
 import { Reveal } from "@/components/public/reveal";
 import { matriculeFromQr, typeFromQr } from "@/lib/identity-qr";
+import { ApiError } from "@/lib/api/errors";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { vibrateError, vibrateSuccess, vibrateWarning } from "@/lib/haptics";
 import { formatMinutes, formatTime } from "@/lib/format";
@@ -50,6 +51,9 @@ interface ScanFeedItem {
   studentAttendanceId?: number | null;
   ok: boolean;
   at: string;
+  /** Échec uniquement : message métier explicite (ex. "Aucun cours programmé aujourd'hui pour cette
+   *  classe.") — affiché directement dans le fil, qui reste visible après la disparition du toast. */
+  errorMessage?: string | null;
 }
 
 type ParseResult =
@@ -137,6 +141,22 @@ export default function AttendanceScanPage() {
     setFeed((f) => [item, ...f].slice(0, 25));
   }, []);
 
+  // En cas d'échec, l'API n'a jamais renvoyé de nom (rejetée avant tout traitement) — sans ça, le fil
+  // affichait juste "#77" à côté du message d'erreur, illisible pour savoir QUI est refusé.
+  const resolveName = useCallback((type: ScanSubjectType, subjectId: number): string => {
+    if (type === "STUDENT") {
+      const s = (studentsQuery.data ?? []).find((p) => p.id === subjectId);
+      return s ? `${s.firstName} ${s.lastName}` : `#${subjectId}`;
+    }
+    if (type === "TEACHER") {
+      const t = (teachersQuery.data ?? []).find((p) => p.id === subjectId);
+      return t ? `${t.firstName} ${t.lastName}` : `#${subjectId}`;
+    }
+    const e = (employeesQuery.data ?? []).find((p) => p.id === subjectId);
+    const name = e ? `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim() : "";
+    return name || `#${subjectId}`;
+  }, [studentsQuery.data, teachersQuery.data, employeesQuery.data]);
+
   const submit = useCallback(async (type: ScanSubjectType, subjectId: number, dir: ScanDirection) => {
     const key = `${type}:${subjectId}:${dir}`;
     if (inFlightRef.current.has(key)) return; // un pointage est déjà en cours pour ce sujet
@@ -147,7 +167,7 @@ export default function AttendanceScanPage() {
         // Hors-ligne : le retard/durée n'est calculé que côté serveur, donc pas de retour riche ici —
         // seul le fait que le scan a bien été enregistré localement est garanti (synchro automatique).
         pushFeed({
-          id: `${Date.now()}`, name: `#${subjectId}`, kind: dir,
+          id: `${Date.now()}`, name: resolveName(type, subjectId), kind: dir,
           ok: true, at: new Date().toLocaleTimeString(),
         });
         notifySuccess("Scan enregistré hors-ligne — sera synchronisé automatiquement.");
@@ -169,13 +189,17 @@ export default function AttendanceScanPage() {
         setPickupPrompt({ studentId: subjectId, name: res.name ?? `#${subjectId}` });
       }
     } catch (err) {
-      pushFeed({ id: `${Date.now()}`, name: `#${subjectId}`, kind: dir, ok: false, at: new Date().toLocaleTimeString() });
+      const errorMessage = err instanceof ApiError ? err.userMessage : "Pointage refusé.";
+      pushFeed({
+        id: `${Date.now()}`, name: resolveName(type, subjectId), kind: dir, ok: false,
+        at: new Date().toLocaleTimeString(), errorMessage,
+      });
       notifyError(err);
       vibrateError();
     } finally {
       inFlightRef.current.delete(key);
     }
-  }, [pushFeed]);
+  }, [pushFeed, resolveName]);
 
   const markAbsent = useCallback(async (type: ScanSubjectType, subjectId: number, name: string) => {
     try {
@@ -645,7 +669,14 @@ function LateActions({ attendanceId }: { attendanceId: number }) {
 
 function FeedOutcome({ item }: { item: ScanFeedItem }) {
   if (!item.ok) {
-    return <span className="text-xs text-gray-400">{item.at}</span>;
+    return (
+      <span className="flex flex-col items-end gap-0.5">
+        {item.errorMessage && (
+          <span className="max-w-[220px] text-right text-xs font-medium text-error-600">{item.errorMessage}</span>
+        )}
+        <span className="text-xs text-gray-400">{item.at}</span>
+      </span>
+    );
   }
   if (item.kind === "ABSENT") {
     return (

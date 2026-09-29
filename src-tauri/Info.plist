@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Sans cette clé, macOS refuse silencieusement getUserMedia({video:true}) dans la webview
+         (aucune boîte de dialogue de permission n'apparaît, la caméra ne s'ouvre jamais) — requis
+         pour le pointage par scan de carte (/attendance/scan) et le pointage par photo (biométrie). -->
+    <key>NSCameraUsageDescription</key>
+    <string>Nécessaire pour scanner les cartes d'élève/enseignant (QR code) lors du pointage de présence.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Non utilisé par l'application — requis uniquement par certaines API caméra du système.</string>
+</dict>
+</plist>
