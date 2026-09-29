@@ -44,9 +44,9 @@ export function EmployeeForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photo, setPhoto] = useState(initial?.photo ?? "");
-  // Sans compte de connexion lié, cette personne n'apparaît jamais dans « Utilisateurs » et on ne
-  // peut donc jamais lui attribuer de rôle — uniquement proposé à la création (une fiche existante
-  // ne peut pas encore être liée après coup, voir EmployeeUseCase.UpdateEmployeeCommand).
+  // Sans compte de connexion lié, cette personne n'apparaît jamais dans « Utilisateurs » ni dans la
+  // recherche « Personnel de l'école » de la fiche d'inscription — proposé à la création, et aussi en
+  // édition tant qu'aucun compte n'est encore lié (voir EmployeeUseCase.UpdateEmployeeCommand#userId).
   const [createLogin, setCreateLogin] = useState(false);
   const [password, setPassword] = useState("");
 
@@ -189,7 +189,11 @@ export function EmployeeForm({
           alors générer une fiche combinée (salaire de base + heures d&apos;enseignement).
         </p>
       </div>
-      {!initial && (
+      {initial?.userId != null ? (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+          Cette personne a déjà un accès (compte de connexion lié).
+        </div>
+      ) : (
         <div className="rounded-xl border border-gray-200 p-3">
           <div className="flex items-center gap-3">
             <Switch checked={createLogin} onChange={setCreateLogin} ariaLabel="Créer un accès" />

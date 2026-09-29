@@ -267,22 +267,28 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
 
       {active === 2 && (
         <div className="space-y-4 pt-2">
-          <div className="rounded-xl border border-gray-200 p-3">
-            <div className="flex items-center gap-3">
-              <Switch checked={v.createLogin} onChange={(checked) => setValue("createLogin", checked)} ariaLabel="Créer un accès" />
-              <span className="text-sm text-gray-700">Créer un accès (espace enseignant)</span>
+          {initial?.userId != null ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+              Cet enseignant a déjà un accès (compte de connexion lié).
             </div>
-            {v.createLogin && (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-gray-400">L&apos;enseignant se connectera avec son <strong>numéro de téléphone</strong> et ce mot de passe.</p>
-                <Field>
-                  <Label>Mot de passe</Label>
-                  <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
-                  {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
-                </Field>
+          ) : (
+            <div className="rounded-xl border border-gray-200 p-3">
+              <div className="flex items-center gap-3">
+                <Switch checked={v.createLogin} onChange={(checked) => setValue("createLogin", checked)} ariaLabel="Créer un accès" />
+                <span className="text-sm text-gray-700">Créer un accès (espace enseignant)</span>
               </div>
-            )}
-          </div>
+              {v.createLogin && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-gray-400">L&apos;enseignant se connectera avec son <strong>numéro de téléphone</strong> et ce mot de passe.</p>
+                  <Field>
+                    <Label>Mot de passe</Label>
+                    <Input type="password" placeholder="••••••••" value={v.password} onChange={(e) => setValue("password", e.target.value)} aria-invalid={!!errors.password} />
+                    {errors.password && <p className="text-xs text-error-600">{errors.password.message}</p>}
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
           <div className="rounded-xl bg-gray-50 p-3 text-sm text-gray-600">
             <p className="font-medium text-gray-700">Récapitulatif</p>
             <p>{v.firstName} {v.lastName}{v.specialization ? ` · ${v.specialization}` : ""}</p>
