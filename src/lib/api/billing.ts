@@ -159,11 +159,11 @@ export function generateMonthlyInvoices(tenantId: number | null, studentId: numb
   return api.post<GenerateMonthlyResult>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
 }
 
-/** Génère UNE SEULE échéance (la plus ancienne pas encore facturée) au lieu de toutes comme
- * `generateMonthlyInvoices` — sert au transport (§billing), facturé au mois, à la demande, jamais à
- * l'avance pour toute l'année. `undefined` si tout est déjà facturé (204, rien à générer). */
-export function generateNextInstallment(tenantId: number | null, studentId: number, feeId: number, academicYearId?: number | null): Promise<Invoice | undefined> {
-  return api.post<Invoice | undefined>("/billing/invoices/generate-next-installment", { tenantId, studentId, feeId, academicYearId });
+/** Génère uniquement les échéances choisies (un ou plusieurs mois, cochés par le comptable) au lieu de
+ * toutes comme `generateMonthlyInvoices` — sert au transport (§billing), facturé au mois, à la demande,
+ * jamais à l'avance pour toute l'année. Idempotent : une échéance déjà facturée est ignorée sans erreur. */
+export function generateSelectedInstallments(tenantId: number | null, studentId: number, feeId: number, installmentIds: number[], academicYearId?: number | null): Promise<GenerateMonthlyResult> {
+  return api.post<GenerateMonthlyResult>("/billing/invoices/generate-selected-installments", { tenantId, studentId, feeId, academicYearId, installmentIds });
 }
 
 export function applyInvoicePayment(id: number, amount: number): Promise<Invoice> {
