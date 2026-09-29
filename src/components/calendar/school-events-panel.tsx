@@ -8,28 +8,23 @@ import {
   listSchoolEventTouchedTeachers, setSchoolEventCreditedTeachers,
 } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
-import type { SchoolEvent, SchoolEventInput, SchoolEventType } from "@/lib/types/academics";
+import type { SchoolEvent, SchoolEventInput } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Input, Label, Textarea } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 
-const EMPTY: SchoolEventInput = { label: "", startDate: "", endDate: "", startTime: "", endTime: "", reason: "", type: "OTHER" };
-
-const TYPE_LABEL: Record<SchoolEventType, string> = {
-  HOLIDAY: "Jour férié (chômé et payé — toujours payé automatiquement)",
-  OTHER: "Autre événement (kermesse, sortie, entraînement... la direction choisit les enseignants payés)",
-};
+const EMPTY: SchoolEventInput = { label: "", startDate: "", endDate: "", startTime: "", endTime: "", reason: "" };
 
 /**
  * Événements école (kermesse, match, entraînement...) décidés par le fondateur/la direction : les
- * élèves ne suivent pas cours sur cette période, mais les enseignants dont un créneau tombe dedans
- * restent payés sur ces heures — aucune saisie côté paie n'est nécessaire, c'est automatique.
+ * élèves ne suivent pas cours sur cette période. Contrairement à un jour férié (calendrier académique,
+ * toujours payé automatiquement), la direction choisit ici enseignant par enseignant lesquels, parmi
+ * ceux dont un créneau est touché, sont considérés comme ayant fait cours (payés).
  */
 export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
   const q = useQuery(listSchoolEvents, []);
@@ -76,8 +71,9 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
       <div className="rounded-2xl border border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <p className="text-sm text-gray-500">
-            Kermesse, match, entraînement… : les élèves ne suivent pas cours, mais les enseignants concernés
-            restent payés sur ces heures (rien à faire côté paie, c&apos;est automatique).
+            Kermesse, match, entraînement… : les élèves ne suivent pas cours. Choisissez ensuite (icône <Users className="inline h-3.5 w-3.5" />)
+            quels enseignants touchés sont payés sur ces heures — un jour férié reste toujours payé automatiquement,
+            sans passer par ici.
           </p>
           {canWrite && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Nouvel événement</Button>}
         </div>
@@ -88,31 +84,22 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
         ) : (
           <Table>
             <THead>
-              <TR><TH>Intitulé</TH><TH>Type</TH><TH>Dates</TH><TH>Horaires</TH><TH>Motif</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
+              <TR><TH>Intitulé</TH><TH>Dates</TH><TH>Horaires</TH><TH>Motif</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
             </THead>
             <TBody>
               {items.map((e) => (
                 <TR key={e.id}>
                   <TD className="font-medium text-gray-900">{e.label}</TD>
-                  <TD>
-                    {e.type === "HOLIDAY" ? (
-                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Jour férié</span>
-                    ) : (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Événement école</span>
-                    )}
-                  </TD>
                   <TD>{e.startDate}{e.endDate !== e.startDate ? ` → ${e.endDate}` : ""}</TD>
                   <TD className="text-sm text-gray-600">{e.startTime && e.endTime ? `${e.startTime} – ${e.endTime}` : "Journée entière"}</TD>
                   <TD className="text-sm text-gray-500">{e.reason ?? "—"}</TD>
                   {canWrite && (
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
-                        {e.type === "OTHER" && (
-                          <button onClick={() => setCreditEvent(e)} aria-label="Choisir les enseignants payés"
-                            className="rounded-lg p-1.5 text-gray-500 hover:bg-brand-50 hover:text-brand-600">
-                            <Users className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button onClick={() => setCreditEvent(e)} aria-label="Choisir les enseignants payés"
+                          className="rounded-lg p-1.5 text-gray-500 hover:bg-brand-50 hover:text-brand-600">
+                          <Users className="h-4 w-4" />
+                        </button>
                         <button onClick={() => remove(e)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -132,19 +119,9 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
             <Label>Intitulé <span className="text-error-500">*</span></Label>
             <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex. Kermesse annuelle" />
           </Field>
-          <Field>
-            <Label>Type <span className="text-error-500">*</span></Label>
-            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as SchoolEventType })}>
-              {(Object.entries(TYPE_LABEL) as [SchoolEventType, string][]).map(([type, label]) => (
-                <option key={type} value={type}>{label}</option>
-              ))}
-            </Select>
-            {form.type === "OTHER" && (
-              <p className="mt-1 text-xs text-gray-400">
-                Après création, choisissez quels enseignants touchés par cet événement sont payés (icône <Users className="inline h-3 w-3" /> dans la liste).
-              </p>
-            )}
-          </Field>
+          <p className="text-xs text-gray-400">
+            Après création, choisissez quels enseignants touchés par cet événement sont payés (icône <Users className="inline h-3 w-3" /> dans la liste).
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
               <Label>Date de début <span className="text-error-500">*</span></Label>
@@ -185,9 +162,9 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
 }
 
 /**
- * Pour un événement OTHER (kermesse, sortie...), la direction choisit enseignant par enseignant
- * lesquels, parmi ceux dont un créneau est touché, sont considérés comme ayant fait cours (payés) —
- * un jour férié n'a pas besoin de ce choix, toujours payé automatiquement (voir PayrollService).
+ * La direction choisit enseignant par enseignant lesquels, parmi ceux dont un créneau est touché par
+ * cet événement, sont considérés comme ayant fait cours (payés) — un jour férié (calendrier académique)
+ * n'a pas besoin de ce choix, toujours payé automatiquement (voir PayrollService).
  */
 function CreditedTeachersModal({
   event, onClose, onSaved,
