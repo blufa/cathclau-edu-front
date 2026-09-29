@@ -9,7 +9,7 @@ import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
-import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch, listExemptions } from "@/lib/api/billing";
+import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +86,15 @@ export default function StudentsPage() {
     () => new Map((staffCoverageQuery.data ?? []).map((c) => [c.studentId, c])),
     [staffCoverageQuery.data],
   );
+
+  // Badge « Prélevé sur salaire » : enfants du personnel SANS aucune remise (donc absents du badge
+  // ci-dessus, basé sur la politique de rang) — leur scolarité est quand même prélevée automatiquement
+  // sur le salaire du parent (§retour comptable), sans que rien ne le montre sinon.
+  const uncoveredStaffChildQuery = useQuery(
+    () => getUncoveredStaffChildIds(pageStudentIds),
+    [pageStudentIds.join(",")],
+  );
+  const uncoveredStaffChildIds = useMemo(() => new Set(uncoveredStaffChildQuery.data ?? []), [uncoveredStaffChildQuery.data]);
 
   // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
   // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
@@ -184,6 +193,11 @@ export default function StudentsPage() {
               title={staffCoverageByStudentId.get(row.student.id)?.policyLabel ?? "Enfant de personnel pris en charge par l'école"}
             >
               Enfant de personnel −{staffCoverageByStudentId.get(row.student.id)?.coveragePercent}%
+            </Badge>
+          )}
+          {uncoveredStaffChildIds.has(row.student.id) && (
+            <Badge tone="blue" title="Enfant du personnel sans remise — scolarité prélevée automatiquement sur le salaire du parent">
+              Enfant de personnel — prélevé sur salaire
             </Badge>
           )}
           {exemptionByStudentId.has(row.student.id) && (

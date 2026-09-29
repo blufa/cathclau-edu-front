@@ -222,6 +222,12 @@ export function getStaffChildCoverageBatch(studentIds: number[], feeType: FeeTyp
   if (studentIds.length === 0) return Promise.resolve([]);
   return api.get<StudentCoverage[]>("/billing/staff-child-benefits/coverage-batch", { query: { studentIds: studentIds.join(","), feeType } });
 }
+/** Parmi `studentIds`, ceux enfants du personnel SANS aucune remise — scolarité prélevée automatiquement
+ * sur le salaire du parent (badge distinct de {@link getStaffChildCoverageBatch} dans la liste des élèves). */
+export function getUncoveredStaffChildIds(studentIds: number[]): Promise<number[]> {
+  if (studentIds.length === 0) return Promise.resolve([]);
+  return api.get<number[]>("/billing/staff-child-benefits/uncovered-batch", { query: { studentIds: studentIds.join(",") } });
+}
 
 // ── Family discount rules (remise fratrie) ───────────────────────────────────
 export function listFamilyDiscountRules(): Promise<FamilyDiscountRule[]> {
