@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
-import { createSchoolEvent, deleteSchoolEvent, listSchoolEvents } from "@/lib/api/academics";
+import {
+  createSchoolEvent, deleteSchoolEvent, listSchoolEvents,
+  listSchoolEventTouchedTeachers, setSchoolEventCreditedTeachers,
+} from "@/lib/api/academics";
+import { listTeachers } from "@/lib/api/staff";
 import type { SchoolEvent, SchoolEventInput } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -17,14 +22,16 @@ const EMPTY: SchoolEventInput = { label: "", startDate: "", endDate: "", startTi
 
 /**
  * Événements école (kermesse, match, entraînement...) décidés par le fondateur/la direction : les
- * élèves ne suivent pas cours sur cette période, mais les enseignants dont un créneau tombe dedans
- * restent payés sur ces heures — aucune saisie côté paie n'est nécessaire, c'est automatique.
+ * élèves ne suivent pas cours sur cette période. Contrairement à un jour férié (calendrier académique,
+ * toujours payé automatiquement), la direction choisit ici enseignant par enseignant lesquels, parmi
+ * ceux dont un créneau est touché, sont considérés comme ayant fait cours (payés).
  */
 export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
   const q = useQuery(listSchoolEvents, []);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<SchoolEventInput>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [creditEvent, setCreditEvent] = useState<SchoolEvent | null>(null);
 
   function openCreate() { setForm(EMPTY); setOpen(true); }
 
@@ -64,8 +71,9 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
       <div className="rounded-2xl border border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <p className="text-sm text-gray-500">
-            Kermesse, match, entraînement… : les élèves ne suivent pas cours, mais les enseignants concernés
-            restent payés sur ces heures (rien à faire côté paie, c&apos;est automatique).
+            Kermesse, match, entraînement… : les élèves ne suivent pas cours. Choisissez ensuite (icône <Users className="inline h-3.5 w-3.5" />)
+            quels enseignants touchés sont payés sur ces heures — un jour férié reste toujours payé automatiquement,
+            sans passer par ici.
           </p>
           {canWrite && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Nouvel événement</Button>}
         </div>
@@ -87,9 +95,15 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
                   <TD className="text-sm text-gray-500">{e.reason ?? "—"}</TD>
                   {canWrite && (
                     <TD className="text-right">
-                      <button onClick={() => remove(e)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => setCreditEvent(e)} aria-label="Choisir les enseignants payés"
+                          className="rounded-lg p-1.5 text-gray-500 hover:bg-brand-50 hover:text-brand-600">
+                          <Users className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => remove(e)} aria-label="Supprimer" className="rounded-lg p-1.5 text-gray-500 hover:bg-error-50 hover:text-error-600">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </TD>
                   )}
                 </TR>
@@ -105,6 +119,9 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
             <Label>Intitulé <span className="text-error-500">*</span></Label>
             <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Ex. Kermesse annuelle" />
           </Field>
+          <p className="text-xs text-gray-400">
+            Après création, choisissez quels enseignants touchés par cet événement sont payés (icône <Users className="inline h-3 w-3" /> dans la liste).
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
               <Label>Date de début <span className="text-error-500">*</span></Label>
@@ -136,6 +153,81 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
           </div>
         </div>
       </Modal>
+
+      {creditEvent && (
+        <CreditedTeachersModal event={creditEvent} onClose={() => setCreditEvent(null)} onSaved={() => q.refetch()} />
+      )}
     </div>
+  );
+}
+
+/**
+ * La direction choisit enseignant par enseignant lesquels, parmi ceux dont un créneau est touché par
+ * cet événement, sont considérés comme ayant fait cours (payés) — un jour férié (calendrier académique)
+ * n'a pas besoin de ce choix, toujours payé automatiquement (voir PayrollService).
+ */
+function CreditedTeachersModal({
+  event, onClose, onSaved,
+}: {
+  event: SchoolEvent;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const touchedQ = useQuery(() => listSchoolEventTouchedTeachers(event.id), [event.id]);
+  const teachersQ = useQuery(listTeachers, []);
+  const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const touched = touchedQ.data ?? [];
+  const teacherNames = new Map((teachersQ.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`]));
+  const current = selected ?? new Set(touched.filter((t) => t.credited).map((t) => t.teacherId));
+
+  function toggle(teacherId: number) {
+    const next = new Set(current);
+    if (next.has(teacherId)) next.delete(teacherId); else next.add(teacherId);
+    setSelected(next);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await setSchoolEventCreditedTeachers(event.id, Array.from(current));
+      notifySuccess("Enseignants payés mis à jour.");
+      onSaved();
+      onClose();
+    } catch (err) { notifyError(err); } finally { setSaving(false); }
+  }
+
+  const loading = touchedQ.loading || teachersQ.loading;
+
+  return (
+    <Modal open onClose={onClose} title={`Enseignants payés — ${event.label}`}>
+      <div className="space-y-4">
+        <p className="text-sm text-gray-500">
+          Parmi les enseignants dont un créneau tombe dans cet événement, cochez ceux que la direction
+          considère comme ayant fait cours (payés sur ces heures). Les autres ne sont pas payés pour ce créneau.
+        </p>
+        {loading ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : touched.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-400">Aucun enseignant n&apos;a de créneau touché par cet événement.</p>
+        ) : (
+          <div className="max-h-80 space-y-1.5 overflow-y-auto rounded-lg border border-gray-200 p-3">
+            {touched.map((t) => (
+              <Checkbox
+                key={t.teacherId}
+                label={teacherNames.get(t.teacherId) ?? `Enseignant #${t.teacherId}`}
+                checked={current.has(t.teacherId)}
+                onChange={() => toggle(t.teacherId)}
+              />
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button onClick={save} disabled={saving || loading}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
