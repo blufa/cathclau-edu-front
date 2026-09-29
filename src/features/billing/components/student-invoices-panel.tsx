@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, generateMonthlyInvoices, getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -199,7 +199,8 @@ export function StudentInvoicesPanel({
   // Abonnement transport à la demande (§billing) : un parent peut décider de s'abonner au moment de
   // l'inscription OU plus tard, en payant les frais scolaires — mêmes options que l'inscription.
   const subscriptionsQuery = useQuery(() => listSubscriptions({ studentId }), [studentId]);
-  const hasActiveTransport = (subscriptionsQuery.data ?? []).some((s) => s.status === "ACTIVE");
+  const activeSubscription = (subscriptionsQuery.data ?? []).find((s) => s.status === "ACTIVE");
+  const hasActiveTransport = activeSubscription != null;
   const routesQuery = useQuery(() => (!hasActiveTransport ? listRoutes() : Promise.resolve([])), [hasActiveTransport]);
   const [wantsTransport, setWantsTransport] = useState(false);
   const [routeId, setRouteId] = useState("");
@@ -210,6 +211,55 @@ export function StudentInvoicesPanel({
     () => (routeId ? listStops(Number(routeId)) : Promise.resolve([])),
     [routeId],
   );
+
+  // Transport facturé au mois, à la demande (§billing, retour comptable) : jamais toute l'année d'un
+  // coup à la souscription — le frais de la ligne est résolu ici pour proposer, une fois abonné, les
+  // mois pas encore facturés à cocher (le mois en cours coché par défaut ; un parent qui avance
+  // plusieurs mois peut en cocher plusieurs à la fois).
+  const routeFeeQuery = useQuery(
+    () => (activeSubscription ? listFeesByRoute(activeSubscription.routeId) : Promise.resolve([])),
+    [activeSubscription?.routeId],
+  );
+  const transportFee = (routeFeeQuery.data ?? []).find((f) => f.type === "TRANSPORT");
+  const transportInstallmentsQuery = useQuery(
+    () => (transportFee ? listInstallments(transportFee.id) : Promise.resolve([])),
+    [transportFee?.id],
+  );
+  const billedTransportInstallmentIds = new Set(
+    all.filter((inv) => inv.feeId === transportFee?.id && inv.installmentId != null).map((inv) => inv.installmentId as number),
+  );
+  const unbilledTransportInstallments = (transportInstallmentsQuery.data ?? [])
+    .filter((inst) => !billedTransportInstallmentIds.has(inst.id))
+    .sort((a, b) => (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31"));
+  const currentMonthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+  const defaultTransportSelection = (() => {
+    const current = unbilledTransportInstallments.find((inst) => (inst.months ?? []).includes(currentMonthKey))
+      ?? unbilledTransportInstallments.find((inst) => (inst.dueDate ?? "").slice(0, 7) === currentMonthKey);
+    return current ? [current.id] : [];
+  })();
+  const [manualTransportSelection, setManualTransportSelection] = useState<number[] | null>(null);
+  const selectedTransportInstallmentIds = manualTransportSelection ?? defaultTransportSelection;
+  function toggleTransportInstallment(id: number) {
+    setManualTransportSelection((prev) => {
+      const base = prev ?? defaultTransportSelection;
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
+  }
+  const [generatingTransportMonth, setGeneratingTransportMonth] = useState(false);
+
+  async function generateTransportMonths() {
+    if (!transportFee || selectedTransportInstallmentIds.length === 0) return;
+    setGeneratingTransportMonth(true);
+    try {
+      const result = await generateSelectedInstallments(tenantId, studentId, transportFee.id, selectedTransportInstallmentIds, all[0]?.academicYearId ?? null);
+      notifySuccess(result.created.length > 0
+        ? `${result.created.length} mois de transport facturé(s) — prêt à encaisser`
+        : "Rien à facturer (déjà réglé)");
+      setManualTransportSelection(null);
+      q.refetch();
+      transportInstallmentsQuery.refetch();
+    } catch (err) { notifyGenerationError(err); } finally { setGeneratingTransportMonth(false); }
+  }
 
   function refetchAll() { q.refetch(); payments.refetch(); onCollected(); }
 
@@ -231,7 +281,7 @@ export function StudentInvoicesPanel({
     setSubscribingTransport(true);
     try {
       await subscribe({ routeId: Number(routeId), stopId: stopId ? Number(stopId) : null, studentId, direction });
-      notifySuccess("Élève abonné au transport — les factures se génèrent selon le frais de la ligne");
+      notifySuccess("Élève abonné au transport — facturez chaque mois utilisé depuis cette fiche, quand le parent vient payer");
       setWantsTransport(false);
       setRouteId(""); setStopId("");
       subscriptionsQuery.refetch();
@@ -386,6 +436,42 @@ export function StudentInvoicesPanel({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Transport déjà abonné : facturé au mois, à la demande (§billing, retour comptable) — un
+              mois non pris n'est jamais une facture impayée, jamais de relance injustifiée. Le mois en
+              cours est coché par défaut ; un parent qui avance plusieurs mois peut en cocher d'autres. */}
+          {hasActiveTransport && (
+            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+              <p className="text-sm text-slate-600">
+                Abonné au transport — cochez le(s) mois à facturer quand le parent vient payer.
+              </p>
+              {unbilledTransportInstallments.length === 0 ? (
+                <p className="text-xs text-slate-400">Tout le transport configuré est déjà facturé.</p>
+              ) : (
+                <div className="space-y-1">
+                  {unbilledTransportInstallments.map((inst) => (
+                    <Checkbox
+                      key={inst.id}
+                      checked={selectedTransportInstallmentIds.includes(inst.id)}
+                      onChange={() => toggleTransportInstallment(inst.id)}
+                      label={<span className="text-sm text-slate-700">{inst.label} — {formatGNF(inst.amount)}</span>}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={generateTransportMonths}
+                  loading={generatingTransportMonth}
+                  disabled={selectedTransportInstallmentIds.length === 0}
+                >
+                  Facturer {selectedTransportInstallmentIds.length > 1 ? `${selectedTransportInstallmentIds.length} mois` : "ce mois"}
+                </Button>
+              </div>
             </div>
           )}
 

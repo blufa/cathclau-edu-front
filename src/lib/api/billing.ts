@@ -34,6 +34,10 @@ export function listFeesByClass(classId: number): Promise<SchoolFee[]> {
   return api.get<SchoolFee[]>(`/billing/fees/class/${classId}`);
 }
 
+export function listFeesByRoute(routeId: number): Promise<SchoolFee[]> {
+  return api.get<SchoolFee[]>(`/billing/fees/route/${routeId}`);
+}
+
 export function createFee(input: SchoolFeeInput): Promise<SchoolFee> {
   return api.post<SchoolFee>("/billing/fees", input);
 }
@@ -155,6 +159,13 @@ export function generateMonthlyInvoices(tenantId: number | null, studentId: numb
   return api.post<GenerateMonthlyResult>("/billing/invoices/generate-monthly", { tenantId, studentId, feeId, academicYearId });
 }
 
+/** Génère uniquement les échéances choisies (un ou plusieurs mois, cochés par le comptable) au lieu de
+ * toutes comme `generateMonthlyInvoices` — sert au transport (§billing), facturé au mois, à la demande,
+ * jamais à l'avance pour toute l'année. Idempotent : une échéance déjà facturée est ignorée sans erreur. */
+export function generateSelectedInstallments(tenantId: number | null, studentId: number, feeId: number, installmentIds: number[], academicYearId?: number | null): Promise<GenerateMonthlyResult> {
+  return api.post<GenerateMonthlyResult>("/billing/invoices/generate-selected-installments", { tenantId, studentId, feeId, academicYearId, installmentIds });
+}
+
 export function applyInvoicePayment(id: number, amount: number): Promise<Invoice> {
   return api.put<Invoice>(`/billing/invoices/${id}/payment`, { amount });
 }
@@ -221,6 +232,12 @@ export function getStaffChildCoverage(studentId: number, feeType: FeeType): Prom
 export function getStaffChildCoverageBatch(studentIds: number[], feeType: FeeType): Promise<StudentCoverage[]> {
   if (studentIds.length === 0) return Promise.resolve([]);
   return api.get<StudentCoverage[]>("/billing/staff-child-benefits/coverage-batch", { query: { studentIds: studentIds.join(","), feeType } });
+}
+/** Parmi `studentIds`, ceux enfants du personnel SANS aucune remise — scolarité prélevée automatiquement
+ * sur le salaire du parent (badge distinct de {@link getStaffChildCoverageBatch} dans la liste des élèves). */
+export function getUncoveredStaffChildIds(studentIds: number[]): Promise<number[]> {
+  if (studentIds.length === 0) return Promise.resolve([]);
+  return api.get<number[]>("/billing/staff-child-benefits/uncovered-batch", { query: { studentIds: studentIds.join(",") } });
 }
 
 // ── Family discount rules (remise fratrie) ───────────────────────────────────
