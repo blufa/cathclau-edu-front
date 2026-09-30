@@ -163,6 +163,11 @@ export default function BulkFamilyEnrollmentPage() {
     () => (selectedParent ? getParentStaffLink(selectedParent.id) : Promise.resolve(null)),
     [selectedParent?.id],
   );
+  // Le système détecte déjà tout seul un parent lié au personnel (mode "Personnel de l'école" OU
+  // parent existant retrouvé par recherche, voir staffLinkQuery ci-dessus) — la mensualisation
+  // (§retour comptable) doit donc se proposer dans les deux cas, pas seulement quand une exonération
+  // "avantage personnel" est en plus explicitement choisie dans la liste déroulante.
+  const isStaffParent = parentMode === "staff" ? !!selectedStaff : !!staffLinkQuery.data;
 
   // ── Année scolaire / classes ────────────────────────────────────────────
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
@@ -661,6 +666,7 @@ export default function BulkFamilyEnrollmentPage() {
               exemptionRules={activeExemptionRules}
               canRemove={children.length > 1}
               running={running}
+              isStaffParent={isStaffParent}
               onUpdate={(patch) => updateChild(child.key, patch)}
               onRemove={() => removeChild(child.key)}
               onDeleteInvoice={(feeId, invoiceId, paidAmount) => deleteGeneratedInvoice(child.key, feeId, invoiceId, paidAmount)}
@@ -709,7 +715,7 @@ export default function BulkFamilyEnrollmentPage() {
 }
 
 function ChildCard({
-  child, index, classes, routes, exemptionRules, canRemove, running, onUpdate, onRemove, onDeleteInvoice,
+  child, index, classes, routes, exemptionRules, canRemove, running, isStaffParent, onUpdate, onRemove, onDeleteInvoice,
 }: {
   child: ChildDraft;
   index: number;
@@ -718,6 +724,9 @@ function ChildCard({
   exemptionRules: ExemptionRule[];
   canRemove: boolean;
   running: boolean;
+  /** Le parent (nouveau/existant/personnel) est déjà détecté comme lié au personnel — indépendamment
+   * de l'exonération choisie ci-dessous, voir isStaffParent dans le composant parent. */
+  isStaffParent: boolean;
   onUpdate: (patch: Partial<ChildDraft>) => void;
   onRemove: () => void;
   onDeleteInvoice: (feeId: number, invoiceId: number, paidAmount: string | null) => void;
@@ -875,7 +884,7 @@ function ChildCard({
             <Checkbox label="Prend le bus" checked={child.wantsTransport} onChange={(e) => onUpdate({ wantsTransport: e.target.checked, routeId: "", stopId: "" })} />
           )}
 
-          {selectedExemptionRule?.staffBenefit && (
+          {(isStaffParent || selectedExemptionRule?.staffBenefit) && (
             <Field>
               <Checkbox
                 label="Facturer en 9 mensualités séparées (retenue sur salaire mensuelle)"
@@ -932,10 +941,10 @@ function ChildCard({
 
       {child.status === "done" && (
         <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
-          {child.generatedInvoices && child.generatedInvoices.length > 0 && (
+          {(child.generatedInvoices && child.generatedInvoices.length > 0) || child.transportSubscribed ? (
             <div className="space-y-1">
               <p className="text-xs font-medium text-gray-500">Factures générées</p>
-              {child.generatedInvoices.flatMap((g) => g.invoices.map((inv) => (
+              {child.generatedInvoices?.flatMap((g) => g.invoices.map((inv) => (
                 <div key={inv.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs">
                   <span className="text-gray-700">
                     {g.fee.type === "OTHER" && g.fee.label ? g.fee.label : FEE_TYPE_LABEL[g.fee.type]} — {formatGNF(inv.totalAmount)}
@@ -950,8 +959,17 @@ function ChildCard({
                   </button>
                 </div>
               )))}
+              {/* L'abonnement transport génère ses factures lui-même, de façon asynchrone côté serveur
+                  (voir TransportInvoiceListener) — jamais renvoyées par generateAllForEnrollment, donc
+                  jamais dans generatedInvoices ci-dessus. Sans cette ligne, le comptable ne voyait
+                  jamais que le transport avait bien été facturé (§retour comptable). */}
+              {child.transportSubscribed && (
+                <div className="flex items-center justify-between rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs">
+                  <span className="text-gray-700">{FEE_TYPE_LABEL.TRANSPORT} — abonnement actif, facturé chaque mois</span>
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

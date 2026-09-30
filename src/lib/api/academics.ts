@@ -23,6 +23,7 @@ import type {
   SchoolCycle,
   SchoolEvent,
   SchoolEventInput,
+  SchoolEventTouchedTeacher,
   StatutAnneeScolaire,
 } from "@/lib/types/academics";
 
@@ -257,4 +258,10 @@ export function createSchoolEvent(input: SchoolEventInput): Promise<SchoolEvent>
 }
 export function deleteSchoolEvent(id: number): Promise<void> {
   return api.delete<void>(`/academics/school-events/${id}`);
+}
+export function listSchoolEventTouchedTeachers(id: number): Promise<SchoolEventTouchedTeacher[]> {
+  return api.get<SchoolEventTouchedTeacher[]>(`/academics/school-events/${id}/enseignants-touches`);
+}
+export function setSchoolEventCreditedTeachers(id: number, teacherIds: number[]): Promise<void> {
+  return api.put<void>(`/academics/school-events/${id}/enseignants-credites`, { teacherIds });
 }

@@ -49,7 +49,10 @@ export interface CreateTeacherInput {
   idempotencyKey?: string;
 }
 
-export type UpdateTeacherInput = Omit<CreateTeacherInput, "userId">;
+/** userId reste modifiable en édition : permet de lier un compte créé après coup (ex. « Créer un
+ * accès » oublié à la création) — le backend ne le retire jamais si non fourni, voir
+ * TeacherUseCase.UpdateTeacherCommand#userId. */
+export type UpdateTeacherInput = CreateTeacherInput;
 
 /** Class where the teacher is head teacher (academics ClassPublicInfo). */
 export interface TeacherClassInfo {

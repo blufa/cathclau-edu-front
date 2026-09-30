@@ -206,7 +206,9 @@ export interface ClasseMatiere {
 }
 
 /** Événement école (kermesse, match, entraînement...) qui empêche les élèves de suivre le cours sur
- * une période — les enseignants dont un créneau tombe dans cette période restent payés (§payroll). */
+ * une période — la direction choisit ensuite quels enseignants touchés sont payés sur ces heures (voir
+ * SchoolEventTouchedTeacher). Un jour férié (chômé et payé par l'État) est un concept SÉPARÉ, saisi
+ * dans le calendrier académique, toujours payé automatiquement — jamais un SchoolEvent. */
 export interface SchoolEvent {
   id: number;
   tenantId: number | null;
@@ -226,6 +228,12 @@ export interface SchoolEventInput {
   startTime?: string | null;
   endTime?: string | null;
   reason?: string | null;
+}
+
+/** Enseignant dont un créneau récurrent est touché par l'événement, avec son statut de crédit actuel. */
+export interface SchoolEventTouchedTeacher {
+  teacherId: number;
+  credited: boolean;
 }
 
 /** Roster projection from GET /classes/{id}/students. */
