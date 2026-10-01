@@ -10,9 +10,15 @@ import { ExemptionsPanel } from "@/features/billing/components/exemptions-panel"
 
 export default function BillingRulesPage() {
   const { user } = useAuth();
-  // Lecture seule par défaut (ex. comptable) : création/modification/suppression exigent un privilège
-  // explicite, accordé par l'administrateur école — plus de "frais:manage" global.
+  // Lecture seule par défaut (ex. comptable) sur le CATALOGUE des types d'exonération/remises :
+  // création/modification/suppression exigent un privilège explicite, accordé par l'administrateur
+  // école — plus de "frais:manage" global.
   const canWrite = hasAnyPermission(user, ["regle_facturation:create", "regle_facturation:update", "regle_facturation:delete"]);
+  // Accorder une exonération à un élève précis est une action courante du comptable/secrétaire à
+  // l'inscription ou à l'encaissement — distinct du catalogue ci-dessus, jamais restreint à la
+  // lecture seule par défaut. La révoquer reste une correction réservée à l'admin école/direction.
+  const canGrantExemption = hasAnyPermission(user, ["exoneration:create"]);
+  const canRevokeExemption = hasAnyPermission(user, ["exoneration:delete"]);
 
   return (
     <div className="space-y-5">
@@ -38,7 +44,7 @@ export default function BillingRulesPage() {
             </div>
             <div>
               <h2 className="mb-2 text-sm font-semibold text-gray-700">Exonérations accordées (cas par cas)</h2>
-              <ExemptionsPanel canWrite={canWrite} />
+              <ExemptionsPanel canCreate={canGrantExemption} canDelete={canRevokeExemption} />
             </div>
           </div>
         </TabsPanel>
