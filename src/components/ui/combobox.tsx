@@ -11,6 +11,7 @@ interface ComboboxProps {
   options: string[];
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -19,7 +20,7 @@ interface ComboboxProps {
  * recherche asynchrone à texte libre (ex. école d'origine) — contrairement à `SearchableSelect`,
  * qui lui impose de choisir une option de la liste.
  */
-export function Combobox({ value, onChange, options, placeholder, className }: ComboboxProps) {
+export function Combobox({ value, onChange, options, placeholder, className, disabled }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -38,13 +39,14 @@ export function Combobox({ value, onChange, options, placeholder, className }: C
         value={value}
         placeholder={placeholder}
         className={className}
+        disabled={disabled}
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
       />
-      {open && options.length > 0 && (
+      {!disabled && open && options.length > 0 && (
         <ul className="absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-theme-lg">
           {options.map((o) => (
             <li key={o}>

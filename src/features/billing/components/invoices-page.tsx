@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
@@ -51,7 +51,11 @@ function genRef(prefix: string): string {
 export default function InvoicesPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["facture:create", "paiement:create"]);
+  // Le comptable a create+read sur les factures (émettre, encaisser) mais jamais update/delete
+  // (remise, recouvrement, annulation — réservés à l'admin/directeur) : plus de "canWrite" global.
+  const canCreateInvoice = hasAnyPermission(user, ["facture:create"]);
+  const canUpdateInvoice = hasAnyPermission(user, ["facture:update"]);
+  const canCreatePayment = hasAnyPermission(user, ["paiement:create"]);
 
   // Arrivée depuis la fiche élève (onglet Scolarité → « Factures de l'élève ») : pré-filtre sur cet
   // élève au lieu d'atterrir sur la liste complète de tous les élèves — sans ça, `?student=` était
@@ -172,7 +176,7 @@ export default function InvoicesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Factures</h1>
           <p className="text-sm text-gray-500">Facturation des frais scolaires des élèves</p>
         </div>
-        {canWrite && (
+        {canCreateInvoice && (
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setBulk(true)}>Générer en masse</Button>
             <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle facture</Button>
@@ -257,10 +261,10 @@ export default function InvoicesPage() {
                         return `Bonjour, voici la facture ${inv.reference} de ${name} (${solde}).${url ? ` ${url}` : ""}`;
                       }}
                     />
-                    {canWrite && inv.status !== "PAID" && <Button size="sm" onClick={() => setPaying(inv)}>Payer</Button>}
-                    {canWrite && inv.status !== "PAID" && inv.recoveryStage !== "EXCLUDED" && <Button size="sm" variant="ghost" onClick={() => advance(inv)}>{inv.recoveryStage === "REMINDER_2" ? "Exclure" : "Relancer"}</Button>}
-                    {canWrite && inv.status !== "PAID" && <Button size="sm" variant="ghost" onClick={() => setDiscountFor(inv)}>Remise</Button>}
-                    {canWrite && inv.status !== "PAID" && (
+                    {canCreatePayment && inv.status !== "PAID" && <Button size="sm" onClick={() => setPaying(inv)}>Payer</Button>}
+                    {canUpdateInvoice && inv.status !== "PAID" && inv.recoveryStage !== "EXCLUDED" && <Button size="sm" variant="ghost" onClick={() => advance(inv)}>{inv.recoveryStage === "REMINDER_2" ? "Exclure" : "Relancer"}</Button>}
+                    {canUpdateInvoice && inv.status !== "PAID" && <Button size="sm" variant="ghost" onClick={() => setDiscountFor(inv)}>Remise</Button>}
+                    {canCreateInvoice && inv.status !== "PAID" && (
                       <ParentReminderButton
                         studentId={inv.studentId}
                         reason="PAYMENT_DUE"
@@ -270,7 +274,7 @@ export default function InvoicesPage() {
                         variant="ghost"
                       />
                     )}
-                    {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => cancel(inv)}>Annuler</Button>}
+                    {canUpdateInvoice && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => cancel(inv)}>Annuler</Button>}
                   </div>
                 </TD>
               </TR>

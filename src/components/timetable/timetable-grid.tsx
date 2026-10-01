@@ -80,6 +80,7 @@ export function TimetableGrid({
   subjects,
   teacherName,
   slotBandMinutes,
+  canWrite,
   onChanged,
 }: {
   classId: number;
@@ -90,6 +91,9 @@ export function TimetableGrid({
   teacherName?: Map<number, string>;
   /** Largeur des bandes horaires en minutes (ex. 120 pour le secondaire, 60 ailleurs) — repli sur 1h. */
   slotBandMinutes?: number;
+  /** Lecture seule (pas de emploi:manage) : aucun contrôle interactif dans les cellules, juste le
+   *  libellé — jamais la possibilité de cliquer pour ensuite se voir refuser par le serveur. */
+  canWrite: boolean;
   onChanged: () => void;
 }) {
   const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
@@ -180,17 +184,21 @@ export function TimetableGrid({
                 dayCursor.set(d.key, rowIndex + span);
                 return (
                   <td key={d.key} rowSpan={span} className="px-1.5 py-1.5 align-top">
-                    <GridCell
-                      // Remonte avec un état frais quand l'entrée apparaît/disparaît (créée ailleurs,
-                      // ex. génération automatique) — évite un effet de resynchronisation.
-                      key={existing?.id ?? "empty"}
-                      classId={classId}
-                      day={d.key}
-                      slot={slot}
-                      existing={existing}
-                      options={options}
-                      onChanged={onChanged}
-                    />
+                    {canWrite ? (
+                      <GridCell
+                        // Remonte avec un état frais quand l'entrée apparaît/disparaît (créée ailleurs,
+                        // ex. génération automatique) — évite un effet de resynchronisation.
+                        key={existing?.id ?? "empty"}
+                        classId={classId}
+                        day={d.key}
+                        slot={slot}
+                        existing={existing}
+                        options={options}
+                        onChanged={onChanged}
+                      />
+                    ) : (
+                      <ReadOnlyGridCell existing={existing} options={options} />
+                    )}
                   </td>
                 );
               })}
@@ -198,6 +206,21 @@ export function TimetableGrid({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Cellule en lecture seule (pas de `emploi:manage`) : juste le libellé, aucun contrôle interactif —
+ * jamais la possibilité de cliquer pour se voir ensuite refuser par le serveur. Composant à part
+ * (plutôt qu'un simple `if` dans {@link GridCell}) pour ne jamais enfreindre les règles des Hooks :
+ * {@link GridCell} appelle toujours ses `useState`, ce composant n'en a aucun. */
+function ReadOnlyGridCell({ existing, options }: { existing: EmploiDuTemps | undefined; options: CellOption[] }) {
+  if (!existing) return <div className="px-1 py-1"><span className="text-xs text-gray-300">—</span></div>;
+  const label = options.find((o) => o.value === `${existing.subjectId}:${existing.teacherId}`)?.label;
+  return (
+    <div className="px-1 py-1 text-xs text-gray-600">
+      <p className="font-medium text-gray-700">{label ?? `Matière #${existing.subjectId}`}</p>
+      <p className="text-[11px] text-gray-400">{existing.startTime.slice(0, 5)}–{existing.endTime.slice(0, 5)}</p>
     </div>
   );
 }

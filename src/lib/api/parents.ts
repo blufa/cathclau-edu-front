@@ -61,12 +61,22 @@ export function listParents(search?: string, size = 1000): Promise<Parent[]> {
   });
 }
 
-export function createParent(input: ParentInput, userId: number | null = null): Promise<Parent> {
-  return api.post<Parent>("/parents", { ...input, userId });
+/** staffType/staffId : lien DIRECT vers une fiche Teacher/Employee, sans compte de connexion requis
+ * (ex. personnel sans smartphone Android) — alternative à userId, voir StaffSearchResult. */
+export function createParent(
+  input: ParentInput, userId: number | null = null,
+  staffType: "TEACHER" | "EMPLOYEE" | null = null, staffId: number | null = null,
+): Promise<Parent> {
+  return api.post<Parent>("/parents", { ...input, userId, staffType, staffId });
 }
 
-export function updateParent(id: number, input: ParentInput): Promise<Parent> {
-  return api.put<Parent>(`/parents/${id}`, input);
+/** userId : lie un compte de connexion créé APRÈS coup (ex. « Créer un accès » oublié à la création) —
+ * null = ne touche pas au lien existant. Même principe pour staffType/staffId (lien direct sans compte). */
+export function updateParent(
+  id: number, input: ParentInput, userId: number | null = null,
+  staffType: "TEACHER" | "EMPLOYEE" | null = null, staffId: number | null = null,
+): Promise<Parent> {
+  return api.put<Parent>(`/parents/${id}`, { ...input, userId, staffType, staffId });
 }
 
 export function getStudentParents(studentId: number): Promise<Parent[]> {

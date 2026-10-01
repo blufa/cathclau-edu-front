@@ -13,7 +13,9 @@ export function listTeachers(): Promise<Teacher[]> {
 }
 
 export interface StaffSearchResult {
-  userId: number;
+  /** null = ce membre du personnel n'a pas de compte de connexion (ex. pas de smartphone Android) —
+   * le lier comme parent nécessite alors un lien DIRECT (staffType/staffId), pas un userId. */
+  userId: number | null;
   staffType: "TEACHER" | "EMPLOYEE";
   staffId: number;
   fullName: string;

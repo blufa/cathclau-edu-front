@@ -1,0 +1,53 @@
+"use client";
+
+import { Modal } from "@/components/ui/modal";
+import { StudentInvoicesPanel } from "./student-invoices-panel";
+
+/**
+ * Encaissement de plusieurs enfants juste après une inscription groupée (§retour comptable) : un
+ * raccourci pour éviter l'aller-retour par la liste des élèves, PAS un paiement combiné — chaque
+ * enfant garde exactement le même écran "Factures" que sur sa propre fiche (transport, tranches,
+ * remises...), encaissé et reçu indépendamment des autres. Voir {@link CollectFeeModal} (même contenu,
+ * un seul enfant) ; contrairement à `MultiChildCollectModal`, qui fusionne tout en un seul paiement/
+ * reçu — adapté à une fratrie qui règle ensemble, pas à ce cas.
+ */
+export function MultiChildInvoicesModal({
+  students, tenantId, open, onClose,
+}: {
+  students: { id: number; name: string; classId: number | null; className?: string | null }[];
+  tenantId: number;
+  open: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Encaissement — ${students.length} élève${students.length > 1 ? "s" : ""}`}
+      className="max-w-[95vw] max-h-[90vh] overflow-y-auto"
+    >
+      {students.length === 0 ? (
+        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Aucun élève à encaisser.</p>
+      ) : (
+        // Deux colonnes sur grand écran : avec 5-6 enfants inscrits d'un coup, un seul long défilement
+        // vertical serait impraticable — pleinement indépendant, l'ordre d'affichage n'a pas d'importance.
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {students.map((student) => (
+            <div key={student.id} className="rounded-xl border border-gray-100 p-4">
+              <h3 className="mb-3 flex items-baseline gap-2 text-base font-semibold text-gray-900">
+                {student.name}
+                {student.className && <span className="text-sm font-normal text-gray-400">· {student.className}</span>}
+              </h3>
+              <StudentInvoicesPanel
+                studentId={student.id}
+                tenantId={tenantId}
+                classId={student.classId ?? undefined}
+                onCollected={() => {}}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
