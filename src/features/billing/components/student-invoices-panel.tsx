@@ -853,8 +853,8 @@ function InvoiceCollect({
                     <span className="text-sm text-slate-700">
                       {labelFor(m)}
                       {m.discountAmount != null && Number(m.discountAmount) > 0 && (
-                        <span className="ml-1.5 text-xs font-medium text-success-600" title={m.discountReason ?? undefined}>
-                          (remise −{formatGNF(m.discountAmount)})
+                        <span className="ml-1.5 text-xs font-medium text-success-600">
+                          (remise −{formatGNF(m.discountAmount)}{m.discountReason && ` · ${m.discountReason}`})
                         </span>
                       )}
                     </span>
@@ -899,11 +899,8 @@ function InvoiceCollect({
         {exemptedPeriods.map((p) => (
           <div key={`exempted-${p.installmentId}-${p.periodLabel}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 opacity-70">
             <span className="text-sm text-slate-500 line-through decoration-slate-300">{p.periodLabel}</span>
-            <span
-              className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700"
-              title={p.discountReason ?? undefined}
-            >
-              Exonéré 100%
+            <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700">
+              {p.discountReason ? p.discountReason : "Exonéré 100%"}
             </span>
           </div>
         ))}
