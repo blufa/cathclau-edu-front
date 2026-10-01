@@ -14,7 +14,9 @@ import {
   RELATIONSHIP_LABEL, type ParentStaffLink, type Relationship,
 } from "@/lib/api/parents";
 import { searchStaff, type StaffSearchResult } from "@/lib/api/staff";
-import { searchPreviousClasses, searchSchools } from "@/lib/api/directory";
+import {
+  searchPreviousClasses, searchSchools, suggestAddresses, suggestFirstNames, suggestLastNames,
+} from "@/lib/api/directory";
 import { enroll } from "@/lib/api/enrollments";
 import {
   cancelInvoice, deleteInvoice, generateAllForEnrollment,
@@ -47,6 +49,22 @@ import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
+/** Suggestions texte débouncées (§retour comptable : prénom/nom/adresse/école déjà saisis ailleurs
+ * sur la plateforme) — un seul hook partagé par tous les champs "Combobox" de cette page plutôt que
+ * de répéter le même triplet state+debounce+catch à chaque champ. */
+function useDebouncedSuggestions(fetchFn: (q: string) => Promise<string[]>, minLength: number) {
+  const [options, setOptions] = useState<string[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function query(q: string) {
+    clearTimeout(debounceRef.current);
+    if (q.trim().length < minLength) { setOptions([]); return; }
+    debounceRef.current = setTimeout(() => {
+      fetchFn(q).then(setOptions).catch(() => setOptions([]));
+    }, 300);
+  }
+  return [options, query] as const;
+}
+
 // "queued" : mis en file locale automatiquement après un échec RÉSEAU (jamais un clic manuel) — sera
 // synchronisé tout seul au retour de la connexion (§retour comptable, file 100% automatique).
 type ChildStatus = "pending" | "creating" | "done" | "error" | "queued";
@@ -61,7 +79,6 @@ interface ChildDraft {
   address: string;
   originSchool: string;
   previousClass: string;
-  repeating: boolean;
   classId: string;
   relationship: Relationship;
   status: ChildStatus;
@@ -94,7 +111,7 @@ function emptyChild(): ChildDraft {
   return {
     key: Math.random().toString(36).slice(2),
     firstName: "", lastName: "", gender: "MALE", birthDate: "",
-    address: "", originSchool: "", previousClass: "", repeating: false,
+    address: "", originSchool: "", previousClass: "",
     classId: "", relationship: "FATHER",
     status: "pending",
     enrollmentType: "NEW",
@@ -137,6 +154,12 @@ export default function BulkFamilyEnrollmentPage() {
   }, [allParentsQuery.data, parentSearch]);
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
   const [newParent, setNewParent] = useState({ firstName: "", lastName: "", phone: "", email: "", occupation: "", address: "" });
+  // Suggestions prénom/nom/adresse déjà saisis pour un autre élève ou parent de l'école (§retour
+  // comptable) — même source que pour l'enfant ci-dessous (ChildCard), un nom ou une adresse déjà
+  // connue de l'école vaut aussi bien pour le parent que pour l'enfant.
+  const [parentFirstNameOptions, fetchParentFirstNames] = useDebouncedSuggestions(suggestFirstNames, 2);
+  const [parentLastNameOptions, fetchParentLastNames] = useDebouncedSuggestions(suggestLastNames, 2);
+  const [parentAddressOptions, fetchParentAddresses] = useDebouncedSuggestions(suggestAddresses, 2);
 
   // Lier comme personnel (§5.5) : recherche croisée enseignant/employé, pré-remplit nom/téléphone et
   // mémorise son userId — indispensable pour que la détection automatique de la remise personnel
@@ -252,7 +275,7 @@ export default function BulkFamilyEnrollmentPage() {
       firstName: child.firstName.trim(), lastName: child.lastName.trim(), gender: child.gender,
       birthDate: child.birthDate || null, address: child.address.trim() || null,
       originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
-      repeating: child.repeating, classId: Number(child.classId), relationship: child.relationship,
+      classId: Number(child.classId), relationship: child.relationship,
       enrollmentType: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
       exemption: rule ? {
         type: rule.type, percentage: rule.percentage != null ? Number(rule.percentage) : null,
@@ -298,7 +321,6 @@ export default function BulkFamilyEnrollmentPage() {
             gender: child.gender, birthDate: child.birthDate || null,
             address: child.address.trim() || null,
             originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
-            repeating: child.repeating,
           });
           studentId = student.id;
           updateChild(child.key, { studentId });
@@ -616,11 +638,21 @@ export default function BulkFamilyEnrollmentPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field>
                 <Label>Prénom <span className="text-error-500">*</span></Label>
-                <Input disabled={running || finished} value={newParent.firstName} onChange={(e) => setNewParent({ ...newParent, firstName: e.target.value })} />
+                <Combobox
+                  disabled={running || finished}
+                  value={newParent.firstName}
+                  options={parentFirstNameOptions}
+                  onChange={(val) => { setNewParent({ ...newParent, firstName: val }); fetchParentFirstNames(val); }}
+                />
               </Field>
               <Field>
                 <Label>Nom <span className="text-error-500">*</span></Label>
-                <Input disabled={running || finished} value={newParent.lastName} onChange={(e) => setNewParent({ ...newParent, lastName: e.target.value })} />
+                <Combobox
+                  disabled={running || finished}
+                  value={newParent.lastName}
+                  options={parentLastNameOptions}
+                  onChange={(val) => { setNewParent({ ...newParent, lastName: val }); fetchParentLastNames(val); }}
+                />
               </Field>
               <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={newParent.phone} onChange={(v) => setNewParent({ ...newParent, phone: v })} />
               <Field>
@@ -633,7 +665,12 @@ export default function BulkFamilyEnrollmentPage() {
               </Field>
               <Field>
                 <Label>Adresse (optionnel)</Label>
-                <Input disabled={running || finished} value={newParent.address} onChange={(e) => setNewParent({ ...newParent, address: e.target.value })} />
+                <Combobox
+                  disabled={running || finished}
+                  value={newParent.address}
+                  options={parentAddressOptions}
+                  onChange={(val) => { setNewParent({ ...newParent, address: val }); fetchParentAddresses(val); }}
+                />
               </Field>
             </div>
           ) : parentMode === "existing" ? (
@@ -786,26 +823,15 @@ function ChildCard({
   const locked = running || child.status === "done" || child.status === "queued";
   const selectedExemptionRule = exemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
 
-  // École d'origine / dernière classe : suggestions depuis les valeurs déjà saisies sur la plateforme
-  // (saisie libre toujours possible) — un champ par enfant, débouncé indépendamment.
-  const [schoolOptions, setSchoolOptions] = useState<string[]>([]);
-  const schoolDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  function fetchSchools(q: string) {
-    clearTimeout(schoolDebounce.current);
-    if (q.trim().length < 2) { setSchoolOptions([]); return; }
-    schoolDebounce.current = setTimeout(() => {
-      searchSchools(q).then(setSchoolOptions).catch(() => setSchoolOptions([]));
-    }, 300);
-  }
-  const [classOptions, setClassOptions] = useState<string[]>([]);
-  const classDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  function fetchPreviousClasses(q: string) {
-    clearTimeout(classDebounce.current);
-    if (q.trim().length < 1) { setClassOptions([]); return; }
-    classDebounce.current = setTimeout(() => {
-      searchPreviousClasses(q).then(setClassOptions).catch(() => setClassOptions([]));
-    }, 300);
-  }
+  // Prénom / nom / adresse / école d'origine / dernière classe : suggestions depuis les valeurs déjà
+  // saisies sur la plateforme (saisie libre toujours possible) — un champ par enfant, débouncé
+  // indépendamment. Prénom/nom/adresse cherchent aussi bien côté élèves que parents du tenant (une
+  // fratrie partage souvent le même nom ou la même adresse qu'un élève/parent déjà enregistré).
+  const [firstNameOptions, fetchFirstNames] = useDebouncedSuggestions(suggestFirstNames, 2);
+  const [lastNameOptions, fetchLastNames] = useDebouncedSuggestions(suggestLastNames, 2);
+  const [addressOptions, fetchAddresses] = useDebouncedSuggestions(suggestAddresses, 2);
+  const [schoolOptions, fetchSchools] = useDebouncedSuggestions(searchSchools, 2);
+  const [classOptions, fetchPreviousClasses] = useDebouncedSuggestions(searchPreviousClasses, 1);
 
   return (
     <div className="rounded-xl border border-gray-200 p-3">
@@ -823,11 +849,21 @@ function ChildCard({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field>
           <Label>Prénom <span className="text-error-500">*</span></Label>
-          <Input disabled={locked} value={child.firstName} onChange={(e) => onUpdate({ firstName: e.target.value })} />
+          <Combobox
+            disabled={locked}
+            value={child.firstName}
+            options={firstNameOptions}
+            onChange={(val) => { onUpdate({ firstName: val }); fetchFirstNames(val); }}
+          />
         </Field>
         <Field>
           <Label>Nom <span className="text-error-500">*</span></Label>
-          <Input disabled={locked} value={child.lastName} onChange={(e) => onUpdate({ lastName: e.target.value })} />
+          <Combobox
+            disabled={locked}
+            value={child.lastName}
+            options={lastNameOptions}
+            onChange={(val) => { onUpdate({ lastName: val }); fetchLastNames(val); }}
+          />
         </Field>
         <Field>
           <Label>Sexe</Label>
@@ -845,11 +881,17 @@ function ChildCard({
         </Field>
         <Field>
           <Label>Adresse</Label>
-          <Input disabled={locked} value={child.address} onChange={(e) => onUpdate({ address: e.target.value })} />
+          <Combobox
+            disabled={locked}
+            value={child.address}
+            options={addressOptions}
+            onChange={(val) => { onUpdate({ address: val }); fetchAddresses(val); }}
+          />
         </Field>
         <Field>
           <Label>École d&apos;origine</Label>
           <Combobox
+            disabled={locked}
             value={child.originSchool}
             options={schoolOptions}
             onChange={(val) => { onUpdate({ originSchool: val }); fetchSchools(val); }}
@@ -858,14 +900,12 @@ function ChildCard({
         <Field>
           <Label>Dernière classe</Label>
           <Combobox
+            disabled={locked}
             value={child.previousClass}
             options={classOptions}
             onChange={(val) => { onUpdate({ previousClass: val }); fetchPreviousClasses(val); }}
           />
         </Field>
-        <div className="flex items-end pb-2.5">
-          <Checkbox label="Redoublant" disabled={locked} checked={child.repeating} onChange={(e) => onUpdate({ repeating: e.target.checked })} />
-        </div>
         <Field>
           <Label>Classe <span className="text-error-500">*</span></Label>
           <SearchableSelect

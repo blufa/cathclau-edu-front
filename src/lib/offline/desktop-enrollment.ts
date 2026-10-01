@@ -35,7 +35,6 @@ export interface QueuedChild {
   address: string | null;
   originSchool: string | null;
   previousClass: string | null;
-  repeating: boolean;
   classId: number;
   relationship: Relationship;
   enrollmentType: EnrollmentType;
@@ -144,7 +143,6 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
             firstName: child.firstName, lastName: child.lastName, gender: child.gender,
             birthDate: child.birthDate, address: child.address,
             originSchool: child.originSchool, previousClass: child.previousClass,
-            repeating: child.repeating,
             idempotencyKey: `${row.id}:${child.key}`,
           });
           studentId = student.id;
