@@ -298,6 +298,9 @@ export function StudentInvoicesPanel({
   // manuelle. Gardées par feeId pour ne jamais mélanger scolarité et cantine.
   const [exemptedPeriodsByFeeId, setExemptedPeriodsByFeeId] = useState<Record<number, ExemptedPeriod[]>>({});
   const exemptedPeriods = Object.values(exemptedPeriodsByFeeId).flat();
+  // Un frais déjà résolu au moins une fois (clé présente, même si son tableau est vide) qui reste sans
+  // aucune facture n'a plus rien à "générer" — voir le commentaire au point d'affichage ci-dessous.
+  const pendingUngeneratedFees = ungeneratedRecurringFees.filter((f) => exemptedPeriodsByFeeId[f.id] === undefined);
 
   async function generateMonths(fee: SchoolFee) {
     setGeneratingFeeId(fee.id);
@@ -510,8 +513,13 @@ export function StudentInvoicesPanel({
 
           {/* Génère les tranches (scolarité ou cantine) pour pouvoir payer l'inscription + les mois
               choisis — un frais réglable en tranches n'a jamais de facture tant qu'il n'a pas été
-              généré une première fois pour cet élève. */}
-          {ungeneratedRecurringFees.map((fee) => {
+              généré une première fois pour cet élève. Exclut un frais déjà résolu (exemptedPeriodsByFeeId
+              connu, voir generateMonths) qui reste malgré tout sans aucune facture : c'est qu'il est
+              exonéré à 100% (aucune facture à 0 GNF n'est jamais créée, voir InvoiceService) — rien à
+              générer ni à montrer ici, l'exonération apparaît déjà listée dans le bloc ci-dessus
+              (§retour comptable : "ce n'est pas la peine" de garder ce bouton pour un élève qui ne doit
+              rien). */}
+          {pendingUngeneratedFees.map((fee) => {
             const label = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
             return (
               <div key={fee.id} className="flex flex-col gap-2 rounded-xl border border-brand-200 bg-brand-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -525,7 +533,7 @@ export function StudentInvoicesPanel({
             );
           })}
 
-          {payable.length === 0 && exemptedPeriods.length === 0 && ungeneratedRecurringFees.length === 0 && (
+          {payable.length === 0 && exemptedPeriods.length === 0 && pendingUngeneratedFees.length === 0 && (
             <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
               Toutes les factures sont soldées.
             </p>
