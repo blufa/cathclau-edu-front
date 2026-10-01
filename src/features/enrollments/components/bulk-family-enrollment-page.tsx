@@ -16,8 +16,6 @@ import {
 import { searchStaff, type StaffSearchResult } from "@/lib/api/staff";
 import { searchPreviousClasses, searchSchools } from "@/lib/api/directory";
 import { enroll } from "@/lib/api/enrollments";
-import { listRoutes, listStops, subscribe } from "@/lib/api/transport";
-import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
 import {
   cancelInvoice, deleteInvoice, generateAllForEnrollment,
   grantExemption, listExemptionRules,
@@ -61,7 +59,6 @@ interface ChildDraft {
   birthDate: string;
   // Coordonnées et parcours scolaire antérieur de l'enfant (fiche identité).
   address: string;
-  phone: string;
   originSchool: string;
   previousClass: string;
   repeating: boolean;
@@ -77,16 +74,10 @@ interface ChildDraft {
   parentLinked?: boolean;
   enrolled?: boolean;
   exemptionApplied?: boolean;
-  transportSubscribed?: boolean;
   feesGenerated?: boolean;
   // Inscription ou réinscription (§retour comptable) : détermine quelle facture d'inscription générer
   // — jamais les deux, même si la classe a les deux frais configurés.
   enrollmentType: EnrollmentType;
-  // Transport (§retour comptable, refonte inscription) : optionnel, comme à l'inscription classique.
-  wantsTransport: boolean;
-  routeId: string;
-  stopId: string;
-  direction: TransportDirection;
   // Exonération choisie dans le catalogue pré-configuré (§retour comptable), accordée en direct avant
   // la génération des factures pour qu'elle s'applique dès le départ. "" = aucune.
   exemptionRuleId: string;
@@ -103,11 +94,10 @@ function emptyChild(): ChildDraft {
   return {
     key: Math.random().toString(36).slice(2),
     firstName: "", lastName: "", gender: "MALE", birthDate: "",
-    address: "", phone: "", originSchool: "", previousClass: "", repeating: false,
+    address: "", originSchool: "", previousClass: "", repeating: false,
     classId: "", relationship: "FATHER",
     status: "pending",
     enrollmentType: "NEW",
-    wantsTransport: false, routeId: "", stopId: "", direction: "BOTH",
     exemptionRuleId: "", monthlyPaymentOptIn: false,
   };
 }
@@ -170,6 +160,14 @@ export default function BulkFamilyEnrollmentPage() {
   // "avantage personnel" est en plus explicitement choisie dans la liste déroulante.
   const isStaffParent = parentMode === "staff" ? !!selectedStaff : !!staffLinkQuery.data;
 
+  // Suggestion nom de famille / adresse (§retour comptable) : dans la grande majorité des familles,
+  // les enfants portent le même nom et vivent à la même adresse que le parent déjà saisi — on la
+  // propose automatiquement sur chaque enfant, mais seulement tant que SON champ est resté vide :
+  // une suggestion que le comptable peut toujours écraser (tuteur, enfant d'un autre nom...), jamais
+  // une valeur imposée.
+  const resolvedParentLastName = (parentMode === "existing" ? selectedParent?.lastName : newParent.lastName)?.trim() || "";
+  const resolvedParentAddress = (parentMode === "existing" ? selectedParent?.address : newParent.address)?.trim() || "";
+
   // ── Année scolaire / classes ────────────────────────────────────────────
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = yearsQuery.data ?? [];
@@ -178,8 +176,6 @@ export default function BulkFamilyEnrollmentPage() {
   const classesQuery = useQuery(() => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])), [effectiveYearId]);
   const classes = classesQuery.data ?? [];
 
-  // Lignes de transport du tenant — partagées entre tous les enfants (chacun choisit la sienne).
-  const routesQuery = useQuery(() => listRoutes(), []);
   // Types d'exonération pré-configurés — partagés entre tous les enfants (§retour comptable).
   const exemptionRulesQuery = useQuery(() => listExemptionRules(), []);
   const activeExemptionRules = (exemptionRulesQuery.data ?? []).filter((r) => r.active);
@@ -208,11 +204,27 @@ export default function BulkFamilyEnrollmentPage() {
     setChildren((cs) => cs.map((c) => (c.key === key ? { ...c, ...patch } : c)));
   }
   function addChild() {
-    setChildren((cs) => [...cs, emptyChild()]);
+    setChildren((cs) => [...cs, { ...emptyChild(), lastName: resolvedParentLastName, address: resolvedParentAddress }]);
   }
   function removeChild(key: string) {
     setChildren((cs) => (cs.length > 1 ? cs.filter((c) => c.key !== key) : cs));
   }
+
+  // Les deux enfants présents dès l'arrivée sur la page (avant tout clic sur "Ajouter un enfant")
+  // sont créés AVANT que le parent ne soit renseigné — sans cet effet, eux seuls resteraient vides
+  // tant qu'on ne les retouche pas, contrairement à tout enfant ajouté ensuite (déjà préremplis par
+  // `addChild` ci-dessus).
+  useEffect(() => {
+    if (!resolvedParentLastName && !resolvedParentAddress) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChildren((cs) => cs.map((c) => {
+      if (c.status !== "pending") return c;
+      const patch: Partial<ChildDraft> = {};
+      if (resolvedParentLastName && !c.lastName.trim()) patch.lastName = resolvedParentLastName;
+      if (resolvedParentAddress && !c.address.trim()) patch.address = resolvedParentAddress;
+      return Object.keys(patch).length > 0 ? { ...c, ...patch } : c;
+    }));
+  }, [resolvedParentLastName, resolvedParentAddress]);
 
   function validate(): string | null {
     if (parentMode === "existing" && !selectedParent) return "Sélectionnez un parent existant.";
@@ -226,9 +238,6 @@ export default function BulkFamilyEnrollmentPage() {
       if (!c.firstName.trim() || !c.lastName.trim() || !c.classId) {
         return "Chaque enfant doit avoir un prénom, un nom et une classe.";
       }
-      if (c.wantsTransport && !c.routeId) {
-        return "Choisissez une ligne de transport, ou décochez l'abonnement.";
-      }
     }
     return null;
   }
@@ -241,12 +250,10 @@ export default function BulkFamilyEnrollmentPage() {
     return {
       key: child.key,
       firstName: child.firstName.trim(), lastName: child.lastName.trim(), gender: child.gender,
-      birthDate: child.birthDate || null, address: child.address.trim() || null, phone: child.phone.trim() || null,
+      birthDate: child.birthDate || null, address: child.address.trim() || null,
       originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
       repeating: child.repeating, classId: Number(child.classId), relationship: child.relationship,
       enrollmentType: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
-      wantsTransport: child.wantsTransport, routeId: child.routeId ? Number(child.routeId) : null,
-      stopId: child.stopId ? Number(child.stopId) : null, direction: child.direction,
       exemption: rule ? {
         type: rule.type, percentage: rule.percentage != null ? Number(rule.percentage) : null,
         amount: rule.amount != null ? Number(rule.amount) : null,
@@ -255,7 +262,7 @@ export default function BulkFamilyEnrollmentPage() {
       } : null,
       studentId: child.studentId ?? null, parentLinked: child.parentLinked ?? false,
       enrolled: child.enrolled ?? false, exemptionApplied: child.exemptionApplied ?? false,
-      transportSubscribed: child.transportSubscribed ?? false, feesGenerated: child.feesGenerated ?? false,
+      feesGenerated: child.feesGenerated ?? false,
       done: false,
       ...progress,
     };
@@ -280,7 +287,6 @@ export default function BulkFamilyEnrollmentPage() {
       let parentLinked = child.parentLinked ?? false;
       let enrolled = child.enrolled ?? false;
       let exemptionApplied = child.exemptionApplied ?? false;
-      let transportSubscribed = child.transportSubscribed ?? false;
       let feesGenerated = child.feesGenerated ?? false;
       let generatedInvoices: GeneratedFeeInvoices[] = child.generatedInvoices ?? [];
       let needsQueue = false;
@@ -290,7 +296,7 @@ export default function BulkFamilyEnrollmentPage() {
           const student = await createStudent({
             firstName: child.firstName.trim(), lastName: child.lastName.trim(),
             gender: child.gender, birthDate: child.birthDate || null,
-            address: child.address.trim() || null, phone: child.phone.trim() || null,
+            address: child.address.trim() || null,
             originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
             repeating: child.repeating,
           });
@@ -338,21 +344,9 @@ export default function BulkFamilyEnrollmentPage() {
           }
         }
 
-        // Transport (point 1) : l'abonnement déclenche lui-même la génération de ses factures
-        // (comme à l'inscription classique) — indépendant de generate-all ci-dessous.
-        if (child.wantsTransport && child.routeId && !transportSubscribed) {
-          try {
-            await subscribe({
-              routeId: Number(child.routeId), stopId: child.stopId ? Number(child.stopId) : null,
-              studentId, direction: child.direction,
-            });
-            transportSubscribed = true;
-            updateChild(child.key, { transportSubscribed: true });
-          } catch (err) {
-            if (isNetworkError(err) && isDesktop()) needsQueue = true;
-            else notifyError(err);
-          }
-        }
+        // Transport : retiré de l'inscription (§retour comptable) — l'abonnement se fait désormais
+        // uniquement après coup, dans le popup d'encaissement (StudentInvoicesPanel), pour éviter le
+        // doublon avec cet écran.
 
         // Génère en un seul appel toutes les factures des frais de la classe (inscription OU
         // réinscription selon le type choisi — jamais les deux —, mensualité, cantine si configurée,
@@ -373,7 +367,7 @@ export default function BulkFamilyEnrollmentPage() {
 
         if (needsQueue) {
           toQueue.push(toQueuedChild(child, {
-            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
+            studentId, parentLinked, enrolled, exemptionApplied, feesGenerated,
           }));
           updateChild(child.key, { status: "queued", studentId, generatedInvoices });
         } else {
@@ -382,7 +376,7 @@ export default function BulkFamilyEnrollmentPage() {
       } catch (err) {
         if (isNetworkError(err) && isDesktop()) {
           toQueue.push(toQueuedChild(child, {
-            studentId, parentLinked, enrolled, exemptionApplied, transportSubscribed, feesGenerated,
+            studentId, parentLinked, enrolled, exemptionApplied, feesGenerated,
           }));
           updateChild(child.key, { status: "queued" });
         } else {
@@ -713,7 +707,6 @@ export default function BulkFamilyEnrollmentPage() {
               child={child}
               index={i}
               classes={classes}
-              routes={routesQuery.data ?? []}
               exemptionRules={activeExemptionRules}
               canRemove={children.length > 1}
               running={running}
@@ -775,12 +768,11 @@ export default function BulkFamilyEnrollmentPage() {
 }
 
 function ChildCard({
-  child, index, classes, routes, exemptionRules, canRemove, running, isStaffParent, onUpdate, onRemove, onDeleteInvoice,
+  child, index, classes, exemptionRules, canRemove, running, isStaffParent, onUpdate, onRemove, onDeleteInvoice,
 }: {
   child: ChildDraft;
   index: number;
   classes: Classe[];
-  routes: { id: number; name: string }[];
   exemptionRules: ExemptionRule[];
   canRemove: boolean;
   running: boolean;
@@ -792,7 +784,6 @@ function ChildCard({
   onDeleteInvoice: (feeId: number, invoiceId: number, paidAmount: string | null) => void;
 }) {
   const locked = running || child.status === "done" || child.status === "queued";
-  const stopsQuery = useQuery(() => (child.routeId ? listStops(Number(child.routeId)) : Promise.resolve([])), [child.routeId]);
   const selectedExemptionRule = exemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
 
   // École d'origine / dernière classe : suggestions depuis les valeurs déjà saisies sur la plateforme
@@ -855,10 +846,6 @@ function ChildCard({
         <Field>
           <Label>Adresse</Label>
           <Input disabled={locked} value={child.address} onChange={(e) => onUpdate({ address: e.target.value })} />
-        </Field>
-        <Field>
-          <Label>Téléphone</Label>
-          <Input disabled={locked} value={child.phone} onChange={(e) => onUpdate({ phone: e.target.value })} />
         </Field>
         <Field>
           <Label>École d&apos;origine</Label>
@@ -938,60 +925,22 @@ function ChildCard({
         </Field>
       </div>
 
-      {!locked && (
-        <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
-          {routes.length > 0 && (
-            <Checkbox label="Prend le bus" checked={child.wantsTransport} onChange={(e) => onUpdate({ wantsTransport: e.target.checked, routeId: "", stopId: "" })} />
-          )}
-
-          {(isStaffParent || selectedExemptionRule?.staffBenefit) && (
-            <Field>
-              <Checkbox
-                label="Facturer en 9 mensualités séparées (retenue sur salaire mensuelle)"
-                checked={child.monthlyPaymentOptIn}
-                onChange={(e) => onUpdate({ monthlyPaymentOptIn: e.target.checked })}
-              />
-              <p className="mt-1 text-xs text-gray-400">
-                La retenue sur salaire du parent se fait chaque mois — cochez pour que la mensualité de
-                l&apos;enfant soit découpée en une facture par mois d&apos;école plutôt qu&apos;en
-                grosses tranches, avec l&apos;exonération appliquée sur chacune.
-              </p>
-            </Field>
-          )}
-
-          {child.wantsTransport && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <SearchableSelect
-                value={child.routeId}
-                onChange={(v) => onUpdate({ routeId: v, stopId: "" })}
-                triggerClassName="w-full justify-between px-3"
-                noResultsLabel="Aucune ligne"
-                options={[
-                  { value: "", trigger: "Ligne…", label: "Ligne…", searchText: "" },
-                  ...routes.map((r): SearchableOption => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
-                ]}
-              />
-              <SearchableSelect
-                value={child.stopId}
-                onChange={(v) => onUpdate({ stopId: v })}
-                disabled={!child.routeId}
-                triggerClassName="w-full justify-between px-3"
-                noResultsLabel="Aucun arrêt"
-                options={[
-                  { value: "", trigger: "Arrêt (optionnel)", label: "Arrêt (optionnel)", searchText: "" },
-                  ...(stopsQuery.data ?? []).map((s): SearchableOption => ({ value: String(s.id), trigger: s.name, label: s.name, searchText: s.name })),
-                ]}
-              />
-              <SearchableSelect
-                value={child.direction}
-                onChange={(v) => onUpdate({ direction: v as TransportDirection })}
-                triggerClassName="w-full justify-between px-3"
-                options={(Object.keys(DIRECTION_LABEL) as TransportDirection[]).map((d): SearchableOption => ({
-                  value: d, trigger: DIRECTION_LABEL[d], label: DIRECTION_LABEL[d], searchText: DIRECTION_LABEL[d],
-                }))}
-              />
-            </div>
-          )}
+      {/* Transport retiré d'ici (§retour comptable) — l'abonnement au bus se fait désormais après
+          coup, dans le popup d'encaissement (StudentInvoicesPanel), pour éviter le doublon. */}
+      {!locked && (isStaffParent || selectedExemptionRule?.staffBenefit) && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <Field>
+            <Checkbox
+              label="Facturer en 9 mensualités séparées (retenue sur salaire mensuelle)"
+              checked={child.monthlyPaymentOptIn}
+              onChange={(e) => onUpdate({ monthlyPaymentOptIn: e.target.checked })}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              La retenue sur salaire du parent se fait chaque mois — cochez pour que la mensualité de
+              l&apos;enfant soit découpée en une facture par mois d&apos;école plutôt qu&apos;en
+              grosses tranches, avec l&apos;exonération appliquée sur chacune.
+            </p>
+          </Field>
         </div>
       )}
 
@@ -1001,10 +950,10 @@ function ChildCard({
 
       {child.status === "done" && (
         <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
-          {(child.generatedInvoices && child.generatedInvoices.length > 0) || child.transportSubscribed ? (
+          {child.generatedInvoices && child.generatedInvoices.length > 0 ? (
             <div className="space-y-1">
               <p className="text-xs font-medium text-gray-500">Factures générées</p>
-              {child.generatedInvoices?.flatMap((g) => g.invoices.map((inv) => (
+              {child.generatedInvoices.flatMap((g) => g.invoices.map((inv) => (
                 <div key={inv.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs">
                   <span className="text-gray-700">
                     {g.fee.type === "OTHER" && g.fee.label ? g.fee.label : FEE_TYPE_LABEL[g.fee.type]} — {formatGNF(inv.totalAmount)}
@@ -1019,15 +968,6 @@ function ChildCard({
                   </button>
                 </div>
               )))}
-              {/* L'abonnement transport génère ses factures lui-même, de façon asynchrone côté serveur
-                  (voir TransportInvoiceListener) — jamais renvoyées par generateAllForEnrollment, donc
-                  jamais dans generatedInvoices ci-dessus. Sans cette ligne, le comptable ne voyait
-                  jamais que le transport avait bien été facturé (§retour comptable). */}
-              {child.transportSubscribed && (
-                <div className="flex items-center justify-between rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs">
-                  <span className="text-gray-700">{FEE_TYPE_LABEL.TRANSPORT} — abonnement actif, facturé chaque mois</span>
-                </div>
-              )}
             </div>
           ) : null}
         </div>
