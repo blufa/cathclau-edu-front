@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
@@ -48,7 +48,11 @@ import { formatGNF } from "@/lib/format";
 export default function FeesPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["frais:manage"]);
+  // Lecture seule par défaut (ex. comptable) : création/modification/suppression exigent chacune leur
+  // propre privilège, accordé explicitement par l'administrateur école — plus de "frais:manage" global.
+  const canCreate = hasAnyPermission(user, ["frais_scolaire:create"]);
+  const canUpdate = hasAnyPermission(user, ["frais_scolaire:update"]);
+  const canDelete = hasAnyPermission(user, ["frais_scolaire:delete"]);
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
@@ -97,7 +101,7 @@ export default function FeesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Frais scolaires</h1>
           <p className="text-sm text-gray-500">Paramétrage des frais par classe et type</p>
         </div>
-        {canWrite && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau frais</Button>}
+        {canCreate && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouveau frais</Button>}
       </Reveal>
 
       {feesQuery.loading ? (
@@ -116,7 +120,8 @@ export default function FeesPage() {
                 fees={group}
                 classLabel={classLabel}
                 routeLabel={routeLabel}
-                canWrite={canWrite}
+                canUpdate={canUpdate}
+                canDelete={canDelete}
                 onInstallments={setInstallmentsFor}
                 onEdit={setEditing}
                 onDelete={handleDelete}
@@ -140,19 +145,20 @@ export default function FeesPage() {
       </Modal>
 
       <Modal open={!!installmentsFor} onClose={() => setInstallmentsFor(null)} title="Échéances du frais">
-        {installmentsFor && <InstallmentsPanel fee={installmentsFor} canWrite={canWrite} />}
+        {installmentsFor && <InstallmentsPanel fee={installmentsFor} canCreate={canCreate} canDelete={canDelete} />}
       </Modal>
     </div>
   );
 }
 
 /** Une catégorie de frais : table paginée (10/page) avec les actions par ligne. */
-function FeeGroup({ title, fees, classLabel, routeLabel, canWrite, onInstallments, onEdit, onDelete }: {
+function FeeGroup({ title, fees, classLabel, routeLabel, canUpdate, canDelete, onInstallments, onEdit, onDelete }: {
   title: string;
   fees: SchoolFee[];
   classLabel: Map<number, string>;
   routeLabel: Map<number, string>;
-  canWrite: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   onInstallments: (f: SchoolFee) => void;
   onEdit: (f: SchoolFee) => void;
   onDelete: (f: SchoolFee) => void;
@@ -184,8 +190,8 @@ function FeeGroup({ title, fees, classLabel, routeLabel, canWrite, onInstallment
               <TD className="text-right">
                 <div className="flex justify-end gap-1">
                   <Button size="sm" variant="ghost" onClick={() => onInstallments(f)}>Échéances</Button>
-                  {canWrite && <Button size="sm" variant="ghost" onClick={() => onEdit(f)}>Modifier</Button>}
-                  {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => onDelete(f)}>Suppr.</Button>}
+                  {canUpdate && <Button size="sm" variant="ghost" onClick={() => onEdit(f)}>Modifier</Button>}
+                  {canDelete && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => onDelete(f)}>Suppr.</Button>}
                 </div>
               </TD>
             </TR>
@@ -663,7 +669,7 @@ type InstallmentFormValues = z.infer<typeof installmentSchema>;
 /** Nombre de mois de l'année scolaire — sert de référence pour vérifier la répartition des tranches. */
 const SCHOOL_YEAR_MONTHS = 9;
 
-function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolean }) {
+function InstallmentsPanel({ fee, canCreate, canDelete }: { fee: SchoolFee; canCreate: boolean; canDelete: boolean }) {
   const q = useQuery(() => listInstallments(fee.id), [fee.id]);
   const [adding, setAdding] = useState(false);
   // Mensualité, transport ET cantine sont des frais récurrents sur l'année scolaire (9 mois) : tous
@@ -739,7 +745,7 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
           : <>Total du frais : <strong>{formatGNF(fee.amount)}</strong> — la somme des échéances doit l&apos;égaler.</>}
       </p>
 
-      {canWrite && isRecurring && (
+      {canCreate && isRecurring && (
         <div className="space-y-2 rounded-xl border border-brand-200 bg-brand-50/40 p-3">
           <div className="flex flex-wrap items-end gap-3">
             <Field>
@@ -801,13 +807,13 @@ function InstallmentsPanel({ fee, canWrite }: { fee: SchoolFee; canWrite: boolea
             {(q.data ?? []).map((i) => (
               <TR key={i.id}>
                 <TD>{i.label}</TD><TD>{formatGNF(i.amount)}</TD><TD>{i.dueDate ?? "—"}</TD>
-                <TD className="text-right">{canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(i.id)}>Suppr.</Button>}</TD>
+                <TD className="text-right">{canDelete && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(i.id)}>Suppr.</Button>}</TD>
               </TR>
             ))}
           </TBody>
         </Table>
       )}
-      {canWrite && (adding ? (
+      {canCreate && (adding ? (
         <form onSubmit={handleSubmit(add)} className="space-y-3 rounded-xl border border-gray-200 p-3">
           {isRecurring && (
             <Field>

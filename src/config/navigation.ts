@@ -147,9 +147,9 @@ export const NAVIGATION: NavSection[] = [
       {
         label: "Facturation", icon: FileText, module: "BILLING",
         children: [
-          { label: "Factures élèves", href: "/invoices", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
-          { label: "Frais scolaires", href: "/invoices/fees", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"], permissions: ["frais:manage"], module: "BILLING" },
-          { label: "Règles de facturation", href: "/invoices/rules", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"], permissions: ["frais:manage"], module: "BILLING" },
+          { label: "Factures élèves", href: "/invoices", permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
+          { label: "Frais scolaires", href: "/invoices/fees", permissions: ["frais_scolaire:read"], module: "BILLING" },
+          { label: "Règles de facturation", href: "/invoices/rules", permissions: ["regle_facturation:read"], module: "BILLING" },
         ],
       },
       {

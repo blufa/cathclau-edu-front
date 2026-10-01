@@ -3,14 +3,16 @@
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { BadgePercent, CalendarCheck } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission } from "@/lib/auth/permissions";
 import { EarlyPaymentDiscountRulesPanel } from "@/features/billing/components/early-payment-discount-rules-panel";
 import { ExemptionRulesPanel } from "@/features/billing/components/exemption-rules-panel";
 import { ExemptionsPanel } from "@/features/billing/components/exemptions-panel";
 
 export default function BillingRulesPage() {
   const { user } = useAuth();
-  const canWrite = hasRole(user, "SCHOOL_ADMIN", "ACCOUNTANT") || hasAnyPermission(user, ["frais:manage"]);
+  // Lecture seule par défaut (ex. comptable) : création/modification/suppression exigent un privilège
+  // explicite, accordé par l'administrateur école — plus de "frais:manage" global.
+  const canWrite = hasAnyPermission(user, ["regle_facturation:create", "regle_facturation:update", "regle_facturation:delete"]);
 
   return (
     <div className="space-y-5">
