@@ -27,7 +27,7 @@ import {
 } from "@/lib/types/billing";
 import type { EnrollmentType, Gender } from "@/lib/types/student";
 import type { Parent } from "@/lib/types/student";
-import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
+import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
 import { isNetworkError } from "@/lib/api/errors";
 import { isDesktop } from "@/lib/offline/desktop-runtime";
 import { useNetworkStore } from "@/lib/offline/network-store";
@@ -493,7 +493,7 @@ export default function BulkFamilyEnrollmentPage() {
   // encore côté serveur, impossible d'y encaisser quoi que ce soit avant la synchronisation.
   const collectableStudents = children
     .filter((c): c is ChildDraft & { studentId: number } => c.status === "done" && c.studentId != null)
-    .map((c) => ({ id: c.studentId, name: `${c.firstName} ${c.lastName}` }));
+    .map((c) => ({ id: c.studentId, name: `${c.firstName} ${c.lastName}`, classId: c.classId ? Number(c.classId) : null }));
   const [showCollect, setShowCollect] = useState(false);
   // Ouvre le popup d'encaissement automatiquement dès que l'inscription se termine — le comptable n'a
   // plus à chercher chaque élève dans la liste pour encaisser. Ref (pas juste la condition) pour ne
@@ -738,12 +738,11 @@ export default function BulkFamilyEnrollmentPage() {
       </div>
 
       {user?.tenantId != null && (
-        <MultiChildCollectModal
+        <MultiChildInvoicesModal
           students={collectableStudents}
           tenantId={user.tenantId}
           open={showCollect}
           onClose={() => setShowCollect(false)}
-          onCollected={() => {}}
         />
       )}
     </div>
