@@ -78,6 +78,10 @@ export interface Parent {
   address: string | null;
   photo: string | null;
   primaryGuardian?: boolean;
+  /** Lien direct vers une fiche Teacher/Employee, SANS compte de connexion — pour le personnel qui ne
+   * veut/ne peut pas en avoir un (ex. pas de smartphone Android). */
+  linkedStaffType?: "TEACHER" | "EMPLOYEE" | null;
+  linkedStaffId?: number | null;
 }
 
 export interface StudentDocument {

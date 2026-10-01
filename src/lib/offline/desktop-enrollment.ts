@@ -20,6 +20,10 @@ export interface QueuedParent {
   occupation?: string | null;
   address?: string | null;
   staffUserId?: number | null;
+  /** Personnel SANS compte de connexion (ex. pas de smartphone Android) : lien direct, alternative à
+   * staffUserId — voir StaffSearchResult/StaffChildBenefitService#isStaffChild. */
+  staffType?: "TEACHER" | "EMPLOYEE" | null;
+  staffId?: number | null;
 }
 
 /** Un enfant de la soumission, avec SES champs ET sa progression déjà accomplie (voir migration 8) —
@@ -133,7 +137,7 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
           phone: parent.phone ?? null, email: parent.email ?? null,
           occupation: parent.occupation ?? null, address: parent.address ?? null,
           idempotencyKey: row.id,
-        }, parent.staffUserId ?? null);
+        }, parent.staffUserId ?? null, parent.staffType ?? null, parent.staffId ?? null);
         parentId = created.id;
         parent.id = parentId;
         await persistParent();

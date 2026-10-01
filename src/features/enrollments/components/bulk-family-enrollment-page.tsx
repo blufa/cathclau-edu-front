@@ -420,6 +420,8 @@ export default function BulkFamilyEnrollmentPage() {
               phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
               occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
               staffUserId: parentMode === "staff" ? (selectedStaff?.userId ?? null) : null,
+              staffType: parentMode === "staff" && selectedStaff?.userId == null ? (selectedStaff?.staffType ?? null) : null,
+              staffId: parentMode === "staff" && selectedStaff?.userId == null ? (selectedStaff?.staffId ?? null) : null,
             }
           : { id: selectedParent?.id ?? null };
         await queueOfflineEnrollment(user?.tenantId ?? 0, effectiveYearId ?? 0, parentPayload, targets.map((c) => toQueuedChild(c)));
@@ -431,11 +433,17 @@ export default function BulkFamilyEnrollmentPage() {
       let parentId = selectedParent?.id ?? null;
       if (needsParentCreation) {
         try {
+          // Personnel SANS compte de connexion (ex. pas de smartphone Android) : lien direct
+          // staffType/staffId au lieu du userId partagé — la prise en charge/retenue sur salaire
+          // continue de fonctionner (voir StaffChildBenefitService#isStaffChild).
+          const staffForLink = parentMode === "staff" ? selectedStaff : null;
           const created = await createParent({
             firstName: newParent.firstName.trim(), lastName: newParent.lastName.trim(),
             phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
             occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
-          }, parentMode === "staff" ? (selectedStaff?.userId ?? null) : null);
+          }, staffForLink?.userId ?? null,
+          staffForLink && staffForLink.userId == null ? staffForLink.staffType : null,
+          staffForLink && staffForLink.userId == null ? staffForLink.staffId : null);
           parentId = created.id;
           setSelectedParent(created);
           setParentMode("existing");
@@ -448,6 +456,8 @@ export default function BulkFamilyEnrollmentPage() {
               phone: newParent.phone.trim() || null, email: newParent.email.trim() || null,
               occupation: newParent.occupation.trim() || null, address: newParent.address.trim() || null,
               staffUserId: parentMode === "staff" ? (selectedStaff?.userId ?? null) : null,
+              staffType: parentMode === "staff" && selectedStaff?.userId == null ? (selectedStaff?.staffType ?? null) : null,
+              staffId: parentMode === "staff" && selectedStaff?.userId == null ? (selectedStaff?.staffId ?? null) : null,
             };
             await queueOfflineEnrollment(user?.tenantId ?? 0, effectiveYearId ?? 0, parentPayload, targets.map((c) => toQueuedChild(c)));
             targets.forEach((c) => updateChild(c.key, { status: "queued" }));
@@ -581,7 +591,10 @@ export default function BulkFamilyEnrollmentPage() {
                       <div key={`${s.staffType}-${s.staffId}`} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2">
                         <div>
                           <p className="text-sm font-medium text-gray-900">{s.fullName}</p>
-                          <p className="text-xs text-gray-400">{s.phone ?? "—"} · {s.staffType === "TEACHER" ? "Enseignant" : "Personnel"}</p>
+                          <p className="text-xs text-gray-400">
+                            {s.phone ?? "—"} · {s.staffType === "TEACHER" ? "Enseignant" : "Personnel"}
+                            {s.userId == null && <span className="ml-1 text-amber-600">· Sans compte</span>}
+                          </p>
                         </div>
                         <Button size="sm" onClick={() => {
                           setSelectedStaff(s);
