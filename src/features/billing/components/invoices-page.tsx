@@ -233,8 +233,9 @@ export default function InvoicesPage() {
                   {formatGNF(inv.totalAmount)}
                   {inv.discountAmount != null && Number(inv.discountAmount) > 0 && (
                     <span className="mt-1 block">
-                      <Badge tone="green" title={inv.discountReason ?? undefined}>
+                      <Badge tone="green">
                         Remise −{formatGNF(inv.discountAmount)}
+                        {inv.discountReason && ` (${inv.discountReason})`}
                       </Badge>
                     </span>
                   )}
