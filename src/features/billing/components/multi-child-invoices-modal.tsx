@@ -24,14 +24,16 @@ export function MultiChildInvoicesModal({
       open={open}
       onClose={onClose}
       title={`Encaissement — ${students.length} élève${students.length > 1 ? "s" : ""}`}
-      className="max-w-4xl max-h-[90vh] overflow-y-auto"
+      className="max-w-[95vw] max-h-[90vh] overflow-y-auto"
     >
       {students.length === 0 ? (
         <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Aucun élève à encaisser.</p>
       ) : (
-        <div className="space-y-8">
-          {students.map((student, i) => (
-            <div key={student.id} className={i > 0 ? "border-t border-gray-100 pt-6" : ""}>
+        // Deux colonnes sur grand écran : avec 5-6 enfants inscrits d'un coup, un seul long défilement
+        // vertical serait impraticable — pleinement indépendant, l'ordre d'affichage n'a pas d'importance.
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {students.map((student) => (
+            <div key={student.id} className="rounded-xl border border-gray-100 p-4">
               <h3 className="mb-3 text-base font-semibold text-gray-900">{student.name}</h3>
               <StudentInvoicesPanel
                 studentId={student.id}
