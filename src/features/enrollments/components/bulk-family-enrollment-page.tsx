@@ -189,6 +189,21 @@ export default function BulkFamilyEnrollmentPage() {
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
 
+  // Repart d'un formulaire vierge une fois l'encaissement terminé (popup fermé) — le comptable peut
+  // enchaîner une nouvelle famille sans quitter la page ni garder les enfants déjà traités affichés.
+  function resetForm() {
+    setParentMode("new");
+    setParentSearch("");
+    setSelectedParent(null);
+    setNewParent({ firstName: "", lastName: "", phone: "", email: "", occupation: "", address: "" });
+    setStaffSearch("");
+    setSelectedStaff(null);
+    setChildren([emptyChild(), emptyChild()]);
+    setRunning(false);
+    setFinished(false);
+    autoOpenedRef.current = false;
+  }
+
   function updateChild(key: string, patch: Partial<ChildDraft>) {
     setChildren((cs) => cs.map((c) => (c.key === key ? { ...c, ...patch } : c)));
   }
@@ -717,18 +732,11 @@ export default function BulkFamilyEnrollmentPage() {
             <Button variant="secondary" onClick={retryFailed} loading={running}>Réessayer les échecs</Button>
           )}
           {allSettled && finished ? (
-            <>
-              <Link href="/students">
-                <Button variant="secondary" onClick={() => notifySuccess(
-                  queuedCount > 0 ? "Inscription(s) mise(s) en attente de synchronisation" : "Inscription(s) effectuée(s) avec succès",
-                )}>Voir les élèves</Button>
-              </Link>
-              {collectableStudents.length > 0 && (
-                <Button onClick={() => setShowCollect(true)}>
-                  Encaisser maintenant ({collectableStudents.length})
-                </Button>
-              )}
-            </>
+            <Link href="/students">
+              <Button variant="secondary" onClick={() => notifySuccess(
+                queuedCount > 0 ? "Inscription(s) mise(s) en attente de synchronisation" : "Inscription(s) effectuée(s) avec succès",
+              )}>Voir les élèves</Button>
+            </Link>
           ) : (
             <Button onClick={submit} loading={running} disabled={finished && !errorCount}>
               {finished ? "Terminé" : `Inscrire ${children.length} enfant(s)`}
@@ -742,7 +750,7 @@ export default function BulkFamilyEnrollmentPage() {
           students={collectableStudents}
           tenantId={user.tenantId}
           open={showCollect}
-          onClose={() => setShowCollect(false)}
+          onClose={() => { setShowCollect(false); resetForm(); }}
         />
       )}
     </div>
