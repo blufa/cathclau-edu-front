@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, Plus, Trash2, UploadCloud, X, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
@@ -27,6 +27,7 @@ import {
 } from "@/lib/types/billing";
 import type { EnrollmentType, Gender } from "@/lib/types/student";
 import type { Parent } from "@/lib/types/student";
+import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
 import { isNetworkError } from "@/lib/api/errors";
 import { isDesktop } from "@/lib/offline/desktop-runtime";
 import { useNetworkStore } from "@/lib/offline/network-store";
@@ -487,6 +488,24 @@ export default function BulkFamilyEnrollmentPage() {
   // "queued" compte comme réglé pour l'utilisateur (rien d'autre à faire, la synchro s'en charge
   // automatiquement) — seule une vraie erreur métier ("error") appelle encore un geste manuel.
   const allSettled = children.every((c) => c.status === "done" || c.status === "queued");
+  // Enfants réellement inscrits en ligne (status "done", studentId connu) : seuls ceux-là ont des
+  // factures immédiatement consultables côté serveur — un enfant "queued" (hors-ligne) n'existe pas
+  // encore côté serveur, impossible d'y encaisser quoi que ce soit avant la synchronisation.
+  const collectableStudents = children
+    .filter((c): c is ChildDraft & { studentId: number } => c.status === "done" && c.studentId != null)
+    .map((c) => ({ id: c.studentId, name: `${c.firstName} ${c.lastName}` }));
+  const [showCollect, setShowCollect] = useState(false);
+  // Ouvre le popup d'encaissement automatiquement dès que l'inscription se termine — le comptable n'a
+  // plus à chercher chaque élève dans la liste pour encaisser. Ref (pas juste la condition) pour ne
+  // l'ouvrir qu'UNE fois : sans elle, re-fermer le popup pendant que `finished` reste vrai le rouvrirait
+  // aussitôt au prochain rendu.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (finished && allSettled && collectableStudents.length > 0 && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      setShowCollect(true);
+    }
+  }, [finished, allSettled, collectableStudents.length]);
 
   return (
     <div className="space-y-6">
@@ -698,11 +717,18 @@ export default function BulkFamilyEnrollmentPage() {
             <Button variant="secondary" onClick={retryFailed} loading={running}>Réessayer les échecs</Button>
           )}
           {allSettled && finished ? (
-            <Link href="/students">
-              <Button onClick={() => notifySuccess(
-                queuedCount > 0 ? "Inscription(s) mise(s) en attente de synchronisation" : "Inscription(s) effectuée(s) avec succès",
-              )}>Voir les élèves</Button>
-            </Link>
+            <>
+              <Link href="/students">
+                <Button variant="secondary" onClick={() => notifySuccess(
+                  queuedCount > 0 ? "Inscription(s) mise(s) en attente de synchronisation" : "Inscription(s) effectuée(s) avec succès",
+                )}>Voir les élèves</Button>
+              </Link>
+              {collectableStudents.length > 0 && (
+                <Button onClick={() => setShowCollect(true)}>
+                  Encaisser maintenant ({collectableStudents.length})
+                </Button>
+              )}
+            </>
           ) : (
             <Button onClick={submit} loading={running} disabled={finished && !errorCount}>
               {finished ? "Terminé" : `Inscrire ${children.length} enfant(s)`}
@@ -710,6 +736,16 @@ export default function BulkFamilyEnrollmentPage() {
           )}
         </div>
       </div>
+
+      {user?.tenantId != null && (
+        <MultiChildCollectModal
+          students={collectableStudents}
+          tenantId={user.tenantId}
+          open={showCollect}
+          onClose={() => setShowCollect(false)}
+          onCollected={() => {}}
+        />
+      )}
     </div>
   );
 }
