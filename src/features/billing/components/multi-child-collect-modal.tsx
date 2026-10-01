@@ -278,8 +278,8 @@ export function MultiChildCollectModal({
                                   <span className="text-sm text-slate-700">
                                     {row.label}
                                     {row.invoice.discountAmount != null && Number(row.invoice.discountAmount) > 0 && (
-                                      <span className="ml-1.5 text-xs font-medium text-success-600" title={row.invoice.discountReason ?? undefined}>
-                                        (remise −{formatGNF(row.invoice.discountAmount)})
+                                      <span className="ml-1.5 text-xs font-medium text-success-600">
+                                        (remise −{formatGNF(row.invoice.discountAmount)}{row.invoice.discountReason && ` · ${row.invoice.discountReason}`})
                                       </span>
                                     )}
                                   </span>
