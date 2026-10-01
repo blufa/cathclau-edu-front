@@ -14,7 +14,7 @@ import { StudentInvoicesPanel } from "./student-invoices-panel";
 export function MultiChildInvoicesModal({
   students, tenantId, open, onClose,
 }: {
-  students: { id: number; name: string; classId: number | null }[];
+  students: { id: number; name: string; classId: number | null; className?: string | null }[];
   tenantId: number;
   open: boolean;
   onClose: () => void;
@@ -34,7 +34,10 @@ export function MultiChildInvoicesModal({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {students.map((student) => (
             <div key={student.id} className="rounded-xl border border-gray-100 p-4">
-              <h3 className="mb-3 text-base font-semibold text-gray-900">{student.name}</h3>
+              <h3 className="mb-3 flex items-baseline gap-2 text-base font-semibold text-gray-900">
+                {student.name}
+                {student.className && <span className="text-sm font-normal text-gray-400">· {student.className}</span>}
+              </h3>
               <StudentInvoicesPanel
                 studentId={student.id}
                 tenantId={tenantId}

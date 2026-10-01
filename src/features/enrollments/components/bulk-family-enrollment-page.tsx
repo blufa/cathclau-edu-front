@@ -516,9 +516,13 @@ export default function BulkFamilyEnrollmentPage() {
   // Enfants réellement inscrits en ligne (status "done", studentId connu) : seuls ceux-là ont des
   // factures immédiatement consultables côté serveur — un enfant "queued" (hors-ligne) n'existe pas
   // encore côté serveur, impossible d'y encaisser quoi que ce soit avant la synchronisation.
+  const classLabelById = new Map(classes.map((c) => [c.id, c.label]));
   const collectableStudents = children
     .filter((c): c is ChildDraft & { studentId: number } => c.status === "done" && c.studentId != null)
-    .map((c) => ({ id: c.studentId, name: `${c.firstName} ${c.lastName}`, classId: c.classId ? Number(c.classId) : null }));
+    .map((c) => {
+      const classId = c.classId ? Number(c.classId) : null;
+      return { id: c.studentId, name: `${c.firstName} ${c.lastName}`, classId, className: classId ? classLabelById.get(classId) ?? null : null };
+    });
   const [showCollect, setShowCollect] = useState(false);
   // Ouvre le popup d'encaissement automatiquement dès que l'inscription se termine — le comptable n'a
   // plus à chercher chaque élève dans la liste pour encaisser. Ref (pas juste la condition) pour ne
