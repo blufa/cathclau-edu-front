@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
+import { hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
-import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 import { openPdfInApp } from "@/lib/open-pdf";
 import { formatGNF } from "@/lib/format";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
@@ -27,7 +27,6 @@ import {
   useCheckPaymentStatusMutation,
   useDownloadReceiptMutation,
   usePaymentsQuery,
-  useRefundPaymentMutation,
 } from "../hooks/use-payments";
 import { getPaymentReceiptPdf } from "@/lib/api/payment";
 
@@ -42,7 +41,6 @@ const STATUS_TONE: Record<PaymentStatus, "gray" | "amber" | "green" | "red" | "i
 export default function PaymentsListPage() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const canRefund = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paiement:refund"]);
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(
@@ -80,7 +78,6 @@ export default function PaymentsListPage() {
   }, [usersQuery.data]);
   const [cashierId, setCashierId] = useState<number | "">("");
 
-  const refundMutation = useRefundPaymentMutation(tenantId);
   const checkStatusMutation = useCheckPaymentStatusMutation(tenantId);
   const downloadReceiptMutation = useDownloadReceiptMutation();
 
@@ -112,23 +109,6 @@ export default function PaymentsListPage() {
     } catch (err) {
       notifyError(err);
     }
-  }
-
-  function refund(p: Payment) {
-    confirmAction({
-      title: "Rembourser le paiement",
-      message: `Rembourser ${p.reference} (${formatGNF(p.amount)}) ?`,
-      confirmLabel: "Rembourser",
-      danger: true,
-      onConfirm: async () => {
-        try {
-          await refundMutation.mutateAsync(p.id);
-          notifySuccess("Paiement remboursé");
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
   }
 
   return (
@@ -194,7 +174,6 @@ export default function PaymentsListPage() {
                         }}
                       />
                     )}
-                    {canRefund && p.status === "SUCCEEDED" && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => refund(p)}>Rembourser</Button>}
                   </div>
                 </TD>
               </TR>

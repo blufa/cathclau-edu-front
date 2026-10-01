@@ -147,9 +147,9 @@ export const NAVIGATION: NavSection[] = [
       {
         label: "Facturation", icon: FileText, module: "BILLING",
         children: [
-          { label: "Factures élèves", href: "/invoices", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
-          { label: "Frais scolaires", href: "/invoices/fees", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"], permissions: ["frais:manage"], module: "BILLING" },
-          { label: "Règles de facturation", href: "/invoices/rules", roles: ["SCHOOL_ADMIN", "ACCOUNTANT"], permissions: ["frais:manage"], module: "BILLING" },
+          { label: "Factures élèves", href: "/invoices", permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
+          { label: "Frais scolaires", href: "/invoices/fees", permissions: ["frais_scolaire:read"], module: "BILLING" },
+          { label: "Règles de facturation", href: "/invoices/rules", permissions: ["regle_facturation:read"], module: "BILLING" },
         ],
       },
       {
@@ -159,9 +159,10 @@ export const NAVIGATION: NavSection[] = [
           // Vue jour par jour, tous canaux confondus, pour le contrôle mensuel du fondateur
           // (§angles morts comptables) — indépendante du fait que les frais soient réglés par tranche.
           { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], module: "PAYMENTS" },
-          // "Transactions & reçus" (§retour comptable, point 26) est masquée du menu — jugée
-          // redondante avec Paiements/Encaissements par jour pour l'usage courant — mais la page reste
-          // intacte et accessible par URL directe si besoin (même traitement que "Comptabilité").
+          // "Reçus" (§retour comptable, point 26 ; onglet "Transactions fournisseur" retiré ensuite)
+          // est masquée du menu — jugée redondante avec Paiements/Encaissements par jour pour l'usage
+          // courant — mais la page reste intacte et accessible par URL directe si besoin (même
+          // traitement que "Comptabilité").
           // Rapprochement de caisse (§angles morts comptables) : usage quotidien au guichet, contrairement
           // au reste de la section « Comptabilité » (masquée du menu, cf. plus bas) — reste visible ici.
           // Route déplacée sous /payments (§retour comptable, point 27) : elle vivait auparavant sous

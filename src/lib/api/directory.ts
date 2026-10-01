@@ -29,3 +29,20 @@ export function searchSchools(q: string): Promise<string[]> {
 export function searchPreviousClasses(q: string): Promise<string[]> {
   return api.get<string[]>("/directory/previous-classes", { query: { q: q || undefined } });
 }
+
+/** Suggest first names already used by another student/parent of THIS tenant (§retour comptable) —
+ * contrairement à searchSchools/searchPreviousClasses, scopé au tenant. */
+export function suggestFirstNames(q: string): Promise<string[]> {
+  return api.get<string[]>("/directory/first-names", { query: { q: q || undefined } });
+}
+
+/** Suggest last names already used by another student/parent of THIS tenant (§retour comptable) —
+ * utile pour une fratrie ou un nom déjà connu de l'école. */
+export function suggestLastNames(q: string): Promise<string[]> {
+  return api.get<string[]>("/directory/last-names", { query: { q: q || undefined } });
+}
+
+/** Suggest addresses already used by another student/parent of THIS tenant (§retour comptable). */
+export function suggestAddresses(q: string): Promise<string[]> {
+  return api.get<string[]>("/directory/addresses", { query: { q: q || undefined } });
+}

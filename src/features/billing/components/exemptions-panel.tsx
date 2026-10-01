@@ -32,7 +32,7 @@ const EMPTY: ExemptionInput = {
   studentId: 0, type: "PARTIAL", percentage: null, amount: null, feeTypes: [], reason: "", startDate: null, endDate: null, staffBenefit: false,
 };
 
-export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
+export function ExemptionsPanel({ canCreate, canDelete }: { canCreate: boolean; canDelete: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const q = useQuery(listExemptions, []);
@@ -83,7 +83,7 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
     <div className="rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <p className="text-sm text-slate-500">Exonérations totales, partielles ou exceptionnelles accordées aux élèves</p>
-        {canWrite && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Accorder</Button>}
+        {canCreate && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Accorder</Button>}
       </div>
       {q.loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
@@ -92,7 +92,7 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
       ) : (
         <Table>
           <THead>
-            <TR><TH>Élève</TH><TH>Type</TH><TH>Montant</TH><TH>Frais</TH><TH>Période</TH><TH>Statut</TH>{canWrite && <TH className="text-right">Actions</TH>}</TR>
+            <TR><TH>Élève</TH><TH>Type</TH><TH>Montant</TH><TH>Frais</TH><TH>Période</TH><TH>Statut</TH>{canDelete && <TH className="text-right">Actions</TH>}</TR>
           </THead>
           <TBody>
             {items.map((e) => (
@@ -108,7 +108,7 @@ export function ExemptionsPanel({ canWrite }: { canWrite: boolean }) {
                 </TD>
                 <TD className="text-sm text-slate-500">{formatDate(e.startDate)}{e.endDate ? ` → ${formatDate(e.endDate)}` : ""}</TD>
                 <TD><Badge tone={e.active ? "green" : "gray"}>{e.active ? "Active" : "Révoquée"}</Badge></TD>
-                {canWrite && (
+                {canDelete && (
                   <TD className="text-right">
                     {e.active && (
                       <button onClick={() => revoke(e)} aria-label="Révoquer" className="rounded-lg p-1.5 text-slate-500 hover:bg-error-50 hover:text-error-600"><Ban className="h-4 w-4" /></button>

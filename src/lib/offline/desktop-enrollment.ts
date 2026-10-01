@@ -1,11 +1,9 @@
 import { createStudent } from "@/lib/api/students";
 import { createParent, linkParentToStudent, type Relationship } from "@/lib/api/parents";
 import { enroll } from "@/lib/api/enrollments";
-import { subscribe } from "@/lib/api/transport";
 import { grantExemption, generateAllForEnrollment } from "@/lib/api/billing";
 import type { EnrollmentType, Gender } from "@/lib/types/student";
 import type { ExemptionType, FeeType } from "@/lib/types/billing";
-import type { TransportDirection } from "@/lib/types/transport";
 import { getDesktopDb } from "./desktop-db";
 
 /** Parent de la soumission — soit déjà résolu (id connu, choisi/créé en ligne avant la coupure), soit
@@ -20,6 +18,10 @@ export interface QueuedParent {
   occupation?: string | null;
   address?: string | null;
   staffUserId?: number | null;
+  /** Personnel SANS compte de connexion (ex. pas de smartphone Android) : lien direct, alternative à
+   * staffUserId — voir StaffSearchResult/StaffChildBenefitService#isStaffChild. */
+  staffType?: "TEACHER" | "EMPLOYEE" | null;
+  staffId?: number | null;
 }
 
 /** Un enfant de la soumission, avec SES champs ET sa progression déjà accomplie (voir migration 8) —
@@ -31,18 +33,12 @@ export interface QueuedChild {
   gender: Gender;
   birthDate: string | null;
   address: string | null;
-  phone: string | null;
   originSchool: string | null;
   previousClass: string | null;
-  repeating: boolean;
   classId: number;
   relationship: Relationship;
   enrollmentType: EnrollmentType;
   monthlyPaymentOptIn: boolean;
-  wantsTransport: boolean;
-  routeId: number | null;
-  stopId: number | null;
-  direction: TransportDirection;
   exemption: {
     type: ExemptionType;
     percentage: number | null;
@@ -58,7 +54,6 @@ export interface QueuedChild {
   parentLinked: boolean;
   enrolled: boolean;
   exemptionApplied: boolean;
-  transportSubscribed: boolean;
   feesGenerated: boolean;
   done: boolean;
 }
@@ -133,7 +128,7 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
           phone: parent.phone ?? null, email: parent.email ?? null,
           occupation: parent.occupation ?? null, address: parent.address ?? null,
           idempotencyKey: row.id,
-        }, parent.staffUserId ?? null);
+        }, parent.staffUserId ?? null, parent.staffType ?? null, parent.staffId ?? null);
         parentId = created.id;
         parent.id = parentId;
         await persistParent();
@@ -146,9 +141,8 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
         if (studentId == null) {
           const student = await createStudent({
             firstName: child.firstName, lastName: child.lastName, gender: child.gender,
-            birthDate: child.birthDate, address: child.address, phone: child.phone,
+            birthDate: child.birthDate, address: child.address,
             originSchool: child.originSchool, previousClass: child.previousClass,
-            repeating: child.repeating,
             idempotencyKey: `${row.id}:${child.key}`,
           });
           studentId = student.id;
@@ -179,16 +173,6 @@ export async function pushOfflineEnrollments(): Promise<{ synced: number; failed
               reason: child.exemption.reason, staffBenefit: child.exemption.staffBenefit,
             });
             child.exemptionApplied = true;
-            await persistChildren();
-          } catch { /* non bloquant, comme en ligne */ }
-        }
-
-        if (child.wantsTransport && child.routeId && !child.transportSubscribed) {
-          try {
-            await subscribe({
-              routeId: child.routeId, stopId: child.stopId, studentId, direction: child.direction,
-            });
-            child.transportSubscribed = true;
             await persistChildren();
           } catch { /* non bloquant, comme en ligne */ }
         }

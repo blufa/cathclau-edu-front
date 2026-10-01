@@ -451,6 +451,7 @@ export default function TimetablePage() {
           subjects={subjects}
           teacherName={teacherName}
           slotBandMinutes={isSecondaryCycle(effectiveClassCycle) ? 120 : 60}
+          canWrite={canWrite}
           onChanged={() => slotsQuery.refetch()}
         />
       ) : (
