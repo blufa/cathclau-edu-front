@@ -30,6 +30,7 @@ import {
   TrendingUp,
   UserSearch,
   Users,
+  Wallet,
   Webhook,
 } from "lucide-react";
 import type { RoleCode } from "@/lib/types/enums";
@@ -163,14 +164,12 @@ export const NAVIGATION: NavSection[] = [
           // est masquée du menu — jugée redondante avec Paiements/Encaissements par jour pour l'usage
           // courant — mais la page reste intacte et accessible par URL directe si besoin (même
           // traitement que "Comptabilité").
-          // Rapprochement de caisse (§angles morts comptables) : usage quotidien au guichet, contrairement
-          // au reste de la section « Comptabilité » (masquée du menu, cf. plus bas) — reste visible ici.
-          // Route déplacée sous /payments (§retour comptable, point 27) : elle vivait auparavant sous
-          // /accounting, dont le layout à onglets est différent de celui de Paiements — y naviguer
-          // depuis ici faisait perdre les onglets Paiements/Encaissements par jour/Transactions.
-          { label: "Session de caisse", href: "/payments/cashier-session", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
         ],
       },
+      // Sortie du sous-menu "Encaissements" (§retour comptable) : élément de niveau supérieur comme
+      // "Dépenses"/"Paie" — usage quotidien au guichet, le comptable ne doit pas avoir à déplier un
+      // sous-menu pour le retrouver.
+      { label: "Session de caisse", href: "/payments/cashier-session", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
       // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
       // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).
