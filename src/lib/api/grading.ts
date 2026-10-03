@@ -2,22 +2,11 @@ import { api } from "@/lib/api/client";
 import type {
   Assessment,
   AssessmentInput,
-  AssessmentSessionSettings,
-  AssessmentSessionSettingsInput,
-  AssessmentTypeConfig,
-  AssessmentTypeConfigInput,
   AnnualReportCard,
-  CycleGroup,
-  DecisionRule,
-  DecisionRuleInput,
-  EliminatoryRule,
-  EliminatoryRuleInput,
   Exam,
   ExamInput,
   Grade,
   GradeHistory,
-  GradingScale,
-  GradingScaleInput,
   ReportCard,
   ReportCardLine,
   SimulationReport,
@@ -221,71 +210,6 @@ export function getAnnualReportCard(studentId: number, classId: number, academic
 
 export function getAnnualReportCardPdfObjectUrl(studentId: number, classId: number, academicYearId: number): Promise<string> {
   return api.blobUrl(`/grading/report-cards/annual/${studentId}/pdf/download`, { query: { classId, academicYearId } });
-}
-
-// ── Grading scale (barème, un par groupe de cycle primaire/secondaire) ──────
-export function getGradingScale(cycleGroup: CycleGroup): Promise<GradingScale> {
-  return api.get<GradingScale>("/grading/scale", { query: { cycleGroup } });
-}
-
-export function updateGradingScale(cycleGroup: CycleGroup, input: GradingScaleInput): Promise<GradingScale> {
-  return api.put<GradingScale>("/grading/scale", input, { query: { cycleGroup } });
-}
-
-// ── Assessment session settings (durées de séance) ───────────────────────────
-export function getAssessmentSessionSettings(): Promise<AssessmentSessionSettings> {
-  return api.get<AssessmentSessionSettings>("/grading/assessment-session-settings");
-}
-
-export function updateAssessmentSessionSettings(
-  input: AssessmentSessionSettingsInput,
-): Promise<AssessmentSessionSettings> {
-  return api.put<AssessmentSessionSettings>("/grading/assessment-session-settings", input);
-}
-
-// ── Eliminatory rules (notes éliminatoires) ──────────────────────────────────
-export function listEliminatoryRules(): Promise<EliminatoryRule[]> {
-  return api.get<EliminatoryRule[]>("/grading/eliminatory-rules");
-}
-export function createEliminatoryRule(input: EliminatoryRuleInput): Promise<EliminatoryRule> {
-  return api.post<EliminatoryRule>("/grading/eliminatory-rules", input);
-}
-export function updateEliminatoryRule(id: number, input: EliminatoryRuleInput): Promise<EliminatoryRule> {
-  return api.put<EliminatoryRule>(`/grading/eliminatory-rules/${id}`, input);
-}
-export function deleteEliminatoryRule(id: number): Promise<void> {
-  return api.delete<void>(`/grading/eliminatory-rules/${id}`);
-}
-
-// ── Decision rules (règles de passage/redoublement) ──────────────────────────
-export function listDecisionRules(): Promise<DecisionRule[]> {
-  return api.get<DecisionRule[]>("/grading/decision-rules");
-}
-export function createDecisionRule(input: DecisionRuleInput): Promise<DecisionRule> {
-  return api.post<DecisionRule>("/grading/decision-rules", input);
-}
-export function updateDecisionRule(id: number, input: DecisionRuleInput): Promise<DecisionRule> {
-  return api.put<DecisionRule>(`/grading/decision-rules/${id}`, input);
-}
-export function deleteDecisionRule(id: number): Promise<void> {
-  return api.delete<void>(`/grading/decision-rules/${id}`);
-}
-
-// ── Assessment type configs (types d'évaluation configurables) ───────────────
-export function listAssessmentTypes(): Promise<AssessmentTypeConfig[]> {
-  return api.get<AssessmentTypeConfig[]>("/grading/assessment-types");
-}
-export function getAssessmentType(id: number): Promise<AssessmentTypeConfig> {
-  return api.get<AssessmentTypeConfig>(`/grading/assessment-types/${id}`);
-}
-export function createAssessmentType(input: AssessmentTypeConfigInput): Promise<AssessmentTypeConfig> {
-  return api.post<AssessmentTypeConfig>("/grading/assessment-types", input);
-}
-export function updateAssessmentType(id: number, input: AssessmentTypeConfigInput): Promise<AssessmentTypeConfig> {
-  return api.put<AssessmentTypeConfig>(`/grading/assessment-types/${id}`, input);
-}
-export function deleteAssessmentType(id: number): Promise<void> {
-  return api.delete<void>(`/grading/assessment-types/${id}`);
 }
 
 // ── Validation workflow (validation multi-niveaux des bulletins) ─────────────

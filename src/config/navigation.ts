@@ -128,7 +128,6 @@ export const NAVIGATION: NavSection[] = [
           { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
           { label: "Bulletins", href: "/grading/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
           { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-          { label: "Paramètres de notation", href: "/grading/settings", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["parametrage_notes:manage"], module: "GRADING" },
         ],
       },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
