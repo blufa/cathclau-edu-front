@@ -167,8 +167,12 @@ export const NAVIGATION: NavSection[] = [
       },
       // Sortie du sous-menu "Encaissements" (§retour comptable) : élément de niveau supérieur comme
       // "Dépenses"/"Paie" — usage quotidien au guichet, le comptable ne doit pas avoir à déplier un
-      // sous-menu pour le retrouver.
-      { label: "Session de caisse", href: "/payments/cashier-session", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
+      // sous-menu pour le retrouver. Route déplacée hors de /payments (plus "/payments/cashier-session")
+      // pour échapper à la fois à la barre d'onglets partagée de PaymentsLayout (Paiements/Encaissements
+      // par jour/Reçus — qui n'ont plus de sens ici, cet élément n'est plus un onglet de cette section)
+      // et au sur-lignage involontaire de "Encaissements" dans la sidebar (isActive matche par préfixe
+      // d'URL, donc toute route sous /payments/... activait aussi ce groupe, voir useNavGating).
+      { label: "Session de caisse", href: "/cashier-session", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
       // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
       // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).
