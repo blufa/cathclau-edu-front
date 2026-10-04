@@ -25,12 +25,17 @@ async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
   if (!ctx) return;
   syncing = true;
   try {
-    // Caisse d'abord (ouvrir la session avant que les encaissements qu'elle couvre ne soient rejoués),
-    // puis inscriptions (un élève doit exister côté serveur avant tout le reste), puis les autres
+    // Caisse d'abord : chaque session est ouverte, ses PROPRES encaissements synchronisés, puis
+    // seulement ensuite close — dans cet ordre, une session à la fois (voir la Javadoc de
+    // `pushOfflineCashierSessions` : clôturer avant que les encaissements de CETTE session n'aient
+    // atteint le serveur ferait calculer un total système faux côté serveur, §retour fondateurs).
+    // Puis inscriptions (un élève doit exister côté serveur avant tout le reste), puis les autres
     // files d'attente — argent et présences avant le confort (cahier de texte, emploi du temps,
     // notes, dépenses) — et enfin le référentiel, pour repartir avec un miroir à jour. Les notes
-    // sont rejouées après les évaluations : une évaluation doit exister côté serveur avant de
-    // rejouer les notes qui s'y rattachent (même logique qu'inscriptions → encaissements).
+    // sont rejouées après les évaluations (même logique qu'inscriptions → encaissements).
+    // `pushOfflineEncaissements` (sans fenêtre) tourne en filet de sécurité après la caisse : ne
+    // retrouve normalement plus rien, sauf un encaissement hors de toute session (aucune caisse
+    // ouverte ce jour-là — un angle mort distinct, pas une fausse alerte de synchro).
     await pushOfflineCashierSessions();
     await pushOfflineEnrollments();
     await pushOfflineEncaissements();

@@ -1,5 +1,6 @@
 import { openCashierSession, closeCashierSession } from "@/lib/api/payment";
 import { getDesktopDb } from "./desktop-db";
+import { pushOfflineEncaissementsInWindow } from "./desktop-payments";
 
 interface OfflineCashierSessionRow {
   id: string;
@@ -25,13 +26,15 @@ export async function getPendingOfflineOpenSession(): Promise<PendingOfflineSess
 
 /** Total encaissé (provisoire, cette machine seulement) depuis l'ouverture d'une session encore
  * locale — mêmes limites que `total_systeme_provisoire` (voir commentaire de `closeOfflineCashierSession`).
- * Ne compte que le canal CASH, exactement comme `CashierSessionService.computeSystemTotal` côté serveur
- * (Orange Money/carte encaissés hors ligne ne font pas partie du rapprochement de caisse ESPÈCES). */
+ * Canaux guichet-manuel (espèces + Orange Money + virement), exactement comme
+ * `CashierSessionService.computeSystemTotal`/`PaymentChannel.isDeskManual()` côté serveur : un
+ * encaissement Orange Money/virement reçu "à la main" hors ligne est aussi facile à ne jamais
+ * déclarer qu'une espèce, il doit donc compter dans le rapprochement — pas seulement l'argent liquide. */
 export async function getOfflineRunningTotal(localId: string): Promise<number> {
   const db = await getDesktopDb();
   const rows = await db.select<{ total: number }[]>(
     `SELECT COALESCE(SUM(montant), 0) AS total FROM encaissements_offline
-     WHERE mode_paiement = 'CASH'
+     WHERE mode_paiement IN ('CASH', 'ORANGE_MONEY', 'BANK_CARD')
        AND date_paiement >= (SELECT ouverte_le FROM caisse_sessions_offline WHERE id = $1)`,
     [localId],
   );
@@ -54,11 +57,11 @@ export async function openOfflineCashierSession(etablissementId: number): Promis
 
 /**
  * Demande la clôture — `total_systeme_provisoire` est calculé LOCALEMENT (somme des encaissements
- * CASH de cette machine sur la période, synchronisés ou non — même filtre canal que le serveur, voir
- * {@link getOfflineRunningTotal}) : un chiffre indicatif pour que le caissier puisse quand même compter
- * sa caisse le soir sans réseau, JAMAIS le total officiel. Le vrai rapprochement (`Payment.systemTotal`
- * côté serveur, qui voit TOUS les encaissements de la session, y compris ceux saisis depuis un autre
- * poste) n'a lieu qu'à la synchronisation réelle.
+ * guichet-manuel de cette machine sur la période, synchronisés ou non — même filtre canal que le
+ * serveur, voir {@link getOfflineRunningTotal}) : un chiffre indicatif pour que le caissier puisse
+ * quand même compter sa caisse le soir sans réseau, JAMAIS le total officiel. Le vrai rapprochement
+ * (`Payment.systemTotal` côté serveur, qui voit TOUS les encaissements de la session, y compris ceux
+ * saisis depuis un autre poste) n'a lieu qu'à la synchronisation réelle.
  */
 export async function closeOfflineCashierSession(
   localId: string, physicalCount: number, notes?: string,
@@ -66,7 +69,7 @@ export async function closeOfflineCashierSession(
   const db = await getDesktopDb();
   const [{ total } = { total: 0 }] = await db.select<{ total: number }[]>(
     `SELECT COALESCE(SUM(montant), 0) AS total FROM encaissements_offline
-     WHERE mode_paiement = 'CASH'
+     WHERE mode_paiement IN ('CASH', 'ORANGE_MONEY', 'BANK_CARD')
        AND date_paiement >= (SELECT ouverte_le FROM caisse_sessions_offline WHERE id = $1)`,
     [localId],
   );
@@ -90,7 +93,7 @@ export async function queueOfflineCashierClose(
   const db = await getDesktopDb();
   const id = crypto.randomUUID();
   const [{ total } = { total: 0 }] = await db.select<{ total: number }[]>(
-    "SELECT COALESCE(SUM(montant), 0) AS total FROM encaissements_offline WHERE mode_paiement = 'CASH' AND date_paiement >= $1",
+    "SELECT COALESCE(SUM(montant), 0) AS total FROM encaissements_offline WHERE mode_paiement IN ('CASH', 'ORANGE_MONEY', 'BANK_CARD') AND date_paiement >= $1",
     [openedAt],
   );
   await db.execute(
@@ -101,9 +104,23 @@ export async function queueOfflineCashierClose(
   );
 }
 
-/** Rejoue les sessions de caisse : ouvre d'abord celles jamais transmises au serveur, puis ferme
- * celles marquées comme fermées localement une fois leur ouverture confirmée en ligne — dans cet
- * ordre précis, jamais l'inverse (fermer une session qui n'existe pas encore côté serveur échouerait). */
+/**
+ * Rejoue les sessions de caisse UNE PAR UNE, dans l'ordre chronologique : ouvre, synchronise LES
+ * ENCAISSEMENTS DE CETTE SESSION PRÉCISE, puis seulement ensuite la clôture — avant de passer à la
+ * session suivante. §retour fondateurs, corrige une corruption de l'écart de caisse découverte en
+ * vérifiant l'intégrité des données de caisse après synchro : `CashierSessionService.close()` calcule
+ * `systemTotal` côté serveur en additionnant les paiements RÉELLEMENT déjà en base à cet instant
+ * précis — clôturer une session avant que SES PROPRES encaissements n'aient atteint le serveur
+ * produisait un total quasi nul, un écart massif et FAUX, déclenchant une alerte SMS de fraude
+ * infondée et corrompant DURABLEMENT l'enregistrement de clôture (jamais recalculé après coup).
+ *
+ * Traiter les sessions STRICTEMENT une par une (plutôt que toutes les ouvertures, puis tous les
+ * encaissements, puis toutes les clôtures) est nécessaire pour le cas — plus rare mais réel — d'un
+ * comptable ayant ouvert/fermé sa caisse PLUSIEURS FOIS le même jour hors ligne (ex. pause déjeuner) :
+ * le serveur refuse d'ouvrir une seconde session tant que la première reste ouverte
+ * ({@code CashierSessionService.open}), donc la session N+1 ne doit être ouverte qu'une fois la
+ * session N entièrement close.
+ */
 export async function pushOfflineCashierSessions(): Promise<{ synced: number; failed: number }> {
   const db = await getDesktopDb();
   const rows = await db.select<OfflineCashierSessionRow[]>(
@@ -121,6 +138,7 @@ export async function pushOfflineCashierSessions(): Promise<{ synced: number; fa
         await db.execute("UPDATE caisse_sessions_offline SET id_serveur = $1 WHERE id = $2", [serverId, row.id]);
       }
       if (row.fermee_le != null) {
+        await pushOfflineEncaissementsInWindow(row.ouverte_le, row.fermee_le);
         await closeCashierSession(serverId, row.comptage_physique ?? 0, row.notes ?? undefined);
       }
       await db.execute("UPDATE caisse_sessions_offline SET synced = 1 WHERE id = $1", [row.id]);
