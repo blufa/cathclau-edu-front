@@ -11,6 +11,7 @@ import {
   IdCard,
   FileText,
   GraduationCap,
+  History,
   Landmark,
   LayoutDashboard,
   Layers,
@@ -269,6 +270,9 @@ export const NAVIGATION: NavSection[] = [
           { label: "Webhooks", href: "/biometric/webhooks", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["webhook:manage"], module: "WEBHOOKS" },
         ],
       },
+      // §retour fondateurs, contrôle anti-fraude comptable (A3) : journal append-only des actions
+      // sensibles (inscriptions, factures, exonérations, clôtures de caisse…), réservé à la direction.
+      { label: "Journal d'audit", href: "/audit-logs", icon: History, roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["audit:read"] },
       // Pas encore couvert par le catalogue de permissions (§task paramètres tenant).
       { label: "Paramètres", href: "/settings", icon: Settings, roles: ["SCHOOL_ADMIN"] },
     ],
