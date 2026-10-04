@@ -1,7 +1,7 @@
 /** Communication contracts mirrored from the backend communication module. */
 
 export type CommunicationChannel = "SMS" | "EMAIL" | "WHATSAPP";
-export type CommunicationReason = "LATE" | "ABSENCE" | "PAYMENT_DUE" | "RESULT" | "MEETING" | "EXAM" | "GENERAL" | "SALARY_PAID";
+export type CommunicationReason = "LATE" | "ABSENCE" | "PAYMENT_DUE" | "RESULT" | "MEETING" | "EXAM" | "GENERAL" | "SALARY_PAID" | "SECURITY_ALERT";
 export type RecipientType = "PARENT" | "STUDENT" | "TEACHER" | "GROUP";
 export type DeliveryStatus = "PENDING" | "DELIVERED" | "FAILED";
 
@@ -83,6 +83,7 @@ export const REASON_LABEL: Record<CommunicationReason, string> = {
   EXAM: "Examen",
   GENERAL: "Général",
   SALARY_PAID: "Salaire payé",
+  SECURITY_ALERT: "Alerte sécurité",
 };
 export const RECIPIENT_TYPE_LABEL: Record<RecipientType, string> = {
   PARENT: "Parents",

@@ -18,9 +18,17 @@ export function updateLesson(id: number, input: LessonInput): Promise<LessonEntr
   return api.put<LessonEntry>(`/lessons/${id}`, input);
 }
 
-/** `durationMinutes` : durée réellement effectuée si elle diffère de la durée planifiée (ex. rattrapage). */
-export function markLessonDone(id: number, durationMinutes?: number | null): Promise<LessonEntry> {
-  return api.patch<LessonEntry>(`/lessons/${id}/done`, { durationMinutes: durationMinutes ?? null });
+/** `durationMinutes` : durée réellement effectuée si elle diffère de la durée planifiée (ex. rattrapage).
+ * `confirmedWithoutCheckin` : la personne qui valide a vu qu'aucun pointage enseignant ne correspond
+ * à cette séance et confirme malgré tout (§retour fondateurs, contrôle anti-fraude) — trace d'audit
+ * dédiée côté backend, jamais un blocage. */
+export function markLessonDone(
+  id: number, durationMinutes?: number | null, confirmedWithoutCheckin?: boolean,
+): Promise<LessonEntry> {
+  return api.patch<LessonEntry>(`/lessons/${id}/done`, {
+    durationMinutes: durationMinutes ?? null,
+    confirmedWithoutCheckin: confirmedWithoutCheckin ?? null,
+  });
 }
 
 export function markLessonPlanned(id: number): Promise<LessonEntry> {

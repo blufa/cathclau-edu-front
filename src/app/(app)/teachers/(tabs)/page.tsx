@@ -31,10 +31,15 @@ import { generateBadge } from "@/lib/api/biometric";
 import { buildIdentityQr } from "@/lib/identity-qr";
 import { resolveBadgeColors } from "@/lib/badge-colors";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { isNetworkError } from "@/lib/api/errors";
 import { useNetworkStore } from "@/lib/offline/network-store";
 import { useTeacherQueueStore } from "@/lib/offline/teacher-queue-store";
+import { useTeacherUpdateQueueStore } from "@/lib/offline/teacher-update-queue-store";
 import { submitTeacherOfflineAware } from "@/lib/offline/submit-teacher-creation";
-import { retryFailedTeacherEntry, discardFailedTeacherEntry } from "@/lib/offline/sync-engine";
+import {
+  retryFailedTeacherEntry, discardFailedTeacherEntry,
+  enqueueTeacherUpdate, retryFailedTeacherUpdateEntry, discardFailedTeacherUpdateEntry,
+} from "@/lib/offline/sync-engine";
 
 type ActiveFilter = "all" | "active" | "inactive";
 
@@ -51,6 +56,7 @@ export default function TeachersPage() {
   const [badgeQr, setBadgeQr] = useState<string | null>(null);
   const online = useNetworkStore((s) => s.online);
   const teacherQueueItems = useTeacherQueueStore((s) => s.items);
+  const teacherUpdateQueueItems = useTeacherUpdateQueueStore((s) => s.items);
 
   // Générer le badge = enrôler l'enseignant pour le pointage (un seul QR scannable « BADGE|… »).
   function openBadge(t: Teacher) {
@@ -93,10 +99,21 @@ export default function TeachersPage() {
   }
   async function handleUpdate(input: CreateTeacherInput): Promise<Teacher> {
     if (!editing) throw new Error("no teacher being edited");
-    const teacher = await updateTeacher(editing.id, input);
-    notifySuccess("Enseignant mis à jour");
-    q.refetch();
-    return teacher;
+    try {
+      const teacher = await updateTeacher(editing.id, input);
+      notifySuccess("Enseignant mis à jour");
+      q.refetch();
+      return teacher;
+    } catch (err) {
+      // Hors-ligne : mis en file (dernière écriture gagne, aucune contrainte en jeu — voir
+      // enqueueTeacherUpdate). Le retour (ignoré par TeacherForm) reste le teacher pré-modification.
+      if (isNetworkError(err)) {
+        await enqueueTeacherUpdate(editing.id, input);
+        notifySuccess("Hors-ligne : modification mise en file, sera synchronisée au retour du réseau.");
+        return editing;
+      }
+      throw err;
+    }
   }
   async function toggleActive(t: Teacher) {
     try {
@@ -220,6 +237,30 @@ export default function TeachersPage() {
                       <span className="text-xs text-error-600">{entry.lastError ?? "Échec"}</span>
                       <Button size="sm" variant="secondary" onClick={() => discardFailedTeacherEntry(entry.id)}>Ignorer</Button>
                       <Button size="sm" onClick={() => retryFailedTeacherEntry(entry.id)}>Réessayer</Button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
+
+      {teacherUpdateQueueItems.length > 0 && (
+        <Card>
+          <CardBody>
+            <h2 className="mb-3 text-sm font-semibold text-warning-700">
+              Modifications en attente de synchronisation (hors-ligne)
+            </h2>
+            <ul className="divide-y divide-slate-100">
+              {teacherUpdateQueueItems.map((entry) => (
+                <li key={entry.teacherId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                  <span className="text-slate-700">{entry.input.firstName} {entry.input.lastName}</span>
+                  {entry.status === "failed" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-error-600">{entry.lastError ?? "Échec"}</span>
+                      <Button size="sm" variant="secondary" onClick={() => discardFailedTeacherUpdateEntry(entry.teacherId)}>Ignorer</Button>
+                      <Button size="sm" onClick={() => retryFailedTeacherUpdateEntry(entry.teacherId)}>Réessayer</Button>
                     </div>
                   )}
                 </li>

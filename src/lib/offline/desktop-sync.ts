@@ -3,6 +3,9 @@ import { pullReferenceData } from "./desktop-reference-sync";
 import { pushOfflineEncaissements } from "./desktop-payments";
 import { pushOfflinePresences } from "./desktop-attendance";
 import { pushOfflineLessons } from "./desktop-lessons";
+import { pushOfflineSchedules } from "./desktop-schedule";
+import { pushOfflineClasses } from "./desktop-classes";
+import { pushOfflineAssessments } from "./desktop-assessments";
 import { pushOfflineExpenses } from "./desktop-expenses";
 import { pushOfflineGrades } from "./desktop-grades";
 import { pushOfflineCashierSessions } from "./desktop-cashier";
@@ -14,6 +17,7 @@ export type DesktopSyncContext = { tenantId: number; academicYearId: number } | 
 
 let wired = false;
 let syncing = false;
+let lastGetContext: (() => DesktopSyncContext) | null = null;
 
 async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
   if (syncing || !useNetworkStore.getState().online) return;
@@ -21,17 +25,27 @@ async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
   if (!ctx) return;
   syncing = true;
   try {
-    // Caisse d'abord (ouvrir la session avant que les encaissements qu'elle couvre ne soient rejoués),
-    // puis inscriptions (un élève doit exister côté serveur avant tout le reste), puis les autres
-    // files d'attente — argent et présences avant le confort (cahier de texte, notes, dépenses) — et
-    // enfin le référentiel, pour repartir avec un miroir à jour.
+    // Caisse d'abord : chaque session est ouverte, ses PROPRES encaissements synchronisés, puis
+    // seulement ensuite close — dans cet ordre, une session à la fois (voir la Javadoc de
+    // `pushOfflineCashierSessions` : clôturer avant que les encaissements de CETTE session n'aient
+    // atteint le serveur ferait calculer un total système faux côté serveur, §retour fondateurs).
+    // Puis inscriptions (un élève doit exister côté serveur avant tout le reste), puis les autres
+    // files d'attente — argent et présences avant le confort (cahier de texte, emploi du temps,
+    // notes, dépenses) — et enfin le référentiel, pour repartir avec un miroir à jour. Les notes
+    // sont rejouées après les évaluations (même logique qu'inscriptions → encaissements).
+    // `pushOfflineEncaissements` (sans fenêtre) tourne en filet de sécurité après la caisse : ne
+    // retrouve normalement plus rien, sauf un encaissement hors de toute session (aucune caisse
+    // ouverte ce jour-là — un angle mort distinct, pas une fausse alerte de synchro).
     await pushOfflineCashierSessions();
     await pushOfflineEnrollments();
     await pushOfflineEncaissements();
     await pushOfflinePresences();
     await pushOfflineLessons();
-    await pushOfflineGrades();
+    await pushOfflineSchedules();
+    await pushOfflineClasses();
+    await pushOfflineAssessments();
     await pushOfflineExpenses();
+    await pushOfflineGrades();
     await pullReferenceData(ctx.tenantId, ctx.academicYearId);
   } finally {
     syncing = false;
@@ -50,9 +64,16 @@ async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
  * valeur figée au montage.
  */
 export function wireDesktopSyncTriggers(getContext: () => DesktopSyncContext): void {
+  lastGetContext = getContext;
   if (wired || typeof window === "undefined") return;
   wired = true;
   window.addEventListener("online", () => void runSync(getContext));
   void runSync(getContext);
   setInterval(() => void runSync(getContext), 15 * 60 * 1000);
+}
+
+/** Relance immédiate (bouton "Réessayer" du bandeau desktop, voir `desktop-offline-banner.tsx`) —
+ * ne fait rien si la synchro n'a jamais été branchée (`DesktopSyncBootstrap` pas encore monté). */
+export function triggerDesktopSyncNow(): void {
+  if (lastGetContext) void runSync(lastGetContext);
 }

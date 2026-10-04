@@ -40,7 +40,17 @@ const VARIABLES_BY_REASON: Record<CommunicationReason, string[]> = {
   EXAM: ["{{classe}}", "{{evaluation}}", "{{date}}", "{{ecole}}"],
   MEETING: ["{{ecole}}"],
   SALARY_PAID: ["{{nom}}", "{{montant}}", "{{periode}}", "{{ecole}}"],
+  // Alerte sécurité (§retour fondateurs, anti-fraude) : contenu volontairement fixe côté backend, non
+  // personnalisable — un établissement ne doit jamais pouvoir affaiblir/masquer une alerte de vol en
+  // reconfigurant son modèle. Retirée du sélecteur ci-dessous, voir REASON_OPTIONS.
+  SECURITY_ALERT: [],
 };
+
+// Motifs proposés à la création d'un modèle — SECURITY_ALERT en est volontairement exclu (voir
+// VARIABLES_BY_REASON ci-dessus) : aucun modèle n'est jamais lu pour ce motif, un établissement ne
+// doit pas pouvoir en créer un qui donnerait l'illusion d'avoir un effet.
+const TEMPLATE_REASON_OPTIONS = (Object.keys(REASON_LABEL) as CommunicationReason[])
+  .filter((r) => r !== "SECURITY_ALERT");
 
 export default function TemplatesPage() {
   const { user } = useAuth();
@@ -130,7 +140,7 @@ function TemplateForm({ tenantId, initial, onCancel, onSaved }: {
         <Field>
           <Label>Motif</Label>
           <Select value={reason} onChange={(e) => setReason(e.target.value as CommunicationReason)}>
-            {(Object.keys(REASON_LABEL) as CommunicationReason[]).map((r) => (<option key={r} value={r}>{REASON_LABEL[r]}</option>))}
+            {TEMPLATE_REASON_OPTIONS.map((r) => (<option key={r} value={r}>{REASON_LABEL[r]}</option>))}
           </Select>
         </Field>
         <Field>

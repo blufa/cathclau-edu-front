@@ -6,13 +6,15 @@ import {
   listClasses,
   listClassSubjects,
   listLevels,
+  listPeriods,
   listRooms,
   listSubjects,
 } from "@/lib/api/academics";
-import { listTeachers } from "@/lib/api/staff";
+import { listEmployees, listTeachers } from "@/lib/api/staff";
 import { listRoutes } from "@/lib/api/transport";
 import { listFeesByTenant } from "@/lib/api/billing";
 import { listEvents } from "@/lib/api/calendar";
+import { searchStudents } from "@/lib/api/students";
 
 async function cachePut(key: string, payload: unknown): Promise<void> {
   await offlineDb.readCache.put({ key, payload, updatedAt: new Date().toISOString() });
@@ -68,15 +70,24 @@ export async function runConfigBootstrap(tenantId: number): Promise<void> {
       safe(async () => cachePut(`levels:${tenantId}`, await listLevels())),
       safe(async () => cachePut(`routes:${tenantId}`, await listRoutes())),
       safe(async () => cachePut(`fees:${tenantId}`, await listFeesByTenant(tenantId))),
+      // Élèves + personnel : clé EXACTEMENT celle lue par le scan/cahier de texte/présences et une
+      // douzaine d'autres écrans (`students-all-v2:${tenantId}`, `employees-all:${tenantId}`) — sans
+      // ce préchargement, un directeur qui se connecte puis part hors-ligne SANS avoir déjà visité
+      // ces écrans en ligne au préalable se retrouvait avec un scan/cahier de texte inutilisable
+      // (§retour fondateurs : ce sont les tâches quotidiennes, et la source des données de paie).
+      safe(async () => cachePut(`students-all-v2:${tenantId}`, await searchStudents({ size: 1000 }).then((p) => p.content))),
+      safe(async () => cachePut(`employees-all:${tenantId}`, await listEmployees())),
     ]);
 
-    // Classes + emploi du temps + matières affectées : par année, puis par classe (dépend des années).
+    // Classes + emploi du temps + matières affectées + périodes : par année, puis par classe
+    // (dépend des années). Les périodes sont nécessaires pour programmer une évaluation hors ligne.
     await Promise.all(
       years.map((year) =>
         safe(async () => {
           const classes = await listClasses(year.id);
           await cachePut(`classes:${year.id}`, classes);
           await cachePut(`events:${year.id}`, await listEvents(year.id).catch(() => []));
+          await safe(async () => cachePut(`periods:${year.id}`, await listPeriods(year.id)));
           await Promise.all(
             classes.map((c) =>
               Promise.all([

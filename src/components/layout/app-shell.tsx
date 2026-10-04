@@ -9,6 +9,7 @@ import { SubscriptionProvider } from "@/providers/subscription-provider";
 import { BrandingProvider } from "@/providers/branding-provider";
 import { SubscriptionBanner } from "@/components/platform/subscription-banner";
 import { OfflineBanner } from "@/components/offline/offline-banner";
+import { DesktopOfflineBanner } from "@/components/offline/desktop-offline-banner";
 import { DesktopSyncBootstrap } from "@/components/offline/desktop-sync-bootstrap";
 import { GlobalPdfPreview } from "@/components/offline/global-pdf-preview";
 import { cn } from "@/lib/utils";
@@ -52,6 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="mx-auto max-w-[1600px]">
               <SubscriptionBanner />
               <OfflineBanner />
+              <DesktopOfflineBanner />
               <DesktopSyncBootstrap />
               <GlobalPdfPreview />
               {children}

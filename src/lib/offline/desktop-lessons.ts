@@ -27,6 +27,7 @@ interface OfflineLessonRow {
   devoirs: string | null;
   duree_minutes: number | null;
   statut: LessonStatus;
+  confirme_sans_pointage: number;
 }
 
 /** Ouvre ou complète une entrée de cahier de texte hors ligne — l'enseignant programme une séance
@@ -51,12 +52,38 @@ export async function queueOfflineLesson(input: QueueOfflineLessonInput): Promis
 /** Marque une séance DÉJÀ en file (encore non synchronisée) comme réalisée — ex. l'enseignant avait
  * programmé la séance le matin hors ligne, la clôture le soir toujours hors ligne : on met simplement
  * à jour la ligne locale, encore une seule ligne à envoyer, plutôt que d'empiler une seconde entrée. */
-export async function markOfflineLessonDone(localId: string, realizedDurationMinutes?: number | null): Promise<void> {
+export async function markOfflineLessonDone(
+  localId: string, realizedDurationMinutes?: number | null, confirmedWithoutCheckin?: boolean,
+): Promise<void> {
   const db = await getDesktopDb();
   await db.execute(
-    "UPDATE seances_offline SET statut = 'DONE', duree_minutes = COALESCE($1, duree_minutes) WHERE id = $2",
-    [realizedDurationMinutes ?? null, localId],
+    "UPDATE seances_offline SET statut = 'DONE', duree_minutes = COALESCE($1, duree_minutes), "
+      + "confirme_sans_pointage = $2 WHERE id = $3",
+    [realizedDurationMinutes ?? null, confirmedWithoutCheckin ? 1 : 0, localId],
   );
+}
+
+/** Marque comme réalisée une séance qui existe déjà CÔTÉ SERVEUR (créée en ligne, `lesson.id` réel) —
+ * à la différence de `markOfflineLessonDone`, aucune ligne `seances_offline` ne couvre encore cette
+ * séance : on en crée une avec `id_serveur` déjà renseigné, pour que le rejeu (`pushOfflineLessons`)
+ * sache qu'il doit seulement appeler `markLessonDone`, jamais recréer la séance. */
+export async function queueOfflineLessonDoneForExisting(input: {
+  etablissementId: number; serverLessonId: number; classeId: number; titre: string; dateSeance: string;
+  realizedDurationMinutes?: number | null; confirmedWithoutCheckin?: boolean;
+}): Promise<string> {
+  const db = await getDesktopDb();
+  const id = crypto.randomUUID();
+  await db.execute(
+    `INSERT INTO seances_offline
+       (id, etablissement_id, id_serveur, classe_id, date_seance, titre, duree_minutes, statut,
+        confirme_sans_pointage, synced)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'DONE', $8, 0)`,
+    [
+      id, input.etablissementId, input.serverLessonId, input.classeId, input.dateSeance, input.titre,
+      input.realizedDurationMinutes ?? null, input.confirmedWithoutCheckin ? 1 : 0,
+    ],
+  );
+  return id;
 }
 
 /** Rejoue le cahier de texte : `createLesson` pour toute ligne pas encore connue du serveur (même si
@@ -89,7 +116,9 @@ export async function pushOfflineLessons(): Promise<{ synced: number; failed: nu
           [created.id, row.id],
         );
       } else {
-        if (row.statut === "DONE") await markLessonDone(row.id_serveur, row.duree_minutes);
+        if (row.statut === "DONE") {
+          await markLessonDone(row.id_serveur, row.duree_minutes, row.confirme_sans_pointage === 1);
+        }
         await db.execute("UPDATE seances_offline SET synced = 1 WHERE id = $1", [row.id]);
       }
       synced++;

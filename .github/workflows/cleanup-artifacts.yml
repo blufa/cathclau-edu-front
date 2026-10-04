@@ -1,0 +1,35 @@
+name: Nettoyage des artefacts CI
+
+# §quota de stockage GitHub Actions (gratuit, limité — alerte reçue à 90% d'utilisation) : les
+# installeurs Windows (desktop-release.yml/desktop-dev-build.yml) pèsent plusieurs dizaines de Mo par
+# run et s'accumulaient avec la rétention par défaut de GitHub (90 jours). `retention-days: 1` sur ces
+# workflows couvre les PROCHAINS uploads, mais pas ceux déjà accumulés avant ce changement — ce job
+# supprime, chaque jour, tout artefact de plus de 24h, quel que soit le workflow qui l'a produit.
+on:
+  schedule:
+    - cron: "0 3 * * *" # tous les jours à 3h UTC
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Supprimer les artefacts de plus de 24h
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d "24 hours ago" +%s)
+          gh api --paginate "repos/$REPO/actions/artifacts" --jq '.artifacts[] | [.id, .created_at, .name] | @tsv' \
+            | while IFS=$'\t' read -r id created name; do
+                created_ts=$(date -u -d "$created" +%s)
+                if [ "$created_ts" -lt "$cutoff" ]; then
+                  echo "Suppression de l'artefact #$id ($name, créé le $created)"
+                  gh api -X DELETE "repos/$REPO/actions/artifacts/$id"
+                fi
+              done
+          echo "Terminé."

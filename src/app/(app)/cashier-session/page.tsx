@@ -263,6 +263,12 @@ function CloseSessionForm({ runningTotal, onCancel, onSubmit, onDone }: {
   const [physicalCount, setPhysicalCount] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  // Barrière anti-erreur (§retour fondateurs) : un écart doit être vu et confirmé explicitement
+  // avant de pouvoir clôturer, jamais juste cliqué distraitement — remise à zéro à chaque nouvelle
+  // saisie du comptant pour qu'on ne puisse pas confirmer un montant puis le changer sans reconfirmer.
+  const [acknowledged, setAcknowledged] = useState(false);
+  const discrepancy = physicalCount === "" ? null : Number(physicalCount) - Number(runningTotal);
+  const hasDiscrepancy = discrepancy != null && discrepancy !== 0;
 
   async function submit() {
     if (physicalCount === "") { notifyError("Indiquez le comptant physique compté"); return; }
@@ -281,15 +287,36 @@ function CloseSessionForm({ runningTotal, onCancel, onSubmit, onDone }: {
       </p>
       <Field>
         <Label>Comptant physique compté (GNF) <span className="text-error-500">*</span></Label>
-        <Input type="number" min={0} value={physicalCount} onChange={(e) => setPhysicalCount(e.target.value)} />
+        <Input type="number" min={0} value={physicalCount}
+          onChange={(e) => { setPhysicalCount(e.target.value); setAcknowledged(false); }} />
       </Field>
+      {hasDiscrepancy && (
+        <div className="rounded-lg border border-warning-300 bg-warning-50 px-3 py-2.5">
+          <p className="text-sm font-medium text-warning-800">
+            ⚠️ Écart de {formatGNF(Math.abs(discrepancy as number))} GNF
+            {" "}({(discrepancy as number) < 0 ? "comptant inférieur au système — manquant" : "comptant supérieur au système — excédent"})
+          </p>
+          <p className="mt-1 text-xs text-warning-700">
+            Vérifiez votre comptage avant de continuer — un écart déclenche une alerte à la direction.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-sm text-warning-800">
+            <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)}
+              className="h-4 w-4 rounded border-warning-400 text-warning-600 accent-warning-600" />
+            Je confirme avoir recompté et ce montant est exact.
+          </label>
+        </div>
+      )}
       <Field>
-        <Label>Notes (optionnel)</Label>
-        <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Label>Notes {hasDiscrepancy ? <span className="text-error-500">*</span> : "(optionnel)"}</Label>
+        <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder={hasDiscrepancy ? "Expliquez la cause de l'écart (ex. billet abîmé refusé, erreur de rendu de monnaie…)" : undefined} />
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-        <Button type="button" onClick={submit} loading={loading}>Clôturer</Button>
+        <Button type="button" onClick={submit} loading={loading}
+          disabled={hasDiscrepancy && (!acknowledged || notes.trim() === "")}>
+          Clôturer
+        </Button>
       </div>
     </div>
   );

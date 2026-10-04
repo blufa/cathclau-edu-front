@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { queueOfflineClass } from "@/lib/offline/desktop-classes";
 import { listAcademicYears, listLevels, listRooms, listSubjects } from "@/lib/api/academics";
 import type { Classe, CreateClassInput } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
@@ -59,9 +62,21 @@ export default function ClassesListPage() {
   const roomLabel = useMemo(() => new Map(rooms.map((r) => [r.id, r.label])), [rooms]);
 
   async function handleCreate(input: CreateClassInput) {
-    await createMutation.mutateAsync(input);
+    try {
+      await createMutation.mutateAsync(input);
+      notifySuccess("Classe créée");
+    } catch (err) {
+      // Hors-ligne sur desktop : mise en file — le seul refus possible (année clôturée entre-temps)
+      // ne peut être détecté qu'à la synchro, jamais localement (voir desktop-classes.ts).
+      if (isNetworkError(err) && isDesktop() && tenantId != null) {
+        await queueOfflineClass({ ...input, etablissementId: tenantId });
+        notifySuccess("Hors-ligne : classe mise en file, sera synchronisée au retour du réseau.");
+      } else {
+        notifyError(err);
+        return;
+      }
+    }
     setCreating(false);
-    notifySuccess("Classe créée");
   }
   async function handleUpdate(input: CreateClassInput) {
     if (!editing) return;
