@@ -715,6 +715,14 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
     [lesson.teacherId, lesson.lessonDate],
   );
   const checkin = (checkinsQuery.data ?? []).find((c) => c.scheduleSlotId === slot?.id);
+  // Barrière anti-erreur (§retour fondateurs, contrôle anti-fraude) : sans pointage correspondant, on
+  // ne doit jamais pouvoir valider (donc payer) une séance d'un simple clic distrait — seulement une
+  // fois la requête résolue (jamais pendant le chargement, pour ne pas afficher l'alerte par erreur un
+  // bref instant) et seulement pour une séance déjà passée (une séance future n'a logiquement aucun
+  // pointage encore, ça ne veut rien dire).
+  const noCheckinFound = !checkinsQuery.loading
+    && lesson.lessonDate != null && lesson.lessonDate <= todayIso() && !checkin;
+  const [acknowledgedNoCheckin, setAcknowledgedNoCheckin] = useState(false);
   // Priorité à l'heure de sortie réellement pointée (plus précise) ; à défaut, on suppose que
   // l'enseignant est resté jusqu'à la fin prévue du créneau.
   const endReference = checkin?.checkOutTime ?? slot?.endTime;
@@ -739,7 +747,7 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
   async function confirm() {
     setLoading(true);
     try {
-      await markLessonDone(lesson.id, duration === "" ? null : Number(duration));
+      await markLessonDone(lesson.id, duration === "" ? null : Number(duration), noCheckinFound);
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -775,6 +783,22 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
           </button>
         )}
       </div>
+      {noCheckinFound && (
+        <div className="rounded-lg border border-warning-300 bg-warning-50 px-3 py-2.5">
+          <p className="text-sm font-medium text-warning-800">
+            ⚠️ Aucun pointage trouvé pour cet enseignant à cette date/ce créneau.
+          </p>
+          <p className="mt-1 text-xs text-warning-700">
+            Vérifiez qu&apos;il était bien présent avant de valider — cette séance compte pour sa paie.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-sm text-warning-800">
+            <input type="checkbox" checked={acknowledgedNoCheckin}
+              onChange={(e) => setAcknowledgedNoCheckin(e.target.checked)}
+              className="h-4 w-4 rounded border-warning-400 text-warning-600 accent-warning-600" />
+            Je confirme que l&apos;enseignant était présent malgré l&apos;absence de pointage.
+          </label>
+        </div>
+      )}
       <Field>
         <Label>Durée réalisée (min){source === "CUSTOM" ? " — personnalisée" : ""}</Label>
         <Input type="number" min={0} value={duration}
@@ -782,7 +806,9 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-        <Button onClick={confirm} loading={loading}>Confirmer la réalisation</Button>
+        <Button onClick={confirm} loading={loading} disabled={noCheckinFound && !acknowledgedNoCheckin}>
+          Confirmer la réalisation
+        </Button>
       </div>
     </div>
   );
