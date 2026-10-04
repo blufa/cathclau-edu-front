@@ -77,17 +77,23 @@ jobs:
             https://ecole.jeccamtech.com/updates/${{ needs.check-version.outputs.version }} `
             src-tauri/target/${{ matrix.target }}/release/bundle
 
+      # retention-days: 1 (§quota de stockage Actions, gratuit et limité) : ces artefacts ne servent
+      # qu'à faire transiter les fichiers entre jobs du MÊME run (vers `publish`, qui les republie
+      # aussitôt comme Release GitHub — la vraie source de vérité, conservée indéfiniment) — aucune
+      # raison de les garder 90 jours (défaut GitHub) une fois le run terminé.
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-${{ matrix.arch }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
+          retention-days: 1
 
       - uses: actions/upload-artifact@v4
         with:
           name: latest-json-${{ matrix.arch }}
           path: latest.json
+          retention-days: 1
 
   publish:
     needs: [check-version, build-windows]
