@@ -1,6 +1,6 @@
 [package]
 name = "jeccam-ecole"
-version = "0.1.6"
+version = "0.1.7"
 description = "Jeccam École — ERP scolaire multi-tenant, mode desktop hors-ligne"
 authors = ["Jeccam Tech"]
 edition = "2021"

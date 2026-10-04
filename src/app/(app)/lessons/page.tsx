@@ -6,6 +6,9 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { queueOfflineLesson, queueOfflineLessonDoneForExisting } from "@/lib/offline/desktop-lessons";
 import { getScheduleByClass, getScheduleByTeacher, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { getTeacherCheckins } from "@/lib/api/attendance";
@@ -437,7 +440,7 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
     setLoading(true);
     try {
       for (const r of valid) {
-        await createLesson({
+        const input = {
           classId: Number(r.classId),
           subjectId: r.noSubject ? null : Number(r.subjectId),
           lessonDate: lessonDate || null,
@@ -445,8 +448,29 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
           content: r.content || null,
           homework: r.homework || null,
           durationMinutes: r.durationMinutes === "" ? null : Number(r.durationMinutes),
-          status: "PLANNED",
-        });
+          status: "PLANNED" as const,
+        };
+        try {
+          await createLesson(input);
+        } catch (err) {
+          // Hors-ligne sur desktop : met en file plutôt que d'échouer (voir desktop-lessons.ts). Le
+          // serveur résout normalement l'enseignant depuis classe+matière (jamais envoyé en ligne,
+          // voir LessonService.resolveTeacherId) — hors-ligne, il faut le résoudre nous-mêmes pour
+          // que la ligne en file soit complète, le rejeu ne pouvant pas compter sur cette résolution
+          // avant d'avoir atteint le serveur.
+          if (isNetworkError(err) && isDesktop() && tenantId != null) {
+            const teacherIdRaw = r.noSubject ? headTeacherIdFor(r.classId) : teacherFor(r.classId, r.subjectId);
+            const teacherId = teacherIdRaw != null ? Number(teacherIdRaw) : null;
+            await queueOfflineLesson({
+              etablissementId: tenantId, classeId: input.classId, matiereId: input.subjectId,
+              enseignantId: teacherId, dateSeance: input.lessonDate ?? todayIso(),
+              titre: input.title, contenu: input.content, devoirs: input.homework,
+              dureeMinutes: input.durationMinutes, statut: "PLANNED",
+            });
+          } else {
+            throw err;
+          }
+        }
       }
       onCreated([...new Set(valid.map((r) => Number(r.classId)))]);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -701,6 +725,8 @@ function EditLessonForm({ lesson, classes, subjectName, canSetStatus, onCancel, 
 type DurationSource = "THEORETICAL" | "ACTUAL" | "CUSTOM";
 
 function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCancel: () => void; onDone: () => void }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const [loading, setLoading] = useState(false);
 
   // Deux sources possibles pour la durée réalisée (qui compte pour la paie) : la durée THÉORIQUE du
@@ -715,6 +741,14 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
     [lesson.teacherId, lesson.lessonDate],
   );
   const checkin = (checkinsQuery.data ?? []).find((c) => c.scheduleSlotId === slot?.id);
+  // Barrière anti-erreur (§retour fondateurs, contrôle anti-fraude) : sans pointage correspondant, on
+  // ne doit jamais pouvoir valider (donc payer) une séance d'un simple clic distrait — seulement une
+  // fois la requête résolue (jamais pendant le chargement, pour ne pas afficher l'alerte par erreur un
+  // bref instant) et seulement pour une séance déjà passée (une séance future n'a logiquement aucun
+  // pointage encore, ça ne veut rien dire).
+  const noCheckinFound = !checkinsQuery.loading
+    && lesson.lessonDate != null && lesson.lessonDate <= todayIso() && !checkin;
+  const [acknowledgedNoCheckin, setAcknowledgedNoCheckin] = useState(false);
   // Priorité à l'heure de sortie réellement pointée (plus précise) ; à défaut, on suppose que
   // l'enseignant est resté jusqu'à la fin prévue du créneau.
   const endReference = checkin?.checkOutTime ?? slot?.endTime;
@@ -738,10 +772,27 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
 
   async function confirm() {
     setLoading(true);
+    const realizedMinutes = duration === "" ? null : Number(duration);
     try {
-      await markLessonDone(lesson.id, duration === "" ? null : Number(duration));
+      await markLessonDone(lesson.id, realizedMinutes, noCheckinFound);
       onDone();
-    } catch (err) { notifyError(err); } finally { setLoading(false); }
+    } catch (err) {
+      // Hors-ligne sur desktop : met en file plutôt que d'échouer — rejoué à la reconnexion en
+      // conservant le signal anti-fraude (voir desktop-lessons.ts, queueOfflineLessonDoneForExisting).
+      if (isNetworkError(err) && isDesktop() && tenantId != null) {
+        try {
+          await queueOfflineLessonDoneForExisting({
+            etablissementId: tenantId, serverLessonId: lesson.id, classeId: lesson.classId,
+            titre: lesson.title, dateSeance: lesson.lessonDate, realizedDurationMinutes: realizedMinutes,
+            confirmedWithoutCheckin: noCheckinFound,
+          });
+          notifySuccess("Hors-ligne : validation mise en file, sera synchronisée au retour du réseau.");
+          onDone();
+        } catch (queueErr) { notifyError(queueErr); }
+      } else {
+        notifyError(err);
+      }
+    } finally { setLoading(false); }
   }
 
   const optionClass = (active: boolean) =>
@@ -775,6 +826,22 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
           </button>
         )}
       </div>
+      {noCheckinFound && (
+        <div className="rounded-lg border border-warning-300 bg-warning-50 px-3 py-2.5">
+          <p className="text-sm font-medium text-warning-800">
+            ⚠️ Aucun pointage trouvé pour cet enseignant à cette date/ce créneau.
+          </p>
+          <p className="mt-1 text-xs text-warning-700">
+            Vérifiez qu&apos;il était bien présent avant de valider — cette séance compte pour sa paie.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-sm text-warning-800">
+            <input type="checkbox" checked={acknowledgedNoCheckin}
+              onChange={(e) => setAcknowledgedNoCheckin(e.target.checked)}
+              className="h-4 w-4 rounded border-warning-400 text-warning-600 accent-warning-600" />
+            Je confirme que l&apos;enseignant était présent malgré l&apos;absence de pointage.
+          </label>
+        </div>
+      )}
       <Field>
         <Label>Durée réalisée (min){source === "CUSTOM" ? " — personnalisée" : ""}</Label>
         <Input type="number" min={0} value={duration}
@@ -782,7 +849,9 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-        <Button onClick={confirm} loading={loading}>Confirmer la réalisation</Button>
+        <Button onClick={confirm} loading={loading} disabled={noCheckinFound && !acknowledgedNoCheckin}>
+          Confirmer la réalisation
+        </Button>
       </div>
     </div>
   );

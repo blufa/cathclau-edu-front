@@ -11,6 +11,7 @@ import {
   IdCard,
   FileText,
   GraduationCap,
+  History,
   Landmark,
   LayoutDashboard,
   Layers,
@@ -30,6 +31,7 @@ import {
   TrendingUp,
   UserSearch,
   Users,
+  Wallet,
   Webhook,
 } from "lucide-react";
 import type { RoleCode } from "@/lib/types/enums";
@@ -127,7 +129,6 @@ export const NAVIGATION: NavSection[] = [
           { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
           { label: "Bulletins", href: "/grading/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
           { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-          { label: "Paramètres de notation", href: "/grading/settings", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["parametrage_notes:manage"], module: "GRADING" },
         ],
       },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
@@ -163,14 +164,16 @@ export const NAVIGATION: NavSection[] = [
           // est masquée du menu — jugée redondante avec Paiements/Encaissements par jour pour l'usage
           // courant — mais la page reste intacte et accessible par URL directe si besoin (même
           // traitement que "Comptabilité").
-          // Rapprochement de caisse (§angles morts comptables) : usage quotidien au guichet, contrairement
-          // au reste de la section « Comptabilité » (masquée du menu, cf. plus bas) — reste visible ici.
-          // Route déplacée sous /payments (§retour comptable, point 27) : elle vivait auparavant sous
-          // /accounting, dont le layout à onglets est différent de celui de Paiements — y naviguer
-          // depuis ici faisait perdre les onglets Paiements/Encaissements par jour/Transactions.
-          { label: "Session de caisse", href: "/payments/cashier-session", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
         ],
       },
+      // Sortie du sous-menu "Encaissements" (§retour comptable) : élément de niveau supérieur comme
+      // "Dépenses"/"Paie" — usage quotidien au guichet, le comptable ne doit pas avoir à déplier un
+      // sous-menu pour le retrouver. Route déplacée hors de /payments (plus "/payments/cashier-session")
+      // pour échapper à la fois à la barre d'onglets partagée de PaymentsLayout (Paiements/Encaissements
+      // par jour/Reçus — qui n'ont plus de sens ici, cet élément n'est plus un onglet de cette section)
+      // et au sur-lignage involontaire de "Encaissements" dans la sidebar (isActive matche par préfixe
+      // d'URL, donc toute route sous /payments/... activait aussi ce groupe, voir useNavGating).
+      { label: "Session de caisse", href: "/cashier-session", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
       // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
       // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).
@@ -267,6 +270,11 @@ export const NAVIGATION: NavSection[] = [
           { label: "Webhooks", href: "/biometric/webhooks", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["webhook:manage"], module: "WEBHOOKS" },
         ],
       },
+      // §retour fondateurs, contrôle anti-fraude comptable (A3) : journal append-only des actions
+      // sensibles (inscriptions, factures, exonérations, clôtures de caisse…), réservé à la direction.
+      { label: "Journal d'audit", href: "/audit-logs", icon: History, roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["audit:read"] },
+      // §retour fondateurs, détecteur B3 : écarts statistiques entre comptables de la même école.
+      { label: "Écarts entre comptables", href: "/accountant-anomaly-alerts", icon: TrendingUp, roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["audit:read"] },
       // Pas encore couvert par le catalogue de permissions (§task paramètres tenant).
       { label: "Paramètres", href: "/settings", icon: Settings, roles: ["SCHOOL_ADMIN"] },
     ],

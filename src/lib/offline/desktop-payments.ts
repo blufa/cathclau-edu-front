@@ -46,17 +46,8 @@ export async function queueOfflineEncaissement(input: QueueOfflineEncaissementIn
   return id;
 }
 
-/** Rejoue vers l'API Java tous les encaissements pas encore synchronisés. Réutilise directement
- * `initiateGroupPayment` (le même endpoint que la saisie en ligne) avec `idempotencyKey = id local` :
- * si l'appel avait déjà réussi lors d'une tentative précédente (coupure juste après la réponse serveur,
- * par ex.), le serveur renvoie le paiement déjà créé au lieu d'en créer un second — voir
- * `GroupPaymentInput.idempotencyKey` côté client et son usage identique dans `sync-engine.ts` (web). */
-export async function pushOfflineEncaissements(): Promise<{ synced: number; failed: number }> {
+async function pushEncaissementRows(rows: OfflineEncaissementRow[]): Promise<{ synced: number; failed: number }> {
   const db = await getDesktopDb();
-  const rows = await db.select<OfflineEncaissementRow[]>(
-    "SELECT * FROM encaissements_offline WHERE synced = 0 ORDER BY date_paiement ASC",
-  );
-
   let synced = 0;
   let failed = 0;
   for (const row of rows) {
@@ -89,6 +80,42 @@ export async function pushOfflineEncaissements(): Promise<{ synced: number; fail
     }
   }
   return { synced, failed };
+}
+
+/** Rejoue vers l'API Java tous les encaissements pas encore synchronisés. Réutilise directement
+ * `initiateGroupPayment` (le même endpoint que la saisie en ligne) avec `idempotencyKey = id local` :
+ * si l'appel avait déjà réussi lors d'une tentative précédente (coupure juste après la réponse serveur,
+ * par ex.), le serveur renvoie le paiement déjà créé au lieu d'en créer un second — voir
+ * `GroupPaymentInput.idempotencyKey` côté client et son usage identique dans `sync-engine.ts` (web).
+ * Appelé en filet de sécurité à la fin de `runSync()`, APRÈS le traitement des sessions de caisse
+ * (voir `desktop-cashier.ts`) — ne retrouve donc normalement plus rien à faire, sauf un encaissement
+ * hors de toute fenêtre de session (ex. aucune session ouverte ce jour-là). */
+export async function pushOfflineEncaissements(): Promise<{ synced: number; failed: number }> {
+  const db = await getDesktopDb();
+  const rows = await db.select<OfflineEncaissementRow[]>(
+    "SELECT * FROM encaissements_offline WHERE synced = 0 ORDER BY date_paiement ASC",
+  );
+  return pushEncaissementRows(rows);
+}
+
+/** Même chose que {@link pushOfflineEncaissements}, mais restreint aux encaissements d'UNE session de
+ * caisse précise (bornes incluses) — utilisé par `desktop-cashier.ts` pour garantir que les
+ * encaissements d'une session atteignent le serveur AVANT sa clôture (sinon le total système calculé
+ * côté serveur serait faux, voir sa Javadoc). `toIso` nul = session encore ouverte, pas de borne haute. */
+export async function pushOfflineEncaissementsInWindow(
+  fromIso: string, toIso: string | null,
+): Promise<{ synced: number; failed: number }> {
+  const db = await getDesktopDb();
+  const rows = toIso != null
+    ? await db.select<OfflineEncaissementRow[]>(
+        "SELECT * FROM encaissements_offline WHERE synced = 0 AND date_paiement >= $1 AND date_paiement <= $2 ORDER BY date_paiement ASC",
+        [fromIso, toIso],
+      )
+    : await db.select<OfflineEncaissementRow[]>(
+        "SELECT * FROM encaissements_offline WHERE synced = 0 AND date_paiement >= $1 ORDER BY date_paiement ASC",
+        [fromIso],
+      );
+  return pushEncaissementRows(rows);
 }
 
 /** Encaissements en attente (pour un badge "N à synchroniser" dans l'UI desktop) — inclut ceux déjà

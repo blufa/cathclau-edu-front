@@ -1,7 +1,7 @@
 import { initiateGroupPayment, type GroupPaymentInput } from "@/lib/api/payment";
 import { createStudent } from "@/lib/api/students";
 import { enroll, reenroll, searchEnrollments } from "@/lib/api/enrollments";
-import { createTeacher } from "@/lib/api/staff";
+import { createTeacher, updateTeacher } from "@/lib/api/staff";
 import { createParent, getStudentParents, linkParentToStudent, type Relationship } from "@/lib/api/parents";
 import {
   recordEmployeeManualEntry,
@@ -28,11 +28,13 @@ import {
   type QueuedGroupPayment,
   type QueuedParent,
   type QueuedTeacher,
+  type QueuedTeacherUpdate,
 } from "./db";
 import { useNetworkStore } from "./network-store";
 import { useSyncQueueStore } from "./sync-queue-store";
 import { useEnrollmentQueueStore } from "./enrollment-queue-store";
 import { useTeacherQueueStore } from "./teacher-queue-store";
+import { useTeacherUpdateQueueStore } from "./teacher-update-queue-store";
 import { useParentQueueStore } from "./parent-queue-store";
 import { useAttendanceQueueStore } from "./attendance-queue-store";
 import { useGradeQueueStore } from "./grade-queue-store";
@@ -564,6 +566,70 @@ export async function discardFailedGradeEntry(assessmentId: number): Promise<voi
   await refreshGradeQueueSnapshot();
 }
 
+// ── Modification d'enseignant hors-ligne (§staff) ───────────────────────────────────────────────
+
+async function refreshTeacherUpdateQueueSnapshot(): Promise<void> {
+  const items = await offlineDb.teacherUpdateQueue.orderBy("createdAt").toArray();
+  useTeacherUpdateQueueStore.getState().setItems(items);
+}
+
+/** Enregistre (ou remplace) la modification hors-ligne d'un enseignant — une nouvelle modification
+ * du MÊME enseignant écrase la précédente au lieu de s'empiler, voir QueuedTeacherUpdate dans db.ts.
+ * Aucune contrainte d'unicité/période en jeu (donnée de profil) : dernière écriture gagne, pas de
+ * détection de conflit nécessaire. */
+export async function enqueueTeacherUpdate(teacherId: number, input: CreateTeacherInput): Promise<QueuedTeacherUpdate> {
+  const entry: QueuedTeacherUpdate = {
+    teacherId, input,
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    attempts: 0,
+  };
+  await offlineDb.teacherUpdateQueue.put(entry);
+  await refreshTeacherUpdateQueueSnapshot();
+  return entry;
+}
+
+let teacherUpdateSyncing = false;
+
+export async function processTeacherUpdateQueue(): Promise<void> {
+  if (teacherUpdateSyncing || !useNetworkStore.getState().online) return;
+  teacherUpdateSyncing = true;
+  useTeacherUpdateQueueStore.getState().setSyncing(true);
+  try {
+    const pending = await offlineDb.teacherUpdateQueue.where("status").equals("pending").toArray();
+    for (const entry of pending) {
+      try {
+        await updateTeacher(entry.teacherId, entry.input);
+        await offlineDb.teacherUpdateQueue.delete(entry.teacherId);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          break;
+        }
+        await offlineDb.teacherUpdateQueue.update(entry.teacherId, {
+          status: "failed",
+          attempts: entry.attempts + 1,
+          lastError: err instanceof Error ? err.message : "Erreur inconnue",
+        });
+      }
+    }
+  } finally {
+    teacherUpdateSyncing = false;
+    useTeacherUpdateQueueStore.getState().setSyncing(false);
+    await refreshTeacherUpdateQueueSnapshot();
+  }
+}
+
+export async function retryFailedTeacherUpdateEntry(teacherId: number): Promise<void> {
+  await offlineDb.teacherUpdateQueue.update(teacherId, { status: "pending" });
+  await refreshTeacherUpdateQueueSnapshot();
+  await processTeacherUpdateQueue();
+}
+
+export async function discardFailedTeacherUpdateEntry(teacherId: number): Promise<void> {
+  await offlineDb.teacherUpdateQueue.delete(teacherId);
+  await refreshTeacherUpdateQueueSnapshot();
+}
+
 let wired = false;
 
 /** Déclenche la synchronisation (paiements, inscriptions, enseignants, parents, présences, notes) au
@@ -575,6 +641,7 @@ export function wireSyncTriggers(): void {
     void processQueue();
     void processEnrollmentQueue();
     void processTeacherQueue();
+    void processTeacherUpdateQueue();
     void processParentQueue();
     void processAttendanceQueue();
     void processGradeQueue();
@@ -596,5 +663,8 @@ export function wireSyncTriggers(): void {
   });
   void refreshGradeQueueSnapshot().then(() => {
     if (useNetworkStore.getState().online) void processGradeQueue();
+  });
+  void refreshTeacherUpdateQueueSnapshot().then(() => {
+    if (useNetworkStore.getState().online) void processTeacherUpdateQueue();
   });
 }

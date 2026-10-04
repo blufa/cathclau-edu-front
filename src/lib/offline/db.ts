@@ -62,6 +62,21 @@ export interface QueuedTeacher {
   lastError?: string;
 }
 
+export type QueuedTeacherUpdateStatus = "pending" | "failed";
+
+export interface QueuedTeacherUpdate {
+  /** Clé = l'enseignant lui-même (PAS un UUID), comme `QueuedGradeEntry` : une donnée de profil
+   * (pas de contrainte d'unicité ni de période en jeu), une nouvelle modification hors-ligne du
+   * MÊME enseignant REMPLACE la précédente au lieu de s'empiler — toujours le dernier état connu
+   * qui part à la synchronisation, jamais une pile de corrections intermédiaires. */
+  teacherId: number;
+  input: CreateTeacherInput;
+  createdAt: string;
+  status: QueuedTeacherUpdateStatus;
+  attempts: number;
+  lastError?: string;
+}
+
 export type QueuedParentStatus = "pending" | "failed";
 
 export interface QueuedParent {
@@ -137,6 +152,9 @@ class LacaOfflineDb extends Dexie {
   /** Notes saisies hors-ligne, en attente de synchronisation — §grading. Clé = assessmentId, voir
    * QueuedGradeEntry ci-dessus. */
   gradeQueue!: Table<QueuedGradeEntry, number>;
+  /** Modifications d'enseignant hors-ligne, en attente de synchronisation — §staff. Clé =
+   * teacherId, voir QueuedTeacherUpdate ci-dessus. */
+  teacherUpdateQueue!: Table<QueuedTeacherUpdate, number>;
 
   constructor() {
     super("laca-offline");
@@ -185,6 +203,17 @@ class LacaOfflineDb extends Dexie {
       attendanceQueue: "id, status, createdAt",
       queryCache: "key",
       gradeQueue: "assessmentId, status, createdAt",
+    });
+    this.version(8).stores({
+      paymentQueue: "id, status, createdAt, *studentIds",
+      readCache: "key",
+      enrollmentQueue: "id, status, createdAt",
+      teacherQueue: "id, status, createdAt",
+      parentQueue: "id, status, createdAt, studentId",
+      attendanceQueue: "id, status, createdAt",
+      queryCache: "key",
+      gradeQueue: "assessmentId, status, createdAt",
+      teacherUpdateQueue: "teacherId, status, createdAt",
     });
   }
 }

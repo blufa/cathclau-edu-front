@@ -5,7 +5,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { isDesktop } from "@/lib/offline/desktop-runtime";
-import { wireDesktopSyncTriggers, type DesktopSyncContext } from "@/lib/offline/desktop-sync";
+import { wireDesktopSyncTriggers, triggerDesktopSyncNow, type DesktopSyncContext } from "@/lib/offline/desktop-sync";
 import { checkForDesktopUpdate } from "@/lib/offline/desktop-updater";
 
 /**
@@ -26,7 +26,13 @@ export function DesktopSyncBootstrap() {
   const tenantId = user?.tenantId ?? null;
   const academicYearId = yearQuery.data?.id ?? null;
   useEffect(() => {
-    ctxRef.current = tenantId != null && academicYearId != null ? { tenantId, academicYearId } : null;
+    const ready = tenantId != null && academicYearId != null;
+    ctxRef.current = ready ? { tenantId, academicYearId } : null;
+    // §retour fondateurs : le premier appel de wireDesktopSyncTriggers (ci-dessous) se déclenche
+    // AVANT que tenantId/academicYearId ne soient résolus (requêtes async) — sans ce déclenchement
+    // explicite dès que le contexte devient prêt, la copie initiale des classes/frais/élèves
+    // n'arrivait qu'au bout de 15 minutes (minuteur de secours), pas à la connexion comme attendu.
+    if (ready && isDesktop()) triggerDesktopSyncNow();
   }, [tenantId, academicYearId]);
 
   useEffect(() => {

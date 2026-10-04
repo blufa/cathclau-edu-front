@@ -13,6 +13,9 @@ import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { submitGradesOfflineAware } from "@/lib/offline/submit-grades-offline-aware";
 import { useGradeQueueStore } from "@/lib/offline/grade-queue-store";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { queueOfflineAssessment } from "@/lib/offline/desktop-assessments";
 import {
   getClassStudents,
   listAcademicYears,
@@ -28,7 +31,6 @@ import {
   completeExam,
   createAssessment,
   updateAssessment,
-  listAssessmentTypes,
   createExam,
   deleteAssessment,
   deleteExam,
@@ -774,9 +776,6 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   const allSubjects = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
-  // Paramètres de notation configurés par l'établissement (Notes → Paramètres).
-  const typeConfigsQuery = useCachedQuery(tenantId ? `assessment-types:${tenantId}` : null, listAssessmentTypes, [tenantId]);
-  const typeConfigs = (typeConfigsQuery.data ?? []).filter((c) => c.active);
   const [loading, setLoading] = useState(false);
 
   const subjectName = useMemo(() => new Map((allSubjects.data ?? []).map((s) => [s.id, s.label])), [allSubjects.data]);
@@ -789,7 +788,6 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   const schema = z.object({
     periodId: z.string().min(1, "Requis"),
     type: z.string(),
-    assessmentTypeId: z.string(),
     label: z.string().trim().min(1, "Requis"),
     date: z.string(),
     coefficient: z.number(),
@@ -802,7 +800,6 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
     defaultValues: {
       periodId: initial ? String(initial.periodId) : "",
       type: initial ? initial.type : "HOMEWORK",
-      assessmentTypeId: initial?.assessmentTypeId != null ? String(initial.assessmentTypeId) : "",
       label: initial?.label ?? "",
       date: initial?.date ?? "",
       coefficient: initial ? Number(initial.coefficient) : 1,
@@ -841,7 +838,6 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
         return {
           classId, subjectId: Number(sid), teacherId: cm?.teacherId ?? null,
           periodId: Number(values.periodId), type: values.type as AssessmentType,
-          assessmentTypeId: values.assessmentTypeId ? Number(values.assessmentTypeId) : null,
           label: values.label,
           date: values.date || null,
           coefficient: multi ? coefFor(sid) : Number(values.coefficient),
@@ -853,7 +849,18 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
         await updateAssessment(initial.id, build(subjectIds[0]));
       } else {
         for (const sid of subjectIds) {
-          await createAssessment(build(sid));
+          const input = build(sid);
+          try {
+            await createAssessment(input);
+          } catch (err) {
+            // Hors-ligne sur desktop : mise en file — le seul refus possible (période clôturée
+            // entre-temps) ne peut être détecté qu'à la synchro, jamais localement.
+            if (isNetworkError(err) && isDesktop() && tenantId != null) {
+              await queueOfflineAssessment({ ...input, etablissementId: tenantId });
+            } else {
+              throw err;
+            }
+          }
         }
       }
       onCreated();
@@ -918,25 +925,6 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
           {(Object.keys(ASSESSMENT_TYPE_LABEL) as AssessmentType[]).map((t) => (<option key={t} value={t}>{ASSESSMENT_TYPE_LABEL[t]}</option>))}
         </Select>
       </Field>
-      {typeConfigs.length > 0 && (
-        <Field>
-          <Label>Paramètre de notation</Label>
-          <p className="text-xs text-gray-400">Barème/type d&apos;évaluation configuré (Notes → Paramètres). Facultatif : pré-remplit le coefficient.</p>
-          <Select
-            value={v.assessmentTypeId}
-            onChange={(e) => {
-              const val = e.target.value;
-              setValue("assessmentTypeId", val);
-              const cfg = typeConfigs.find((c) => String(c.id) === val);
-              const coef = cfg?.defaultCoefficient != null ? Number(cfg.defaultCoefficient) : NaN;
-              if (!Number.isNaN(coef) && coef > 0) setValue("coefficient", coef);
-            }}
-          >
-            <option value="">— Aucun —</option>
-            {typeConfigs.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-          </Select>
-        </Field>
-      )}
       <Field>
         <Label>Libellé <span className="text-error-500">*</span></Label>
         <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />

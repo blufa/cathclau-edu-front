@@ -7,6 +7,9 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { queueOfflineSchedule } from "@/lib/offline/desktop-schedule";
 import {
   cancelScheduleWeekException,
   createSchedule,
@@ -302,9 +305,21 @@ export default function TimetablePage() {
   }
 
   async function handleCreate(input: CreateScheduleInput) {
-    await createSchedule(input);
+    try {
+      await createSchedule(input);
+      notifySuccess("Créneau ajouté");
+    } catch (err) {
+      // Hors-ligne sur desktop : mis en file, le conflit éventuel (salle/enseignant/classe) ne sera
+      // détecté qu'à la synchro — visible alors dans le bandeau desktop, jamais silencieux.
+      if (isNetworkError(err) && isDesktop() && tenantId != null) {
+        await queueOfflineSchedule({ ...input, etablissementId: tenantId });
+        notifySuccess("Hors-ligne : créneau mis en file, sera synchronisé au retour du réseau.");
+      } else {
+        notifyError(err);
+        return;
+      }
+    }
     setCreating(false);
-    notifySuccess("Créneau ajouté");
     refetchSchedules();
   }
   async function handleMoveForWeek(input: MoveScheduleForWeekInput) {
