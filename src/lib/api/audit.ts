@@ -1,6 +1,7 @@
 import { api } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
 import type { AuditLogEntry } from "@/lib/types/audit";
+import type { AccountantAnomalyAlert } from "@/lib/types/accountant-anomaly";
 
 export interface AuditLogSearchParams {
   action?: string;
@@ -23,4 +24,9 @@ export function searchAuditLogs(params: AuditLogSearchParams): Promise<Page<Audi
       size: params.size,
     },
   });
+}
+
+/** Détecteur B3 (§retour fondateurs) : écarts statistiques entre comptables de l'école courante. */
+export function listAccountantAnomalyAlerts(): Promise<AccountantAnomalyAlert[]> {
+  return api.get<AccountantAnomalyAlert[]>("/accountant-anomaly-alerts");
 }
