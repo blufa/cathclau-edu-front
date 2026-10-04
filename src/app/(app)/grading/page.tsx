@@ -13,6 +13,9 @@ import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { submitGradesOfflineAware } from "@/lib/offline/submit-grades-offline-aware";
 import { useGradeQueueStore } from "@/lib/offline/grade-queue-store";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { queueOfflineAssessment } from "@/lib/offline/desktop-assessments";
 import {
   getClassStudents,
   listAcademicYears,
@@ -846,7 +849,18 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
         await updateAssessment(initial.id, build(subjectIds[0]));
       } else {
         for (const sid of subjectIds) {
-          await createAssessment(build(sid));
+          const input = build(sid);
+          try {
+            await createAssessment(input);
+          } catch (err) {
+            // Hors-ligne sur desktop : mise en file — le seul refus possible (période clôturée
+            // entre-temps) ne peut être détecté qu'à la synchro, jamais localement.
+            if (isNetworkError(err) && isDesktop() && tenantId != null) {
+              await queueOfflineAssessment({ ...input, etablissementId: tenantId });
+            } else {
+              throw err;
+            }
+          }
         }
       }
       onCreated();

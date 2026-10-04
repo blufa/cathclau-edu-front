@@ -6,6 +6,9 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { isNetworkError } from "@/lib/api/errors";
+import { isDesktop } from "@/lib/offline/desktop-runtime";
+import { queueOfflineLesson, queueOfflineLessonDoneForExisting } from "@/lib/offline/desktop-lessons";
 import { getScheduleByClass, getScheduleByTeacher, listAcademicYears, listClasses, listClassSubjects, listSubjects } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { getTeacherCheckins } from "@/lib/api/attendance";
@@ -437,7 +440,7 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
     setLoading(true);
     try {
       for (const r of valid) {
-        await createLesson({
+        const input = {
           classId: Number(r.classId),
           subjectId: r.noSubject ? null : Number(r.subjectId),
           lessonDate: lessonDate || null,
@@ -445,8 +448,29 @@ function LessonForm({ classes, defaultClassId, subjectName, onCancel, onCreated 
           content: r.content || null,
           homework: r.homework || null,
           durationMinutes: r.durationMinutes === "" ? null : Number(r.durationMinutes),
-          status: "PLANNED",
-        });
+          status: "PLANNED" as const,
+        };
+        try {
+          await createLesson(input);
+        } catch (err) {
+          // Hors-ligne sur desktop : met en file plutôt que d'échouer (voir desktop-lessons.ts). Le
+          // serveur résout normalement l'enseignant depuis classe+matière (jamais envoyé en ligne,
+          // voir LessonService.resolveTeacherId) — hors-ligne, il faut le résoudre nous-mêmes pour
+          // que la ligne en file soit complète, le rejeu ne pouvant pas compter sur cette résolution
+          // avant d'avoir atteint le serveur.
+          if (isNetworkError(err) && isDesktop() && tenantId != null) {
+            const teacherIdRaw = r.noSubject ? headTeacherIdFor(r.classId) : teacherFor(r.classId, r.subjectId);
+            const teacherId = teacherIdRaw != null ? Number(teacherIdRaw) : null;
+            await queueOfflineLesson({
+              etablissementId: tenantId, classeId: input.classId, matiereId: input.subjectId,
+              enseignantId: teacherId, dateSeance: input.lessonDate ?? todayIso(),
+              titre: input.title, contenu: input.content, devoirs: input.homework,
+              dureeMinutes: input.durationMinutes, statut: "PLANNED",
+            });
+          } else {
+            throw err;
+          }
+        }
       }
       onCreated([...new Set(valid.map((r) => Number(r.classId)))]);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -701,6 +725,8 @@ function EditLessonForm({ lesson, classes, subjectName, canSetStatus, onCancel, 
 type DurationSource = "THEORETICAL" | "ACTUAL" | "CUSTOM";
 
 function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCancel: () => void; onDone: () => void }) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const [loading, setLoading] = useState(false);
 
   // Deux sources possibles pour la durée réalisée (qui compte pour la paie) : la durée THÉORIQUE du
@@ -746,10 +772,27 @@ function MarkDoneForm({ lesson, onCancel, onDone }: { lesson: LessonEntry; onCan
 
   async function confirm() {
     setLoading(true);
+    const realizedMinutes = duration === "" ? null : Number(duration);
     try {
-      await markLessonDone(lesson.id, duration === "" ? null : Number(duration), noCheckinFound);
+      await markLessonDone(lesson.id, realizedMinutes, noCheckinFound);
       onDone();
-    } catch (err) { notifyError(err); } finally { setLoading(false); }
+    } catch (err) {
+      // Hors-ligne sur desktop : met en file plutôt que d'échouer — rejoué à la reconnexion en
+      // conservant le signal anti-fraude (voir desktop-lessons.ts, queueOfflineLessonDoneForExisting).
+      if (isNetworkError(err) && isDesktop() && tenantId != null) {
+        try {
+          await queueOfflineLessonDoneForExisting({
+            etablissementId: tenantId, serverLessonId: lesson.id, classeId: lesson.classId,
+            titre: lesson.title, dateSeance: lesson.lessonDate, realizedDurationMinutes: realizedMinutes,
+            confirmedWithoutCheckin: noCheckinFound,
+          });
+          notifySuccess("Hors-ligne : validation mise en file, sera synchronisée au retour du réseau.");
+          onDone();
+        } catch (queueErr) { notifyError(queueErr); }
+      } else {
+        notifyError(err);
+      }
+    } finally { setLoading(false); }
   }
 
   const optionClass = (active: boolean) =>

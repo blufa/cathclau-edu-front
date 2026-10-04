@@ -3,6 +3,9 @@ import { pullReferenceData } from "./desktop-reference-sync";
 import { pushOfflineEncaissements } from "./desktop-payments";
 import { pushOfflinePresences } from "./desktop-attendance";
 import { pushOfflineLessons } from "./desktop-lessons";
+import { pushOfflineSchedules } from "./desktop-schedule";
+import { pushOfflineClasses } from "./desktop-classes";
+import { pushOfflineAssessments } from "./desktop-assessments";
 import { pushOfflineExpenses } from "./desktop-expenses";
 import { pushOfflineGrades } from "./desktop-grades";
 import { pushOfflineCashierSessions } from "./desktop-cashier";
@@ -14,6 +17,7 @@ export type DesktopSyncContext = { tenantId: number; academicYearId: number } | 
 
 let wired = false;
 let syncing = false;
+let lastGetContext: (() => DesktopSyncContext) | null = null;
 
 async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
   if (syncing || !useNetworkStore.getState().online) return;
@@ -23,15 +27,20 @@ async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
   try {
     // Caisse d'abord (ouvrir la session avant que les encaissements qu'elle couvre ne soient rejoués),
     // puis inscriptions (un élève doit exister côté serveur avant tout le reste), puis les autres
-    // files d'attente — argent et présences avant le confort (cahier de texte, notes, dépenses) — et
-    // enfin le référentiel, pour repartir avec un miroir à jour.
+    // files d'attente — argent et présences avant le confort (cahier de texte, emploi du temps,
+    // notes, dépenses) — et enfin le référentiel, pour repartir avec un miroir à jour. Les notes
+    // sont rejouées après les évaluations : une évaluation doit exister côté serveur avant de
+    // rejouer les notes qui s'y rattachent (même logique qu'inscriptions → encaissements).
     await pushOfflineCashierSessions();
     await pushOfflineEnrollments();
     await pushOfflineEncaissements();
     await pushOfflinePresences();
     await pushOfflineLessons();
-    await pushOfflineGrades();
+    await pushOfflineSchedules();
+    await pushOfflineClasses();
+    await pushOfflineAssessments();
     await pushOfflineExpenses();
+    await pushOfflineGrades();
     await pullReferenceData(ctx.tenantId, ctx.academicYearId);
   } finally {
     syncing = false;
@@ -50,9 +59,16 @@ async function runSync(getContext: () => DesktopSyncContext): Promise<void> {
  * valeur figée au montage.
  */
 export function wireDesktopSyncTriggers(getContext: () => DesktopSyncContext): void {
+  lastGetContext = getContext;
   if (wired || typeof window === "undefined") return;
   wired = true;
   window.addEventListener("online", () => void runSync(getContext));
   void runSync(getContext);
   setInterval(() => void runSync(getContext), 15 * 60 * 1000);
+}
+
+/** Relance immédiate (bouton "Réessayer" du bandeau desktop, voir `desktop-offline-banner.tsx`) —
+ * ne fait rien si la synchro n'a jamais été branchée (`DesktopSyncBootstrap` pas encore monté). */
+export function triggerDesktopSyncNow(): void {
+  if (lastGetContext) void runSync(lastGetContext);
 }

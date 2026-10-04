@@ -317,6 +317,108 @@ fn migrations() -> Vec<Migration> {
             "#,
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "seances_offline_confirmation_sans_pointage",
+            // La validation "séance réalisée" sans pointage enseignant exige une confirmation
+            // explicite côté serveur (`confirmedWithoutCheckin`, voir LessonController côté Java,
+            // §retour fondateurs anti-fraude) — jusqu'ici cette colonne n'existait pas ici, donc une
+            // validation faite hors-ligne perdait silencieusement ce signal au rejeu (toujours
+            // renvoyé comme `false`/absent), ce qui aurait contourné la barrière pour exactement le
+            // cas qu'elle vise (enseignant hors-ligne, donc sans réseau pour un pointage badge).
+            sql: r#"
+                ALTER TABLE seances_offline ADD COLUMN confirme_sans_pointage INTEGER NOT NULL DEFAULT 0;
+            "#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 10,
+            description: "creation_file_attente_emploi_du_temps",
+            // Même forme que `seances_offline` (migration 5) : un créneau créé/déplacé hors-ligne
+            // peut entrer en conflit (salle, enseignant ou classe déjà occupés) avec un créneau créé
+            // depuis un autre poste entre-temps — ce conflit n'est détectable qu'au moment du rejeu
+            // (`pushOfflineSchedules`), jamais localement. `id_serveur` reste NULL tant que le
+            // créneau n'a pas été accepté par le serveur (pas d'étape "modifier après coup" pour les
+            // créneaux, contrairement aux séances/caisse — une correction hors-ligne d'un créneau pas
+            // encore synchronisé écrase simplement la ligne locale, voir `desktop-schedule.ts`).
+            sql: r#"
+                CREATE TABLE IF NOT EXISTS emplois_du_temps_offline (
+                    id                TEXT PRIMARY KEY,
+                    etablissement_id  INTEGER NOT NULL,
+                    id_serveur        INTEGER,
+                    classe_id         INTEGER NOT NULL,
+                    matiere_id        INTEGER,
+                    enseignant_id     INTEGER,
+                    salle_id          INTEGER,
+                    jour              TEXT NOT NULL,
+                    heure_debut       TEXT NOT NULL,
+                    heure_fin         TEXT NOT NULL,
+                    libelle           TEXT,
+                    synced            INTEGER NOT NULL DEFAULT 0,
+                    tentatives        INTEGER NOT NULL DEFAULT 0,
+                    derniere_erreur   TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_emplois_du_temps_offline_synced ON emplois_du_temps_offline (synced);
+            "#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "creation_file_attente_classes",
+            // Création de classe hors-ligne : le seul risque de rejet serveur (année scolaire
+            // clôturée entre-temps) n'est détectable qu'au rejeu, jamais localement — même principe
+            // que les 3 autres nouvelles files de cette extension (emploi du temps, évaluations).
+            sql: r#"
+                CREATE TABLE IF NOT EXISTS classes_offline (
+                    id                  TEXT PRIMARY KEY,
+                    etablissement_id    INTEGER NOT NULL,
+                    id_serveur          INTEGER,
+                    niveau_id           INTEGER,
+                    annee_scolaire_id   INTEGER NOT NULL,
+                    enseignant_resp_id  INTEGER,
+                    salle_id            INTEGER,
+                    libelle             TEXT NOT NULL,
+                    capacite_max        INTEGER,
+                    type_classe         TEXT,
+                    grade               TEXT,
+                    serie               TEXT,
+                    synced              INTEGER NOT NULL DEFAULT 0,
+                    tentatives          INTEGER NOT NULL DEFAULT 0,
+                    derniere_erreur     TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_classes_offline_synced ON classes_offline (synced);
+            "#,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 12,
+            description: "creation_file_attente_evaluations",
+            // Création d'évaluation hors-ligne : le seul risque de rejet serveur (période clôturée
+            // entre-temps) n'est détectable qu'au rejeu, jamais localement. Rejouée AVANT les notes
+            // dans `runSync()` : une évaluation doit exister côté serveur avant que ses notes
+            // puissent être rejouées (même logique que "inscriptions avant encaissements").
+            sql: r#"
+                CREATE TABLE IF NOT EXISTS evaluations_offline (
+                    id                TEXT PRIMARY KEY,
+                    etablissement_id  INTEGER NOT NULL,
+                    id_serveur        INTEGER,
+                    classe_id         INTEGER NOT NULL,
+                    matiere_id        INTEGER NOT NULL,
+                    enseignant_id     INTEGER,
+                    periode_id        INTEGER NOT NULL,
+                    type_evaluation   TEXT NOT NULL,
+                    libelle           TEXT NOT NULL,
+                    date_evaluation   TEXT NOT NULL,
+                    note_sur          REAL NOT NULL,
+                    coefficient       REAL NOT NULL,
+                    synced            INTEGER NOT NULL DEFAULT 0,
+                    tentatives        INTEGER NOT NULL DEFAULT 0,
+                    derniere_erreur   TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_evaluations_offline_synced ON evaluations_offline (synced);
+            "#,
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -6,6 +6,7 @@ import { useNetworkStore, wireNetworkListeners } from "@/lib/offline/network-sto
 import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
 import { useEnrollmentQueueStore } from "@/lib/offline/enrollment-queue-store";
 import { useTeacherQueueStore } from "@/lib/offline/teacher-queue-store";
+import { useTeacherUpdateQueueStore } from "@/lib/offline/teacher-update-queue-store";
 import { useParentQueueStore } from "@/lib/offline/parent-queue-store";
 import { useAttendanceQueueStore } from "@/lib/offline/attendance-queue-store";
 import { useGradeQueueStore } from "@/lib/offline/grade-queue-store";
@@ -13,6 +14,7 @@ import {
   wireSyncTriggers, processQueue, retryFailedEntry, discardFailedEntry,
   processEnrollmentQueue, retryFailedEnrollmentEntry, discardFailedEnrollmentEntry,
   processTeacherQueue, retryFailedTeacherEntry, discardFailedTeacherEntry,
+  processTeacherUpdateQueue, retryFailedTeacherUpdateEntry, discardFailedTeacherUpdateEntry,
   processParentQueue, retryFailedParentEntry, discardFailedParentEntry,
   processAttendanceQueue, retryFailedAttendanceEntry, discardFailedAttendanceEntry,
   processGradeQueue, retryFailedGradeEntry, discardFailedGradeEntry,
@@ -38,6 +40,8 @@ export function OfflineBanner() {
   const enrollmentSyncing = useEnrollmentQueueStore((s) => s.syncing);
   const teacherItems = useTeacherQueueStore((s) => s.items);
   const teacherSyncing = useTeacherQueueStore((s) => s.syncing);
+  const teacherUpdateItems = useTeacherUpdateQueueStore((s) => s.items);
+  const teacherUpdateSyncing = useTeacherUpdateQueueStore((s) => s.syncing);
   const parentItems = useParentQueueStore((s) => s.items);
   const parentSyncing = useParentQueueStore((s) => s.syncing);
   const attendanceItems = useAttendanceQueueStore((s) => s.items);
@@ -51,22 +55,24 @@ export function OfflineBanner() {
     wireSyncTriggers();
   }, []);
 
-  const syncing = paymentSyncing || enrollmentSyncing || teacherSyncing || parentSyncing || attendanceSyncing || gradeSyncing;
+  const syncing = paymentSyncing || enrollmentSyncing || teacherSyncing || teacherUpdateSyncing || parentSyncing || attendanceSyncing || gradeSyncing;
   const pendingPayments = paymentItems.filter((i) => i.status === "pending");
   const failedPayments = paymentItems.filter((i) => i.status === "failed");
   const pendingEnrollments = enrollmentItems.filter((i) => i.status === "pending");
   const failedEnrollments = enrollmentItems.filter((i) => i.status === "failed");
   const pendingTeachers = teacherItems.filter((i) => i.status === "pending");
   const failedTeachers = teacherItems.filter((i) => i.status === "failed");
+  const pendingTeacherUpdates = teacherUpdateItems.filter((i) => i.status === "pending");
+  const failedTeacherUpdates = teacherUpdateItems.filter((i) => i.status === "failed");
   const pendingParents = parentItems.filter((i) => i.status === "pending");
   const failedParents = parentItems.filter((i) => i.status === "failed");
   const pendingAttendance = attendanceItems.filter((i) => i.status === "pending");
   const failedAttendance = attendanceItems.filter((i) => i.status === "failed");
   const pendingGrades = gradeItems.filter((i) => i.status === "pending");
   const failedGrades = gradeItems.filter((i) => i.status === "failed");
-  const pendingTotal = pendingPayments.length + pendingEnrollments.length + pendingTeachers.length + pendingParents.length + pendingAttendance.length + pendingGrades.length;
-  const failedTotal = failedPayments.length + failedEnrollments.length + failedTeachers.length + failedParents.length + failedAttendance.length + failedGrades.length;
-  const totalItems = paymentItems.length + enrollmentItems.length + teacherItems.length + parentItems.length + attendanceItems.length + gradeItems.length;
+  const pendingTotal = pendingPayments.length + pendingEnrollments.length + pendingTeachers.length + pendingTeacherUpdates.length + pendingParents.length + pendingAttendance.length + pendingGrades.length;
+  const failedTotal = failedPayments.length + failedEnrollments.length + failedTeachers.length + failedTeacherUpdates.length + failedParents.length + failedAttendance.length + failedGrades.length;
+  const totalItems = paymentItems.length + enrollmentItems.length + teacherItems.length + teacherUpdateItems.length + parentItems.length + attendanceItems.length + gradeItems.length;
 
   if (online && totalItems === 0) return null;
 
@@ -74,6 +80,7 @@ export function OfflineBanner() {
     void processQueue();
     void processEnrollmentQueue();
     void processTeacherQueue();
+    void processTeacherUpdateQueue();
     void processParentQueue();
     void processAttendanceQueue();
     void processGradeQueue();
@@ -179,6 +186,23 @@ export function OfflineBanner() {
                       Ignorer
                     </Button>
                     <Button size="sm" onClick={() => void retryFailedTeacherEntry(entry.id)}>Réessayer</Button>
+                  </div>
+                </div>
+              ))}
+              {failedTeacherUpdates.map((entry) => (
+                <div key={`teacher-update-${entry.teacherId}`} className="rounded-lg border border-error-100 bg-error-50/40 p-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-700">
+                      Modification enseignant · {entry.input.firstName} {entry.input.lastName}
+                    </span>
+                  </div>
+                  {entry.lastError && <p className="mt-1 text-xs text-error-600">{entry.lastError}</p>}
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" leftSection={<X className="h-3.5 w-3.5" />}
+                      onClick={() => void discardFailedTeacherUpdateEntry(entry.teacherId)}>
+                      Ignorer
+                    </Button>
+                    <Button size="sm" onClick={() => void retryFailedTeacherUpdateEntry(entry.teacherId)}>Réessayer</Button>
                   </div>
                 </div>
               ))}
