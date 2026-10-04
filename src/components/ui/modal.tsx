@@ -53,13 +53,17 @@ export function Modal({ open, onClose, title, children, className, bare, align =
         aria-modal="true"
         aria-labelledby={title ? "modal-title" : undefined}
         className={cn(
-          "relative w-full max-w-lg rounded-2xl bg-white shadow-theme-lg ring-1 ring-gray-900/5",
-          !bare && "p-6",
+          // max-h-[90vh] + en-tête fixe/corps défilant séparément (au lieu d'un bloc unique) : sur un
+          // écran bas (15 pouces, souvent 768px de hauteur utile) un formulaire à beaucoup de champs
+          // ne doit jamais être coupé en bas ni forcer à faire défiler toute la page derrière le
+          // fond assombri — seul le contenu du modal défile, le titre/bouton fermer restent visibles.
+          "relative flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-theme-lg ring-1 ring-gray-900/5",
+          bare ? "overflow-y-auto" : "overflow-hidden",
           className,
         )}
       >
         {!bare && (
-          <div className="mb-4 flex items-center justify-between">
+          <div className="flex shrink-0 items-center justify-between px-6 pb-4 pt-6">
             <h2 id="modal-title" className="text-base font-semibold text-gray-900">
               {title}
             </h2>
@@ -73,7 +77,7 @@ export function Modal({ open, onClose, title, children, className, bare, align =
             </button>
           </div>
         )}
-        {children}
+        {bare ? children : <div className="overflow-y-auto px-6 pb-6">{children}</div>}
       </div>
     </div>,
     document.body,
