@@ -7,7 +7,10 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { searchAuditLogs } from "@/lib/api/audit";
 import { listUsers } from "@/lib/api/iam";
-import { AUDIT_ACTION_LABEL, AUDIT_FRAUD_ACTIONS, type AuditLogEntry } from "@/lib/types/audit";
+import {
+  AUDIT_ACTION_LABEL, AUDIT_FRAUD_ACTIONS, AUDIT_RESOURCE_LABEL, formatAuditDetails,
+  type AuditLogEntry,
+} from "@/lib/types/audit";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -79,8 +82,18 @@ export default function AuditLogsPage() {
       accessor: (l) => userName(l.utilisateurId),
       render: (l) => userName(l.utilisateurId),
     },
-    { key: "ressource", header: "Ressource", accessor: (l) => `${l.ressource} #${l.ressourceId ?? ""}`, render: (l) => `${l.ressource}${l.ressourceId != null ? ` #${l.ressourceId}` : ""}` },
-    { key: "details", header: "Détails", accessor: (l) => l.details ?? "", render: (l) => <span className="text-xs text-gray-500">{l.details ?? "—"}</span> },
+    {
+      key: "ressource",
+      header: "Ressource",
+      accessor: (l) => `${AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource} #${l.ressourceId ?? ""}`,
+      render: (l) => `${AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource}${l.ressourceId != null ? ` #${l.ressourceId}` : ""}`,
+    },
+    {
+      key: "details",
+      header: "Détails",
+      accessor: (l) => formatAuditDetails(l.details),
+      render: (l) => <span className="text-xs text-gray-500">{formatAuditDetails(l.details)}</span>,
+    },
   ];
 
   return (
