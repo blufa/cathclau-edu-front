@@ -121,6 +121,7 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         email: profile.email,
         website: profile.website,
         director: profile.director,
+        founderPhone: profile.founderPhone,
         accreditationNumber: profile.accreditationNumber,
         openingAuthorization: profile.openingAuthorization,
         motto: profile.motto,
@@ -161,6 +162,15 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
       </div>
       <Field><Label>Site web</Label><Input value={profile.website ?? ""} disabled={ro} onChange={(e) => set("website", e.target.value)} /></Field>
       <Field><Label>Directeur</Label><Input value={profile.director ?? ""} disabled={ro} onChange={(e) => set("director", e.target.value)} /></Field>
+      <Field>
+        <Label>Numéro du fondateur (alertes)</Label>
+        <p className="text-xs text-gray-400">
+          Les alertes automatiques (écart de caisse, exonération suspecte, retard/absence enseignant…)
+          sont envoyées sur ce numéro. Tant qu&apos;il n&apos;est pas renseigné, elles continuent
+          d&apos;être envoyées à tous les comptes administrateur de l&apos;école.
+        </p>
+        <PhoneInput value={profile.founderPhone ?? ""} disabled={ro} onChange={(v) => set("founderPhone", v)} />
+      </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Numéro d&apos;agrément</Label><Input value={profile.accreditationNumber ?? ""} disabled={ro} onChange={(e) => set("accreditationNumber", e.target.value)} /></Field>
         <Field><Label>Autorisation d&apos;ouverture</Label><Input value={profile.openingAuthorization ?? ""} disabled={ro} onChange={(e) => set("openingAuthorization", e.target.value)} /></Field>
