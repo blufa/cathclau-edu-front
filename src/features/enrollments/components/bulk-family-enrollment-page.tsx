@@ -967,22 +967,35 @@ function ChildCard({
 
       {/* Transport retiré d'ici (§retour comptable) — l'abonnement au bus se fait désormais après
           coup, dans le popup d'encaissement (StudentInvoicesPanel), pour éviter le doublon. */}
-      {!locked && (isStaffParent || selectedExemptionRule?.staffBenefit) && (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          <Field>
-            <Checkbox
-              label="Facturer en 9 mensualités séparées (retenue sur salaire mensuelle)"
-              checked={child.monthlyPaymentOptIn}
-              onChange={(e) => onUpdate({ monthlyPaymentOptIn: e.target.checked })}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              La retenue sur salaire du parent se fait chaque mois — cochez pour que la mensualité de
-              l&apos;enfant soit découpée en une facture par mois d&apos;école plutôt qu&apos;en
-              grosses tranches, avec l&apos;exonération appliquée sur chacune.
-            </p>
-          </Field>
-        </div>
-      )}
+      {!locked && (() => {
+        // §retour comptable : cette case n'était visible que pour le personnel/enseignant avec une
+        // exonération "avantage personnel" — alors que n'importe quel parent peut demander à payer
+        // mois par mois (monthlyPaymentOptIn est un champ général de l'inscription, pas réservé au
+        // personnel, voir EnrollmentUseCase côté serveur). Le texte reste adapté au cas précis où la
+        // retenue se fait sur salaire, car cette mécanique-là est bien spécifique au personnel.
+        const staffBenefit = isStaffParent || selectedExemptionRule?.staffBenefit;
+        return (
+          <div className="mt-3 border-t border-gray-100 pt-3">
+            <Field>
+              <Checkbox
+                label={staffBenefit
+                  ? "Facturer en 9 mensualités séparées (retenue sur salaire mensuelle)"
+                  : "Ce parent règle mois par mois"}
+                checked={child.monthlyPaymentOptIn}
+                onChange={(e) => onUpdate({ monthlyPaymentOptIn: e.target.checked })}
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                {staffBenefit
+                  ? "La retenue sur salaire du parent se fait chaque mois — cochez pour que la "
+                    + "mensualité de l'enfant soit découpée en une facture par mois d'école plutôt "
+                    + "qu'en grosses tranches, avec l'exonération appliquée sur chacune."
+                  : "Cochez pour que la mensualité de l'enfant soit découpée en une facture par mois "
+                    + "d'école plutôt qu'en grosses tranches groupées."}
+              </p>
+            </Field>
+          </div>
+        );
+      })()}
 
       {child.status === "error" && (
         <p className="mt-2 text-xs text-error-600">{child.error}</p>
