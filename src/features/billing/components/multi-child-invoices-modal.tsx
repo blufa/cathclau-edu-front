@@ -5,7 +5,7 @@ import { Printer } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { listPaymentsByStudent, getReceiptPdfObjectUrl } from "@/lib/api/payment";
-import { stageMultiPdfPrintRoot } from "@/lib/print-node";
+import { mergePdfsForPrint, stageFilePrintRoot } from "@/lib/print-node";
 import { notifyError, notifyInfo } from "@/lib/feedback";
 import { StudentInvoicesPanel } from "./student-invoices-panel";
 
@@ -29,12 +29,15 @@ export function MultiChildInvoicesModal({
 
   /**
    * Un seul clic imprime le reçu le plus récent de CHAQUE enfant déjà encaissé dans cette fenêtre
-   * (§retour comptable : "il encaisse chaque enfant puis clique une seule fois sur imprimer") — une
-   * iframe par reçu, séparées par un saut de page, un seul window.print() au lieu d'imprimer chaque
-   * enfant un par un (voir stageMultiPdfPrintRoot, même mécanisme Tauri-compatible que FilePreview).
+   * (§retour comptable : "il encaisse chaque enfant puis clique une seule fois sur imprimer"). Les
+   * reçus sont d'abord FUSIONNÉS en un seul vrai PDF (voir mergePdfsForPrint — plusieurs iframes
+   * empilées avec un saut de page CSS a été essayé d'abord mais rognait les reçus, chaque iframe
+   * ayant une hauteur fixe qui ne correspond pas à une page papier), puis imprimés d'un coup via
+   * stageFilePrintRoot comme un document normal (même mécanisme Tauri-compatible que FilePreview).
    */
   async function printAllReceipts() {
     setPrintingAll(true);
+    let mergedUrl: string | null = null;
     try {
       const latestPayments = await Promise.all(students.map(async (s) => {
         const payments = await listPaymentsByStudent(s.id);
@@ -47,11 +50,16 @@ export function MultiChildInvoicesModal({
         return;
       }
       const urls = await Promise.all(toPrint.map((p) => getReceiptPdfObjectUrl(p.id)));
-      const unstage = stageMultiPdfPrintRoot(urls);
-      // Laisse le temps aux PDF de se charger dans leurs iframes avant de déclencher l'impression.
+      mergedUrl = await mergePdfsForPrint(urls);
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      const unstage = stageFilePrintRoot(mergedUrl, "pdf");
+      // Laisse le temps au PDF fusionné de se charger dans l'iframe avant de déclencher l'impression.
       setTimeout(() => {
         window.print();
-        setTimeout(unstage, 2000);
+        setTimeout(() => {
+          unstage();
+          if (mergedUrl) URL.revokeObjectURL(mergedUrl);
+        }, 2000);
       }, 600);
     } catch (err) {
       notifyError(err);

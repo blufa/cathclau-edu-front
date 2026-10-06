@@ -16,6 +16,33 @@
  * est un vrai enfant du document principal (donc `window.print()` dessus fonctionne partout), juste
  * masqué en temps normal et le seul élément visible pendant l'impression.
  */
+import { PDFDocument } from "pdf-lib";
+
+/**
+ * Fusionne plusieurs PDF (ex. un reçu par enfant, après une inscription groupée — §retour comptable :
+ * "il clique une seule fois sur imprimer pour tous les reçus encaissés") en UN SEUL PDF, pour
+ * l'imprimer ensuite via {@link stageFilePrintRoot} comme un document normal.
+ *
+ * Pourquoi la fusion plutôt que plusieurs iframes empilées (essayé en premier, abandonné) : chaque
+ * iframe a une hauteur fixe (`100vh`, la hauteur de l'écran) — en impression, ça ne correspond PAS à
+ * la hauteur d'une page papier, et un reçu qui dépasse cette hauteur fixe est simplement ROGNÉ (une
+ * iframe ne reflow jamais son contenu au-delà de sa boîte, contrairement à une page qui peut créer de
+ * nouvelles pages). Un vrai PDF fusionné, lui, est paginé NATIVEMENT par la visionneuse PDF du
+ * navigateur — exactement comme n'importe quel PDF multi-pages déjà imprimé normalement ailleurs dans
+ * l'appli, sans bricolage CSS de saut de page.
+ */
+export async function mergePdfsForPrint(urls: string[]): Promise<string> {
+  const merged = await PDFDocument.create();
+  for (const url of urls) {
+    const bytes = await fetch(url).then((r) => r.arrayBuffer());
+    const src = await PDFDocument.load(bytes);
+    const pages = await merged.copyPages(src, src.getPageIndices());
+    pages.forEach((p) => merged.addPage(p));
+  }
+  const mergedBytes = await merged.save();
+  return URL.createObjectURL(new Blob([mergedBytes as unknown as BlobPart], { type: "application/pdf" }));
+}
+
 function printInMainDocument(innerHtml: string, extraPrintCss: string) {
   const root = document.createElement("div");
   root.id = "app-print-root";
@@ -118,50 +145,6 @@ export function printNode(node: HTMLElement) {
  * au rendu de la page principale, c'est `window.print()` SUR LA FENÊTRE PRINCIPALE qui déclenche
  * l'impression, jamais l'iframe elle-même — ce qui fonctionne identiquement sur web et sur desktop.
  */
-/**
- * Variante de {@link stageFilePrintRoot} pour imprimer PLUSIEURS PDF réels en une seule fois, en un
- * seul clic (§retour comptable — inscription groupée de plusieurs enfants, chacun encaissé et reçu
- * séparément : « il veut encaisser chaque enfant puis cliquer une seule fois sur imprimer pour que ça
- * imprime tous les reçus encaissés »). Une iframe par document, séparées par un saut de page
- * (`page-break-after`) — un seul `window.print()` déclenche une seule boîte de dialogue d'impression
- * couvrant tous les reçus, au lieu de devoir imprimer chaque enfant un par un.
- */
-export function stageMultiPdfPrintRoot(urls: string[]): () => void {
-  const root = document.createElement("div");
-  root.id = "app-print-root";
-  urls.forEach((url, idx) => {
-    const iframe = document.createElement("iframe");
-    iframe.src = url;
-    iframe.title = `Document ${idx + 1}`;
-    iframe.className = "app-print-page";
-    iframe.style.width = "100%";
-    iframe.style.height = "100vh";
-    iframe.style.border = "none";
-    root.appendChild(iframe);
-  });
-  document.body.appendChild(root);
-
-  const style = document.createElement("style");
-  style.textContent = `
-    @media print {
-      body > :not(#app-print-root) { display: none !important; }
-      #app-print-root { display: block !important; }
-      #app-print-root .app-print-page { width: 100%; height: 100%; page-break-after: always; }
-      #app-print-root .app-print-page:last-child { page-break-after: auto; }
-      @page { margin: 0; }
-    }
-  `;
-  document.head.appendChild(style);
-
-  let removed = false;
-  return function unstage() {
-    if (removed) return;
-    removed = true;
-    root.remove();
-    style.remove();
-  };
-}
-
 export function stageFilePrintRoot(url: string, kind: "pdf" | "image" = "pdf"): () => void {
   const root = document.createElement("div");
   root.id = "app-print-root";
