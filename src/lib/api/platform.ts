@@ -59,6 +59,10 @@ export interface SchoolProfile {
   country: string | null;
   website: string | null;
   director: string | null;
+  /** Numéro dédié à la réception des alertes automatiques (écart de caisse, exonération suspecte,
+   * retard/absence enseignant…) — null = ces alertes continuent d'être envoyées à tous les comptes
+   * administrateur de l'école. */
+  founderPhone: string | null;
   accreditationNumber: string | null;
   openingAuthorization: string | null;
   /** Devise de l'établissement (phrase courte et formelle) — imprimée au verso des badges/cartes,
@@ -92,7 +96,7 @@ export interface SchoolProfile {
 export type SchoolProfileInput = Pick<
   SchoolProfile,
   "schoolName" | "logo" | "brandColor" | "address" | "city" | "country" | "phone" | "email"
-  | "website" | "director" | "accreditationNumber" | "openingAuthorization" | "motto" | "slogan"
+  | "website" | "director" | "founderPhone" | "accreditationNumber" | "openingAuthorization" | "motto" | "slogan"
   | "ire" | "dpeLabel" | "sousPrefectureLabel"
   | "payoutMerchantNumber" | "payoutOperator" | "payoutAccountName"
   | "matriculeFormat" | "matriculeDigits"
