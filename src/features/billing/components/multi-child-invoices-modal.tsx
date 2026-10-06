@@ -4,8 +4,9 @@ import { useState } from "react";
 import { Printer } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { FilePreview } from "@/components/ui/file-preview";
 import { listPaymentsByStudent, getReceiptPdfObjectUrl } from "@/lib/api/payment";
-import { mergePdfsForPrint, stageFilePrintRoot } from "@/lib/print-node";
+import { mergePdfsForPrint } from "@/lib/print-node";
 import { notifyError, notifyInfo } from "@/lib/feedback";
 import { StudentInvoicesPanel } from "./student-invoices-panel";
 
@@ -26,18 +27,21 @@ export function MultiChildInvoicesModal({
   onClose: () => void;
 }) {
   const [printingAll, setPrintingAll] = useState(false);
+  const [mergedPreview, setMergedPreview] = useState<string | null>(null);
 
   /**
    * Un seul clic imprime le reçu le plus récent de CHAQUE enfant déjà encaissé dans cette fenêtre
    * (§retour comptable : "il encaisse chaque enfant puis clique une seule fois sur imprimer"). Les
    * reçus sont d'abord FUSIONNÉS en un seul vrai PDF (voir mergePdfsForPrint — plusieurs iframes
    * empilées avec un saut de page CSS a été essayé d'abord mais rognait les reçus, chaque iframe
-   * ayant une hauteur fixe qui ne correspond pas à une page papier), puis imprimés d'un coup via
-   * stageFilePrintRoot comme un document normal (même mécanisme Tauri-compatible que FilePreview).
+   * ayant une hauteur fixe qui ne correspond pas à une page papier), puis ouverts dans le même
+   * aperçu que pour un reçu unique (FilePreview, `autoPrint`) : retour terrain, même sur UN SEUL
+   * reçu, imprimer un PDF caché via window.print() sur le document principal le rognait aussi sur le
+   * web — seule l'impression de l'iframe VISIBLE elle-même (iframe.contentWindow.print(), géré dans
+   * FilePreview) est fiable là-bas.
    */
   async function printAllReceipts() {
     setPrintingAll(true);
-    let mergedUrl: string | null = null;
     try {
       const latestPayments = await Promise.all(students.map(async (s) => {
         const payments = await listPaymentsByStudent(s.id);
@@ -50,17 +54,9 @@ export function MultiChildInvoicesModal({
         return;
       }
       const urls = await Promise.all(toPrint.map((p) => getReceiptPdfObjectUrl(p.id)));
-      mergedUrl = await mergePdfsForPrint(urls);
+      const mergedUrl = await mergePdfsForPrint(urls);
       urls.forEach((u) => URL.revokeObjectURL(u));
-      const unstage = stageFilePrintRoot(mergedUrl, "pdf");
-      // Laisse le temps au PDF fusionné de se charger dans l'iframe avant de déclencher l'impression.
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => {
-          unstage();
-          if (mergedUrl) URL.revokeObjectURL(mergedUrl);
-        }, 2000);
-      }, 600);
+      setMergedPreview(mergedUrl);
     } catch (err) {
       notifyError(err);
     } finally {
@@ -69,6 +65,7 @@ export function MultiChildInvoicesModal({
   }
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -107,5 +104,13 @@ export function MultiChildInvoicesModal({
         </>
       )}
     </Modal>
+    <FilePreview
+      url={mergedPreview}
+      title="Tous les reçus"
+      open={mergedPreview != null}
+      onClose={() => setMergedPreview(null)}
+      autoPrint
+    />
+    </>
   );
 }

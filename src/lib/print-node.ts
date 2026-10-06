@@ -175,7 +175,10 @@ export function stageFilePrintRoot(url: string, kind: "pdf" | "image" = "pdf"): 
       #app-print-root { display: block !important; }
       #app-print-root iframe { width: 100%; height: 100%; }
       #app-print-root img { width: 100%; }
-      @page { margin: 0; }
+      /* A4 explicite : les reçus/factures générés côté serveur (OpenPdfReceiptGenerator) sont tous
+         en A4 — sans ça, le dialogue d'impression du webview desktop peut retomber sur un format
+         par défaut différent (Letter) et mal cadrer la page. */
+      @page { size: A4; margin: 0; }
     }
   `;
   document.head.appendChild(style);
