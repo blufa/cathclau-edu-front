@@ -16,6 +16,33 @@
  * est un vrai enfant du document principal (donc `window.print()` dessus fonctionne partout), juste
  * masqué en temps normal et le seul élément visible pendant l'impression.
  */
+import { PDFDocument } from "pdf-lib";
+
+/**
+ * Fusionne plusieurs PDF (ex. un reçu par enfant, après une inscription groupée — §retour comptable :
+ * "il clique une seule fois sur imprimer pour tous les reçus encaissés") en UN SEUL PDF, pour
+ * l'imprimer ensuite via {@link stageFilePrintRoot} comme un document normal.
+ *
+ * Pourquoi la fusion plutôt que plusieurs iframes empilées (essayé en premier, abandonné) : chaque
+ * iframe a une hauteur fixe (`100vh`, la hauteur de l'écran) — en impression, ça ne correspond PAS à
+ * la hauteur d'une page papier, et un reçu qui dépasse cette hauteur fixe est simplement ROGNÉ (une
+ * iframe ne reflow jamais son contenu au-delà de sa boîte, contrairement à une page qui peut créer de
+ * nouvelles pages). Un vrai PDF fusionné, lui, est paginé NATIVEMENT par la visionneuse PDF du
+ * navigateur — exactement comme n'importe quel PDF multi-pages déjà imprimé normalement ailleurs dans
+ * l'appli, sans bricolage CSS de saut de page.
+ */
+export async function mergePdfsForPrint(urls: string[]): Promise<string> {
+  const merged = await PDFDocument.create();
+  for (const url of urls) {
+    const bytes = await fetch(url).then((r) => r.arrayBuffer());
+    const src = await PDFDocument.load(bytes);
+    const pages = await merged.copyPages(src, src.getPageIndices());
+    pages.forEach((p) => merged.addPage(p));
+  }
+  const mergedBytes = await merged.save();
+  return URL.createObjectURL(new Blob([mergedBytes as unknown as BlobPart], { type: "application/pdf" }));
+}
+
 function printInMainDocument(innerHtml: string, extraPrintCss: string) {
   const root = document.createElement("div");
   root.id = "app-print-root";
@@ -96,4 +123,71 @@ export function printNode(node: HTMLElement) {
   // le format papier réel choisi dans le dialogue d'impression (A4, Letter…).
   const wrapper = `<div style="display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:6mm;">${node.outerHTML}</div>`;
   printInMainDocument(wrapper, "@page { size: auto; margin: 8mm; }");
+}
+
+/**
+ * Prépare l'impression directe d'un fichier déjà téléchargé (PDF généré côté serveur — reçu,
+ * facture… — ou image, voir `kind` ; pas un document HTML généré en chaîne — voir
+ * {@link printHtmlDocument} pour ce cas) : contrairement à {@link printInMainDocument}, ne déclenche
+ * PAS l'impression tout de suite — pose juste le contenu (masqué sauf pendant l'impression) et
+ * retourne une fonction de nettoyage, à appeler quand l'aperçu se ferme.
+ *
+ * Pourquoi cette distinction (§retour comptable — "le clic Imprimer ne doit jamais ouvrir un nouvel
+ * onglet, et Ctrl+P doit marcher aussi") : `window.print()` déclenché explicitement par le bouton
+ * « Imprimer » ET le raccourci natif Ctrl+P appellent tous les deux la MÊME impression navigateur —
+ * pour que Ctrl+P produise le bon résultat SANS JavaScript dédié à l'écoute de cette touche, le
+ * contenu à imprimer (et le CSS qui masque le reste de la page) doit déjà être en place dans le DOM
+ * au moment où l'utilisateur appuie sur Ctrl+P, pas seulement au moment du clic sur le bouton — d'où
+ * le fait de poser ceci dès l'ouverture de l'aperçu (voir `FilePreview`), pas dans le clic lui-même.
+ *
+ * Réutilise une VRAIE iframe/img (jamais `iframe.contentWindow.print()`, qui ne fait rien dans le
+ * webview desktop Tauri — voir le commentaire de {@link printInMainDocument}) : l'élément participe
+ * au rendu de la page principale, c'est `window.print()` SUR LA FENÊTRE PRINCIPALE qui déclenche
+ * l'impression, jamais l'iframe elle-même — ce qui fonctionne identiquement sur web et sur desktop.
+ */
+export function stageFilePrintRoot(url: string, kind: "pdf" | "image" = "pdf"): () => void {
+  const root = document.createElement("div");
+  root.id = "app-print-root";
+  let el: HTMLIFrameElement | HTMLImageElement;
+  if (kind === "image") {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "Document à imprimer";
+    img.style.width = "100%";
+    img.style.objectFit = "contain";
+    el = img;
+  } else {
+    const iframe = document.createElement("iframe");
+    iframe.src = url;
+    iframe.title = "Document à imprimer";
+    iframe.style.width = "100%";
+    iframe.style.height = "100vh";
+    iframe.style.border = "none";
+    el = iframe;
+  }
+  root.appendChild(el);
+  document.body.appendChild(root);
+
+  const style = document.createElement("style");
+  style.textContent = `
+    @media print {
+      body > :not(#app-print-root) { display: none !important; }
+      #app-print-root { display: block !important; }
+      #app-print-root iframe { width: 100%; height: 100%; }
+      #app-print-root img { width: 100%; }
+      /* A4 explicite : les reçus/factures générés côté serveur (OpenPdfReceiptGenerator) sont tous
+         en A4 — sans ça, le dialogue d'impression du webview desktop peut retomber sur un format
+         par défaut différent (Letter) et mal cadrer la page. */
+      @page { size: A4; margin: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  let removed = false;
+  return function unstage() {
+    if (removed) return;
+    removed = true;
+    root.remove();
+    style.remove();
+  };
 }
