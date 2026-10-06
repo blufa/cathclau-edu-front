@@ -97,3 +97,67 @@ export function printNode(node: HTMLElement) {
   const wrapper = `<div style="display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:6mm;">${node.outerHTML}</div>`;
   printInMainDocument(wrapper, "@page { size: auto; margin: 8mm; }");
 }
+
+/**
+ * Prépare l'impression directe d'un fichier déjà téléchargé (PDF généré côté serveur — reçu,
+ * facture… — ou image, voir `kind` ; pas un document HTML généré en chaîne — voir
+ * {@link printHtmlDocument} pour ce cas) : contrairement à {@link printInMainDocument}, ne déclenche
+ * PAS l'impression tout de suite — pose juste le contenu (masqué sauf pendant l'impression) et
+ * retourne une fonction de nettoyage, à appeler quand l'aperçu se ferme.
+ *
+ * Pourquoi cette distinction (§retour comptable — "le clic Imprimer ne doit jamais ouvrir un nouvel
+ * onglet, et Ctrl+P doit marcher aussi") : `window.print()` déclenché explicitement par le bouton
+ * « Imprimer » ET le raccourci natif Ctrl+P appellent tous les deux la MÊME impression navigateur —
+ * pour que Ctrl+P produise le bon résultat SANS JavaScript dédié à l'écoute de cette touche, le
+ * contenu à imprimer (et le CSS qui masque le reste de la page) doit déjà être en place dans le DOM
+ * au moment où l'utilisateur appuie sur Ctrl+P, pas seulement au moment du clic sur le bouton — d'où
+ * le fait de poser ceci dès l'ouverture de l'aperçu (voir `FilePreview`), pas dans le clic lui-même.
+ *
+ * Réutilise une VRAIE iframe/img (jamais `iframe.contentWindow.print()`, qui ne fait rien dans le
+ * webview desktop Tauri — voir le commentaire de {@link printInMainDocument}) : l'élément participe
+ * au rendu de la page principale, c'est `window.print()` SUR LA FENÊTRE PRINCIPALE qui déclenche
+ * l'impression, jamais l'iframe elle-même — ce qui fonctionne identiquement sur web et sur desktop.
+ */
+export function stageFilePrintRoot(url: string, kind: "pdf" | "image" = "pdf"): () => void {
+  const root = document.createElement("div");
+  root.id = "app-print-root";
+  let el: HTMLIFrameElement | HTMLImageElement;
+  if (kind === "image") {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "Document à imprimer";
+    img.style.width = "100%";
+    img.style.objectFit = "contain";
+    el = img;
+  } else {
+    const iframe = document.createElement("iframe");
+    iframe.src = url;
+    iframe.title = "Document à imprimer";
+    iframe.style.width = "100%";
+    iframe.style.height = "100vh";
+    iframe.style.border = "none";
+    el = iframe;
+  }
+  root.appendChild(el);
+  document.body.appendChild(root);
+
+  const style = document.createElement("style");
+  style.textContent = `
+    @media print {
+      body > :not(#app-print-root) { display: none !important; }
+      #app-print-root { display: block !important; }
+      #app-print-root iframe { width: 100%; height: 100%; }
+      #app-print-root img { width: 100%; }
+      @page { margin: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  let removed = false;
+  return function unstage() {
+    if (removed) return;
+    removed = true;
+    root.remove();
+    style.remove();
+  };
+}
