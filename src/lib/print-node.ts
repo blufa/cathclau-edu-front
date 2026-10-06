@@ -118,6 +118,50 @@ export function printNode(node: HTMLElement) {
  * au rendu de la page principale, c'est `window.print()` SUR LA FENÊTRE PRINCIPALE qui déclenche
  * l'impression, jamais l'iframe elle-même — ce qui fonctionne identiquement sur web et sur desktop.
  */
+/**
+ * Variante de {@link stageFilePrintRoot} pour imprimer PLUSIEURS PDF réels en une seule fois, en un
+ * seul clic (§retour comptable — inscription groupée de plusieurs enfants, chacun encaissé et reçu
+ * séparément : « il veut encaisser chaque enfant puis cliquer une seule fois sur imprimer pour que ça
+ * imprime tous les reçus encaissés »). Une iframe par document, séparées par un saut de page
+ * (`page-break-after`) — un seul `window.print()` déclenche une seule boîte de dialogue d'impression
+ * couvrant tous les reçus, au lieu de devoir imprimer chaque enfant un par un.
+ */
+export function stageMultiPdfPrintRoot(urls: string[]): () => void {
+  const root = document.createElement("div");
+  root.id = "app-print-root";
+  urls.forEach((url, idx) => {
+    const iframe = document.createElement("iframe");
+    iframe.src = url;
+    iframe.title = `Document ${idx + 1}`;
+    iframe.className = "app-print-page";
+    iframe.style.width = "100%";
+    iframe.style.height = "100vh";
+    iframe.style.border = "none";
+    root.appendChild(iframe);
+  });
+  document.body.appendChild(root);
+
+  const style = document.createElement("style");
+  style.textContent = `
+    @media print {
+      body > :not(#app-print-root) { display: none !important; }
+      #app-print-root { display: block !important; }
+      #app-print-root .app-print-page { width: 100%; height: 100%; page-break-after: always; }
+      #app-print-root .app-print-page:last-child { page-break-after: auto; }
+      @page { margin: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  let removed = false;
+  return function unstage() {
+    if (removed) return;
+    removed = true;
+    root.remove();
+    style.remove();
+  };
+}
+
 export function stageFilePrintRoot(url: string, kind: "pdf" | "image" = "pdf"): () => void {
   const root = document.createElement("div");
   root.id = "app-print-root";
