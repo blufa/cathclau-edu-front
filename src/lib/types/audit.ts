@@ -32,6 +32,10 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   UNDECLARED_ATTENDANCE: "Présence sans inscription déclarée",
   ACCOUNTANT_ANOMALY_DETECTED: "Écart statistique comptable détecté",
   ACCOUNTANT_ANOMALY_RESOLVED: "Écart statistique comptable résolu",
+  SCHOOL_FEE_CREATED: "Frais scolaire créé",
+  SCHOOL_FEE_DELETED: "Frais scolaire supprimé",
+  INSTALLMENT_CREATED: "Échéance créée",
+  INSTALLMENT_DELETED: "Échéance supprimée",
 };
 
 // Actions à mettre en évidence (§retour fondateurs, contrôle anti-fraude) : toujours le signal d'une
@@ -42,6 +46,8 @@ export const AUDIT_FRAUD_ACTIONS = new Set([
   "LESSON_VALIDATED_WITHOUT_CHECKIN",
   "UNDECLARED_ATTENDANCE",
   "ACCOUNTANT_ANOMALY_DETECTED",
+  "SCHOOL_FEE_DELETED",
+  "INSTALLMENT_DELETED",
 ]);
 
 /** Nom technique de `ressource` (toujours le nom de la classe Java, voir AuditEventListener) traduit
@@ -58,6 +64,8 @@ export const AUDIT_RESOURCE_LABEL: Record<string, string> = {
   CashierSession: "Session de caisse",
   LessonEntry: "Séance",
   AccountantAnomalyAlert: "Alerte comptable",
+  SchoolFee: "Frais scolaire",
+  Installment: "Échéance",
 };
 
 /** Libellé de chaque clé pouvant apparaître dans `details` (format brut "clé=valeur;clé2=valeur2",
@@ -69,6 +77,7 @@ const DETAIL_KEY_LABEL: Record<string, string> = {
   reason: "Motif", systemTotal: "Total système", physicalCount: "Comptant physique",
   discrepancy: "Écart", teacherId: "Enseignant", lessonDate: "Date de séance", date: "Date",
   metricValue: "Valeur", peerAverage: "Moyenne des pairs",
+  label: "Libellé", feeId: "Frais", academicYear: "Année scolaire", dueDate: "Échéance",
 };
 
 const MONETARY_DETAIL_KEYS = new Set([
@@ -78,7 +87,7 @@ const MONETARY_DETAIL_KEYS = new Set([
 /** Clés faisant référence à une AUTRE ressource par identifiant — affichées "Libellé #valeur"
  * plutôt que "Libellé : valeur", pour rester lisible sans prétendre être un montant/texte libre. */
 const REFERENCE_DETAIL_KEYS = new Set([
-  "invoiceId", "studentId", "classId", "teacherId", "academicYearId", "roleId",
+  "invoiceId", "studentId", "classId", "teacherId", "academicYearId", "roleId", "feeId",
 ]);
 
 /** Transforme le `details` technique ("invoiceId=null;amount=80000") en texte lisible

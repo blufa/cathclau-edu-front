@@ -8,6 +8,7 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import type { Classe } from "@/lib/types/academics";
+import { GRADE_LABEL_BY_CODE, gradeProgressionRank } from "@/lib/academics-grades";
 import { createStudent } from "@/lib/api/students";
 import {
   createParent, getParentStaffLink, linkParentToStudent, listParents,
@@ -197,7 +198,17 @@ export default function BulkFamilyEnrollmentPage() {
   const [yearId, setYearId] = useState<number | null>(null);
   const effectiveYearId = yearId ?? years.find((y) => y.current)?.id ?? years[0]?.id ?? null;
   const classesQuery = useQuery(() => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])), [effectiveYearId]);
-  const classes = classesQuery.data ?? [];
+  // Ordre croissant par niveau (PS, MS, GS, 1ère année, 2ème année...) plutôt que l'ordre de création
+  // en base — voir GRADE_PROGRESSION (progression canonique partagée avec la réinscription). Les
+  // classes sans grade reconnu (nomenclature maison) sont reléguées en fin de liste, triées par libellé.
+  const classes = useMemo(() => {
+    const rank = (c: Classe) => {
+      const label = c.grade ? GRADE_LABEL_BY_CODE[c.grade] : null;
+      const r = label ? gradeProgressionRank(label) : -1;
+      return r === -1 ? Number.MAX_SAFE_INTEGER : r;
+    };
+    return [...(classesQuery.data ?? [])].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+  }, [classesQuery.data]);
 
   // Types d'exonération pré-configurés — partagés entre tous les enfants (§retour comptable).
   const exemptionRulesQuery = useQuery(() => listExemptionRules(), []);
