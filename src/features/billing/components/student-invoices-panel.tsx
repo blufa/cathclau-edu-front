@@ -402,7 +402,10 @@ export function StudentInvoicesPanel({
               tenantId={tenantId}
               studentId={studentId}
               onShowPdf={(inv) => showPdf(`Facture ${inv.reference}`, () => getInvoicePdfObjectUrl(inv.id))}
-              onPaid={(paymentId) => showPdf("Reçu de paiement", () => getReceiptPdfObjectUrl(paymentId))}
+              // Retour comptable : ne plus ouvrir l'aperçu automatiquement après un encaissement — le
+              // reçu est généré, mais sa consultation/impression reste une action volontaire (liste
+              // des reçus ci-dessous, ou "Imprimer tous les reçus" dans l'inscription groupée).
+              onPaid={() => {}}
               onDone={refetchAll}
             />
           )}
