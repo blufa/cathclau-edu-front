@@ -36,7 +36,6 @@ import { ParentsManager } from "./parents-manager";
 import { DocumentsManager } from "./documents-manager";
 import { CertificateAction } from "./certificate-action";
 import { PurgeStudentAction } from "./purge-student-action";
-import { StudentExemptionsPanel } from "./student-exemptions-panel";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useStudentQuery } from "../hooks/use-students";
 
@@ -277,10 +276,7 @@ export default function StudentDetailPage() {
               Réservé aux comptes d&apos;établissement.
             </p>
           ) : (
-            <div className="space-y-4">
-              <StudentExemptionsPanel studentId={id} />
-              <StudentInvoicesPanel studentId={id} tenantId={tenantId} classId={activeClassId ?? undefined} onCollected={refetch} />
-            </div>
+            <StudentInvoicesPanel studentId={id} tenantId={tenantId} classId={activeClassId ?? undefined} onCollected={refetch} />
           )}
         </TabsPanel>
 
