@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -79,6 +79,12 @@ export function StudentInvoicesPanel({
   const q = useCachedQuery(`student-invoices:${studentId}`, () => listInvoicesByStudent(studentId), [studentId]);
   const payments = useCachedQuery(`student-payments:${studentId}`, () => listPaymentsByStudent(studentId), [studentId]);
   const fees = useCachedQuery(classId ? `fees-class:${classId}` : null, () => listFeesByClass(classId as number), [classId]);
+  // Filet de secours pour labelFor() (§retour comptable : référence opaque "PNM-FRA-2026-xxxxxx"
+  // affichée au lieu du nom du frais) — une facture peut référencer un frais d'une AUTRE classe que
+  // la classe active actuelle (ex. après un transfert de classe) ; fees ci-dessus, scopé à la seule
+  // classe active, ne le contient alors plus. Scope tenant entier, jamais utilisé pour décider quoi
+  // proposer de générer/ajouter (ça reste class-scopé), seulement pour retrouver un nom lisible.
+  const tenantFees = useCachedQuery(`fees-tenant:${tenantId}`, () => listFeesByTenant(tenantId), [tenantId]);
 
   const all = q.data ?? [];
   // CANCELLED (ex. ancienne classe après un transfert, §retour comptable) : remainingBalance déjà
@@ -165,20 +171,24 @@ export function StudentInvoicesPanel({
   // propose son propre bouton de génération, indépendamment des autres (ex. la scolarité peut déjà
   // être générée sans que la cantine le soit).
   const [generatingFeeId, setGeneratingFeeId] = useState<number | null>(null);
+  // CANCELLED (facture supprimée/annulée, ex. pour corriger un oubli d'exonération, §retour comptable)
+  // ne doit jamais bloquer une régénération — sinon le frais reste considéré "déjà facturé" à vie et
+  // plus aucun bouton "Générer" ne réapparaît jamais pour cet élève sur ce frais.
   const ungeneratedRecurringFees = recurringFees.filter((f) =>
-    !all.some((inv) => inv.feeId === f.id) && (installmentsByFeeId.get(f.id)?.length ?? 0) > 0);
+    !all.some((inv) => inv.feeId === f.id && inv.status !== "CANCELLED") && (installmentsByFeeId.get(f.id)?.length ?? 0) > 0);
 
   // Libellé + ordre d'affichage de chaque facture : les mensualités gardent leur périodLabel (déjà
   // « Tranche N (mois…) ») ; les autres frais (inscription, annexes) affichent leur type de frais.
   const feeById = new Map((fees.data ?? []).map((f) => [f.id, f]));
+  const tenantFeeById = new Map((tenantFees.data ?? []).map((f) => [f.id, f]));
   function labelFor(inv: Invoice): string {
     if (inv.periodLabel) return inv.periodLabel;
-    const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
+    const fee = inv.feeId != null ? (feeById.get(inv.feeId) ?? tenantFeeById.get(inv.feeId)) : undefined;
     if (!fee) return inv.reference;
     return fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
   }
   function groupOf(inv: Invoice): number {
-    const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
+    const fee = inv.feeId != null ? (feeById.get(inv.feeId) ?? tenantFeeById.get(inv.feeId)) : undefined;
     return fee ? GROUP_ORDER[fee.type] : 2;
   }
   function sortKeyOf(inv: Invoice): string {
@@ -200,8 +210,12 @@ export function StudentInvoicesPanel({
   const tranchedCanteenFeeIds = new Set(
     recurringFees.filter((f) => f.type === "CANTEEN" && (installmentsByFeeId.get(f.id)?.length ?? 0) > 0).map((f) => f.id),
   );
+  // Même correctif que ungeneratedRecurringFees ci-dessus : une facture CANCELLED ne doit jamais
+  // empêcher de rajouter ce frais annexe (sinon aucune nouvelle facture n'est jamais plus possible
+  // pour ce frais, même après suppression/annulation de l'ancienne).
   const availableFees = (fees.data ?? []).filter((f) =>
-    f.type !== "MONTHLY" && f.type !== "TRANSPORT" && !tranchedCanteenFeeIds.has(f.id) && !all.some((inv) => inv.feeId === f.id));
+    f.type !== "MONTHLY" && f.type !== "TRANSPORT" && !tranchedCanteenFeeIds.has(f.id)
+    && !all.some((inv) => inv.feeId === f.id && inv.status !== "CANCELLED"));
   const [addingFee, setAddingFee] = useState(false);
   const [selectedFeeId, setSelectedFeeId] = useState("");
   const [creatingInvoice, setCreatingInvoice] = useState(false);
