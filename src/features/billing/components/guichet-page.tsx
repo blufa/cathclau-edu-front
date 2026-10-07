@@ -82,25 +82,49 @@ export default function GuichetPage() {
       return `<tr><td>${esc(i.reference)}</td><td>${esc(i.periodLabel ?? INVOICE_STATUS_LABEL[i.status])}</td>`
         + `<td class="right">${esc(formatGNF(i.totalAmount))}</td><td class="right">${esc(formatGNF(due))}</td></tr>`;
     }).join("") || `<tr><td colspan="4" class="empty">Aucun solde restant.</td></tr>`;
-    // En-tête alignée sur celle des reçus/factures générés côté serveur (logo + nom de l'école
-    // centrés, filet aux couleurs de l'école, titre encadré) — retour comptable : ce PDF (généré
-    // côté client, contrairement aux autres) avait un en-tête bien plus sommaire que les autres.
+    // En-tête reproduisant fidèlement celle des reçus/factures générées côté serveur (§retour
+    // comptable, 2e retour sur ce point : le 1er essai — logo+nom+tél seulement — ne suffisait pas) —
+    // même structure que SchoolPdfHeader.renderAdministrativeBlock côté backend : bloc 3 colonnes
+    // (ministère/IRE/DPE à gauche, logo centré, République/devise/année/contact à droite), nom de
+    // l'école + devise centrés, filet aux couleurs de l'école, puis titre ENCADRÉ (pas rempli — comme
+    // AdminDocumentLayout.titleBox utilisé par le reçu de paiement, jamais la barre pleine couleur
+    // utilisée par d'autres documents comme les bulletins).
+    const adminLeft = [
+      "MEPU-A",
+      branding?.ire ? `IRE : ${esc(branding.ire)}` : "",
+      branding?.dpeLabel ? `DPE/DCE : ${esc(branding.dpeLabel)}` : "",
+      branding?.sousPrefectureLabel ? `DSSEE : ${esc(branding.sousPrefectureLabel)}` : "",
+    ].filter(Boolean).map((l, i) => `<p class="${i === 0 ? "admin-bold" : "admin-line"}">${l}</p>`).join("");
+    const adminRight = [
+      `<p class="admin-bold">RÉPUBLIQUE DE GUINÉE</p>`,
+      `<p class="admin-motto">Travail — Justice — Solidarité</p>`,
+      currentYear ? `<p class="admin-line">${esc(currentYear.label)}</p>` : "",
+      branding?.phone ? `<p class="admin-line">Tél : ${esc(branding.phone)}</p>` : "",
+    ].filter(Boolean).join("");
     const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu du reste à payer</title>`
       + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
-      + `.header{text-align:center;margin-bottom:10px}.logo{height:64px;margin-bottom:6px}`
-      + `.school-name{font-size:16px;font-weight:700;margin:0}`
-      + `.separator{border:none;border-top:2px solid ${brandColor};margin:10px 0 14px}`
-      + `.title-box{border:1px solid #334155;border-radius:4px;padding:8px;text-align:center;`
+      + `.admin{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}`
+      + `.admin-col{flex:1;font-size:10px}.admin-col.right{text-align:right}`
+      + `.admin-bold{font-weight:700;margin:0 0 2px}.admin-line{margin:0 0 2px;color:#334155}`
+      + `.admin-motto{margin:0 0 2px;font-style:italic;color:#64748b;font-size:9.5px}`
+      + `.logo-col{flex:0 0 auto;text-align:center;padding:0 12px}.logo{height:90px}`
+      + `.school-name{font-size:16px;font-weight:700;margin:4px 0 0;text-align:center;color:${brandColor}}`
+      + `.motto{text-align:center;font-style:italic;color:#64748b;font-size:10.5px;margin:2px 0}`
+      + `.separator{border:none;border-top:1.5px solid ${brandColor};margin:8px 0 14px}`
+      + `.title-box{border:1px solid #334155;padding:8px;text-align:center;`
       + `font-weight:700;font-size:14px;margin-bottom:16px}`
       + `.sub{color:#64748b;font-size:12px;margin-bottom:16px}table{width:100%;border-collapse:collapse;margin-top:10px}`
       + `th,td{border:1px solid #cbd5e1;padding:8px;font-size:12px}th{background:#f1f5f9;text-align:left}.right{text-align:right}`
       + `.empty{text-align:center;color:#94a3b8}.total{margin-top:14px;font-size:15px;font-weight:700;text-align:right}`
       + `@media print{body{padding:0}}</style></head><body>`
-      + `<div class="header">`
-      + (branding?.logo ? `<img class="logo" src="${esc(branding.logo)}" alt="${esc(schoolName)}" />` : "")
+      + `<div class="admin">`
+      + `<div class="admin-col">${adminLeft}</div>`
+      + `<div class="logo-col">${branding?.logo ? `<img class="logo" src="${esc(branding.logo)}" alt="${esc(schoolName)}" />` : ""}</div>`
+      + `<div class="admin-col right">${adminRight}</div>`
+      + `</div>`
       + `<p class="school-name">${esc(schoolName)}</p>`
-      + (branding?.phone ? `<p class="sub">Tél : ${esc(branding.phone)}</p>` : "")
-      + `</div><hr class="separator" />`
+      + (branding?.motto ? `<p class="motto">« ${esc(branding.motto)} »</p>` : "")
+      + `<hr class="separator" />`
       + `<div class="title-box">REÇU DU RESTE À PAYER</div>`
       + `<div class="sub">Édité le ${new Date().toLocaleDateString("fr-FR")}</div>`
       + `<p><strong>${esc(selected.firstName)} ${esc(selected.lastName)}</strong> — matricule ${esc(selected.studentNumber)}</p>`

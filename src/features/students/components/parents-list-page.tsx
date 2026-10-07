@@ -6,7 +6,7 @@ import { CreditCard, Users } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getParentChildren, listParents, updateParent } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
-import { getCurrentAcademicYear } from "@/lib/api/academics";
+import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { ApiError } from "@/lib/api/errors";
 import type { Parent } from "@/lib/types/student";
@@ -92,7 +92,7 @@ function ParentChildren({ parent, onLinked, onUpdated }: { parent: Parent; onLin
   const childrenQuery = useCachedQuery(`parent-children:${parent.id}`, () => getParentChildren(parent.id), [parent.id]);
   const children = childrenQuery.data ?? [];
   const [editing, setEditing] = useState(false);
-  const [collectStudents, setCollectStudents] = useState<{ id: number; name: string; classId: number | null }[] | null>(null);
+  const [collectStudents, setCollectStudents] = useState<{ id: number; name: string; classId: number | null; className: string | null }[] | null>(null);
   const [resolvingCollect, setResolvingCollect] = useState(false);
 
   /**
@@ -109,13 +109,18 @@ function ParentChildren({ parent, onLinked, onUpdated }: { parent: Parent; onLin
     setResolvingCollect(true);
     try {
       const year = await getCurrentAcademicYear();
+      // Retour comptable : la classe de chaque enfant doit être visible dans la fenêtre d'encaissement
+      // groupé — résolue via les classes de l'année en cours (même source que les autres écrans).
+      const classLabelById = year
+        ? new Map((await listClasses(year.id)).map((cl) => [cl.id, cl.label]))
+        : new Map<number, string>();
       const resolved = await Promise.all(children.map(async (c) => {
         let classId: number | null = null;
         if (year) {
           const enrollments = await searchEnrollments({ studentId: c.id, academicYearId: year.id, status: "VALIDATED" });
           classId = enrollments[0]?.classId ?? null;
         }
-        return { id: c.id, name: `${c.firstName} ${c.lastName}`, classId };
+        return { id: c.id, name: `${c.firstName} ${c.lastName}`, classId, className: classId != null ? classLabelById.get(classId) ?? null : null };
       }));
       setCollectStudents(resolved);
     } catch (err) {

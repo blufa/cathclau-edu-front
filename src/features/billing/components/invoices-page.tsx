@@ -17,6 +17,7 @@ import {
   applyInvoiceDiscount,
   cancelInvoice,
   createInvoice,
+  deleteInvoice,
   generateInvoicesBulk,
   getInvoicePdf,
   getInvoicePdfObjectUrl,
@@ -55,6 +56,7 @@ export default function InvoicesPage() {
   // (remise, recouvrement, annulation — réservés à l'admin/directeur) : plus de "canWrite" global.
   const canCreateInvoice = hasAnyPermission(user, ["facture:create"]);
   const canUpdateInvoice = hasAnyPermission(user, ["facture:update"]);
+  const canDeleteInvoice = hasAnyPermission(user, ["facture:delete"]);
   const canCreatePayment = hasAnyPermission(user, ["paiement:create"]);
 
   // Arrivée depuis la fiche élève (onglet Scolarité → « Factures de l'élève ») : pré-filtre sur cet
@@ -154,6 +156,18 @@ export default function InvoicesPage() {
     confirmAction({
       title: "Annuler la facture", message: `Annuler ${inv.reference} ?`, confirmLabel: "Annuler", danger: true,
       onConfirm: async () => { try { await cancelInvoice(inv.id); notifySuccess("Facture annulée"); q.refetch(); } catch (err) { notifyError(err); } },
+    });
+  }
+
+  // Retour comptable : supprimer physiquement une facture générée par erreur (ex. doublon) — à la
+  // différence de "Annuler" (conserve l'historique), n'a de sens QUE tant qu'aucun paiement n'a été
+  // encaissé dessus ; le serveur refuse sinon (InvoiceService#delete).
+  function remove(inv: Invoice) {
+    confirmAction({
+      title: "Supprimer la facture",
+      message: `Supprimer définitivement ${inv.reference} ? Cette action est irréversible (contrairement à "Annuler", qui conserve l'historique).`,
+      confirmLabel: "Supprimer", danger: true,
+      onConfirm: async () => { try { await deleteInvoice(inv.id); notifySuccess("Facture supprimée"); q.refetch(); } catch (err) { notifyError(err); } },
     });
   }
 
@@ -276,6 +290,11 @@ export default function InvoicesPage() {
                       />
                     )}
                     {canUpdateInvoice && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => cancel(inv)}>Annuler</Button>}
+                    {/* Supprimer : uniquement tant qu'aucun paiement n'est encaissé dessus (ex. doublon
+                        généré par erreur) — le serveur refuse sinon (voir remove() ci-dessus). */}
+                    {canDeleteInvoice && (!inv.paidAmount || Number(inv.paidAmount) === 0) && (
+                      <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(inv)}>Supprimer</Button>
+                    )}
                   </div>
                 </TD>
               </TR>
