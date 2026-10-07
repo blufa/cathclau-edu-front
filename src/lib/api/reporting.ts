@@ -235,6 +235,12 @@ export interface SubsidyStats {
   studentsFullySettledMonthlyFees: number;
   /** Montant réellement déduit via la remise "paiement anticipé" — remise réelle, pas une estimation. */
   earlyPaymentDiscountApplied: string;
+  /** ESTIMATION de la valeur des exonérations TOTALES (100%) actives sur la mensualité — une
+   * exonération 100% ne produit jamais de facture (évite qu'une facture à 0 GNF soit cochée par
+   * erreur avec le reste), donc ce montant n'existe nulle part en base : recalculé à la volée à
+   * partir des échéances configurées pour la classe de chaque élève concerné, moins précis qu'un
+   * vrai montant facturé (ex. ne reflète pas une exonération accordée/révoquée en cours d'année). */
+  totalExemptionEstimatedValue: string;
 }
 export interface FounderAlert {
   level: "INFO" | "WARNING" | "CRITICAL";
