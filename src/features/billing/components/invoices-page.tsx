@@ -215,6 +215,13 @@ export default function InvoicesPage() {
           {(Object.keys(INVOICE_STATUS_LABEL) as InvoiceStatus[]).map((s) => (<option key={s} value={s}>{INVOICE_STATUS_LABEL[s]}</option>))}
         </Select>
       </div>
+      {studentsQuery.fromCache && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Liste des élèves non actualisée (hors-ligne ou connexion lente) — un élève inscrit très
+          récemment peut manquer dans la recherche ci-dessus tant que la page n&apos;a pas pu se
+          mettre à jour. Reconnectez-vous puis rouvrez cette page si besoin.
+        </p>
+      )}
 
       {q.isLoading ? (
         <div className="flex justify-center py-12"><Spinner /></div>

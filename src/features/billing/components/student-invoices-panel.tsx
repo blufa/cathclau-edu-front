@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -24,7 +24,9 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { useAuth } from "@/providers/auth-provider";
+import { hasAnyPermission } from "@/lib/auth/permissions";
 import { printHtmlDocument } from "@/lib/print-node";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
@@ -72,6 +74,8 @@ export function StudentInvoicesPanel({
   classId?: number;
   onCollected: () => void;
 }) {
+  const { user } = useAuth();
+  const canDeleteInvoice = hasAnyPermission(user, ["facture:delete"]);
   const q = useCachedQuery(`student-invoices:${studentId}`, () => listInvoicesByStudent(studentId), [studentId]);
   const payments = useCachedQuery(`student-payments:${studentId}`, () => listPaymentsByStudent(studentId), [studentId]);
   const fees = useCachedQuery(classId ? `fees-class:${classId}` : null, () => listFeesByClass(classId as number), [classId]);
@@ -406,6 +410,7 @@ export function StudentInvoicesPanel({
               monthlyFeeId={monthlyFee?.id ?? null}
               tenantId={tenantId}
               studentId={studentId}
+              canDeleteInvoice={canDeleteInvoice}
               onShowPdf={(inv) => showPdf(`Facture ${inv.reference}`, () => getInvoicePdfObjectUrl(inv.id))}
               // Retour comptable : ne plus ouvrir l'aperçu automatiquement après un encaissement — le
               // reçu est généré, mais sa consultation/impression reste une action volontaire (liste
@@ -635,7 +640,7 @@ export function StudentInvoicesPanel({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, exemptedPeriods, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
+  invoices, exemptedPeriods, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, canDeleteInvoice, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
   /** Échéances exonérées à 100% (§billing) : jamais cochables/encaissables, affichées dans la même
@@ -650,6 +655,10 @@ function InvoiceCollect({
   monthlyFeeId: number | null;
   tenantId: number;
   studentId: number;
+  /** Permission facture:delete — affiche "Supprimer" sur une facture encore sans paiement (générée
+   * par erreur), directement depuis la fiche élève (pas seulement depuis la liste globale /invoices,
+   * qui peut ne pas afficher cette facture tant que l'inscription n'est pas validée). */
+  canDeleteInvoice: boolean;
   onShowPdf: (inv: Invoice) => void;
   /** Appelé juste après un encaissement guichet réussi, avec l'id du paiement — ouvre aussitôt le reçu
    * (visualiser/télécharger/imprimer) au lieu de forcer un aller-retour par la fiche élève. */
@@ -667,6 +676,25 @@ function InvoiceCollect({
   const [customAmounts, setCustomAmounts] = useState<Record<number, number>>({});
   // Mois cochés dans chaque tranche multi-mois, pour aider au calcul (« je paie 2 des 5 mois »).
   const [monthSelections, setMonthSelections] = useState<Record<number, string[]>>({});
+
+  // Retour comptable : supprimer directement depuis la fiche élève une facture générée par erreur
+  // (ex. mauvaise classe à l'inscription) — jamais possible tant qu'un paiement y est déjà encaissé
+  // (le serveur refuse sinon, voir InvoiceService#delete). Distinct d'"annuler" (conserve l'historique).
+  function remove(inv: Invoice) {
+    confirmAction({
+      title: "Supprimer la facture",
+      message: `Supprimer définitivement ${inv.reference} ? Cette action est irréversible.`,
+      confirmLabel: "Supprimer", danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteInvoice(inv.id);
+          notifySuccess("Facture supprimée");
+          setSelected((prev) => prev.filter((id) => id !== inv.id));
+          onDone();
+        } catch (err) { notifyError(err); }
+      },
+    });
+  }
 
   const allIds = invoices.map((inv) => inv.id);
   const monthlyIds = invoices.filter((inv) => inv.feeId === monthlyFeeId).map((inv) => inv.id);
@@ -878,6 +906,12 @@ function InvoiceCollect({
                     className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
                     <FileText className="h-3.5 w-3.5" />
                   </button>
+                  {canDeleteInvoice && (!m.paidAmount || Number(m.paidAmount) === 0) && (
+                    <button type="button" onClick={(e) => { e.preventDefault(); remove(m); }}
+                      className="text-xs text-error-600 hover:underline">
+                      Supprimer
+                    </button>
+                  )}
                   {isChecked ? (
                     <MoneyInput
                       className="w-36"
