@@ -519,13 +519,19 @@ export default function FounderDashboard() {
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Élèves pris en charge</h2>
         {founderQuery.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Exonérations actives" value={(founder?.subsidy.totalExemptions ?? 0) + (founder?.subsidy.partialExemptions ?? 0)} icon={Users} accent="indigo"
               hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s), ${founder?.subsidy.partialExemptions ?? 0} partielle(s)`} />
             <StatCard title="Remises exonérations appliquées" value={formatGNF(founder?.subsidy.exemptionDiscountAmount)} icon={Wallet} accent="teal"
               hint={`${founder?.subsidy.exemptionDiscountInvoiceCount ?? 0} facture(s), dont ${founder?.subsidy.exemptionDiscountInvoicePaidCount ?? 0} encaissée(s)`} />
+            {/* Une exonération à 100% ne produit jamais de facture (pour qu'elle ne soit jamais cochée
+                par erreur avec le reste à l'encaissement) — donc jamais comptée dans la carte
+                "Remises appliquées" ci-dessus, basée sur de vraies factures. Carte séparée, "estimée"
+                pour que le fondateur ne confonde pas les deux montants (§retour fondateurs). */}
+            <StatCard title="Valeur estimée des exonérations totales" value={formatGNF(founder?.subsidy.totalExemptionEstimatedValue)} icon={Wallet} accent="indigo"
+              hint="Estimation — aucune facture générée pour une exonération à 100%" />
             <StatCard title="Élèves à jour sur l'année" value={founder?.subsidy.studentsFullySettledMonthlyFees ?? 0} icon={Award} accent="emerald"
               hint="Toutes les mensualités payées" />
           </div>
