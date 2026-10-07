@@ -84,6 +84,19 @@ export function deleteStudent(id: number): Promise<void> {
   return api.delete<void>(`/students/${id}`);
 }
 
+export interface StudentPurgeResult {
+  studentId: number;
+  deletedByTable: Record<string, number>;
+  warnings: string[];
+}
+
+/** Purge DÉFINITIVE (irréversible, SUPER_ADMIN) : supprime l'élève et toutes les lignes qui le
+ * référencent (factures, paiements, inscriptions/réinscriptions, présences, notes…) — contrairement
+ * à `deleteStudent` ci-dessus, qui ne fait qu'archiver (réversible, ne touche à rien d'autre). */
+export function purgeStudent(id: number): Promise<StudentPurgeResult> {
+  return api.delete<StudentPurgeResult>(`/students/${id}/purge`);
+}
+
 // ── Documents ──────────────────────────────────────────────────────────────
 export function getStudentDocuments(studentId: number): Promise<StudentDocument[]> {
   return api.get<StudentDocument[]>(`/students/${studentId}/documents`);
