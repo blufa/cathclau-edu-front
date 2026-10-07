@@ -5,7 +5,6 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent } from "@/lib/api/billing";
-import { getReceiptPdfObjectUrl } from "@/lib/api/payment";
 import { isNetworkError } from "@/lib/api/errors";
 import { FEE_TYPE_LABEL, type FeeType, type Invoice } from "@/lib/types/billing";
 import { type PaymentChannel } from "@/lib/types/payment";
@@ -224,12 +223,6 @@ export function MultiChildCollectModal({
       }
       notifySuccess(`${selectedRows.length} facture(s) encaissée(s) pour ${studentIds.length} enfant(s) — reçu unique généré.`);
       setSelected([]); setCustomAmounts({}); setMonthSelections({});
-      // Affiche aussitôt le reçu (visualiser/télécharger/imprimer) au lieu de forcer un aller-retour
-      // par la fiche élève — voir CollectFeeModal.onPaid (même correction, deux écrans).
-      if (!online) {
-        try { setPreview({ url: await getReceiptPdfObjectUrl(attempt.response.payment.id), title: "Reçu de paiement" }); }
-        catch (err) { notifyError(err); }
-      }
       onCollected();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }

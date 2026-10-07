@@ -80,6 +80,13 @@ interface ChildDraft {
   address: string;
   originSchool: string;
   previousClass: string;
+  // Distingue une valeur auto-remplie (nom/adresse du parent, voir l'effet plus bas) d'une saisie
+  // manuelle du comptable (§retour comptable — régression réelle : sans ce drapeau, le simple fait
+  // que lastName devienne non-vide après la 1ère lettre auto-remplie bloquait tout le reste de la
+  // frappe du parent, "D" restant figé alors que le parent continuait de taper "Diallo"). true dès
+  // que l'utilisateur tape lui-même dans CE champ ; jamais remis à false ensuite.
+  lastNameTouched: boolean;
+  addressTouched: boolean;
   classId: string;
   relationship: Relationship;
   status: ChildStatus;
@@ -113,6 +120,7 @@ function emptyChild(): ChildDraft {
     key: Math.random().toString(36).slice(2),
     firstName: "", lastName: "", gender: "MALE", birthDate: "",
     address: "", originSchool: "", previousClass: "",
+    lastNameTouched: false, addressTouched: false,
     classId: "", relationship: "FATHER",
     status: "pending",
     enrollmentType: "NEW",
@@ -215,7 +223,7 @@ export default function BulkFamilyEnrollmentPage() {
   const activeExemptionRules = (exemptionRulesQuery.data ?? []).filter((r) => r.active);
 
   // ── Enfants ─────────────────────────────────────────────────────────────
-  const [children, setChildren] = useState<ChildDraft[]>([emptyChild(), emptyChild()]);
+  const [children, setChildren] = useState<ChildDraft[]>([emptyChild()]);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
 
@@ -228,7 +236,7 @@ export default function BulkFamilyEnrollmentPage() {
     setNewParent({ firstName: "", lastName: "", phone: "", email: "", occupation: "", address: "" });
     setStaffSearch("");
     setSelectedStaff(null);
-    setChildren([emptyChild(), emptyChild()]);
+    setChildren([emptyChild()]);
     setRunning(false);
     setFinished(false);
     autoOpenedRef.current = false;
@@ -244,18 +252,21 @@ export default function BulkFamilyEnrollmentPage() {
     setChildren((cs) => (cs.length > 1 ? cs.filter((c) => c.key !== key) : cs));
   }
 
-  // Les deux enfants présents dès l'arrivée sur la page (avant tout clic sur "Ajouter un enfant")
-  // sont créés AVANT que le parent ne soit renseigné — sans cet effet, eux seuls resteraient vides
-  // tant qu'on ne les retouche pas, contrairement à tout enfant ajouté ensuite (déjà préremplis par
-  // `addChild` ci-dessus).
+  // L'enfant présent dès l'arrivée sur la page (avant tout clic sur "Ajouter un enfant") est créé
+  // AVANT que le parent ne soit renseigné — sans cet effet, lui seul resterait vide tant qu'on ne le
+  // retouche pas, contrairement à tout enfant ajouté ensuite (déjà prérempli par `addChild` ci-dessus).
+  // Condition sur `*Touched` (saisie manuelle du comptable), PAS sur le champ vide/non-vide :
+  // régression réelle, en testant `!c.lastName.trim()`, une fois la 1ère lettre auto-remplie le
+  // champ n'était plus "vide" et l'effet s'arrêtait de suivre la frappe du parent — "D" restait figé
+  // alors que le parent continuait de taper "Diallo".
   useEffect(() => {
     if (!resolvedParentLastName && !resolvedParentAddress) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setChildren((cs) => cs.map((c) => {
       if (c.status !== "pending") return c;
       const patch: Partial<ChildDraft> = {};
-      if (resolvedParentLastName && !c.lastName.trim()) patch.lastName = resolvedParentLastName;
-      if (resolvedParentAddress && !c.address.trim()) patch.address = resolvedParentAddress;
+      if (resolvedParentLastName && !c.lastNameTouched) patch.lastName = resolvedParentLastName;
+      if (resolvedParentAddress && !c.addressTouched) patch.address = resolvedParentAddress;
       return Object.keys(patch).length > 0 ? { ...c, ...patch } : c;
     }));
   }, [resolvedParentLastName, resolvedParentAddress]);
@@ -873,7 +884,7 @@ function ChildCard({
             disabled={locked}
             value={child.lastName}
             options={lastNameOptions}
-            onChange={(val) => { onUpdate({ lastName: val }); fetchLastNames(val); }}
+            onChange={(val) => { onUpdate({ lastName: val, lastNameTouched: true }); fetchLastNames(val); }}
           />
         </Field>
         <Field>
@@ -896,7 +907,7 @@ function ChildCard({
             disabled={locked}
             value={child.address}
             options={addressOptions}
-            onChange={(val) => { onUpdate({ address: val }); fetchAddresses(val); }}
+            onChange={(val) => { onUpdate({ address: val, addressTouched: true }); fetchAddresses(val); }}
           />
         </Field>
         <Field>

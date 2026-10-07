@@ -76,7 +76,11 @@ export function MultiChildInvoicesModal({
         <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">Aucun élève à encaisser.</p>
       ) : (
         <>
-        <div className="mb-4 flex justify-end">
+        {/* Fixe en haut du corps défilant (§retour comptable : le bouton ne doit jamais se cacher
+            quand on défile pour encaisser plusieurs enfants) — marges négatives pour couvrir toute la
+            largeur malgré le padding du conteneur défilant (voir Modal), fond blanc + filet pour
+            rester lisible au-dessus du contenu qui défile dessous. */}
+        <div className="sticky top-0 z-10 -mx-6 mb-4 flex justify-end border-b border-gray-100 bg-white px-6 py-3">
           <Button variant="secondary" size="sm" leftSection={<Printer className="h-4 w-4" />}
             onClick={printAllReceipts} loading={printingAll}>
             Imprimer tous les reçus

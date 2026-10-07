@@ -40,6 +40,12 @@ export function Combobox({ value, onChange, options, placeholder, className, dis
         placeholder={placeholder}
         className={className}
         disabled={disabled}
+        // L'autocomplétion du navigateur entre en conflit avec notre propre liste de suggestions —
+        // pire, elle peut pré-remplir le champ AVANT que l'effet de suggestion (ex. nom de famille du
+        // parent reporté sur l'enfant) ne s'exécute, et cette valeur "déjà remplie" bloque alors la
+        // suggestion automatique (retour comptable : le nom ne se reportait pas sur le 1er enfant —
+        // le champ le plus exposé à l'autofill du navigateur sur la page).
+        autoComplete="off"
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);
