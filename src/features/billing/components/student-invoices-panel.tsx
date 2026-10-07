@@ -81,7 +81,10 @@ export function StudentInvoicesPanel({
   const fees = useCachedQuery(classId ? `fees-class:${classId}` : null, () => listFeesByClass(classId as number), [classId]);
 
   const all = q.data ?? [];
-  const unpaid = all.filter((inv) => inv.status !== "PAID");
+  // CANCELLED (ex. ancienne classe après un transfert, §retour comptable) : remainingBalance déjà
+  // remis à 0 côté serveur, mais sans ce filtre la facture restait quand même listée ici (fantôme à
+  // 0 GNF, jamais réellement "à régler") — à exclure comme PAID, pas juste masquer son montant.
+  const unpaid = all.filter((inv) => inv.status !== "PAID" && inv.status !== "CANCELLED");
   const receipts = (payments.data ?? []).filter((p) => p.status === "SUCCEEDED");
   // Le plus récent n'est pas forcément en dernière position dans la liste affichée — déterminé par
   // l'id le plus élevé plutôt que l'ordre d'affichage (§retour comptable : "(Dernier reçu encaissé)").
