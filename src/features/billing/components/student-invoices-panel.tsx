@@ -79,6 +79,11 @@ export function StudentInvoicesPanel({
   const all = q.data ?? [];
   const unpaid = all.filter((inv) => inv.status !== "PAID");
   const receipts = (payments.data ?? []).filter((p) => p.status === "SUCCEEDED");
+  // Le plus récent n'est pas forcément en dernière position dans la liste affichée — déterminé par
+  // l'id le plus élevé plutôt que l'ordre d'affichage (§retour comptable : "(Dernier reçu encaissé)").
+  const latestReceiptId = receipts.length > 0
+    ? receipts.reduce((latest, r) => (r.id > latest.id ? r : latest), receipts[0]).id
+    : null;
   const monthlyFee = (fees.data ?? []).find((f) => f.type === "MONTHLY");
   // Encaissements guichet enregistrés hors-ligne pour cet élève, pas encore synchronisés (§payments —
   // mode hors-ligne) : pas de vrai reçu serveur tant qu'ils n'ont pas atteint le backend. Web
@@ -549,6 +554,11 @@ export function StudentInvoicesPanel({
                 <div key={p.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-slate-600">
                     <span className="font-mono text-xs">{p.reference}</span> · {formatGNF(p.amount)}
+                    {/* Retour comptable : identifier d'un coup d'œil le reçu le plus récent dans cette
+                        liste (pas forcément en dernière position à l'écran). */}
+                    {p.id === latestReceiptId && (
+                      <span className="ml-1.5 font-medium text-brand-600">(Dernier reçu encaissé)</span>
+                    )}
                   </span>
                   <div className="flex items-center gap-3">
                     <button type="button"

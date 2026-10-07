@@ -215,7 +215,7 @@ export default function BulkFamilyEnrollmentPage() {
   const activeExemptionRules = (exemptionRulesQuery.data ?? []).filter((r) => r.active);
 
   // ── Enfants ─────────────────────────────────────────────────────────────
-  const [children, setChildren] = useState<ChildDraft[]>([emptyChild(), emptyChild()]);
+  const [children, setChildren] = useState<ChildDraft[]>([emptyChild()]);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
 
@@ -228,7 +228,7 @@ export default function BulkFamilyEnrollmentPage() {
     setNewParent({ firstName: "", lastName: "", phone: "", email: "", occupation: "", address: "" });
     setStaffSearch("");
     setSelectedStaff(null);
-    setChildren([emptyChild(), emptyChild()]);
+    setChildren([emptyChild()]);
     setRunning(false);
     setFinished(false);
     autoOpenedRef.current = false;
@@ -244,10 +244,9 @@ export default function BulkFamilyEnrollmentPage() {
     setChildren((cs) => (cs.length > 1 ? cs.filter((c) => c.key !== key) : cs));
   }
 
-  // Les deux enfants présents dès l'arrivée sur la page (avant tout clic sur "Ajouter un enfant")
-  // sont créés AVANT que le parent ne soit renseigné — sans cet effet, eux seuls resteraient vides
-  // tant qu'on ne les retouche pas, contrairement à tout enfant ajouté ensuite (déjà préremplis par
-  // `addChild` ci-dessus).
+  // L'enfant présent dès l'arrivée sur la page (avant tout clic sur "Ajouter un enfant") est créé
+  // AVANT que le parent ne soit renseigné — sans cet effet, lui seul resterait vide tant qu'on ne le
+  // retouche pas, contrairement à tout enfant ajouté ensuite (déjà prérempli par `addChild` ci-dessus).
   useEffect(() => {
     if (!resolvedParentLastName && !resolvedParentAddress) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect

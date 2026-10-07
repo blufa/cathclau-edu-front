@@ -18,7 +18,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 import { printHtmlDocument } from "@/lib/print-node";
-import { getBranding } from "@/lib/branding";
+import { useBranding } from "@/providers/branding-provider";
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
 
@@ -29,6 +29,7 @@ const num = (v: string | number | null | undefined) => Number(v ?? 0);
 const PAGE_SIZE = 10;
 
 export default function GuichetPage() {
+  const { branding } = useBranding();
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [page, setPage] = useState(0);
@@ -73,20 +74,34 @@ export default function GuichetPage() {
 
   function printReceipt() {
     if (!selected) return;
-    const branding = getBranding();
     const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
+    const schoolName = branding?.schoolName ?? "École";
+    const brandColor = branding?.brandColor ?? "#14b8a6";
     const rows = unpaid.map((i) => {
       const due = num(i.remainingBalance ?? num(i.totalAmount) - num(i.paidAmount));
       return `<tr><td>${esc(i.reference)}</td><td>${esc(i.periodLabel ?? INVOICE_STATUS_LABEL[i.status])}</td>`
         + `<td class="right">${esc(formatGNF(i.totalAmount))}</td><td class="right">${esc(formatGNF(due))}</td></tr>`;
     }).join("") || `<tr><td colspan="4" class="empty">Aucun solde restant.</td></tr>`;
+    // En-tête alignée sur celle des reçus/factures générés côté serveur (logo + nom de l'école
+    // centrés, filet aux couleurs de l'école, titre encadré) — retour comptable : ce PDF (généré
+    // côté client, contrairement aux autres) avait un en-tête bien plus sommaire que les autres.
     const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu du reste à payer</title>`
-      + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}h1{font-size:18px;margin:0 0 2px}`
+      + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
+      + `.header{text-align:center;margin-bottom:10px}.logo{height:64px;margin-bottom:6px}`
+      + `.school-name{font-size:16px;font-weight:700;margin:0}`
+      + `.separator{border:none;border-top:2px solid ${brandColor};margin:10px 0 14px}`
+      + `.title-box{border:1px solid #334155;border-radius:4px;padding:8px;text-align:center;`
+      + `font-weight:700;font-size:14px;margin-bottom:16px}`
       + `.sub{color:#64748b;font-size:12px;margin-bottom:16px}table{width:100%;border-collapse:collapse;margin-top:10px}`
       + `th,td{border:1px solid #cbd5e1;padding:8px;font-size:12px}th{background:#f1f5f9;text-align:left}.right{text-align:right}`
       + `.empty{text-align:center;color:#94a3b8}.total{margin-top:14px;font-size:15px;font-weight:700;text-align:right}`
       + `@media print{body{padding:0}}</style></head><body>`
-      + `<h1>${esc(branding.appName)} — Reçu du reste à payer</h1>`
+      + `<div class="header">`
+      + (branding?.logo ? `<img class="logo" src="${esc(branding.logo)}" alt="${esc(schoolName)}" />` : "")
+      + `<p class="school-name">${esc(schoolName)}</p>`
+      + (branding?.phone ? `<p class="sub">Tél : ${esc(branding.phone)}</p>` : "")
+      + `</div><hr class="separator" />`
+      + `<div class="title-box">REÇU DU RESTE À PAYER</div>`
       + `<div class="sub">Édité le ${new Date().toLocaleDateString("fr-FR")}</div>`
       + `<p><strong>${esc(selected.firstName)} ${esc(selected.lastName)}</strong> — matricule ${esc(selected.studentNumber)}</p>`
       + `<table><thead><tr><th>Référence</th><th>Période</th><th class="right">Montant total</th><th class="right">Reste dû</th></tr></thead>`

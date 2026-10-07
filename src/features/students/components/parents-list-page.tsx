@@ -2,14 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { CreditCard, Users } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getParentChildren, listParents, updateParent } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
+import { getCurrentAcademicYear } from "@/lib/api/academics";
+import { searchEnrollments } from "@/lib/api/enrollments";
 import { ApiError } from "@/lib/api/errors";
 import type { Parent } from "@/lib/types/student";
 import { Modal } from "@/components/ui/modal";
 import { Input, Field, Label } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -17,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
 
 /** Liste de tous les parents du tenant — cliquer sur un parent affiche tous ses enfants rattachés. */
 export default function ParentsListPage() {
@@ -72,29 +76,85 @@ export default function ParentsListPage() {
       )}
 
       <Modal open={!!selected} onClose={() => setSelected(null)} title={selected ? `${selected.firstName} ${selected.lastName}` : ""}>
-        {selected && <ParentChildren parent={selected} onLinked={() => q.refetch()} />}
+        {selected && (
+          <ParentChildren
+            parent={selected}
+            onLinked={() => q.refetch()}
+            onUpdated={(updated) => { setSelected(updated); q.refetch(); }}
+          />
+        )}
       </Modal>
     </div>
   );
 }
 
-function ParentChildren({ parent, onLinked }: { parent: Parent; onLinked: () => void }) {
+function ParentChildren({ parent, onLinked, onUpdated }: { parent: Parent; onLinked: () => void; onUpdated: (p: Parent) => void }) {
   const childrenQuery = useCachedQuery(`parent-children:${parent.id}`, () => getParentChildren(parent.id), [parent.id]);
   const children = childrenQuery.data ?? [];
+  const [editing, setEditing] = useState(false);
+  const [collectStudents, setCollectStudents] = useState<{ id: number; name: string; classId: number | null }[] | null>(null);
+  const [resolvingCollect, setResolvingCollect] = useState(false);
+
+  /**
+   * "Encaisser tous les enfants" depuis la fiche parent (§retour comptable : un parent revenu un
+   * autre jour payer la scolarité de ses enfants ne doit pas avoir à chercher chacun d'eux un par
+   * un) — ouvre la même fenêtre d'encaissement groupé que juste après une inscription
+   * (MultiChildInvoicesModal), pré-remplie avec tous les enfants de ce parent. Résout la classe
+   * courante de chaque enfant (même logique que MultiChildCollectModal.fetchChildRows) puisque
+   * `Student` ne porte pas directement son classId — passe par l'inscription validée de l'année en
+   * cours.
+   */
+  async function openCollectAll() {
+    if (children.length === 0) return;
+    setResolvingCollect(true);
+    try {
+      const year = await getCurrentAcademicYear();
+      const resolved = await Promise.all(children.map(async (c) => {
+        let classId: number | null = null;
+        if (year) {
+          const enrollments = await searchEnrollments({ studentId: c.id, academicYearId: year.id, status: "VALIDATED" });
+          classId = enrollments[0]?.classId ?? null;
+        }
+        return { id: c.id, name: `${c.firstName} ${c.lastName}`, classId };
+      }));
+      setCollectStudents(resolved);
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setResolvingCollect(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div><dt className="text-gray-400">Téléphone</dt><dd className="text-gray-900">{parent.phone ?? "—"}</dd></div>
-        <div><dt className="text-gray-400">Email</dt><dd className="text-gray-900">{parent.email ?? "—"}</dd></div>
-        <div><dt className="text-gray-400">Profession</dt><dd className="text-gray-900">{parent.occupation ?? "—"}</dd></div>
-        <div><dt className="text-gray-400">Adresse</dt><dd className="text-gray-900">{parent.address ?? "—"}</dd></div>
-      </dl>
+      {editing ? (
+        <ParentEditForm parent={parent} onCancel={() => setEditing(false)} onSaved={(p) => { setEditing(false); onUpdated(p); }} />
+      ) : (
+        <div className="space-y-2">
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-gray-400">Téléphone</dt><dd className="text-gray-900">{parent.phone ?? "—"}</dd></div>
+            <div><dt className="text-gray-400">Email</dt><dd className="text-gray-900">{parent.email ?? "—"}</dd></div>
+            <div><dt className="text-gray-400">Profession</dt><dd className="text-gray-900">{parent.occupation ?? "—"}</dd></div>
+            <div><dt className="text-gray-400">Adresse</dt><dd className="text-gray-900">{parent.address ?? "—"}</dd></div>
+          </dl>
+          <div className="flex justify-end">
+            <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>Modifier</Button>
+          </div>
+        </div>
+      )}
       <CreateParentAccessSection parent={parent} onLinked={onLinked} />
       <div>
-        <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-700">
-          <Users className="h-4 w-4" /> Enfants ({children.length})
-        </p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+            <Users className="h-4 w-4" /> Enfants ({children.length})
+          </p>
+          {children.length > 0 && (
+            <Button size="sm" variant="secondary" leftSection={<CreditCard className="h-3.5 w-3.5" />}
+              onClick={openCollectAll} loading={resolvingCollect}>
+              Encaisser tous les enfants
+            </Button>
+          )}
+        </div>
         {childrenQuery.loading ? (
           <div className="flex justify-center py-6"><Spinner /></div>
         ) : children.length === 0 ? (
@@ -115,6 +175,12 @@ function ParentChildren({ parent, onLinked }: { parent: Parent; onLinked: () => 
           </ul>
         )}
       </div>
+      <MultiChildInvoicesModal
+        students={collectStudents ?? []}
+        tenantId={parent.tenantId}
+        open={collectStudents != null}
+        onClose={() => setCollectStudents(null)}
+      />
     </div>
   );
 }
@@ -187,6 +253,58 @@ function CreateParentAccessSection({ parent, onLinked }: { parent: Parent; onLin
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Formulaire d'édition d'un parent (§retour comptable : "il doit pouvoir venir modifier le nom ou le
+ * numéro") — n'existait pas : la fiche parent était jusqu'ici en lecture seule (seule exception :
+ * une résaisie identique des mêmes champs lors de la création d'un accès). userId=null : ne touche
+ * jamais au compte de connexion/lien personnel déjà en place. */
+function ParentEditForm({ parent, onCancel, onSaved }: { parent: Parent; onCancel: () => void; onSaved: (p: Parent) => void }) {
+  const [firstName, setFirstName] = useState(parent.firstName);
+  const [lastName, setLastName] = useState(parent.lastName);
+  const [phone, setPhone] = useState(parent.phone ?? "");
+  const [email, setEmail] = useState(parent.email ?? "");
+  const [occupation, setOccupation] = useState(parent.occupation ?? "");
+  const [address, setAddress] = useState(parent.address ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!firstName.trim() || !lastName.trim()) {
+      notifyError(new Error("Prénom et nom requis."));
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await updateParent(parent.id, {
+        firstName: firstName.trim(), lastName: lastName.trim(),
+        phone: phone.trim() || null, email: email.trim() || null,
+        occupation: occupation.trim() || null, address: address.trim() || null,
+      }, null);
+      notifySuccess("Parent modifié.");
+      onSaved(updated);
+    } catch (err) {
+      notifyError(err instanceof ApiError ? err : new Error("Impossible de modifier ce parent."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-gray-200 p-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Field><Label>Prénom</Label><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} /></Field>
+        <Field><Label>Nom</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
+      </div>
+      <PhoneInput label="Téléphone" value={phone} onChange={setPhone} />
+      <Field><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+      <Field><Label>Profession</Label><Input value={occupation} onChange={(e) => setOccupation(e.target.value)} /></Field>
+      <Field><Label>Adresse</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></Field>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={saving}>Annuler</Button>
+        <Button size="sm" onClick={save} loading={saving}>Enregistrer</Button>
+      </div>
     </div>
   );
 }
