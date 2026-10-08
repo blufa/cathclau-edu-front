@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -177,12 +178,18 @@ export function EmployeeForm({
       <div className="rounded-xl border border-gray-200 p-3">
         <Field>
           <Label>Enseigne aussi (optionnel)</Label>
-          <Select value={linkedTeacherId} onChange={(e) => setLinkedTeacherId(e.target.value)}>
-            <option value="">Non — poste administratif/direction uniquement</option>
-            {teachers.map((t) => (
-              <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
-            ))}
-          </Select>
+          <SearchableSelect
+            value={linkedTeacherId}
+            onChange={setLinkedTeacherId}
+            triggerClassName="w-full justify-between px-3"
+            options={[
+              { value: "", trigger: "Non — poste administratif/direction uniquement", label: "Non — poste administratif/direction uniquement", searchText: "" },
+              ...teachers.map((t): SearchableOption => {
+                const label = `${t.firstName} ${t.lastName}`;
+                return { value: String(t.id), trigger: label, label, searchText: label };
+              }),
+            ]}
+          />
         </Field>
         <p className="mt-1.5 text-xs text-gray-400">
           Si cette personne donne aussi des cours, reliez sa fiche enseignant ici — la paie pourra

@@ -7,7 +7,7 @@ import { listPlatformUsers, searchTenants } from "@/lib/api/platform";
 import type { PlatformUser } from "@/lib/types/platform";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
 import { NewRedacteurModal } from "@/components/platform/new-redacteur-modal";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
@@ -138,16 +138,17 @@ function PlatformUsersTable() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Select
-          className="max-w-[240px]"
+        <SearchableSelect
+          triggerClassName="max-w-[240px] justify-between px-3"
           value={tenantFilter}
-          onChange={(e) => setTenantFilter(e.target.value)}
-        >
-          <option value="">Toutes les écoles</option>
-          {(tenantsQuery.data?.content ?? []).map((t) => (
-            <option key={t.id} value={String(t.id)}>{t.schoolName}</option>
-          ))}
-        </Select>
+          onChange={setTenantFilter}
+          options={[
+            { value: "", trigger: "Toutes les écoles", label: "Toutes les écoles", searchText: "" },
+            ...(tenantsQuery.data?.content ?? []).map((t): SearchableOption => ({
+              value: String(t.id), trigger: t.schoolName, label: t.schoolName, searchText: t.schoolName,
+            })),
+          ]}
+        />
       </div>
 
       <DataTable

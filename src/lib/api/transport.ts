@@ -30,6 +30,13 @@ export function deleteStop(stopId: number): Promise<void> {
 export function listSubscriptions(params?: { routeId?: number; studentId?: number }): Promise<TransportSubscription[]> {
   return api.get<TransportSubscription[]>("/transport/subscriptions", { query: { routeId: params?.routeId, studentId: params?.studentId } });
 }
+
+/** Nombre de mois de transport déjà réglés, par élève (§retour comptable : "savoir qui a payé le
+ * transport", précisé en "le nombre de mois payé") — clés = id élève en string (sérialisation JSON
+ * d'une Map<Long,Long>), absent de l'objet si l'élève n'a encore rien payé. */
+export function getTransportPaidMonthsCount(): Promise<Record<string, number>> {
+  return api.get<Record<string, number>>("/transport/subscriptions/paid-months-count");
+}
 export function subscribe(input: {
   routeId: number; stopId?: number | null; studentId: number; direction: TransportDirection;
   startDate?: string | null; monthlyFee?: number | null;

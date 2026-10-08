@@ -10,6 +10,7 @@ import type { Classe, Niveau } from "@/lib/types/academics";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Spinner } from "@/components/ui/spinner";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
@@ -95,10 +96,16 @@ export function PassageMasseModal({ open, onClose, onDone }: {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Classe source</label>
-            <Select value={sourceClassId} onChange={(e) => { setSourceClassId(e.target.value); setTargetOverride(null); }} disabled={!sourceYearId}>
-              <option value="">—</option>
-              {sourceClasses.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-            </Select>
+            <SearchableSelect
+              value={sourceClassId}
+              onChange={(v) => { setSourceClassId(v); setTargetOverride(null); }}
+              disabled={!sourceYearId}
+              triggerClassName="w-full justify-between px-3"
+              options={[
+                { value: "", trigger: "—", label: "—", searchText: "" },
+                ...sourceClasses.map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+              ]}
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Année cible</label>
@@ -111,10 +118,16 @@ export function PassageMasseModal({ open, onClose, onDone }: {
             <label className="mb-1 block text-xs font-medium text-slate-500">
               Classe cible {proposed && !targetOverride && <span className="text-emerald-600">(proposée)</span>}
             </label>
-            <Select value={targetClassId} onChange={(e) => setTargetOverride(e.target.value)} disabled={!targetYearId}>
-              <option value="">—</option>
-              {targetClasses.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-            </Select>
+            <SearchableSelect
+              value={targetClassId}
+              onChange={setTargetOverride}
+              disabled={!targetYearId}
+              triggerClassName="w-full justify-between px-3"
+              options={[
+                { value: "", trigger: "—", label: "—", searchText: "" },
+                ...targetClasses.map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+              ]}
+            />
           </div>
         </div>
 

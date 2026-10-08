@@ -11,9 +11,11 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
+import { getTransportPaidMonthsCount, listSubscriptions } from "@/lib/api/transport";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Card, CardBody } from "@/components/ui/card";
@@ -88,6 +90,23 @@ export default function StudentsPage() {
     [pageStudentIds.join(",")],
   );
   const uncoveredStaffChildIds = useMemo(() => new Set(uncoveredStaffChildQuery.data ?? []), [uncoveredStaffChildQuery.data]);
+
+  // Badge « Transport » (§retour comptable : "savoir qui a payé le transport", précisé en "le
+  // nombre de mois payé") : élèves actuellement abonnés à une ligne de bus — pas de filtre studentId
+  // côté API, donc tous les abonnements du tenant sont récupérés une seule fois (mis en cache) puis
+  // filtrés sur ceux affichés à l'écran. Affiche le nombre de mois réellement réglés (le transport
+  // est facturé mois par mois, à la demande — un abonnement actif ne veut pas dire qu'une facture a
+  // déjà été générée/encaissée).
+  const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
+  const activeTransportStudentIds = useMemo(
+    () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
+    [subscriptionsQuery.data],
+  );
+  const transportPaidMonthsQuery = useCachedQuery("transport-paid-months-count", () => getTransportPaidMonthsCount(), []);
+  const transportPaidMonthsByStudentId = useMemo(
+    () => new Map(Object.entries(transportPaidMonthsQuery.data ?? {}).map(([id, count]) => [Number(id), count])),
+    [transportPaidMonthsQuery.data],
+  );
 
   // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
   // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
@@ -188,6 +207,19 @@ export default function StudentsPage() {
               Enfant de personnel — prélevé sur salaire
             </Badge>
           )}
+          {activeTransportStudentIds.has(row.student.id) && (() => {
+            const paidMonths = transportPaidMonthsByStudentId.get(row.student.id) ?? 0;
+            return (
+              <Badge
+                tone={paidMonths > 0 ? "blue" : "amber"}
+                title={paidMonths > 0
+                  ? `Abonné au transport — ${paidMonths} mois déjà réglé(s)`
+                  : "Abonné au transport — aucun mois encore réglé"}
+              >
+                Transport {paidMonths} mois
+              </Badge>
+            );
+          })()}
           {exemptionByStudentId.has(row.student.id) && (
             <Badge
               tone={exemptionByStudentId.get(row.student.id)?.type === "TOTAL" ? "green" : exemptionByStudentId.get(row.student.id)?.type === "EXCEPTIONAL" ? "blue" : "amber"}
@@ -308,32 +340,28 @@ export default function StudentsPage() {
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
-        <Select
-          className="max-w-[160px]"
+        <SearchableSelect
+          triggerClassName="max-w-[160px] justify-between px-3"
           value={gender}
-          onChange={(e) => {
-            setPage(0);
-            setGender(e.target.value as Gender | "");
-          }}
-        >
-          <option value="">Tous sexes</option>
-          <option value="MALE">Masculin</option>
-          <option value="FEMALE">Féminin</option>
-        </Select>
-        <Select
-          className="max-w-[200px]"
+          onChange={(v) => { setPage(0); setGender(v as Gender | ""); }}
+          options={[
+            { value: "", trigger: "Tous sexes", label: "Tous sexes", searchText: "tous" },
+            { value: "MALE", trigger: "Masculin", label: "Masculin", searchText: "masculin" },
+            { value: "FEMALE", trigger: "Féminin", label: "Féminin", searchText: "féminin" },
+          ]}
+        />
+        <SearchableSelect
+          triggerClassName="max-w-[200px] justify-between px-3"
           value={status}
-          onChange={(e) => {
-            setPage(0);
-            setStatus(e.target.value as EnrollmentStatus | "NOT_ENROLLED" | "");
-          }}
-        >
-          <option value="">Toutes inscriptions</option>
-          <option value="NOT_ENROLLED">Non inscrits</option>
-          <option value="PENDING">En attente</option>
-          <option value="VALIDATED">Validée</option>
-          <option value="CANCELLED">Annulée</option>
-        </Select>
+          onChange={(v) => { setPage(0); setStatus(v as EnrollmentStatus | "NOT_ENROLLED" | ""); }}
+          options={[
+            { value: "", trigger: "Toutes inscriptions", label: "Toutes inscriptions", searchText: "toutes" },
+            { value: "NOT_ENROLLED", trigger: "Non inscrits", label: "Non inscrits", searchText: "non inscrits" },
+            { value: "PENDING", trigger: "En attente", label: "En attente", searchText: "en attente" },
+            { value: "VALIDATED", trigger: "Validée", label: "Validée", searchText: "validée" },
+            { value: "CANCELLED", trigger: "Annulée", label: "Annulée", searchText: "annulée" },
+          ]}
+        />
         <Button type="submit" variant="secondary">
           Filtrer
         </Button>
@@ -350,6 +378,7 @@ export default function StudentsPage() {
         columnToggle
         exportable
         exportFilename="eleves.csv"
+        initialColumnVisibility={{ actions: false }}
       />
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">

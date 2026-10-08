@@ -8,6 +8,7 @@ import type { EnrollmentType } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Field, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /**
@@ -89,10 +90,15 @@ export function OfflineEnrollFields({
 
           <Field>
             <Label htmlFor="offline-class">Classe</Label>
-            <Select id="offline-class" value={classId} onChange={(e) => setClassId(e.target.value)}>
-              <option value="">Sélectionner…</option>
-              {classes.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-            </Select>
+            <SearchableSelect
+              value={classId}
+              onChange={setClassId}
+              triggerClassName="w-full justify-between px-3"
+              options={[
+                { value: "", trigger: "Sélectionner…", label: "Sélectionner…", searchText: "" },
+                ...classes.map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+              ]}
+            />
           </Field>
 
           <Field>
