@@ -11,7 +11,7 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
-import { listSubscriptions } from "@/lib/api/transport";
+import { getTransportPaidStudentIds, listSubscriptions } from "@/lib/api/transport";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,11 +94,16 @@ export default function StudentsPage() {
   // Badge « Transport » (§retour comptable : "savoir qui a payé le transport") : élèves actuellement
   // abonnés à une ligne de bus — pas de filtre studentId côté API, donc tous les abonnements du
   // tenant sont récupérés une seule fois (mis en cache) puis filtrés sur ceux affichés à l'écran.
+  // Distingue en plus ceux qui ont déjà réellement réglé au moins un mois de ceux qui n'ont encore
+  // rien payé (le transport est facturé mois par mois, à la demande — un abonnement actif ne veut pas
+  // dire qu'une facture a déjà été générée/encaissée).
   const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
   const activeTransportStudentIds = useMemo(
     () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
     [subscriptionsQuery.data],
   );
+  const transportPaidQuery = useCachedQuery("transport-paid-student-ids", () => getTransportPaidStudentIds(), []);
+  const transportPaidStudentIds = useMemo(() => new Set(transportPaidQuery.data ?? []), [transportPaidQuery.data]);
 
   // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
   // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
@@ -200,9 +205,15 @@ export default function StudentsPage() {
             </Badge>
           )}
           {activeTransportStudentIds.has(row.student.id) && (
-            <Badge tone="blue" title="Abonné à une ligne de transport scolaire">
-              Transport
-            </Badge>
+            transportPaidStudentIds.has(row.student.id) ? (
+              <Badge tone="blue" title="Abonné au transport — au moins un mois déjà réglé">
+                Transport — payé
+              </Badge>
+            ) : (
+              <Badge tone="amber" title="Abonné au transport — aucun mois encore réglé">
+                Transport — pas payé
+              </Badge>
+            )
           )}
           {exemptionByStudentId.has(row.student.id) && (
             <Badge

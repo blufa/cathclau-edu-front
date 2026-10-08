@@ -30,6 +30,12 @@ export function deleteStop(stopId: number): Promise<void> {
 export function listSubscriptions(params?: { routeId?: number; studentId?: number }): Promise<TransportSubscription[]> {
   return api.get<TransportSubscription[]>("/transport/subscriptions", { query: { routeId: params?.routeId, studentId: params?.studentId } });
 }
+
+/** Élèves ayant déjà réglé au moins un mois de transport (§retour comptable : "savoir qui a payé
+ * le transport") — parmi les abonnés actifs, ceux absents de cette liste n'ont encore rien payé. */
+export function getTransportPaidStudentIds(): Promise<number[]> {
+  return api.get<number[]>("/transport/subscriptions/paid-student-ids");
+}
 export function subscribe(input: {
   routeId: number; stopId?: number | null; studentId: number; direction: TransportDirection;
   startDate?: string | null; monthlyFee?: number | null;
