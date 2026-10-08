@@ -915,6 +915,11 @@ function InvoiceCollect({
                           (remise −{formatGNF(m.discountAmount)}{m.discountReason && ` · ${m.discountReason}`})
                         </span>
                       )}
+                      {m.creditedAmount != null && Number(m.creditedAmount) > 0 && (
+                        <span className="ml-1.5 text-xs font-medium text-brand-600">
+                          (crédit +{formatGNF(m.creditedAmount)}{m.creditReason && ` · ${m.creditReason}`})
+                        </span>
+                      )}
                     </span>
                   )}
                 />

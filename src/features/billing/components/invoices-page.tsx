@@ -260,6 +260,14 @@ export default function InvoicesPage() {
                       </Badge>
                     </span>
                   )}
+                  {inv.creditedAmount != null && Number(inv.creditedAmount) > 0 && (
+                    <span className="mt-1 block">
+                      <Badge tone="blue">
+                        Crédit +{formatGNF(inv.creditedAmount)}
+                        {inv.creditReason && ` (${inv.creditReason})`}
+                      </Badge>
+                    </span>
+                  )}
                 </TD>
                 <TD className="hidden sm:table-cell">{formatGNF(inv.paidAmount ?? 0)}</TD>
                 <TD className="font-medium text-gray-900">{formatGNF(inv.remainingBalance ?? inv.totalAmount)}</TD>
