@@ -64,6 +64,9 @@ interface DataTableProps<T> {
   onSelectionChange?: (rows: T[]) => void;
   /** Extra toolbar content (e.g. bulk actions) rendered on the right. */
   toolbar?: React.ReactNode;
+  /** Colonnes masquées au premier affichage (clé = `Column.key`) — l'utilisateur peut toujours les
+   * réafficher via le menu de colonnes (`columnToggle`), ça ne fait que changer le réglage par défaut. */
+  initialColumnVisibility?: VisibilityState;
 }
 
 const alignClass = { left: "text-left", right: "text-right", center: "text-center" } as const;
@@ -114,6 +117,7 @@ export function DataTable<T>({
   selectable,
   onSelectionChange,
   toolbar,
+  initialColumnVisibility,
 }: DataTableProps<T>) {
   const data = useMemo(() => (page ? page.content : (rows ?? [])), [page, rows]);
   const serverPaginated = !!page;
@@ -121,7 +125,7 @@ export function DataTable<T>({
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility ?? {});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement>(null);

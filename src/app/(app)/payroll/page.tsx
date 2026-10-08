@@ -64,6 +64,7 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -874,10 +875,15 @@ function CompensationTab() {
             searchPlaceholder="Rechercher un enseignant…"
             emptyLabel="Aucun enseignant."
             toolbar={
-              <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="max-w-[200px]">
-                <option value="">Tous les niveaux</option>
-                {levels.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
-              </Select>
+              <SearchableSelect
+                value={levelFilter}
+                onChange={setLevelFilter}
+                triggerClassName="max-w-[200px] justify-between px-3"
+                options={[
+                  { value: "", trigger: "Tous les niveaux", label: "Tous les niveaux", searchText: "" },
+                  ...levels.map((l): SearchableOption => ({ value: String(l.id), trigger: l.label, label: l.label, searchText: l.label })),
+                ]}
+              />
             }
           />
         </TabsPanel>

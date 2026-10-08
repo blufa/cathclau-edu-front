@@ -309,10 +309,15 @@ export function EnrollModal({ studentId, open, onClose, onEnrolled, enrollment }
               )}
               {wantsTransport && (
                 <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-3">
-                  <Select value={routeId} onChange={(e) => { setRouteId(e.target.value); setStopId(""); }}>
-                    <option value="">Ligne…</option>
-                    {(routesQuery.data ?? []).map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
-                  </Select>
+                  <SearchableSelect
+                    value={routeId}
+                    onChange={(v) => { setRouteId(v); setStopId(""); }}
+                    triggerClassName="w-full justify-between px-3"
+                    options={[
+                      { value: "", trigger: "Ligne…", label: "Ligne…", searchText: "" },
+                      ...(routesQuery.data ?? []).map((r): SearchableOption => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
+                    ]}
+                  />
                   <Select value={stopId} onChange={(e) => setStopId(e.target.value)} disabled={!routeId}>
                     <option value="">Arrêt (optionnel)</option>
                     {(stopsQuery.data ?? []).map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}

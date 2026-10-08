@@ -30,6 +30,7 @@ import {
 import type { Student } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -311,18 +312,31 @@ function ClassDocumentsPanel() {
         <Select value={effectiveYearId ?? ""} onChange={(e) => { setAcademicYearId(Number(e.target.value)); setClassId(null); setPeriodId(null); }}>
           {years.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
         </Select>
-        <Select value={classId ?? ""} onChange={(e) => setClassId(e.target.value ? Number(e.target.value) : null)}>
-          <option value="">— Classe —</option>
-          {(classesQuery.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </Select>
+        <SearchableSelect
+          value={classId != null ? String(classId) : ""}
+          onChange={(v) => setClassId(v ? Number(v) : null)}
+          triggerClassName="w-full justify-between px-3"
+          options={[
+            { value: "", trigger: "— Classe —", label: "— Classe —", searchText: "" },
+            ...(classesQuery.data ?? []).map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+          ]}
+        />
         <Select value={periodId ?? ""} onChange={(e) => setPeriodId(e.target.value ? Number(e.target.value) : null)}>
           <option value="">— Période —</option>
           {(periodsQuery.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </Select>
-        <Select value={subjectId ?? ""} onChange={(e) => setSubjectId(e.target.value ? Number(e.target.value) : null)}>
-          <option value="">— Matière (fiche de notes) —</option>
-          {(subjectsQuery.data ?? []).map((s) => <option key={s.subjectId} value={s.subjectId}>{subjectLabel.get(s.subjectId) ?? `#${s.subjectId}`}</option>)}
-        </Select>
+        <SearchableSelect
+          value={subjectId != null ? String(subjectId) : ""}
+          onChange={(v) => setSubjectId(v ? Number(v) : null)}
+          triggerClassName="w-full justify-between px-3"
+          options={[
+            { value: "", trigger: "— Matière (fiche de notes) —", label: "— Matière (fiche de notes) —", searchText: "" },
+            ...(subjectsQuery.data ?? []).map((s): SearchableOption => {
+              const label = subjectLabel.get(s.subjectId) ?? `#${s.subjectId}`;
+              return { value: String(s.subjectId), trigger: label, label, searchText: label };
+            }),
+          ]}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">
