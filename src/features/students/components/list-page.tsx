@@ -11,6 +11,8 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
+import { listSubscriptions } from "@/lib/api/transport";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -88,6 +90,15 @@ export default function StudentsPage() {
     [pageStudentIds.join(",")],
   );
   const uncoveredStaffChildIds = useMemo(() => new Set(uncoveredStaffChildQuery.data ?? []), [uncoveredStaffChildQuery.data]);
+
+  // Badge « Transport » (§retour comptable : "savoir qui a payé le transport") : élèves actuellement
+  // abonnés à une ligne de bus — pas de filtre studentId côté API, donc tous les abonnements du
+  // tenant sont récupérés une seule fois (mis en cache) puis filtrés sur ceux affichés à l'écran.
+  const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
+  const activeTransportStudentIds = useMemo(
+    () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
+    [subscriptionsQuery.data],
+  );
 
   // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
   // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
@@ -186,6 +197,11 @@ export default function StudentsPage() {
           {uncoveredStaffChildIds.has(row.student.id) && (
             <Badge tone="blue" title="Enfant du personnel sans remise — scolarité prélevée automatiquement sur le salaire du parent">
               Enfant de personnel — prélevé sur salaire
+            </Badge>
+          )}
+          {activeTransportStudentIds.has(row.student.id) && (
+            <Badge tone="blue" title="Abonné à une ligne de transport scolaire">
+              Transport
             </Badge>
           )}
           {exemptionByStudentId.has(row.student.id) && (
