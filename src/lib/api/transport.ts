@@ -31,10 +31,11 @@ export function listSubscriptions(params?: { routeId?: number; studentId?: numbe
   return api.get<TransportSubscription[]>("/transport/subscriptions", { query: { routeId: params?.routeId, studentId: params?.studentId } });
 }
 
-/** Élèves ayant déjà réglé au moins un mois de transport (§retour comptable : "savoir qui a payé
- * le transport") — parmi les abonnés actifs, ceux absents de cette liste n'ont encore rien payé. */
-export function getTransportPaidStudentIds(): Promise<number[]> {
-  return api.get<number[]>("/transport/subscriptions/paid-student-ids");
+/** Nombre de mois de transport déjà réglés, par élève (§retour comptable : "savoir qui a payé le
+ * transport", précisé en "le nombre de mois payé") — clés = id élève en string (sérialisation JSON
+ * d'une Map<Long,Long>), absent de l'objet si l'élève n'a encore rien payé. */
+export function getTransportPaidMonthsCount(): Promise<Record<string, number>> {
+  return api.get<Record<string, number>>("/transport/subscriptions/paid-months-count");
 }
 export function subscribe(input: {
   routeId: number; stopId?: number | null; studentId: number; direction: TransportDirection;

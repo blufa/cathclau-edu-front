@@ -11,7 +11,7 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
-import { getTransportPaidStudentIds, listSubscriptions } from "@/lib/api/transport";
+import { getTransportPaidMonthsCount, listSubscriptions } from "@/lib/api/transport";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,19 +91,22 @@ export default function StudentsPage() {
   );
   const uncoveredStaffChildIds = useMemo(() => new Set(uncoveredStaffChildQuery.data ?? []), [uncoveredStaffChildQuery.data]);
 
-  // Badge « Transport » (§retour comptable : "savoir qui a payé le transport") : élèves actuellement
-  // abonnés à une ligne de bus — pas de filtre studentId côté API, donc tous les abonnements du
-  // tenant sont récupérés une seule fois (mis en cache) puis filtrés sur ceux affichés à l'écran.
-  // Distingue en plus ceux qui ont déjà réellement réglé au moins un mois de ceux qui n'ont encore
-  // rien payé (le transport est facturé mois par mois, à la demande — un abonnement actif ne veut pas
-  // dire qu'une facture a déjà été générée/encaissée).
+  // Badge « Transport » (§retour comptable : "savoir qui a payé le transport", précisé en "le
+  // nombre de mois payé") : élèves actuellement abonnés à une ligne de bus — pas de filtre studentId
+  // côté API, donc tous les abonnements du tenant sont récupérés une seule fois (mis en cache) puis
+  // filtrés sur ceux affichés à l'écran. Affiche le nombre de mois réellement réglés (le transport
+  // est facturé mois par mois, à la demande — un abonnement actif ne veut pas dire qu'une facture a
+  // déjà été générée/encaissée).
   const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
   const activeTransportStudentIds = useMemo(
     () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
     [subscriptionsQuery.data],
   );
-  const transportPaidQuery = useCachedQuery("transport-paid-student-ids", () => getTransportPaidStudentIds(), []);
-  const transportPaidStudentIds = useMemo(() => new Set(transportPaidQuery.data ?? []), [transportPaidQuery.data]);
+  const transportPaidMonthsQuery = useCachedQuery("transport-paid-months-count", () => getTransportPaidMonthsCount(), []);
+  const transportPaidMonthsByStudentId = useMemo(
+    () => new Map(Object.entries(transportPaidMonthsQuery.data ?? {}).map(([id, count]) => [Number(id), count])),
+    [transportPaidMonthsQuery.data],
+  );
 
   // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
   // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
@@ -204,17 +207,19 @@ export default function StudentsPage() {
               Enfant de personnel — prélevé sur salaire
             </Badge>
           )}
-          {activeTransportStudentIds.has(row.student.id) && (
-            transportPaidStudentIds.has(row.student.id) ? (
-              <Badge tone="blue" title="Abonné au transport — au moins un mois déjà réglé">
-                Transport — payé
+          {activeTransportStudentIds.has(row.student.id) && (() => {
+            const paidMonths = transportPaidMonthsByStudentId.get(row.student.id) ?? 0;
+            return (
+              <Badge
+                tone={paidMonths > 0 ? "blue" : "amber"}
+                title={paidMonths > 0
+                  ? `Abonné au transport — ${paidMonths} mois déjà réglé(s)`
+                  : "Abonné au transport — aucun mois encore réglé"}
+              >
+                Transport {paidMonths} mois
               </Badge>
-            ) : (
-              <Badge tone="amber" title="Abonné au transport — aucun mois encore réglé">
-                Transport — pas payé
-              </Badge>
-            )
-          )}
+            );
+          })()}
           {exemptionByStudentId.has(row.student.id) && (
             <Badge
               tone={exemptionByStudentId.get(row.student.id)?.type === "TOTAL" ? "green" : exemptionByStudentId.get(row.student.id)?.type === "EXCEPTIONAL" ? "blue" : "amber"}
