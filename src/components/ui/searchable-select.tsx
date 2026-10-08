@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,36 +41,48 @@ export function SearchableSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  // Bascule le menu au-dessus du champ quand il n'y a pas assez de place en dessous (ex. dernier champ
-  // d'une carte proche du bas de l'écran) — sans ça, un ancêtre `overflow-hidden` (ex. Card) peut rogner
-  // le menu qui déborde vers le bas, le rendant invisible plutôt que de simplement s'ouvrir vers le
-  // haut comme n'importe quel menu déroulant "intelligent". PANEL_HEIGHT_ESTIMATE ~ hauteur réelle du
-  // panneau (recherche + max-h-72) : pas besoin de la mesurer après coup, une petite marge suffit.
+  // Panneau rendu dans un portail (document.body) en position fixe, calculée depuis le bouton —
+  // jamais rogné par un ancêtre overflow-hidden/overflow-y-auto (ex. le corps défilant d'un Modal,
+  // §retour comptable : "le dropdown est caché" sur le modal de transfert de classe). L'ancienne
+  // position "absolute" relative au bouton se faisait couper net par ce genre d'ancêtre, quel que
+  // soit le sens d'ouverture (dropUp ne suffisait pas : les DEUX sens restent dans le même ancêtre
+  // rogné).
   const PANEL_HEIGHT_ESTIMATE = 300;
-  const [dropUp, setDropUp] = useState(false);
+  const [rect, setRect] = useState<{ top: number; bottom: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  function measure() {
+    if (!rootRef.current) return;
+    const r = rootRef.current.getBoundingClientRect();
+    setRect({ top: r.top, bottom: r.bottom, left: r.left, width: r.width });
+  }
 
   useEffect(() => {
     if (!open) return;
-    if (rootRef.current) {
-      const rect = rootRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setDropUp(spaceBelow < PANEL_HEIGHT_ESTIMATE && spaceAbove > spaceBelow);
-    }
+    measure();
     function onClickOutside(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
+    // capture: true — attrape aussi le défilement d'un ancêtre scrollable (ex. le corps d'un Modal),
+    // qui ne fait pas remonter d'événement "scroll" jusqu'à window autrement.
     document.addEventListener("mousedown", onClickOutside);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
     searchRef.current?.focus();
     return () => {
       document.removeEventListener("mousedown", onClickOutside);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
     };
   }, [open]);
 
@@ -80,6 +93,9 @@ export function SearchableSelect({
   }, [options, query]);
 
   const selected = options.find((o) => o.value === value);
+  const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
+  const spaceAbove = rect ? rect.top : 0;
+  const dropUp = rect != null && spaceBelow < PANEL_HEIGHT_ESTIMATE && spaceAbove > spaceBelow;
 
   return (
     <div ref={rootRef} className="relative">
@@ -99,11 +115,18 @@ export function SearchableSelect({
         {selected?.trigger ?? <span className="text-gray-400">—</span>}
         <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
       </button>
-      {open && (
+      {open && rect && typeof document !== "undefined" && createPortal(
         <div
+          ref={panelRef}
+          style={{
+            position: "fixed",
+            left: rect.left,
+            ...(dropUp ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
+          }}
           className={cn(
-            "absolute z-50 max-h-72 w-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-theme-lg",
-            dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5",
+            // w-60 par défaut (comme avant ce correctif) — seule la POSITION passe en portail/fixed,
+            // la largeur par défaut ne change pas (panelClassName peut toujours la surcharger).
+            "z-[9999] max-h-72 w-60 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-theme-lg",
             panelClassName,
           )}
         >
@@ -137,7 +160,8 @@ export function SearchableSelect({
               </li>
             ))}
           </ul>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
