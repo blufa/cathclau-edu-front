@@ -917,7 +917,7 @@ function InvoiceCollect({
                       )}
                       {m.creditedAmount != null && Number(m.creditedAmount) > 0 && (
                         <span className="ml-1.5 text-xs font-medium text-brand-600">
-                          (crédit +{formatGNF(m.creditedAmount)}{m.creditReason && ` · ${m.creditReason}`})
+                          ({formatGNF(m.creditedAmount)} déjà réglés — ancienne classe{m.creditReason && `, ${m.creditReason.toLowerCase()}`})
                         </span>
                       )}
                     </span>
