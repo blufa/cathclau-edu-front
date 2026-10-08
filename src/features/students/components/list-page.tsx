@@ -44,17 +44,24 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
   const [status, setStatus] = useState<EnrollmentStatus | "NOT_ENROLLED" | "">("");
+  const [transportFilter, setTransportFilter] = useState<"" | "SUBSCRIBED" | "NOT_SUBSCRIBED">("");
+  const [minPaidMonths, setMinPaidMonths] = useState<"" | "0" | "1" | "2" | "3">("");
   const [page, setPage] = useState(0);
 
   const [editing, setEditing] = useState<Student | null>(null);
 
   // Résumé (élève + classe courante + parent principal) en un seul appel, déjà trié alphabétiquement
-  // (nom, ascendant) côté serveur — voir searchStudentsSummary.
+  // (nom, ascendant) côté serveur — voir searchStudentsSummary. Les filtres transport (abonné / mois
+  // payés) sont passés tels quels à l'API (§retour comptable : "filtrer par transport, pour chercher
+  // rapidement") — minPaidMonths="0" signifie "aucun mois payé" (égalité exacte côté serveur), toute
+  // autre valeur signifie "au moins N mois payés".
   const { data, isLoading: loading, error } = useStudentsSummaryQuery({
     search: search || undefined,
     gender: gender || undefined,
     enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
     notEnrolled: status === "NOT_ENROLLED" || undefined,
+    transportSubscribed: transportFilter === "SUBSCRIBED" ? true : transportFilter === "NOT_SUBSCRIBED" ? false : undefined,
+    minPaidMonths: minPaidMonths ? Number(minPaidMonths) : undefined,
     page,
     size: PAGE_SIZE,
   });
@@ -68,6 +75,20 @@ export default function StudentsPage() {
     [currentYearQuery.data?.id],
   );
   const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
+
+  // Abonnements + mois payés transport, tout le tenant (mis en cache) : servent uniquement au badge
+  // « Transport » affiché sur chaque ligne (le filtrage lui-même est désormais fait côté serveur, voir
+  // ci-dessus).
+  const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
+  const activeTransportStudentIds = useMemo(
+    () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
+    [subscriptionsQuery.data],
+  );
+  const transportPaidMonthsQuery = useCachedQuery("transport-paid-months-count", () => getTransportPaidMonthsCount(), []);
+  const transportPaidMonthsByStudentId = useMemo(
+    () => new Map(Object.entries(transportPaidMonthsQuery.data ?? {}).map(([id, count]) => [Number(id), count])),
+    [transportPaidMonthsQuery.data],
+  );
 
   const pageStudentIds = useMemo(() => (data?.content ?? []).map((row) => row.student.id), [data]);
 
@@ -90,23 +111,6 @@ export default function StudentsPage() {
     [pageStudentIds.join(",")],
   );
   const uncoveredStaffChildIds = useMemo(() => new Set(uncoveredStaffChildQuery.data ?? []), [uncoveredStaffChildQuery.data]);
-
-  // Badge « Transport » (§retour comptable : "savoir qui a payé le transport", précisé en "le
-  // nombre de mois payé") : élèves actuellement abonnés à une ligne de bus — pas de filtre studentId
-  // côté API, donc tous les abonnements du tenant sont récupérés une seule fois (mis en cache) puis
-  // filtrés sur ceux affichés à l'écran. Affiche le nombre de mois réellement réglés (le transport
-  // est facturé mois par mois, à la demande — un abonnement actif ne veut pas dire qu'une facture a
-  // déjà été générée/encaissée).
-  const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
-  const activeTransportStudentIds = useMemo(
-    () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
-    [subscriptionsQuery.data],
-  );
-  const transportPaidMonthsQuery = useCachedQuery("transport-paid-months-count", () => getTransportPaidMonthsCount(), []);
-  const transportPaidMonthsByStudentId = useMemo(
-    () => new Map(Object.entries(transportPaidMonthsQuery.data ?? {}).map(([id, count]) => [Number(id), count])),
-    [transportPaidMonthsQuery.data],
-  );
 
   // Badge « Exonéré » : pour que le comptable repère directement, sans ouvrir chaque fiche, les élèves
   // qui ont une exonération active (totale, partielle ou exceptionnelle — accordée à l'inscription,
@@ -360,6 +364,28 @@ export default function StudentsPage() {
             { value: "PENDING", trigger: "En attente", label: "En attente", searchText: "en attente" },
             { value: "VALIDATED", trigger: "Validée", label: "Validée", searchText: "validée" },
             { value: "CANCELLED", trigger: "Annulée", label: "Annulée", searchText: "annulée" },
+          ]}
+        />
+        <SearchableSelect
+          triggerClassName="max-w-[200px] justify-between px-3"
+          value={transportFilter}
+          onChange={(v) => { setPage(0); setTransportFilter(v as "" | "SUBSCRIBED" | "NOT_SUBSCRIBED"); }}
+          options={[
+            { value: "", trigger: "Tous (transport)", label: "Tous (transport)", searchText: "tous transport" },
+            { value: "SUBSCRIBED", trigger: "Abonnés au transport", label: "Abonnés au transport", searchText: "abonnés transport" },
+            { value: "NOT_SUBSCRIBED", trigger: "Non abonnés", label: "Non abonnés", searchText: "non abonnés transport" },
+          ]}
+        />
+        <SearchableSelect
+          triggerClassName="max-w-[220px] justify-between px-3"
+          value={minPaidMonths}
+          onChange={(v) => { setPage(0); setMinPaidMonths(v as "" | "0" | "1" | "2" | "3"); }}
+          options={[
+            { value: "", trigger: "Tous (mois payés)", label: "Tous (mois payés)", searchText: "tous mois payés" },
+            { value: "0", trigger: "Aucun mois payé", label: "Aucun mois payé", searchText: "aucun mois payé" },
+            { value: "1", trigger: "Au moins 1 mois payé", label: "Au moins 1 mois payé", searchText: "1 mois payé" },
+            { value: "2", trigger: "Au moins 2 mois payés", label: "Au moins 2 mois payés", searchText: "2 mois payés" },
+            { value: "3", trigger: "Au moins 3 mois payés", label: "Au moins 3 mois payés", searchText: "3 mois payés" },
           ]}
         />
         <Button type="submit" variant="secondary">

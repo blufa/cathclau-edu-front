@@ -50,15 +50,20 @@ export function searchStudents(params: StudentSearchParams): Promise<Page<Studen
 }
 
 /** Liste des élèves avec classe courante + parent principal (guichet d'accueil, liste élèves), triée
- * alphabétiquement (nom, ascendant). */
+ * alphabétiquement (nom, ascendant). `transportSubscribed`/`minPaidMonths` filtrent par abonnement
+ * transport et nombre de mois de transport payés (§retour comptable : "filtrer par transport, pour
+ * chercher rapidement") — `minPaidMonths = 0` signifie "aucun mois payé" (égalité exacte), toute
+ * autre valeur signifie "au moins N mois payés". */
 export function searchStudentsSummary(params: {
   search?: string; gender?: Gender; enrollmentStatus?: EnrollmentStatus; notEnrolled?: boolean;
+  transportSubscribed?: boolean; minPaidMonths?: number;
   page?: number; size?: number;
 }): Promise<Page<StudentSummary>> {
   return api.get<Page<StudentSummary>>("/students/summary", {
     query: {
       search: params.search || undefined, gender: params.gender,
       enrollmentStatus: params.enrollmentStatus, notEnrolled: params.notEnrolled || undefined,
+      transportSubscribed: params.transportSubscribed, minPaidMonths: params.minPaidMonths,
       page: params.page, size: params.size, sort: "lastName,asc",
     },
   });

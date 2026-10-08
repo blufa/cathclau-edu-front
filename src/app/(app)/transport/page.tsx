@@ -19,13 +19,13 @@ export default function TransportPage() {
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Transport</h1>
         <p className="text-sm text-gray-500">Lignes de bus, arrêts et abonnements des élèves</p>
       </Reveal>
-      <Tabs defaultValue="routes">
+      <Tabs defaultValue="subs">
         <TabsList>
-          <TabsTrigger value="routes" icon={Bus}>Lignes</TabsTrigger>
           <TabsTrigger value="subs" icon={Users}>Abonnements</TabsTrigger>
+          <TabsTrigger value="routes" icon={Bus}>Lignes</TabsTrigger>
         </TabsList>
-        <TabsPanel value="routes"><RoutesTab /></TabsPanel>
         <TabsPanel value="subs"><SubscriptionsTab /></TabsPanel>
+        <TabsPanel value="routes"><RoutesTab /></TabsPanel>
       </Tabs>
     </div>
   );
