@@ -10,7 +10,7 @@ import type { AnneeScolaire, Classe, Niveau } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Label } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 /**
@@ -111,10 +111,15 @@ function ClassPicker({
     <div className="space-y-3">
       <Field>
         <Label>Filtrer par niveau</Label>
-        <Select className="sm:w-56" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
-          <option value="">Tous les niveaux</option>
-          {levels.map((l) => (<option key={l.id} value={l.id}>{l.label}</option>))}
-        </Select>
+        <SearchableSelect
+          triggerClassName="sm:w-56 justify-between px-3"
+          value={levelFilter}
+          onChange={setLevelFilter}
+          options={[
+            { value: "", trigger: "Tous les niveaux", label: "Tous les niveaux", searchText: "" },
+            ...levels.map((l): SearchableOption => ({ value: String(l.id), trigger: l.label, label: l.label, searchText: l.label })),
+          ]}
+        />
       </Field>
       <Field>
         <Label>Classes enseignées</Label>
@@ -134,10 +139,15 @@ function ClassPicker({
       {canWrite && subjectOptions.length > 0 && (
         <Field>
           <Label>Matière enseignée dans les nouvelles classes cochées</Label>
-          <Select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-            <option value="">— Ne pas affecter de matière automatiquement —</option>
-            {subjectOptions.map((s) => (<option key={s.id} value={s.id}>{s.label}</option>))}
-          </Select>
+          <SearchableSelect
+            value={subjectId}
+            onChange={setSubjectId}
+            triggerClassName="w-full justify-between px-3"
+            options={[
+              { value: "", trigger: "— Ne pas affecter de matière automatiquement —", label: "— Ne pas affecter de matière automatiquement —", searchText: "" },
+              ...subjectOptions.map((s): SearchableOption => ({ value: String(s.id), trigger: s.label, label: s.label, searchText: s.label })),
+            ]}
+          />
           <p className="mt-1 text-xs text-gray-400">
             S&apos;applique uniquement aux classes que vous venez de cocher (pas celles déjà enregistrées).
           </p>

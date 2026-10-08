@@ -35,6 +35,7 @@ import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Input, Label, Field, MoneyInput, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -96,10 +97,15 @@ export default function CoursesPage() {
 
         <TabsPanel value="catalogue">
           <div className="mb-4">
-            <Select className="w-64" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
-              <option value="">Toutes les classes</option>
-              {(classesQuery.data ?? []).map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-            </Select>
+            <SearchableSelect
+              triggerClassName="w-64 justify-between px-3"
+              value={classFilter}
+              onChange={setClassFilter}
+              options={[
+                { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "" },
+                ...(classesQuery.data ?? []).map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+              ]}
+            />
           </div>
           <CourseCatalog
             classId={classFilter ? Number(classFilter) : null}
@@ -410,10 +416,15 @@ function CourseForm({ tenantId, initial, classes, onCancel, onSaved }: {
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
       <Field>
         <Label>Classe <span className="text-error-500">*</span></Label>
-        <Select value={v.classId} onChange={(e) => setValue("classId", e.target.value)}>
-          <option value="">Choisir…</option>
-          {classes.map((c) => (<option key={c.id} value={c.id}>{c.label}</option>))}
-        </Select>
+        <SearchableSelect
+          value={v.classId}
+          onChange={(val) => setValue("classId", val)}
+          triggerClassName="w-full justify-between px-3"
+          options={[
+            { value: "", trigger: "Choisir…", label: "Choisir…", searchText: "" },
+            ...classes.map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+          ]}
+        />
         {errors.classId && <p className="text-xs text-error-600">{errors.classId.message}</p>}
       </Field>
       <Field>

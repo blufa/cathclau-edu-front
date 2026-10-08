@@ -421,12 +421,15 @@ export default function TimetablePage() {
         ) : (
           <div className="w-64">
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Enseignant</label>
-            <Select
+            <SearchableSelect
               value={effectiveTeacherId != null ? String(effectiveTeacherId) : ""}
-              onChange={(e) => setTeacherId(e.target.value ? Number(e.target.value) : null)}
-            >
-              {teachers.map((t) => (<option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>))}
-            </Select>
+              onChange={(val) => setTeacherId(val ? Number(val) : null)}
+              triggerClassName="w-full justify-between px-3"
+              options={teachers.map((t): SearchableOption => {
+                const label = `${t.firstName} ${t.lastName}`;
+                return { value: String(t.id), trigger: label, label, searchText: label };
+              })}
+            />
             {effectiveTeacherId != null && (
               <div className="mt-1.5 flex items-center gap-2">
                 <span className="text-xs text-gray-500">

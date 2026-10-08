@@ -37,10 +37,15 @@ export function SubscriptionsTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Select className="max-w-[240px]" value={routeFilter} onChange={(e) => setRouteFilter(e.target.value)}>
-          <option value="">Toutes les lignes</option>
-          {(routesQuery.data ?? []).map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
-        </Select>
+        <SearchableSelect
+          triggerClassName="max-w-[240px] justify-between px-3"
+          value={routeFilter}
+          onChange={setRouteFilter}
+          options={[
+            { value: "", trigger: "Toutes les lignes", label: "Toutes les lignes", searchText: "" },
+            ...(routesQuery.data ?? []).map((r): SearchableOption => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
+          ]}
+        />
         <Button leftSection={<Plus className="h-4 w-4" />} onClick={() => setSubscribing(true)}>Abonner un élève</Button>
       </div>
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
@@ -122,10 +127,15 @@ function SubscribeForm({ routes, students, onCancel, onDone }: {
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
       <Field>
         <Label>Ligne <span className="text-error-500">*</span></Label>
-        <Select value={v.routeId} onChange={(e) => onRoute(e.target.value)}>
-          <option value="">— Choisir —</option>
-          {routes.map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
-        </Select>
+        <SearchableSelect
+          value={v.routeId}
+          onChange={onRoute}
+          triggerClassName="w-full justify-between px-3"
+          options={[
+            { value: "", trigger: "— Choisir —", label: "— Choisir —", searchText: "" },
+            ...routes.map((r): SearchableOption => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
+          ]}
+        />
         {errors.routeId && <p className="text-xs text-error-600">{errors.routeId.message}</p>}
       </Field>
       <Field>

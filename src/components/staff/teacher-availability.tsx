@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const DAYS: { value: string; label: string }[] = [
@@ -119,10 +120,15 @@ export function TeacherAvailabilitySection({ teacherId, canWrite }: { teacherId:
             <Label>
               Classe — Matière <span className="text-error-500">*</span>
             </Label>
-            <Select value={combo} onChange={(e) => setCombo(e.target.value)}>
-              <option value="">— Choisir —</option>
-              {comboOptions.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
-            </Select>
+            <SearchableSelect
+              value={combo}
+              onChange={setCombo}
+              triggerClassName="w-full justify-between px-3"
+              options={[
+                { value: "", trigger: "— Choisir —", label: "— Choisir —", searchText: "" },
+                ...comboOptions.map((o): SearchableOption => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label })),
+              ]}
+            />
             {comboOptions.length === 0 && (
               <p className="text-xs text-warning-600">Aucune matière n&apos;est encore affectée à cet enseignant dans une classe.</p>
             )}

@@ -18,6 +18,7 @@ import {
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -218,14 +219,15 @@ export default function EnrollmentsPage() {
           ))}
         </Select>
 
-        <Select className="max-w-[200px]" value={classId} onChange={(e) => setClassId(e.target.value)}>
-          <option value="">Toutes les classes</option>
-          {(classesQuery.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-            </option>
-          ))}
-        </Select>
+        <SearchableSelect
+          triggerClassName="max-w-[200px] justify-between px-3"
+          value={classId}
+          onChange={setClassId}
+          options={[
+            { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "" },
+            ...(classesQuery.data ?? []).map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+          ]}
+        />
 
         <Select
           className="max-w-[180px]"

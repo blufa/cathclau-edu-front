@@ -13,6 +13,7 @@ import {
 } from "@/lib/types/audit";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Reveal } from "@/components/public/reveal";
@@ -115,12 +116,18 @@ export default function AuditLogsPage() {
             <option key={code} value={code}>{label}</option>
           ))}
         </Select>
-        <Select className="max-w-[220px]" value={utilisateurId} onChange={(e) => { setPage(0); setUtilisateurId(e.target.value); }}>
-          <option value="">Tous les utilisateurs</option>
-          {(usersQuery.data?.content ?? []).map((u) => (
-            <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-          ))}
-        </Select>
+        <SearchableSelect
+          triggerClassName="max-w-[220px] justify-between px-3"
+          value={utilisateurId}
+          onChange={(v) => { setPage(0); setUtilisateurId(v); }}
+          options={[
+            { value: "", trigger: "Tous les utilisateurs", label: "Tous les utilisateurs", searchText: "" },
+            ...(usersQuery.data?.content ?? []).map((u): SearchableOption => {
+              const label = `${u.firstName} ${u.lastName}`;
+              return { value: String(u.id), trigger: label, label, searchText: label };
+            }),
+          ]}
+        />
         <div className="flex items-center gap-2">
           <DatePicker value={from} onChange={(v) => { setPage(0); setFrom(v); }} placeholder="Depuis le…" clearable />
           <span className="text-sm text-gray-400">→</span>
