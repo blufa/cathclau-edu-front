@@ -624,9 +624,9 @@ export function StudentInvoicesPanel({
                     </button>
                     <WhatsAppInvoiceButton
                       studentId={studentId}
-                      buildMessage={async () => {
+                      buildShare={async () => {
                         const { url } = await getPaymentReceiptPdf(p.id);
-                        return `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} (réf. ${p.reference}).${url ? ` ${url}` : ""}`;
+                        return { url, fileName: p.reference, text: `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} (réf. ${p.reference}).` };
                       }}
                     />
                   </div>
