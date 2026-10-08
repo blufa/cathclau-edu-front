@@ -174,6 +174,20 @@ export interface Exemption {
   staffBenefit: boolean;
 }
 
+/** Surplus de crédit laissé par un transfert de classe (nouvelle classe moins chère) — à rembourser
+ * au parent. Reste visible sur le reçu de l'élève tant que refundedAt est null. */
+export interface ClassTransferRefund {
+  id: number;
+  tenantId: number | null;
+  studentId: number;
+  oldClassId: number | null;
+  newClassId: number | null;
+  amount: string;
+  reason: string | null;
+  createdAt: string;
+  refundedAt: string | null;
+}
+
 export interface ExemptionInput {
   studentId: number;
   type: ExemptionType;

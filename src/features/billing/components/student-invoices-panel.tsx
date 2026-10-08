@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listClassTransferRefunds, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, markClassTransferRefundRefunded, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -78,6 +78,20 @@ export function StudentInvoicesPanel({
   const canDeleteInvoice = hasAnyPermission(user, ["facture:delete"]);
   const q = useCachedQuery(`student-invoices:${studentId}`, () => listInvoicesByStudent(studentId), [studentId]);
   const payments = useCachedQuery(`student-payments:${studentId}`, () => listPaymentsByStudent(studentId), [studentId]);
+  // Surplus de transfert de classe (§retour comptable) : un rappel visible tant qu'il n'est pas
+  // marqué remboursé — déjà rappelé automatiquement sur le reçu PDF, mais rien ne l'affichait encore
+  // à l'écran pour que le comptable puisse le résoudre.
+  const refundsQuery = useCachedQuery(`class-transfer-refunds:${studentId}`, () => listClassTransferRefunds(studentId), [studentId]);
+  const pendingRefunds = (refundsQuery.data ?? []).filter((r) => !r.refundedAt);
+  const [markingRefundedId, setMarkingRefundedId] = useState<number | null>(null);
+  async function markRefunded(id: number) {
+    setMarkingRefundedId(id);
+    try {
+      await markClassTransferRefundRefunded(id);
+      notifySuccess("Remboursement confirmé");
+      refundsQuery.refetch();
+    } catch (err) { notifyError(err); } finally { setMarkingRefundedId(null); }
+  }
   const fees = useCachedQuery(classId ? `fees-class:${classId}` : null, () => listFeesByClass(classId as number), [classId]);
   // Filet de secours pour labelFor() (§retour comptable : référence opaque "PNM-FRA-2026-xxxxxx"
   // affichée au lieu du nom du frais) — une facture peut référencer un frais d'une AUTRE classe que
@@ -405,6 +419,21 @@ export function StudentInvoicesPanel({
 
   return (
     <>
+      {pendingRefunds.length > 0 && (
+        <div className="mb-4 space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+          {pendingRefunds.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900">
+              <span>
+                <span className="font-semibold">À rembourser au parent : {formatGNF(r.amount)}</span>
+                {r.reason && ` — ${r.reason}`}
+              </span>
+              <Button size="sm" variant="secondary" loading={markingRefundedId === r.id} onClick={() => markRefunded(r.id)}>
+                Marquer comme remboursé
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       {q.loading ? (
         <div className="flex justify-center py-10"><Spinner /></div>
       ) : all.length === 0 && isNetworkError(q.error) ? (
