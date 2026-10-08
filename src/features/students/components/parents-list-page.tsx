@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
@@ -30,6 +31,8 @@ export default function ParentsListPage() {
   const q = useCachedQuery("parents", listParents, []);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Parent | null>(null);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
 
   const parents = useMemo(() => {
     const list = q.data ?? [];
@@ -37,6 +40,8 @@ export default function ParentsListPage() {
     if (!term) return list;
     return list.filter((p) => `${p.firstName} ${p.lastName} ${p.phone ?? ""} ${p.email ?? ""}`.toLowerCase().includes(term));
   }, [q.data, search]);
+  const totalPages = Math.ceil(parents.length / PAGE_SIZE);
+  const pageParents = parents.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -49,7 +54,7 @@ export default function ParentsListPage() {
         className="max-w-sm"
         placeholder="Rechercher (nom, téléphone, email)…"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
       />
 
       {q.loading ? (
@@ -60,10 +65,10 @@ export default function ParentsListPage() {
             <tr><TH>Nom</TH><TH className="hidden sm:table-cell">Téléphone</TH><TH className="hidden sm:table-cell">Email</TH><TH className="hidden sm:table-cell">Profession</TH></tr>
           </THead>
           <TBody>
-            {parents.length === 0 && (
+            {pageParents.length === 0 && (
               <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucun parent trouvé.</TD></TR>
             )}
-            {parents.map((p) => (
+            {pageParents.map((p) => (
               <TR key={p.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(p)}>
                 <TD className="font-medium text-gray-900">{p.firstName} {p.lastName}</TD>
                 <TD className="hidden text-gray-600 sm:table-cell">{p.phone ?? "—"}</TD>
@@ -73,6 +78,10 @@ export default function ParentsListPage() {
             ))}
           </TBody>
         </Table>
+      )}
+
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} totalElements={parents.length} onPageChange={setPage} />
       )}
 
       <Modal open={!!selected} onClose={() => setSelected(null)} title={selected ? `${selected.firstName} ${selected.lastName}` : ""}>
