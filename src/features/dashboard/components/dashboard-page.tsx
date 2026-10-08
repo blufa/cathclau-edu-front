@@ -103,7 +103,10 @@ export default function DashboardPage() {
   const totalPaid = invoices.reduce((s, i) => s + num(i.paidAmount), 0);
   const due = invoices.reduce((s, i) => s + num(i.remainingBalance ?? num(i.totalAmount) - num(i.paidAmount)), 0);
   const recovery = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 0;
-  const unpaidCount = invoices.filter((i) => i.status === "UNPAID").length;
+  // Les factures PARTIELLEMENT payées restent dues (donc comptées ici) — sans ça, ce compteur ne
+  // correspondait pas au "Reste à recouvrer" juste au-dessus, qui lui somme bien les deux statuts
+  // (retour comptable : écart observé avec "Impayés" du rapport, qui comptait déjà les deux).
+  const unpaidCount = invoices.filter((i) => i.status === "UNPAID" || i.status === "PARTIAL").length;
   const excludedCount = invoices.filter((i) => i.recoveryStage === "EXCLUDED").length;
   const monthly = billingByMonth(invoices);
   const breakdown = statusBreakdown(invoices);

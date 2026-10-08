@@ -128,6 +128,12 @@ export interface Invoice {
   /** Non-null uniquement sur une facture dédiée au frais d'usage plateforme (frais annexe, jamais
    * mêlée à la mensualité) — dans ce cas égal à totalAmount. Null/absent sur une facture normale. */
   platformFeeAmount?: string | null;
+  /** Montant porté à paidAmount SANS paiement réel correspondant (ex. crédit reporté d'une ancienne
+   * classe lors d'un transfert, §retour comptable) — sans ça, une facture apparaît déjà réglée sans
+   * aucun encaissement associé, ce qui dérouterait le comptable. Null/absent si aucun crédit. */
+  creditedAmount?: string | null;
+  /** Motif du crédit reporté (ex. "Crédit reporté de l'ancienne classe (transfert)"). */
+  creditReason?: string | null;
 }
 
 export type RecoveryStage = "NONE" | "REMINDER_1" | "REMINDER_2" | "EXCLUDED";
@@ -166,6 +172,20 @@ export interface Exemption {
   /** Avantage personnel (enfant de membre du personnel) : la facture est marquée pour la retenue
    * sur salaire, au lieu d'une détection automatique. */
   staffBenefit: boolean;
+}
+
+/** Surplus de crédit laissé par un transfert de classe (nouvelle classe moins chère) — à rembourser
+ * au parent. Reste visible sur le reçu de l'élève tant que refundedAt est null. */
+export interface ClassTransferRefund {
+  id: number;
+  tenantId: number | null;
+  studentId: number;
+  oldClassId: number | null;
+  newClassId: number | null;
+  amount: string;
+  reason: string | null;
+  createdAt: string;
+  refundedAt: string | null;
 }
 
 export interface ExemptionInput {

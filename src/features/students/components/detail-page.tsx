@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Receipt, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
-import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
+import { hasAnyPermission, hasRole, isSuperAdmin } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
@@ -35,6 +35,7 @@ import { StudentAttendanceStats } from "./attendance-stats";
 import { ParentsManager } from "./parents-manager";
 import { DocumentsManager } from "./documents-manager";
 import { CertificateAction } from "./certificate-action";
+import { PurgeStudentAction } from "./purge-student-action";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useStudentQuery } from "../hooks/use-students";
 
@@ -214,31 +215,43 @@ export default function StudentDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-brand-50 to-white p-5">
-        {student.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={student.photo}
-            alt={`${student.firstName} ${student.lastName}`}
-            className="h-20 w-20 shrink-0 rounded-2xl object-cover shadow-md ring-2 ring-white"
-          />
-        ) : (
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-2xl font-bold text-white shadow-md">
-            {student.firstName[0]}
-            {student.lastName[0]}
-          </div>
-        )}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {student.firstName} {student.lastName}
-          </h1>
-          <p className="font-mono text-sm text-slate-500">{student.studentNumber}</p>
-          {currentEnrollment && (
-            <Badge tone={currentEnrollment.platformAccessOptIn ? "green" : "gray"} className="mt-1.5">
-              {currentEnrollment.platformAccessOptIn ? "Accès plateforme activé" : "Accès plateforme non activé"}
-            </Badge>
+      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-brand-50 to-white p-5">
+        <div className="flex items-center gap-4">
+          {student.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={student.photo}
+              alt={`${student.firstName} ${student.lastName}`}
+              className="h-20 w-20 shrink-0 rounded-2xl object-cover shadow-md ring-2 ring-white"
+            />
+          ) : (
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-2xl font-bold text-white shadow-md">
+              {student.firstName[0]}
+              {student.lastName[0]}
+            </div>
           )}
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              {student.firstName} {student.lastName}
+            </h1>
+            <p className="font-mono text-sm text-slate-500">{student.studentNumber}</p>
+            {currentEnrollment && (
+              <Badge tone={currentEnrollment.platformAccessOptIn ? "green" : "gray"} className="mt-1.5">
+                {currentEnrollment.platformAccessOptIn ? "Accès plateforme activé" : "Accès plateforme non activé"}
+              </Badge>
+            )}
+          </div>
         </div>
+        {/* Zone dangereuse : réservée au SUPER_ADMIN (plateforme), invisible pour le personnel de
+            l'école — suppression définitive (factures, paiements, inscriptions, classe…), distincte
+            de l'archivage réversible accessible par ailleurs. */}
+        {isSuperAdmin(user) && (
+          <PurgeStudentAction
+            studentId={student.id}
+            studentNumber={student.studentNumber}
+            studentName={`${student.firstName} ${student.lastName}`}
+          />
+        )}
       </div>
 
       <Tabs defaultValue="invoices">

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listFeesByClass, listFeesByRoute, listInstallments, listInvoicesByStudent, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listClassTransferRefunds, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, markClassTransferRefundRefunded, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -24,7 +24,9 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { useAuth } from "@/providers/auth-provider";
+import { hasAnyPermission } from "@/lib/auth/permissions";
 import { printHtmlDocument } from "@/lib/print-node";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
@@ -72,12 +74,37 @@ export function StudentInvoicesPanel({
   classId?: number;
   onCollected: () => void;
 }) {
+  const { user } = useAuth();
+  const canDeleteInvoice = hasAnyPermission(user, ["facture:delete"]);
   const q = useCachedQuery(`student-invoices:${studentId}`, () => listInvoicesByStudent(studentId), [studentId]);
   const payments = useCachedQuery(`student-payments:${studentId}`, () => listPaymentsByStudent(studentId), [studentId]);
+  // Surplus de transfert de classe (§retour comptable) : un rappel visible tant qu'il n'est pas
+  // marqué remboursé — déjà rappelé automatiquement sur le reçu PDF, mais rien ne l'affichait encore
+  // à l'écran pour que le comptable puisse le résoudre.
+  const refundsQuery = useCachedQuery(`class-transfer-refunds:${studentId}`, () => listClassTransferRefunds(studentId), [studentId]);
+  const pendingRefunds = (refundsQuery.data ?? []).filter((r) => !r.refundedAt);
+  const [markingRefundedId, setMarkingRefundedId] = useState<number | null>(null);
+  async function markRefunded(id: number) {
+    setMarkingRefundedId(id);
+    try {
+      await markClassTransferRefundRefunded(id);
+      notifySuccess("Remboursement confirmé");
+      refundsQuery.refetch();
+    } catch (err) { notifyError(err); } finally { setMarkingRefundedId(null); }
+  }
   const fees = useCachedQuery(classId ? `fees-class:${classId}` : null, () => listFeesByClass(classId as number), [classId]);
+  // Filet de secours pour labelFor() (§retour comptable : référence opaque "PNM-FRA-2026-xxxxxx"
+  // affichée au lieu du nom du frais) — une facture peut référencer un frais d'une AUTRE classe que
+  // la classe active actuelle (ex. après un transfert de classe) ; fees ci-dessus, scopé à la seule
+  // classe active, ne le contient alors plus. Scope tenant entier, jamais utilisé pour décider quoi
+  // proposer de générer/ajouter (ça reste class-scopé), seulement pour retrouver un nom lisible.
+  const tenantFees = useCachedQuery(`fees-tenant:${tenantId}`, () => listFeesByTenant(tenantId), [tenantId]);
 
   const all = q.data ?? [];
-  const unpaid = all.filter((inv) => inv.status !== "PAID");
+  // CANCELLED (ex. ancienne classe après un transfert, §retour comptable) : remainingBalance déjà
+  // remis à 0 côté serveur, mais sans ce filtre la facture restait quand même listée ici (fantôme à
+  // 0 GNF, jamais réellement "à régler") — à exclure comme PAID, pas juste masquer son montant.
+  const unpaid = all.filter((inv) => inv.status !== "PAID" && inv.status !== "CANCELLED");
   const receipts = (payments.data ?? []).filter((p) => p.status === "SUCCEEDED");
   // Le plus récent n'est pas forcément en dernière position dans la liste affichée — déterminé par
   // l'id le plus élevé plutôt que l'ordre d'affichage (§retour comptable : "(Dernier reçu encaissé)").
@@ -158,20 +185,24 @@ export function StudentInvoicesPanel({
   // propose son propre bouton de génération, indépendamment des autres (ex. la scolarité peut déjà
   // être générée sans que la cantine le soit).
   const [generatingFeeId, setGeneratingFeeId] = useState<number | null>(null);
+  // CANCELLED (facture supprimée/annulée, ex. pour corriger un oubli d'exonération, §retour comptable)
+  // ne doit jamais bloquer une régénération — sinon le frais reste considéré "déjà facturé" à vie et
+  // plus aucun bouton "Générer" ne réapparaît jamais pour cet élève sur ce frais.
   const ungeneratedRecurringFees = recurringFees.filter((f) =>
-    !all.some((inv) => inv.feeId === f.id) && (installmentsByFeeId.get(f.id)?.length ?? 0) > 0);
+    !all.some((inv) => inv.feeId === f.id && inv.status !== "CANCELLED") && (installmentsByFeeId.get(f.id)?.length ?? 0) > 0);
 
   // Libellé + ordre d'affichage de chaque facture : les mensualités gardent leur périodLabel (déjà
   // « Tranche N (mois…) ») ; les autres frais (inscription, annexes) affichent leur type de frais.
   const feeById = new Map((fees.data ?? []).map((f) => [f.id, f]));
+  const tenantFeeById = new Map((tenantFees.data ?? []).map((f) => [f.id, f]));
   function labelFor(inv: Invoice): string {
     if (inv.periodLabel) return inv.periodLabel;
-    const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
+    const fee = inv.feeId != null ? (feeById.get(inv.feeId) ?? tenantFeeById.get(inv.feeId)) : undefined;
     if (!fee) return inv.reference;
     return fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
   }
   function groupOf(inv: Invoice): number {
-    const fee = inv.feeId != null ? feeById.get(inv.feeId) : undefined;
+    const fee = inv.feeId != null ? (feeById.get(inv.feeId) ?? tenantFeeById.get(inv.feeId)) : undefined;
     return fee ? GROUP_ORDER[fee.type] : 2;
   }
   function sortKeyOf(inv: Invoice): string {
@@ -193,8 +224,12 @@ export function StudentInvoicesPanel({
   const tranchedCanteenFeeIds = new Set(
     recurringFees.filter((f) => f.type === "CANTEEN" && (installmentsByFeeId.get(f.id)?.length ?? 0) > 0).map((f) => f.id),
   );
+  // Même correctif que ungeneratedRecurringFees ci-dessus : une facture CANCELLED ne doit jamais
+  // empêcher de rajouter ce frais annexe (sinon aucune nouvelle facture n'est jamais plus possible
+  // pour ce frais, même après suppression/annulation de l'ancienne).
   const availableFees = (fees.data ?? []).filter((f) =>
-    f.type !== "MONTHLY" && f.type !== "TRANSPORT" && !tranchedCanteenFeeIds.has(f.id) && !all.some((inv) => inv.feeId === f.id));
+    f.type !== "MONTHLY" && f.type !== "TRANSPORT" && !tranchedCanteenFeeIds.has(f.id)
+    && !all.some((inv) => inv.feeId === f.id && inv.status !== "CANCELLED"));
   const [addingFee, setAddingFee] = useState(false);
   const [selectedFeeId, setSelectedFeeId] = useState("");
   const [creatingInvoice, setCreatingInvoice] = useState(false);
@@ -384,6 +419,21 @@ export function StudentInvoicesPanel({
 
   return (
     <>
+      {pendingRefunds.length > 0 && (
+        <div className="mb-4 space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+          {pendingRefunds.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900">
+              <span>
+                <span className="font-semibold">À rembourser au parent : {formatGNF(r.amount)}</span>
+                {r.reason && ` — ${r.reason}`}
+              </span>
+              <Button size="sm" variant="secondary" loading={markingRefundedId === r.id} onClick={() => markRefunded(r.id)}>
+                Marquer comme remboursé
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       {q.loading ? (
         <div className="flex justify-center py-10"><Spinner /></div>
       ) : all.length === 0 && isNetworkError(q.error) ? (
@@ -406,6 +456,7 @@ export function StudentInvoicesPanel({
               monthlyFeeId={monthlyFee?.id ?? null}
               tenantId={tenantId}
               studentId={studentId}
+              canDeleteInvoice={canDeleteInvoice}
               onShowPdf={(inv) => showPdf(`Facture ${inv.reference}`, () => getInvoicePdfObjectUrl(inv.id))}
               // Retour comptable : ne plus ouvrir l'aperçu automatiquement après un encaissement — le
               // reçu est généré, mais sa consultation/impression reste une action volontaire (liste
@@ -635,7 +686,7 @@ export function StudentInvoicesPanel({
  * handled from the parent portal.
  */
 function InvoiceCollect({
-  invoices, exemptedPeriods, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, onShowPdf, onPaid, onDone,
+  invoices, exemptedPeriods, labelFor, coveredMonthsByInvoiceId, monthlyFeeId, tenantId, studentId, canDeleteInvoice, onShowPdf, onPaid, onDone,
 }: {
   invoices: Invoice[];
   /** Échéances exonérées à 100% (§billing) : jamais cochables/encaissables, affichées dans la même
@@ -650,6 +701,10 @@ function InvoiceCollect({
   monthlyFeeId: number | null;
   tenantId: number;
   studentId: number;
+  /** Permission facture:delete — affiche "Supprimer" sur une facture encore sans paiement (générée
+   * par erreur), directement depuis la fiche élève (pas seulement depuis la liste globale /invoices,
+   * qui peut ne pas afficher cette facture tant que l'inscription n'est pas validée). */
+  canDeleteInvoice: boolean;
   onShowPdf: (inv: Invoice) => void;
   /** Appelé juste après un encaissement guichet réussi, avec l'id du paiement — ouvre aussitôt le reçu
    * (visualiser/télécharger/imprimer) au lieu de forcer un aller-retour par la fiche élève. */
@@ -667,6 +722,25 @@ function InvoiceCollect({
   const [customAmounts, setCustomAmounts] = useState<Record<number, number>>({});
   // Mois cochés dans chaque tranche multi-mois, pour aider au calcul (« je paie 2 des 5 mois »).
   const [monthSelections, setMonthSelections] = useState<Record<number, string[]>>({});
+
+  // Retour comptable : supprimer directement depuis la fiche élève une facture générée par erreur
+  // (ex. mauvaise classe à l'inscription) — jamais possible tant qu'un paiement y est déjà encaissé
+  // (le serveur refuse sinon, voir InvoiceService#delete). Distinct d'"annuler" (conserve l'historique).
+  function remove(inv: Invoice) {
+    confirmAction({
+      title: "Supprimer la facture",
+      message: `Supprimer définitivement ${inv.reference} ? Cette action est irréversible.`,
+      confirmLabel: "Supprimer", danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteInvoice(inv.id);
+          notifySuccess("Facture supprimée");
+          setSelected((prev) => prev.filter((id) => id !== inv.id));
+          onDone();
+        } catch (err) { notifyError(err); }
+      },
+    });
+  }
 
   const allIds = invoices.map((inv) => inv.id);
   const monthlyIds = invoices.filter((inv) => inv.feeId === monthlyFeeId).map((inv) => inv.id);
@@ -870,6 +944,11 @@ function InvoiceCollect({
                           (remise −{formatGNF(m.discountAmount)}{m.discountReason && ` · ${m.discountReason}`})
                         </span>
                       )}
+                      {m.creditedAmount != null && Number(m.creditedAmount) > 0 && (
+                        <span className="ml-1.5 text-xs font-medium text-brand-600">
+                          ({formatGNF(m.creditedAmount)} déjà réglés — ancienne classe{m.creditReason && `, ${m.creditReason.toLowerCase()}`})
+                        </span>
+                      )}
                     </span>
                   )}
                 />
@@ -878,6 +957,12 @@ function InvoiceCollect({
                     className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
                     <FileText className="h-3.5 w-3.5" />
                   </button>
+                  {canDeleteInvoice && (!m.paidAmount || Number(m.paidAmount) === 0) && (
+                    <button type="button" onClick={(e) => { e.preventDefault(); remove(m); }}
+                      className="text-xs text-error-600 hover:underline">
+                      Supprimer
+                    </button>
+                  )}
                   {isChecked ? (
                     <MoneyInput
                       className="w-36"
