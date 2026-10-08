@@ -1,6 +1,7 @@
 import { api } from "@/lib/api/client";
 import type {
   ApplicableDiscount,
+  ClassTransferRefund,
   EarlyPaymentDiscountRule,
   EarlyPaymentDiscountRuleInput,
   Exemption,
@@ -196,6 +197,14 @@ export function grantExemption(input: ExemptionInput): Promise<Exemption> {
 }
 export function revokeExemption(id: number): Promise<Exemption> {
   return api.patch<Exemption>(`/billing/exemptions/${id}/revoquer`);
+}
+
+// ── Surplus de transfert de classe (§retour comptable : à rembourser au parent) ─────────────
+export function listClassTransferRefunds(studentId: number): Promise<ClassTransferRefund[]> {
+  return api.get<ClassTransferRefund[]>(`/billing/class-transfer-refunds/student/${studentId}`);
+}
+export function markClassTransferRefundRefunded(id: number): Promise<ClassTransferRefund> {
+  return api.patch<ClassTransferRefund>(`/billing/class-transfer-refunds/${id}/rembourse`);
 }
 
 // ── Types d'exonération pré-configurés (catalogue réutilisable) ──────────────

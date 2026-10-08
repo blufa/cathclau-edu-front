@@ -51,7 +51,9 @@ async function fetchChildRows(studentId: number, studentName: string, classId: n
     listInvoicesByStudent(studentId),
     classId ? listFeesByClass(classId) : Promise.resolve([]),
   ]);
-  const unpaid = invoicesAll.filter((inv) => inv.status !== "PAID");
+  // CANCELLED (ex. ancienne classe après un transfert) : à exclure comme PAID, sinon reste listée
+  // comme "à régler" alors que son solde a déjà été remis à 0 côté serveur.
+  const unpaid = invoicesAll.filter((inv) => inv.status !== "PAID" && inv.status !== "CANCELLED");
   const monthlyFee = fees.find((f) => f.type === "MONTHLY");
   const installments = monthlyFee ? await listInstallments(monthlyFee.id) : [];
   const installmentMonths = new Map(installments.map((i) => [i.id, [...(i.months ?? [])].sort()]));

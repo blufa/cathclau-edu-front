@@ -44,6 +44,13 @@ import { formatGNF, monthShortLabel } from "@/lib/format";
 
 const STATUS_TONE: Record<InvoiceStatus, "red" | "amber" | "green" | "gray"> = { UNPAID: "red", PARTIAL: "amber", PAID: "green", CANCELLED: "gray" };
 
+// Ordre d'affichage demandé (§retour comptable) : inscription/réinscription d'abord, puis la
+// scolarité (tranches, chronologique), puis les frais annexes — même convention que le guichet
+// d'accueil et la fiche élève (GROUP_ORDER), reproduite ici pour que /invoices affiche les factures
+// dans le même ordre logique plutôt que l'ordre brut renvoyé par le serveur.
+const GROUP_ORDER: Record<string, number> = { ENROLLMENT: 0, RE_ENROLLMENT: 0, MONTHLY: 1 };
+const groupOrderOf = (feeType: string | undefined) => (feeType != null ? GROUP_ORDER[feeType] ?? 2 : 2);
+
 /** Module-scope reference generator (kept out of render to stay pure). */
 function genRef(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
@@ -89,10 +96,22 @@ export default function InvoicesPage() {
     [studentsQuery.data],
   );
   // Quand on filtre par élève, le statut s'applique côté client (l'API par élève renvoie tous statuts).
-  const invoices = useMemo(
-    () => (studentFilter && status ? (q.data ?? []).filter((i) => i.status === status) : (q.data ?? [])),
-    [q.data, studentFilter, status],
+  const feeTypeById = useMemo(
+    () => new Map((feesQuery.data ?? []).map((f) => [f.id, f.type])),
+    [feesQuery.data],
   );
+  const invoices = useMemo(() => {
+    const base = studentFilter && status ? (q.data ?? []).filter((i) => i.status === status) : (q.data ?? []);
+    // Tri uniquement pertinent quand on regarde un seul élève (vue par défaut : mélange de tous les
+    // élèves, où grouper par type de frais n'aurait pas de sens) — voir GROUP_ORDER ci-dessus.
+    if (!studentFilter) return base;
+    return [...base].sort((a, b) => {
+      const g = groupOrderOf(a.feeId != null ? feeTypeById.get(a.feeId) : undefined)
+        - groupOrderOf(b.feeId != null ? feeTypeById.get(b.feeId) : undefined);
+      if (g !== 0) return g;
+      return (a.issueDate ?? "").localeCompare(b.issueDate ?? "");
+    });
+  }, [q.data, studentFilter, status, feeTypeById]);
 
   // Mois couverts par chaque échéance (tranche) liée aux factures affichées — pour afficher, sur une
   // facture multi-mois, quels mois sont déjà réglés (Invoice.paidMonths) vs restants, au lieu d'un
@@ -215,6 +234,13 @@ export default function InvoicesPage() {
           {(Object.keys(INVOICE_STATUS_LABEL) as InvoiceStatus[]).map((s) => (<option key={s} value={s}>{INVOICE_STATUS_LABEL[s]}</option>))}
         </Select>
       </div>
+      {studentsQuery.fromCache && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Liste des élèves non actualisée (hors-ligne ou connexion lente) — un élève inscrit très
+          récemment peut manquer dans la recherche ci-dessus tant que la page n&apos;a pas pu se
+          mettre à jour. Reconnectez-vous puis rouvrez cette page si besoin.
+        </p>
+      )}
 
       {q.isLoading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
@@ -250,6 +276,14 @@ export default function InvoicesPage() {
                       <Badge tone="green">
                         Remise −{formatGNF(inv.discountAmount)}
                         {inv.discountReason && ` (${inv.discountReason})`}
+                      </Badge>
+                    </span>
+                  )}
+                  {inv.creditedAmount != null && Number(inv.creditedAmount) > 0 && (
+                    <span className="mt-1 block">
+                      <Badge tone="blue">
+                        {formatGNF(inv.creditedAmount)} déjà réglés (ancienne classe)
+                        {inv.creditReason && ` · ${inv.creditReason}`}
                       </Badge>
                     </span>
                   )}

@@ -9,7 +9,7 @@ import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
-import { getEligibleYoungestStudentIds, getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
+import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,14 +67,7 @@ export default function StudentsPage() {
   );
   const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
 
-  // Badge « Cadet exonéré » : parmi les élèves affichés sur la page, ceux qui bénéficient de la
-  // remise fratrie nombreuse (cf. Facturation → Règles de facturation → Réduction fratrie).
   const pageStudentIds = useMemo(() => (data?.content ?? []).map((row) => row.student.id), [data]);
-  const eligibleYoungestQuery = useQuery(
-    () => getEligibleYoungestStudentIds(pageStudentIds),
-    [pageStudentIds.join(",")],
-  );
-  const eligibleYoungestIds = useMemo(() => new Set(eligibleYoungestQuery.data ?? []), [eligibleYoungestQuery.data]);
 
   // Badge « Enfant de personnel » : parmi les élèves affichés, ceux pris en charge (partiellement ou
   // totalement) via la politique de prise en charge des enfants du personnel (§6, frais MENSUALITE).
@@ -182,11 +175,6 @@ export default function StudentsPage() {
           <span className="font-medium text-slate-900 group-hover:text-brand-700">
             {row.student.firstName} {row.student.lastName}
           </span>
-          {eligibleYoungestIds.has(row.student.id) && (
-            <Badge tone="green" title="Bénéficie de la remise fratrie nombreuse (cadet)">
-              Cadet exonéré
-            </Badge>
-          )}
           {staffCoverageByStudentId.has(row.student.id) && (
             <Badge
               tone="indigo"
