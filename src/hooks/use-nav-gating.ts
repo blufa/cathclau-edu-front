@@ -7,6 +7,7 @@ import { isNavItemAllowed } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getActiveModules } from "@/lib/api/modules";
 import { getLatestSubscription } from "@/lib/api/platform";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 
 /**
  * Filtrage par rôle + verrouillage par module de la navigation — logique partagée entre la sidebar
@@ -46,7 +47,13 @@ export function useNavGating() {
   const subQuery = useQuery(() => getLatestSubscription(), []);
   const paymentRequired = subQuery.data?.status === "PENDING";
 
+  // Barrière caisse (§angles morts comptables) : même règle que le backend (PaymentService,
+  // MonthlyExpenseSheetService) — un item `cashGate` est grisé tant que l'utilisateur n'a pas ouvert
+  // sa caisse. Tant que l'état n'est pas encore connu (chargement), on n'affiche pas de faux positif.
+  const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
+
   const isDisabled = (item: NavItem) => {
+    if (item.cashGate && !sessionLoading && !sessionOpen) return true;
     if (!item.module) return false;
     if (paymentRequired) return true;
     // Pas encore chargé, ou aucun module provisionné (ex. seed sans lignes de module) : on affiche

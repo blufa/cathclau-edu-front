@@ -42,6 +42,12 @@ export function declareCardLost(id: number): Promise<StudentCard> {
   return api.patch<StudentCard>(`/cartes/${id}/declarer-perdue`);
 }
 
+/** Marque ces cartes comme imprimées (après passage sur une planche de badges) — pour filtrer ensuite
+ * les cartes restant à imprimer et ne jamais réimprimer par erreur un badge déjà sorti. */
+export function markCardsPrinted(ids: number[]): Promise<StudentCard[]> {
+  return api.patch<StudentCard[]>("/cartes/marquer-imprimees", { ids });
+}
+
 /** Vérifie l'authenticité d'une carte scannée (payload + signature du QR code). */
 export function verifyCard(payload: string, signature: string): Promise<Record<string, unknown>> {
   return api.get<Record<string, unknown>>("/cartes/verifier", { query: { payload, signature } });

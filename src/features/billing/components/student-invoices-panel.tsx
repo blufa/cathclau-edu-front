@@ -27,6 +27,7 @@ import { formatGNF, monthShortLabel } from "@/lib/format";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission } from "@/lib/auth/permissions";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 import { printHtmlDocument } from "@/lib/print-node";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
@@ -624,9 +625,9 @@ export function StudentInvoicesPanel({
                     </button>
                     <WhatsAppInvoiceButton
                       studentId={studentId}
-                      buildMessage={async () => {
+                      buildShare={async () => {
                         const { url } = await getPaymentReceiptPdf(p.id);
-                        return `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} (réf. ${p.reference}).${url ? ` ${url}` : ""}`;
+                        return { url, fileName: p.reference, text: `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} (réf. ${p.reference}).` };
                       }}
                     />
                   </div>
@@ -819,6 +820,9 @@ function InvoiceCollect({
     return s + Math.max(0, remainingOf(m) - amountFor(m));
   }, 0);
   const online = channel === "DJOMY";
+  // Barrière caisse (comme côté backend, PaymentService) : ne concerne que les canaux guichet.
+  const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
+  const cashBlocked = !online && !sessionLoading && !sessionOpen;
   const toggle = (id: number) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const toggleMonthlyFees = () =>
@@ -1031,16 +1035,18 @@ function InvoiceCollect({
           />
         </Field>
         <div className="flex-1" />
-        <Button onClick={collect} loading={loading || onlineWaiting} disabled={selected.length === 0}>
+        <Button onClick={collect} loading={loading || onlineWaiting} disabled={selected.length === 0 || cashBlocked}>
           {online ? "Payer en ligne" : "Encaisser"} {selected.length} facture{selected.length > 1 ? "s" : ""} · {formatGNF(total)}
         </Button>
       </div>
-      <p className="mt-2 text-xs text-slate-400">
-        {onlineWaiting
-          ? "Portail Djomy ouvert dans un nouvel onglet. Le règlement sera validé automatiquement dès le paiement confirmé."
-          : online
-            ? "Paiement en ligne : une seule transaction Djomy pour tout ce qui est coché, un reçu unique."
-            : "Encaissement au guichet : validé immédiatement, un reçu unique listant tout ce qui est réglé et le reste à payer."}
+      <p className={`mt-2 text-xs ${cashBlocked ? "rounded-md bg-amber-50 px-2.5 py-1.5 font-medium text-amber-800" : "text-slate-400"}`}>
+        {cashBlocked
+          ? "Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») avant d'encaisser au guichet."
+          : onlineWaiting
+            ? "Portail Djomy ouvert dans un nouvel onglet. Le règlement sera validé automatiquement dès le paiement confirmé."
+            : online
+              ? "Paiement en ligne : une seule transaction Djomy pour tout ce qui est coché, un reçu unique."
+              : "Encaissement au guichet : validé immédiatement, un reçu unique listant tout ce qui est réglé et le reste à payer."}
       </p>
     </div>
   );

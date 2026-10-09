@@ -5,6 +5,7 @@ import type {
   DiffusionInput,
   MessageRecipient,
   MessageTemplate,
+  PaymentReminderCandidate,
   ScheduleBroadcastInput,
   ScheduledBroadcast,
   SendCommunicationInput,
@@ -27,6 +28,13 @@ export function getSmsBalance(): Promise<SmsBalance[]> {
 // ── Communications ─────────────────────────────────────────────────────────
 export function sendCommunication(input: SendCommunicationInput): Promise<Communication> {
   return api.post<Communication>("/communications", input);
+}
+
+/** Tous les élèves d'une classe avec leur statut de paiement de la mensualité (à jour/retard/échéance
+ * proche), leur progression en tranches et leurs contacts parents — pour trier/filtrer avant une
+ * relance SMS ciblée. */
+export function listPaymentReminderCandidates(classId: number): Promise<PaymentReminderCandidate[]> {
+  return api.get<PaymentReminderCandidate[]>("/communications/payment-reminders", { query: { classId } });
 }
 
 /** Diffusion de masse segmentée (tous les parents, une classe, garçons/filles, enseignants, élève

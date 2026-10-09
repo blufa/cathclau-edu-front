@@ -10,6 +10,7 @@ import { FEE_TYPE_LABEL, type FeeType, type Invoice } from "@/lib/types/billing"
 import { type PaymentChannel } from "@/lib/types/payment";
 import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
 import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -172,6 +173,10 @@ export function MultiChildCollectModal({
     return s + Math.max(0, remainingOf(r.invoice) - amountFor(r));
   }, 0);
   const online = channel === "DJOMY";
+  // Barrière caisse (comme côté backend, PaymentService) : ne concerne que les canaux guichet — le
+  // paiement en ligne Djomy ne passe jamais par la caisse physique.
+  const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
+  const cashBlocked = !online && !sessionLoading && !sessionOpen;
 
   async function showPdf(inv: Invoice) {
     try { setPreview({ url: await getInvoicePdfObjectUrl(inv.id), title: `Facture ${inv.reference}` }); }
@@ -325,13 +330,19 @@ export function MultiChildCollectModal({
                   </Select>
                 </Field>
                 <div className="flex-1" />
-                <Button onClick={collect} loading={loading} disabled={selected.length === 0}>
+                <Button onClick={collect} loading={loading} disabled={selected.length === 0 || cashBlocked}>
                   {online ? "Payer en ligne" : "Encaisser"} {selected.length} facture{selected.length > 1 ? "s" : ""} · {formatGNF(total)}
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-slate-400">
-                Un seul paiement, un seul reçu listant chaque enfant et ses factures réglées.
-              </p>
+              {cashBlocked ? (
+                <p className="mt-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800">
+                  Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») avant d&apos;encaisser au guichet.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400">
+                  Un seul paiement, un seul reçu listant chaque enfant et ses factures réglées.
+                </p>
+              )}
             </div>
 
             {queuedPayments.length > 0 && (

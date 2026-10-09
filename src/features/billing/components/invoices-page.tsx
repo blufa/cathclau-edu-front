@@ -303,11 +303,11 @@ export default function InvoicesPage() {
                     <Button size="sm" variant="ghost" leftSection={<FileText className="h-4 w-4" />} onClick={() => showInvoicePdf(inv)}>Aperçu</Button>
                     <WhatsAppInvoiceButton
                       studentId={inv.studentId}
-                      buildMessage={async () => {
+                      buildShare={async () => {
                         const { url } = await getInvoicePdf(inv.id);
                         const name = studentName.get(inv.studentId) ?? "l'élève";
                         const solde = inv.status === "PAID" ? "soldée" : `reste à payer : ${formatGNF(inv.remainingBalance ?? inv.totalAmount)}`;
-                        return `Bonjour, voici la facture ${inv.reference} de ${name} (${solde}).${url ? ` ${url}` : ""}`;
+                        return { url, fileName: inv.reference, text: `Bonjour, voici la facture ${inv.reference} de ${name} (${solde}).` };
                       }}
                     />
                     {canCreatePayment && inv.status !== "PAID" && <Button size="sm" onClick={() => setPaying(inv)}>Payer</Button>}

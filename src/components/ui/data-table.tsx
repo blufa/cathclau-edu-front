@@ -184,16 +184,7 @@ export function DataTable<T>({
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: (updater) => {
-      setRowSelection((prev) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
-        if (onSelectionChange) {
-          const selectedIds = new Set(Object.keys(next).filter((k) => next[k]));
-          onSelectionChange(data.filter((r) => selectedIds.has(String(getRowKey(r)))));
-        }
-        return next;
-      });
-    },
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: serverSorted ? undefined : getSortedRowModel(),
@@ -203,6 +194,22 @@ export function DataTable<T>({
     // Pagination client à 10 lignes/page (rows non paginé) avec contrôles rendus plus bas.
     initialState: serverPaginated ? undefined : { pagination: { pageIndex: 0, pageSize: 10 } },
   });
+
+  // Reporte la notification au parent après le rendu plutôt que de l'appeler depuis l'updater de
+  // rowSelection : TanStack Table réinitialise automatiquement la sélection pendant le rendu de la
+  // table quand `data` change (lignes sélectionnées disparues), et appeler onSelectionChange (donc un
+  // setState du parent) à ce moment-là déclenchait "Cannot update a component while rendering a
+  // different component". Ne dépend que de `rowSelection` (un state qu'on contrôle, qui ne change que
+  // sur une vraie sélection ou un auto-reset de TanStack) — PAS de `data`/`getRowKey`/`onSelectionChange`,
+  // dont l'identité change à chaque rendu chez la plupart des appelants (ex. `rows={(q.data ?? []).filter(...)}`
+  // recalculé inline) : les inclure créait une boucle de rendu infinie (onSelectionChange → setState
+  // parent → nouvelle référence `rows` → effet déclenché → onSelectionChange → …).
+  useEffect(() => {
+    if (!onSelectionChange) return;
+    const selectedIds = new Set(Object.keys(rowSelection).filter((k) => rowSelection[k]));
+    onSelectionChange(data.filter((r) => selectedIds.has(String(getRowKey(r)))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- voir commentaire ci-dessus.
+  }, [rowSelection]);
 
   function handleHeaderSort(col: Column<T>) {
     if (!col.sortable) return;
