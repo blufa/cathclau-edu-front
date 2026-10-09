@@ -57,11 +57,11 @@ export function BadgeSheet({ badges, onPrinted }: { badges: IdBadgeProps[]; onPr
               {" · "}Imprimer à 100 % · couper sur les traits · coins arrondis r = 3 mm
             </p>
             {/* Marges/espacements volontairement serrés en impression (voir printBadgeSheet, marge de
-                page réduite à 3mm) — 3 rangées de cartes CR80 (85,6mm chacune, un peu plus si un champ
-                déborde sur 2 lignes) tiennent tout juste sur une page A4 ; tout padding superflu ici
-                fait déborder la 3e rangée sur une deuxième page. Si ça déborde encore malgré ça,
-                décoche "En-têtes et pieds de page" dans la boîte de dialogue d'impression (voir
-                printBadgeSheet). */}
+                page à 5mm — valeur physique sûre, pas poussée plus bas) — 3 rangées de cartes CR80
+                (85,6mm chacune, un peu plus si un champ déborde sur 2 lignes) tiennent sur une page A4 ;
+                tout padding superflu ici fait déborder la 3e rangée sur une deuxième page. Si ça déborde
+                encore malgré ça, décoche "En-têtes et pieds de page" dans la boîte de dialogue
+                d'impression (voir printBadgeSheet). */}
             <div className="grid grid-cols-3 gap-[4mm] print:gap-[1.5mm]">
               {pageBadges.map((props, i) => (
                 <div key={i} className="rounded-[4mm] border border-dashed border-slate-300 p-[2mm] print:rounded-[3mm] print:border-slate-400 print:p-[0.3mm]">
