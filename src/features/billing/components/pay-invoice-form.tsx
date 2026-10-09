@@ -9,6 +9,7 @@ import { Label, Field, MoneyInput } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 
 /** Pure reference generator shared by the billing collection flows. */
 export function genRef(prefix: string): string {
@@ -33,6 +34,9 @@ export function PayInvoiceForm({ invoice, tenantId, onDone }: { invoice: Invoice
   const remaining = Number(invoice.remainingBalance ?? invoice.totalAmount);
   const [channel, setChannel] = useState<PaymentChannel>("CASH");
   const [amount, setAmount] = useState(remaining);
+  // Tous les canaux proposés ici sont guichet (voir DESK_CHANNELS) : jamais de paiement en ligne sur
+  // ce formulaire, la barrière caisse s'applique donc sans condition de canal.
+  const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,12 +74,18 @@ export function PayInvoiceForm({ invoice, tenantId, onDone }: { invoice: Invoice
         <Label>Montant</Label>
         <MoneyInput value={amount} onValueChange={(n) => setAmount(Math.min(n, remaining))} />
       </Field>
-      <p className="text-xs text-slate-400">
-        Encaissement au guichet : paiement validé immédiatement et reçu généré. Pour un paiement
-        en ligne, le parent passe par le portail Djomy depuis son espace.
-      </p>
+      {!sessionLoading && !sessionOpen ? (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») avant d&apos;encaisser.
+        </p>
+      ) : (
+        <p className="text-xs text-slate-400">
+          Encaissement au guichet : paiement validé immédiatement et reçu généré. Pour un paiement
+          en ligne, le parent passe par le portail Djomy depuis son espace.
+        </p>
+      )}
       <div className="flex justify-end gap-2">
-        <Button type="submit" loading={loading}>Encaisser {formatGNF(amount)}</Button>
+        <Button type="submit" loading={loading} disabled={!sessionLoading && !sessionOpen}>Encaisser {formatGNF(amount)}</Button>
       </div>
     </form>
   );

@@ -19,6 +19,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { notifySuccess } from "@/lib/feedback";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 
 const EMPTY_OPTION: SearchableOption = { value: "", trigger: "— Choisir —", label: "— Choisir —", searchText: "" };
 function toOptions(items: { id: number; label: string }[]): SearchableOption[] {
@@ -53,6 +54,11 @@ export default function ReEnrollmentPage() {
   const [overrides, setOverrides] = useState<Record<number, RowOverride>>({});
   const [results, setResults] = useState<Record<number, RowResult>>({});
   const [running, setRunning] = useState(false);
+
+  // Barrière caisse (§retour comptable) : la réinscription régénère les factures de frais, réglées au
+  // guichet au même moment — même garde que "Nouvelle inscription" (voir BulkFamilyEnrollmentPage).
+  const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
+  const cashierBlocked = !sessionLoading && !sessionOpen;
 
   if (!tenantId) {
     return <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Réservé aux comptes d&apos;établissement.</div>;
@@ -199,11 +205,18 @@ export default function ReEnrollmentPage() {
           </Table>
 
           {canDo && (
-            <div className="flex items-center justify-end gap-3">
-              <span className="text-sm text-slate-500">{selected.length} élève(s) à réinscrire dans l&apos;année cible</span>
-              <Button onClick={runBulk} loading={running} disabled={selected.length === 0} leftSection={<Rocket className="h-4 w-4" />}>
-                Réinscrire la sélection
-              </Button>
+            <div className="flex flex-col items-end gap-2">
+              {cashierBlocked && (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») avant de réinscrire — les frais se règlent au guichet au moment de la réinscription.
+                </p>
+              )}
+              <div className="flex items-center justify-end gap-3">
+                <span className="text-sm text-slate-500">{selected.length} élève(s) à réinscrire dans l&apos;année cible</span>
+                <Button onClick={runBulk} loading={running} disabled={selected.length === 0 || cashierBlocked} leftSection={<Rocket className="h-4 w-4" />}>
+                  Réinscrire la sélection
+                </Button>
+              </div>
             </div>
           )}
           <p className="text-xs text-slate-400">

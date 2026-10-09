@@ -150,9 +150,10 @@ function SidebarNode({
   const Icon = item.icon;
   const active = isItemActive(item);
 
-  // Module not available (e.g. trial ended): render a greyed, non-clickable entry.
+  // Module not available (e.g. trial ended) or caisse fermée : rendu grisé, non cliquable — le
+  // message distingue les deux raisons pour ne pas induire en erreur (voir DisabledLink).
   if (disabled) {
-    return <DisabledLink label={item.label} Icon={Icon} compact={compact} />;
+    return <DisabledLink label={item.label} Icon={Icon} compact={compact} cashGate={item.cashGate} />;
   }
 
   // Un groupe (ex. « Facturation ») est un lien plat unique — les sous-pages se choisissent via les
@@ -210,8 +211,9 @@ function IconLink({
   return compact ? <Tooltip label={label}>{content}</Tooltip> : content;
 }
 
-/** A module-gated entry that is not available (e.g. trial ended): greyed and non-clickable. */
-function DisabledLink({ label, Icon, compact }: { label: string; Icon?: NavItem["icon"]; compact: boolean }) {
+/** A module-gated entry that is not available (e.g. trial ended), or a cash-gated one (caisse
+ * fermée) : greyed and non-clickable. */
+function DisabledLink({ label, Icon, compact, cashGate }: { label: string; Icon?: NavItem["icon"]; compact: boolean; cashGate?: boolean }) {
   const content = (
     <div
       aria-disabled
@@ -225,7 +227,8 @@ function DisabledLink({ label, Icon, compact }: { label: string; Icon?: NavItem[
       {!compact && <Lock className="h-3.5 w-3.5 shrink-0" />}
     </div>
   );
-  return (
-    <Tooltip label="Indisponible — période d'essai terminée ou module non inclus dans votre plan">{content}</Tooltip>
-  );
+  const tooltip = cashGate
+    ? "Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») pour accéder à cette page"
+    : "Indisponible — période d'essai terminée ou module non inclus dans votre plan";
+  return <Tooltip label={tooltip}>{content}</Tooltip>;
 }
