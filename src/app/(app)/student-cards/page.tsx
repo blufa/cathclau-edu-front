@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { IdCard, Plus, Search, Tags } from "lucide-react";
+import { IdCard, Plus, Printer, Search, Tags } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getStudent, searchStudents } from "@/lib/api/students";
-import { getClass, listAcademicYears } from "@/lib/api/academics";
+import { getClass, listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
   createCardTemplate,
   updateCardTemplate,
@@ -19,6 +19,7 @@ import {
   issueStudentCard,
   listCardTemplates,
   listCards,
+  markCardsPrinted,
   replaceCard,
   setDefaultCardTemplate,
 } from "@/lib/api/student-card";
@@ -38,10 +39,15 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatDate } from "@/lib/format";
 import { FileUpload } from "@/components/ui/file-upload";
 import { StudentCardPreview } from "@/features/students/components/student-card-preview";
+import { BadgeSheet } from "@/components/cards/badge-sheet";
+import type { IdBadgeProps } from "@/components/cards/id-badge";
+import { resolveBadgeColors } from "@/lib/badge-colors";
+import { buildIdentityQr } from "@/lib/identity-qr";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -79,15 +85,22 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   const tenantId = user?.tenantId ?? null;
   const q = useQuery(() => listCards(), []);
   const templatesQuery = useQuery(() => listCardTemplates(), []);
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
-  const studentName = useMemo(() => {
-    const m = new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
-    return (id: number) => m.get(id) ?? `Élève archivé (#${id})`;
-  }, [studentsQuery.data]);
+  const studentById = useMemo(() => new Map((studentsQuery.data ?? []).map((s) => [s.id, s])), [studentsQuery.data]);
+  const studentName = (id: number) => {
+    const s = studentById.get(id);
+    return s ? `${s.firstName} ${s.lastName}` : `Élève archivé (#${id})`;
+  };
   const [status, setStatus] = useState<CardStatus | "">("");
+  const [printedFilter, setPrintedFilter] = useState<"" | "YES" | "NO">("");
   const [issuing, setIssuing] = useState(false);
   const [preview, setPreview] = useState<StudentCard | null>(null);
   const [previewClass, setPreviewClass] = useState<string | null>(null);
+  const [selected, setSelected] = useState<StudentCard[]>([]);
+  const [sheetBadges, setSheetBadges] = useState<IdBadgeProps[] | null>(null);
+  const [sheetCardIds, setSheetCardIds] = useState<number[]>([]);
+  const [buildingSheet, setBuildingSheet] = useState(false);
 
   function openPreview(c: StudentCard) {
     setPreview(c);
@@ -95,49 +108,117 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
     if (c.classId) getClass(c.classId).then((cl) => setPreviewClass(cl.label)).catch(() => setPreviewClass(null));
   }
 
-  const rows = (q.data ?? []).filter((c) => !status || c.status === status);
+  const rows = (q.data ?? []).filter((c) => !status || c.status === status)
+    .filter((c) => !printedFilter || (printedFilter === "YES" ? !!c.printedAt : !c.printedAt));
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try { await fn(); notifySuccess(ok); q.refetch(); } catch (e) { notifyError(e); }
   }
 
+  /** Construit les données de badge de plusieurs cartes à la fois (planche d'impression) — résout les
+   * classes en un seul appel par année scolaire concernée plutôt qu'un appel par carte. */
+  async function buildBadgeSheet(cards: StudentCard[]) {
+    setBuildingSheet(true);
+    try {
+      const colors = resolveBadgeColors(templatesQuery.data, "STUDENT");
+      const yearIds = [...new Set(cards.map((c) => c.academicYearId).filter((id): id is number => id != null))];
+      const classLists = await Promise.all(yearIds.map((id) => listClasses(id)));
+      const classLabel = new Map(classLists.flat().map((cl) => [cl.id, cl.label]));
+      const years = yearsQuery.data ?? [];
+      const badges: IdBadgeProps[] = cards.map((c) => {
+        const student = studentById.get(c.studentId);
+        const fullName = student ? `${student.firstName} ${student.lastName}` : `Élève ${c.studentNumber ?? ""}`.trim();
+        return {
+          kind: "Badge élève",
+          fullName,
+          firstName: student?.firstName,
+          lastName: student?.lastName,
+          photoUrl: c.photoUrl,
+          idNumber: c.studentNumber,
+          validUntil: c.expirationDate ? formatDate(c.expirationDate) : null,
+          academicYearLabel: years.find((y) => y.id === c.academicYearId)?.label ?? null,
+          fields: [
+            { label: "Classe", value: c.classId != null ? (classLabel.get(c.classId) ?? "—") : "—" },
+            { label: "Né le", value: formatDate(student?.birthDate) },
+          ],
+          qrData: buildIdentityQr({ type: "STUDENT", fullName, matricule: c.studentNumber }),
+          primaryColor: colors.primaryColor,
+          secondaryColor: colors.secondaryColor,
+          orientation: colors.orientation,
+        };
+      });
+      setSheetBadges(badges);
+      setSheetCardIds(cards.map((c) => c.id));
+    } catch (e) { notifyError(e); } finally { setBuildingSheet(false); }
+  }
+
+  /** Marque les cartes de la planche comme imprimées une fois le dialogue d'impression déclenché —
+   * pour qu'elles disparaissent du filtre "Non imprimées" et ne soient jamais réimprimées par erreur. */
+  async function onSheetPrinted() {
+    try {
+      await markCardsPrinted(sheetCardIds);
+      q.refetch();
+    } catch (e) { notifyError(e); }
+  }
+
+  const columns: Column<StudentCard>[] = [
+    { key: "cardNumber", header: "N° carte", render: (c) => <span className="font-mono text-xs text-gray-600">{c.cardNumber}</span> },
+    { key: "student", header: "Élève", accessor: (c) => studentName(c.studentId), render: (c) => studentName(c.studentId) },
+    { key: "studentNumber", header: "Matricule", render: (c) => c.studentNumber ?? "—" },
+    { key: "issueDate", header: "Émission", render: (c) => <span className="text-gray-500">{formatDate(c.issueDate)}</span> },
+    { key: "status", header: "Statut", render: (c) => <Badge tone={STATUS_TONE[c.status]}>{CARD_STATUS_LABEL[c.status]}</Badge> },
+    {
+      key: "printed", header: "Imprimé",
+      render: (c) => <Badge tone={c.printedAt ? "green" : "gray"}>{c.printedAt ? "OUI" : "NON"}</Badge>,
+    },
+    {
+      key: "actions", header: "Actions", align: "right",
+      render: (c) => (
+        <div className="flex justify-end gap-1">
+          <Button size="sm" variant="ghost" onClick={() => openPreview(c)}>Badge</Button>
+          {canEdit && c.status === "ACTIVE" && (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => act(() => replaceCard(c.id), "Carte réémise")}>Réémettre</Button>
+              <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Déclarer perdue", message: `Carte ${c.cardNumber}`, confirmLabel: "Déclarer perdue", danger: true, onConfirm: () => act(() => declareCardLost(c.id), "Carte déclarée perdue") })}>Perdue</Button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Select className="max-w-[200px]" value={status} onChange={(e) => setStatus(e.target.value as CardStatus | "")}>
-          <option value="">Tous les statuts</option>
-          {(Object.keys(CARD_STATUS_LABEL) as CardStatus[]).map((s) => (<option key={s} value={s}>{CARD_STATUS_LABEL[s]}</option>))}
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select className="max-w-[200px]" value={status} onChange={(e) => setStatus(e.target.value as CardStatus | "")}>
+            <option value="">Tous les statuts</option>
+            {(Object.keys(CARD_STATUS_LABEL) as CardStatus[]).map((s) => (<option key={s} value={s}>{CARD_STATUS_LABEL[s]}</option>))}
+          </Select>
+          <Select className="max-w-[200px]" value={printedFilter} onChange={(e) => setPrintedFilter(e.target.value as "" | "YES" | "NO")}>
+            <option value="">Imprimé : tous</option>
+            <option value="NO">Non imprimées</option>
+            <option value="YES">Déjà imprimées</option>
+          </Select>
+        </div>
         {canEdit && <Button onClick={() => setIssuing(true)} leftSection={<Plus className="h-4 w-4" />}>Émettre une carte</Button>}
       </div>
 
       {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
-        <Table>
-          <THead><tr><TH className="hidden sm:table-cell">N° carte</TH><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Émission</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
-          <TBody>
-            {rows.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune carte.</TD></TR>}
-            {rows.map((c) => (
-              <TR key={c.id}>
-                <TD className="hidden font-mono text-xs text-gray-600 sm:table-cell">{c.cardNumber}</TD>
-                <TD>{studentName(c.studentId)}</TD>
-                <TD className="hidden sm:table-cell">{c.studentNumber ?? "—"}</TD>
-                <TD className="hidden text-gray-500 sm:table-cell">{formatDate(c.issueDate)}</TD>
-                <TD><Badge tone={STATUS_TONE[c.status]}>{CARD_STATUS_LABEL[c.status]}</Badge></TD>
-                <TD className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => openPreview(c)}>Badge</Button>
-                    {canEdit && c.status === "ACTIVE" && (
-                      <>
-                        <Button size="sm" variant="ghost" onClick={() => act(() => replaceCard(c.id), "Carte réémise")}>Réémettre</Button>
-                        <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Déclarer perdue", message: `Carte ${c.cardNumber}`, confirmLabel: "Déclarer perdue", danger: true, onConfirm: () => act(() => declareCardLost(c.id), "Carte déclarée perdue") })}>Perdue</Button>
-                      </>
-                    )}
-                  </div>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowKey={(c) => c.id}
+          emptyLabel="Aucune carte."
+          selectable
+          onSelectionChange={setSelected}
+          toolbar={
+            <Button size="sm" disabled={selected.length === 0} loading={buildingSheet}
+              leftSection={<Printer className="h-4 w-4" />} onClick={() => buildBadgeSheet(selected)}>
+              Imprimer planche {selected.length > 0 ? `(${selected.length})` : ""}
+            </Button>
+          }
+        />
       )}
 
       <Modal open={issuing} onClose={() => setIssuing(false)} title="Émettre une carte">
@@ -146,6 +227,10 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 
       <StudentCardPreview card={preview} studentName={preview ? studentName(preview.studentId) : null}
         className={previewClass} open={!!preview} onClose={() => setPreview(null)} templates={templatesQuery.data ?? []} />
+
+      <Modal open={!!sheetBadges} onClose={() => setSheetBadges(null)} title="Planche de badges" className="max-w-4xl">
+        {sheetBadges && <BadgeSheet badges={sheetBadges} onPrinted={onSheetPrinted} />}
+      </Modal>
     </div>
   );
 }
@@ -290,7 +375,7 @@ function TemplateForm({ initial, defaultKind, onCancel, onCreated }: {
     defaultValues: {
       name: initial?.name ?? "",
       badgeKind: initial?.badgeKind ?? defaultKind,
-      orientation: initial?.orientation ?? "LANDSCAPE",
+      orientation: initial?.orientation ?? "PORTRAIT",
       primaryColor: initial?.primaryColor ?? "#14b8a6",
       secondaryColor: initial?.secondaryColor ?? "#0f766e",
       logoUrl: initial?.logoUrl ?? "",

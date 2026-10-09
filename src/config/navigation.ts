@@ -60,6 +60,10 @@ export interface NavItem {
   excludeRoles?: RoleCode[];
   /** Backend ModuleCode gating this item. Omitted = always available (not module-gated). */
   module?: ModuleCode;
+  /** Grisé tant que l'utilisateur n'a pas de session de caisse ouverte (voir useNavGating) — pour les
+   * écrans de dépense/décaissement guichet, même barrière que le backend (PaymentService,
+   * MonthlyExpenseSheetService). */
+  cashGate?: boolean;
   /** Optional collapsible sub-menu. */
   children?: NavItem[];
 }
@@ -86,8 +90,8 @@ export const NAVIGATION: NavSection[] = [
         label: "Inscriptions & rentrée", icon: ClipboardList, module: "STUDENTS",
         children: [
           { label: "Inscriptions", href: "/enrollments", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
-          { label: "Nouvelle inscription", href: "/enrollments/bulk-family", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
-          { label: "Réinscription (rentrée)", href: "/enrollments/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS" },
+          { label: "Nouvelle inscription", href: "/enrollments/bulk-family", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS", cashGate: true },
+          { label: "Réinscription (rentrée)", href: "/enrollments/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS", cashGate: true },
           { label: "Mouvements & attente", href: "/enrollments/movements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
           { label: "Tableau de la rentrée", href: "/enrollments/overview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
         ],
@@ -181,7 +185,7 @@ export const NAVIGATION: NavSection[] = [
       // (Budget annuel prévisionnel + Subventions + Dépenses à onglets) par un lien unique vers la
       // nouvelle page de fiches de dépense mensuelles. "Budget annuel" (désormais /budget/annual) et
       // "Subventions" (/budget/grants) restent intacts, juste plus mis en avant dans le menu.
-      { label: "Dépenses", href: "/budget", icon: PiggyBank, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["depense:create"], module: "EXPENSES" },
+      { label: "Dépenses", href: "/budget", icon: PiggyBank, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["depense:create"], module: "EXPENSES", cashGate: true },
       { label: "Paie", href: "/payroll", icon: Banknote, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paie:manage"] },
     ],
   },

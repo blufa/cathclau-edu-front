@@ -46,4 +46,6 @@ export interface StudentCard {
   pdfUrl: string | null;
   replacesCardId: number | null;
   createdAt: string | null;
+  /** Date/heure du dernier passage sur une planche d'impression — null tant que jamais imprimée. */
+  printedAt: string | null;
 }

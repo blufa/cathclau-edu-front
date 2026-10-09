@@ -167,10 +167,10 @@ export default function PaymentsListPage() {
                     {p.status === "SUCCEEDED" && (
                       <WhatsAppInvoiceButton
                         studentId={p.studentId}
-                        buildMessage={async () => {
+                        buildShare={async () => {
                           const { url } = await getPaymentReceiptPdf(p.id);
                           const name = studentName(p.studentId);
-                          return `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} pour ${name} (réf. ${p.reference}).${url ? ` ${url}` : ""}`;
+                          return { url, fileName: p.reference, text: `Bonjour, voici le reçu de paiement de ${formatGNF(p.amount)} pour ${name} (réf. ${p.reference}).` };
                         }}
                       />
                     )}

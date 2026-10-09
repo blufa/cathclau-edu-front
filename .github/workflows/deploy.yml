@@ -51,13 +51,36 @@ jobs:
       - uses: actions/checkout@v4
       - name: Lowercase owner
         run: echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+      # Docker Hub (registry-1.docker.io / auth.docker.io, d'où vient l'image buildkit et le
+      # "# syntax=docker/dockerfile:1" du Dockerfile) renvoie de temps en temps un timeout/504
+      # ponctuel, sans rapport avec ce dépôt — retry à chaque étape qui en dépend plutôt que de laisser
+      # tout le déploiement échouer pour un aléa réseau qui se résorbe tout seul en quelques minutes.
       - uses: docker/setup-buildx-action@v3
+        id: buildx1
+        continue-on-error: true
+      - uses: docker/setup-buildx-action@v3
+        if: steps.buildx1.outcome == 'failure'
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
+        id: build1
+        continue-on-error: true
+        with:
+          context: .
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ needs.setup.outputs.api }}
+            NEXT_PUBLIC_SITE_URL=${{ needs.setup.outputs.site }}
+          tags: |
+            ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:${{ needs.setup.outputs.env }}
+            ghcr.io/${{ env.OWNER }}/lacaeducation-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v6
+        if: steps.build1.outcome == 'failure'
         with:
           context: .
           push: true

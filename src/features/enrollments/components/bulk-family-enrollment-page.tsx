@@ -49,6 +49,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
 import { formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 
 /** Suggestions texte débouncées (§retour comptable : prénom/nom/adresse/école déjà saisis ailleurs
  * sur la plateforme) — un seul hook partagé par tous les champs "Combobox" de cette page plutôt que
@@ -226,6 +227,15 @@ export default function BulkFamilyEnrollmentPage() {
   const [children, setChildren] = useState<ChildDraft[]>([emptyChild()]);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
+
+  // Barrière caisse (§retour comptable) : une nouvelle inscription s'accompagne presque toujours d'un
+  // encaissement immédiat des frais au guichet — même garde que pour "Dépenses"/"Encaisser" (voir
+  // PayInvoiceForm). Ignorée hors-ligne : sans réseau on ne peut de toute façon pas vérifier l'état de
+  // la caisse, et l'inscription part alors dans la file d'attente de synchronisation (queueOfflineEnrollment)
+  // plutôt que d'être bloquée.
+  const online = useNetworkStore((s) => s.online);
+  const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
+  const cashierBlocked = online && !sessionLoading && !sessionOpen;
 
   // Repart d'un formulaire vierge une fois l'encaissement terminé (popup fermé) — le comptable peut
   // enchaîner une nouvelle famille sans quitter la page ni garder les enfants déjà traités affichés.
@@ -784,6 +794,12 @@ export default function BulkFamilyEnrollmentPage() {
         </CardBody>
       </Card>
 
+      {cashierBlocked && !finished && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») avant d&apos;inscrire — les frais se règlent au guichet au moment de l&apos;inscription.
+        </p>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
           {finished && (
@@ -798,7 +814,7 @@ export default function BulkFamilyEnrollmentPage() {
         </div>
         <div className="flex gap-2">
           {finished && errorCount > 0 && (
-            <Button variant="secondary" onClick={retryFailed} loading={running}>Réessayer les échecs</Button>
+            <Button variant="secondary" onClick={retryFailed} loading={running} disabled={cashierBlocked}>Réessayer les échecs</Button>
           )}
           {allSettled && finished ? (
             <Link href="/students">
@@ -807,7 +823,7 @@ export default function BulkFamilyEnrollmentPage() {
               )}>Voir les élèves</Button>
             </Link>
           ) : (
-            <Button onClick={submit} loading={running} disabled={finished && !errorCount}>
+            <Button onClick={submit} loading={running} disabled={(finished && !errorCount) || cashierBlocked}>
               {finished ? "Terminé" : `Inscrire ${children.length} enfant(s)`}
             </Button>
           )}

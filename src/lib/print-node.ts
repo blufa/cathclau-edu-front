@@ -126,6 +126,23 @@ export function printNode(node: HTMLElement) {
 }
 
 /**
+ * Imprime une planche de badges (3×3, CR80, voir {@code BadgeSheet}) sur papier bristol A4 — contexte
+ * différent de {@link printNode} : ici le format papier EST imposé (A4, sinon la grille de 9 cartes ne
+ * tient plus dans la page) et les coins arrondis des cartes doivent être conservés à l'impression (ce
+ * sont les repères de découpe), contrairement à une carte imprimée seule puis découpée à la main.
+ */
+export function printBadgeSheet(node: HTMLElement) {
+  // Marge à 5mm — valeur physique sûre, la plupart des imprimantes ne garantissent rien en dessous
+  // même si certaines l'acceptent (on ne descend plus à 2,5mm juste pour gagner de la place). 3 rangées
+  // de cartes CR80 portrait (85,6mm chacune) tiennent sur une page A4 avec cette marge, voir le détail
+  // du calcul dans badge-sheet.tsx. Au-delà de cette marge CSS, la plupart des navigateurs réservent
+  // AUSSI 10-25mm en haut/bas pour leurs propres en-tête/pied de page (titre, date, numéro) — invisible
+  // depuis le CSS : si la planche déborde encore sur une 2e page malgré tout, décocher "En-têtes et
+  // pieds de page" dans la boîte de dialogue d'impression règle le problème.
+  printInMainDocument(node.outerHTML, "@page { size: A4; margin: 5mm; }");
+}
+
+/**
  * Prépare l'impression directe d'un fichier déjà téléchargé (PDF généré côté serveur — reçu,
  * facture… — ou image, voir `kind` ; pas un document HTML généré en chaîne — voir
  * {@link printHtmlDocument} pour ce cas) : contrairement à {@link printInMainDocument}, ne déclenche
