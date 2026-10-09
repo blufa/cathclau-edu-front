@@ -14,7 +14,9 @@ export type BroadcastAudience =
   | "ALL_TEACHERS"
   | "ALL_STAFF"
   | "STUDENT_PARENTS"
-  | "ALL";
+  | "ALL"
+  | "OVERDUE_PAYERS"
+  | "UPCOMING_PAYERS";
 
 export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
   ALL_PARENTS: "Tous les parents",
@@ -25,7 +27,43 @@ export const BROADCAST_AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
   ALL_STAFF: "Tout le personnel (enseignants + personnel)",
   STUDENT_PARENTS: "Parent(s) d'un élève précis",
   ALL: "Toute l'école (élèves, parents, enseignants, personnel)",
+  OVERDUE_PAYERS: "Parents des élèves en retard de paiement",
+  UPCOMING_PAYERS: "Parents des élèves dont l'échéance approche",
 };
+
+/** Statut de paiement de la mensualité d'un élève d'une classe — voir
+ * GET /communications/payment-reminders?classId=. daysLate : positif = jours de retard, négatif =
+ * jours restants avant l'échéance, 0 si à jour (une seule colonne numérique triable pour tous les cas). */
+export type PaymentReminderStatus = "OVERDUE" | "UPCOMING" | "UP_TO_DATE";
+
+export const PAYMENT_REMINDER_STATUS_LABEL: Record<PaymentReminderStatus, string> = {
+  OVERDUE: "En retard",
+  UPCOMING: "Échéance proche",
+  UP_TO_DATE: "À jour",
+};
+
+export interface PaymentReminderParentContact {
+  parentId: number;
+  name: string;
+  phone: string;
+}
+
+/** Un élève d'une classe avec son statut de paiement de la mensualité et sa progression en tranches
+ * (certains parents paient en une fois par tranche, d'autres mois par mois — tranchesPaid compte une
+ * tranche comme payée seulement si toutes ses factures pour cet élève sont réglées). */
+export interface PaymentReminderCandidate {
+  studentId: number;
+  studentName: string;
+  classId: number | null;
+  className: string | null;
+  status: PaymentReminderStatus;
+  amountDue: string;
+  dueDate: string | null;
+  daysLate: number;
+  tranchesPaid: number;
+  totalTranches: number;
+  parents: PaymentReminderParentContact[];
+}
 
 export type ScheduledBroadcastStatus = "PENDING" | "SENT" | "CANCELLED" | "FAILED";
 export const SCHEDULED_BROADCAST_STATUS_LABEL: Record<ScheduledBroadcastStatus, string> = {
