@@ -6,6 +6,8 @@ import { Printer } from "lucide-react";
 import { useBranding } from "@/providers/branding-provider";
 import { Button } from "@/components/ui/button";
 import { printNode } from "@/lib/print-node";
+import { IdBadgePortrait } from "./id-badge-portrait";
+import type { CardOrientation } from "@/lib/types/student-card";
 
 export interface IdBadgeField {
   label: string;
@@ -33,6 +35,10 @@ export interface IdBadgeProps {
   footerNote?: string;
   /** Numéro affiché sous la photo (ex. matricule/n° de carte) — comme sur la maquette fournie. */
   idNumber?: string | null;
+  /** Date de validité (ex. expiration de la carte élève), affichée sous le numéro d'identification
+   * dans l'encadré QR en orientation PORTRAIT — comme sur la maquette fournie. Absent pour les badges
+   * sans date d'expiration propre (enseignant/personnel, générés à la volée). */
+  validUntil?: string | null;
   /** Année scolaire affichée en filet vertical sur le bord droit de la carte (ex. « 2026-2027 »). */
   academicYearLabel?: string | null;
   /** Show the print button (default true). */
@@ -42,6 +48,9 @@ export interface IdBadgeProps {
    * (violet) au premier coup d'œil, voir resolveBadgeColors. */
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  /** Orientation du modèle résolu — PORTRAIT reproduit la maquette fournie par l'école (voir
+   * {@link IdBadgePortrait}) ; LANDSCAPE (par défaut, repli) garde la mise en page historique. */
+  orientation?: CardOrientation | null;
 }
 
 /** Taille réelle d'une carte CR80 tenue en PAYSAGE (horizontal) — 85,6 × 53,98 mm, appliquée aussi bien
@@ -77,7 +86,12 @@ function FieldRow({ label, value, mono }: { label: string; value: string; mono?:
  * centre, année scolaire en filet vertical sur le bord droit, QR de vérification + hiérarchie
  * administrative (IRE/DPE-DCE) en pied de carte — avec une identité colorée distincte par type de badge.
  */
-export function IdBadge({
+export function IdBadge(props: IdBadgeProps) {
+  if (props.orientation === "PORTRAIT") return <IdBadgePortrait {...props} />;
+  return <IdBadgeLandscape {...props} />;
+}
+
+function IdBadgeLandscape({
   kind, fullName, firstName, lastName, photoUrl, fields, qrData, footerNote, idNumber, academicYearLabel,
   printable = true, primaryColor, secondaryColor,
 }: IdBadgeProps) {

@@ -326,6 +326,7 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
       footerNote={enrolled ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}
       primaryColor={colors.primaryColor}
       secondaryColor={colors.secondaryColor}
+      orientation={colors.orientation}
     />
   );
 }

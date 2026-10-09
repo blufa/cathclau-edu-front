@@ -74,11 +74,13 @@ export function StudentCardPreview({
           photoUrl={card.photoUrl}
           fields={fields}
           idNumber={card.studentNumber}
+          validUntil={card.expirationDate ? formatDate(card.expirationDate) : null}
           academicYearLabel={academicYearLabel}
           qrData={qrData}
           footerNote="QR sécurisé — vérifiable par scan à l'entrée de l'établissement."
           primaryColor={colors.primaryColor}
           secondaryColor={colors.secondaryColor}
+          orientation={colors.orientation}
         />
       )}
     </Modal>

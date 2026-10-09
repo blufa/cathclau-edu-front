@@ -249,6 +249,7 @@ function StaffBadgeContent({ employee }: { employee: Employee }) {
       footerNote="Personnel de l'établissement."
       primaryColor={colors.primaryColor}
       secondaryColor={colors.secondaryColor}
+      orientation={colors.orientation}
     />
   );
 }
