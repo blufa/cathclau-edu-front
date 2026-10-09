@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Printer } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -27,11 +28,12 @@ import { Select } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { EMPLOYEE_CATEGORY_LABEL, EmployeeForm } from "@/components/staff/employee-form";
 import { TeacherForm } from "@/components/staff/teacher-form";
-import { IdBadge } from "@/components/cards/id-badge";
+import { IdBadge, type IdBadgeProps } from "@/components/cards/id-badge";
+import { BadgeSheet } from "@/components/cards/badge-sheet";
 import { buildIdentityQr } from "@/lib/identity-qr";
 import { resolveBadgeColors } from "@/lib/badge-colors";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatGNF } from "@/lib/format";
+import { formatDate, formatGNF } from "@/lib/format";
 
 type ActiveFilter = "all" | "active" | "inactive";
 
@@ -57,6 +59,43 @@ export default function PersonnelPage() {
   // plutôt que de tout ressaisir. Les deux fiches restent distinctes (salaire de base vs heures de
   // cours), la paie les traite séparément — voir EmployeeType côté API.
   const [teachingFor, setTeachingFor] = useState<Employee | null>(null);
+  const [selected, setSelected] = useState<Employee[]>([]);
+  const [sheetBadges, setSheetBadges] = useState<IdBadgeProps[] | null>(null);
+  const [buildingSheet, setBuildingSheet] = useState(false);
+
+  const tenantId = user?.tenantId ?? null;
+  const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
+  const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const validUntil = currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null;
+
+  /** Construit les données de badge de plusieurs membres du personnel à la fois (planche d'impression). */
+  function buildBadgeSheet(employees: Employee[]) {
+    setBuildingSheet(true);
+    try {
+      const colors = resolveBadgeColors(templatesQuery.data, "STAFF");
+      const badges: IdBadgeProps[] = employees.map((e) => ({
+        kind: "Badge personnel",
+        fullName: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim(),
+        firstName: e.firstName,
+        lastName: e.lastName,
+        photoUrl: e.photo,
+        idNumber: e.employeeNumber,
+        validUntil,
+        academicYearLabel: currentYearQuery.data?.label,
+        fields: [
+          { label: "Poste", value: e.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[e.category] },
+          { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[e.category] },
+          { label: "Téléphone", value: e.phone ?? "—" },
+        ],
+        qrData: buildIdentityQr({ type: "EMPLOYEE", fullName: `${e.firstName ?? ""} ${e.lastName ?? ""}`, matricule: e.employeeNumber }),
+        footerNote: "Personnel de l'établissement.",
+        primaryColor: colors.primaryColor,
+        secondaryColor: colors.secondaryColor,
+        orientation: colors.orientation,
+      }));
+      setSheetBadges(badges);
+    } catch (e) { notifyError(e); } finally { setBuildingSheet(false); }
+  }
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -196,6 +235,14 @@ export default function PersonnelPage() {
         columnToggle
         exportable
         exportFilename="personnel.csv"
+        selectable
+        onSelectionChange={setSelected}
+        toolbar={
+          <Button size="sm" disabled={selected.length === 0} loading={buildingSheet}
+            leftSection={<Printer className="h-4 w-4" />} onClick={() => buildBadgeSheet(selected)}>
+            Imprimer planche {selected.length > 0 ? `(${selected.length})` : ""}
+          </Button>
+        }
       />
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouveau membre du personnel">
@@ -218,6 +265,9 @@ export default function PersonnelPage() {
       <Modal open={!!badgeFor} onClose={() => setBadgeFor(null)} title="Badge personnel">
         {badgeFor && <StaffBadgeContent employee={badgeFor} />}
       </Modal>
+      <Modal open={!!sheetBadges} onClose={() => setSheetBadges(null)} title="Planche de badges" className="max-w-4xl">
+        {sheetBadges && <BadgeSheet badges={sheetBadges} />}
+      </Modal>
     </div>
   );
 }
@@ -239,6 +289,7 @@ function StaffBadgeContent({ employee }: { employee: Employee }) {
       lastName={employee.lastName}
       photoUrl={employee.photo}
       idNumber={employee.employeeNumber}
+      validUntil={currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null}
       academicYearLabel={currentYearQuery.data?.label}
       fields={[
         { label: "Poste", value: employee.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[employee.category] },
