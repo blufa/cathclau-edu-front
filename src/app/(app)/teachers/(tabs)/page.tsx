@@ -46,6 +46,10 @@ import {
 
 type ActiveFilter = "all" | "active" | "inactive";
 
+const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
+  PERMANENT: "Permanent", VACATAIRE: "Vacataire", CONTRACTUEL: "Contractuel",
+};
+
 export default function TeachersPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
@@ -80,8 +84,10 @@ export default function TeachersPage() {
       const subjectsLists = await Promise.all(teachers.map((t) => getTeacherSubjects(t.id)));
       const badges: IdBadgeProps[] = teachers.map((t, i) => {
         const fullName = `${t.firstName} ${t.lastName}`.trim();
-        const subjectIds = [...new Set(subjectsLists[i].map((a) => a.subjectId))];
-        const taughtSubjects = subjectIds.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
+        // Une seule matière sur le badge (§retour direction des études), même si l'enseignant en couvre
+        // plusieurs — pas la peine de tout lister sur une carte aussi étroite (54mm).
+        const firstSubjectId = subjectsLists[i][0]?.subjectId;
+        const taughtSubjects = firstSubjectId != null ? subjectLabel.get(firstSubjectId) ?? "" : "";
         return {
           kind: "Badge enseignant",
           fullName, firstName: t.firstName, lastName: t.lastName,
@@ -90,8 +96,8 @@ export default function TeachersPage() {
           validUntil,
           academicYearLabel: currentYearQuery.data?.label,
           fields: [
-            { label: "Téléphone", value: t.phone ?? "—" },
-            { label: "Matières", value: taughtSubjects || "—" },
+            { label: "Matière", value: taughtSubjects || "—" },
+            { label: "Statut", value: t.employmentStatus ? (EMPLOYMENT_STATUS_LABEL[t.employmentStatus] ?? t.employmentStatus) : "—" },
           ],
           qrData: buildIdentityQr({ type: "TEACHER", fullName, matricule: t.staffNumber }),
           primaryColor: colors.primaryColor,
@@ -358,9 +364,11 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
 
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
+  // Une seule matière sur le badge (§retour direction des études), même si l'enseignant en couvre
+  // plusieurs — pas la peine de tout lister sur une carte aussi étroite (54mm).
   const taughtSubjects = useMemo(() => {
-    const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.subjectId))];
-    return ids.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
+    const firstSubjectId = teacherSubjectsQuery.data?.[0]?.subjectId;
+    return firstSubjectId != null ? subjectLabel.get(firstSubjectId) ?? "" : "";
   }, [teacherSubjectsQuery.data, subjectLabel]);
 
   const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
@@ -376,8 +384,8 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
       validUntil={currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null}
       academicYearLabel={currentYearQuery.data?.label}
       fields={[
-        { label: "Téléphone", value: teacher.phone ?? "—" },
-        { label: "Matières", value: taughtSubjects || "—" },
+        { label: "Matière", value: taughtSubjects || "—" },
+        { label: "Statut", value: teacher.employmentStatus ? (EMPLOYMENT_STATUS_LABEL[teacher.employmentStatus] ?? teacher.employmentStatus) : "—" },
       ]}
       qrData={buildIdentityQr({ type: "TEACHER", fullName: `${teacher.firstName} ${teacher.lastName}`, matricule: teacher.staffNumber })}
       footerNote={enrolled ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}
