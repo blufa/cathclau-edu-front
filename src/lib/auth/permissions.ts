@@ -36,6 +36,14 @@ export function isSuperAdmin(user: AuthUser | null): boolean {
   return hasRole(user, "SUPER_ADMIN");
 }
 
+/** SCHOOL_ADMIN et SUPER_ADMIN n'ont pas à ouvrir de caisse pour encaisser/dépenser — le rituel
+ * ouverture/clôture (rapprochement comptant physique vs système) vise le personnel de guichet, pas
+ * la direction qui encaisse occasionnellement en direct (demande utilisateur, "il ne faut pas lui
+ * bloquer"). Même règle côté backend, voir PaymentService.requireOpenCashierSession. */
+export function isExemptFromCashierGate(user: AuthUser | null): boolean {
+  return hasRole(user, "SCHOOL_ADMIN");
+}
+
 /** Single source of truth for "can this user see/reach this nav item or route?" — used by the
  * sidebar (useNavGating), the direct-URL guard and post-login redirect (role-access.ts), the
  * command palette (global-search.tsx) and the tab bar (route-tabs.tsx), so a role's visibility is
