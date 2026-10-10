@@ -13,7 +13,7 @@ export function useStudentsQuery(params: StudentSearchParams) {
 /** Élèves + classe courante + parent principal en un seul appel (liste élèves, guichet d'accueil). */
 export function useStudentsSummaryQuery(params: {
   search?: string; gender?: Gender; enrollmentStatus?: EnrollmentStatus; notEnrolled?: boolean;
-  transportSubscribed?: boolean; minPaidMonths?: number;
+  classId?: number;
   page?: number; size?: number;
 }, options?: { enabled?: boolean }) {
   return useQuery({
