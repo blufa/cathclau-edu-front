@@ -68,6 +68,10 @@ export interface Tenant {
   createdAt: string | null;
   /** Mot de passe temporaire généré, renvoyé une seule fois à la création ; null sinon. */
   temporaryPassword?: string | null;
+  /** Alerte SMS au personnel (fondateur + encaisseur) à chaque paiement reçu, en plus du parent
+   * (toujours notifié). Réglable uniquement via setTenantNotifyStaffOnPayment — jamais via updateTenant,
+   * ni par l'école elle-même. Désactivé par défaut. */
+  notifyStaffOnPayment: boolean;
 }
 
 export interface TenantDetail {

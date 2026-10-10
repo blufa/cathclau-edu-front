@@ -37,8 +37,9 @@ function abbreviateSchoolName(name: string): string {
  * Carte d'identité / badge officiel au format PORTRAIT CR80, reproduisant fidèlement la maquette
  * fournie par l'école (découpe/plastification sur papier bristol, voir "Badges scolaires
  * professionnels.pdf") : en-tête coloré arrondi avec fente de dragonne + logo + nom d'établissement,
- * grande photo chevauchant l'en-tête et le corps blanc, identité centrée, deux informations clé
- * (ex. Classe / Né le) côte à côte, encadré gris avec QR + numéro d'identification + validité,
+ * grande photo chevauchant l'en-tête et le corps blanc, identité centrée, jusqu'à trois informations
+ * clé (ex. Classe / Né le, ou Service / Fonction / Téléphone) côte à côte, encadré gris avec QR +
+ * numéro d'identification + validité,
  * coordonnées de l'établissement, et bandeau coloré de pied de carte indiquant le type de badge.
  * Rendue par {@link IdBadge} quand le modèle résolu est en orientation PORTRAIT.
  */
@@ -54,10 +55,10 @@ export function IdBadgePortrait({
   const gradientStyle = { backgroundImage: `linear-gradient(135deg, ${accent}, ${accent2})` };
   const grayBoxStyle = { backgroundColor: "#F5F4F1" };
 
-  // La maquette n'affiche que les deux informations clé côte à côte (ex. Classe/Né le, Matière/Statut,
-  // Service/Fonction) — les champs supplémentaires éventuels (ex. adresse de l'élève) ne sont pas
-  // repris ici pour rester fidèle au design fourni.
-  const [metaLeft, metaRight] = fields;
+  // La maquette n'affiche que quelques informations clé côte à côte (ex. Classe/Né le, Statut/Matières,
+  // Service/Fonction/Téléphone) — au-delà de 3, le reste n'est pas repris pour rester lisible sur une
+  // carte de 54mm de large (voir buildBadgeSheet par type de badge pour la liste exacte transmise).
+  const metaFields = fields.slice(0, 3);
 
   function print() {
     if (badgeRef.current) printNode(badgeRef.current);
@@ -128,22 +129,19 @@ export function IdBadgePortrait({
             </p>
           </div>
 
-          {/* Deux informations clé côte à côte (Classe/Né le, Matière/Statut, Service/Fonction...). */}
-          {(metaLeft || metaRight) && (
-            <div className="mt-2.5 flex items-start justify-center gap-4 px-3 print:mt-[0.6mm] print:gap-[2.5mm] print:px-[1.5mm]">
-              {metaLeft && (
-                <div className="text-center">
-                  <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 print:text-[1.5mm]">{metaLeft.label}</p>
-                  <p className="truncate text-[13px] font-bold text-slate-800 print:text-[2.2mm]">{metaLeft.value}</p>
+          {/* Informations clé côte à côte (2, ex. Classe/Né le — ou 3, ex. Service/Fonction/Téléphone) —
+              texte un cran plus petit à 3 champs pour rester lisible sur une carte de 54mm de large. */}
+          {metaFields.length > 0 && (
+            <div className={`mt-2.5 flex items-start justify-center px-3 print:mt-[0.6mm] print:px-[1.5mm] ${metaFields.length >= 3 ? "gap-2 print:gap-[1.2mm]" : "gap-4 print:gap-[2.5mm]"}`}>
+              {metaFields.map((f, i) => (
+                <div key={f.label} className="flex items-start">
+                  {i > 0 && <div className="mt-0.5 mr-2 h-8 w-px shrink-0 bg-slate-200 print:mr-[1.2mm] print:h-[4.5mm]" />}
+                  <div className="min-w-0 text-center">
+                    <p className={`font-semibold uppercase tracking-wider text-slate-400 ${metaFields.length >= 3 ? "text-[7.5px] print:text-[1.3mm]" : "text-[9px] print:text-[1.5mm]"}`}>{f.label}</p>
+                    <p className={`truncate font-bold text-slate-800 ${metaFields.length >= 3 ? "text-[11px] print:text-[1.9mm]" : "text-[13px] print:text-[2.2mm]"}`}>{f.value}</p>
+                  </div>
                 </div>
-              )}
-              {metaLeft && metaRight && <div className="mt-0.5 h-8 w-px bg-slate-200 print:h-[4.5mm]" />}
-              {metaRight && (
-                <div className="text-center">
-                  <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 print:text-[1.5mm]">{metaRight.label}</p>
-                  <p className="truncate text-[13px] font-bold text-slate-800 print:text-[2.2mm]">{metaRight.value}</p>
-                </div>
-              )}
+              ))}
             </div>
           )}
 

@@ -83,9 +83,8 @@ export default function PersonnelPage() {
         validUntil,
         academicYearLabel: currentYearQuery.data?.label,
         fields: [
-          { label: "Poste", value: e.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[e.category] },
-          { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[e.category] },
-          { label: "Téléphone", value: e.phone ?? "—" },
+          { label: "Service", value: EMPLOYEE_CATEGORY_LABEL[e.category] },
+          { label: "Fonction", value: e.jobTitle ?? "—" },
         ],
         qrData: buildIdentityQr({ type: "EMPLOYEE", fullName: `${e.firstName ?? ""} ${e.lastName ?? ""}`, matricule: e.employeeNumber }),
         footerNote: "Personnel de l'établissement.",
@@ -292,9 +291,8 @@ function StaffBadgeContent({ employee }: { employee: Employee }) {
       validUntil={currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null}
       academicYearLabel={currentYearQuery.data?.label}
       fields={[
-        { label: "Poste", value: employee.jobTitle ?? EMPLOYEE_CATEGORY_LABEL[employee.category] },
-        { label: "Catégorie", value: EMPLOYEE_CATEGORY_LABEL[employee.category] },
-        { label: "Téléphone", value: employee.phone ?? "—" },
+        { label: "Service", value: EMPLOYEE_CATEGORY_LABEL[employee.category] },
+        { label: "Fonction", value: employee.jobTitle ?? "—" },
       ]}
       qrData={buildIdentityQr({ type: "EMPLOYEE", fullName: `${employee.firstName ?? ""} ${employee.lastName ?? ""}`, matricule: employee.employeeNumber })}
       footerNote="Personnel de l'établissement."

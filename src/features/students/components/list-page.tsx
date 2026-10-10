@@ -11,8 +11,6 @@ import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
-import { getTransportPaidMonthsCount, listSubscriptions } from "@/lib/api/transport";
-import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -44,31 +42,12 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
   const [status, setStatus] = useState<EnrollmentStatus | "NOT_ENROLLED" | "">("");
-  const [transportFilter, setTransportFilter] = useState<"" | "SUBSCRIBED" | "NOT_SUBSCRIBED">("");
-  const [minPaidMonths, setMinPaidMonths] = useState<"" | "0" | "1" | "2" | "3">("");
+  const [classFilter, setClassFilter] = useState<string>("");
   const [page, setPage] = useState(0);
 
   const [editing, setEditing] = useState<Student | null>(null);
 
-  // Résumé (élève + classe courante + parent principal) en un seul appel, déjà trié alphabétiquement
-  // (nom, ascendant) côté serveur — voir searchStudentsSummary. Les filtres transport (abonné / mois
-  // payés) sont passés tels quels à l'API (§retour comptable : "filtrer par transport, pour chercher
-  // rapidement") — minPaidMonths="0" signifie "aucun mois payé" (égalité exacte côté serveur), toute
-  // autre valeur signifie "au moins N mois payés".
-  const { data, isLoading: loading, error } = useStudentsSummaryQuery({
-    search: search || undefined,
-    gender: gender || undefined,
-    enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
-    notEnrolled: status === "NOT_ENROLLED" || undefined,
-    transportSubscribed: transportFilter === "SUBSCRIBED" ? true : transportFilter === "NOT_SUBSCRIBED" ? false : undefined,
-    minPaidMonths: minPaidMonths ? Number(minPaidMonths) : undefined,
-    page,
-    size: PAGE_SIZE,
-  });
-  const updateMutation = useUpdateStudentMutation();
-  const deleteMutation = useDeleteStudentMutation();
-
-  // Libellés de classe (colonne « Classe ») — résolus depuis l'année scolaire courante.
+  // Libellés de classe (colonne « Classe » + filtre) — résolus depuis l'année scolaire courante.
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
   const classesQuery = useQuery(
     () => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])),
@@ -76,19 +55,19 @@ export default function StudentsPage() {
   );
   const classLabelById = useMemo(() => new Map(classesQuery.data?.map((c) => [c.id, c.label]) ?? []), [classesQuery.data]);
 
-  // Abonnements + mois payés transport, tout le tenant (mis en cache) : servent uniquement au badge
-  // « Transport » affiché sur chaque ligne (le filtrage lui-même est désormais fait côté serveur, voir
-  // ci-dessus).
-  const subscriptionsQuery = useCachedQuery("transport-subscriptions-all", () => listSubscriptions(), []);
-  const activeTransportStudentIds = useMemo(
-    () => new Set((subscriptionsQuery.data ?? []).filter((s) => s.status === "ACTIVE").map((s) => s.studentId)),
-    [subscriptionsQuery.data],
-  );
-  const transportPaidMonthsQuery = useCachedQuery("transport-paid-months-count", () => getTransportPaidMonthsCount(), []);
-  const transportPaidMonthsByStudentId = useMemo(
-    () => new Map(Object.entries(transportPaidMonthsQuery.data ?? {}).map(([id, count]) => [Number(id), count])),
-    [transportPaidMonthsQuery.data],
-  );
+  // Résumé (élève + classe courante + parent principal) en un seul appel, déjà trié alphabétiquement
+  // (nom, ascendant) côté serveur — voir searchStudentsSummary.
+  const { data, isLoading: loading, error } = useStudentsSummaryQuery({
+    search: search || undefined,
+    gender: gender || undefined,
+    enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
+    notEnrolled: status === "NOT_ENROLLED" || undefined,
+    classId: classFilter ? Number(classFilter) : undefined,
+    page,
+    size: PAGE_SIZE,
+  });
+  const updateMutation = useUpdateStudentMutation();
+  const deleteMutation = useDeleteStudentMutation();
 
   const pageStudentIds = useMemo(() => (data?.content ?? []).map((row) => row.student.id), [data]);
 
@@ -211,19 +190,6 @@ export default function StudentsPage() {
               Enfant de personnel — prélevé sur salaire
             </Badge>
           )}
-          {activeTransportStudentIds.has(row.student.id) && (() => {
-            const paidMonths = transportPaidMonthsByStudentId.get(row.student.id) ?? 0;
-            return (
-              <Badge
-                tone={paidMonths > 0 ? "blue" : "amber"}
-                title={paidMonths > 0
-                  ? `Abonné au transport — ${paidMonths} mois déjà réglé(s)`
-                  : "Abonné au transport — aucun mois encore réglé"}
-              >
-                Transport {paidMonths} mois
-              </Badge>
-            );
-          })()}
           {exemptionByStudentId.has(row.student.id) && (
             <Badge
               tone={exemptionByStudentId.get(row.student.id)?.type === "TOTAL" ? "green" : exemptionByStudentId.get(row.student.id)?.type === "EXCEPTIONAL" ? "blue" : "amber"}
@@ -368,24 +334,11 @@ export default function StudentsPage() {
         />
         <SearchableSelect
           triggerClassName="max-w-[200px] justify-between px-3"
-          value={transportFilter}
-          onChange={(v) => { setPage(0); setTransportFilter(v as "" | "SUBSCRIBED" | "NOT_SUBSCRIBED"); }}
+          value={classFilter}
+          onChange={(v) => { setPage(0); setClassFilter(v); }}
           options={[
-            { value: "", trigger: "Tous (transport)", label: "Tous (transport)", searchText: "tous transport" },
-            { value: "SUBSCRIBED", trigger: "Abonnés au transport", label: "Abonnés au transport", searchText: "abonnés transport" },
-            { value: "NOT_SUBSCRIBED", trigger: "Non abonnés", label: "Non abonnés", searchText: "non abonnés transport" },
-          ]}
-        />
-        <SearchableSelect
-          triggerClassName="max-w-[220px] justify-between px-3"
-          value={minPaidMonths}
-          onChange={(v) => { setPage(0); setMinPaidMonths(v as "" | "0" | "1" | "2" | "3"); }}
-          options={[
-            { value: "", trigger: "Tous (mois payés)", label: "Tous (mois payés)", searchText: "tous mois payés" },
-            { value: "0", trigger: "Aucun mois payé", label: "Aucun mois payé", searchText: "aucun mois payé" },
-            { value: "1", trigger: "Au moins 1 mois payé", label: "Au moins 1 mois payé", searchText: "1 mois payé" },
-            { value: "2", trigger: "Au moins 2 mois payés", label: "Au moins 2 mois payés", searchText: "2 mois payés" },
-            { value: "3", trigger: "Au moins 3 mois payés", label: "Au moins 3 mois payés", searchText: "3 mois payés" },
+            { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "" },
+            ...(classesQuery.data ?? []).map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
           ]}
         />
         <Button type="submit" variant="secondary">

@@ -248,6 +248,12 @@ export function deleteTenant(id: number): Promise<void> {
   return api.delete<void>(`/platform/tenants/${id}`);
 }
 
+/** Active/désactive l'alerte SMS au personnel (fondateur + encaisseur) à chaque paiement reçu —
+ * réservé au SUPER_ADMIN, jamais réglable par l'école elle-même. Désactivé par défaut. */
+export function setTenantNotifyStaffOnPayment(id: number, enabled: boolean): Promise<void> {
+  return api.patch<void>(`/platform/tenants/${id}/notify-staff-on-payment`, undefined, { query: { enabled } });
+}
+
 /** Tous les utilisateurs, toutes écoles confondues (ou d'une seule école si `tenantId` est fourni). */
 export function listPlatformUsers(tenantId?: number): Promise<PlatformUser[]> {
   return api.get<PlatformUser[]>("/platform/users", { query: { tenantId } });
