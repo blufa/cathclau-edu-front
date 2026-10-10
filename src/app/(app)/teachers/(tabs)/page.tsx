@@ -83,20 +83,21 @@ export default function TeachersPage() {
     try {
       const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
       const subjectsLists = await Promise.all(teachers.map((t) => getTeacherSubjects(t.id)));
-      // Un enseignant du primaire n'a généralement aucune matière assignée (généraliste, seul titulaire
-      // d'une classe) — dans ce cas, le badge affiche sa classe à la place (§retour direction des
-      // études). N'interroge les classes que pour ceux sans matière, pour ne pas multiplier les appels.
-      const classesLists = await Promise.all(teachers.map((t, i) => (subjectsLists[i].length === 0 ? getTeacherClasses(t.id) : Promise.resolve([]))));
+      // Un enseignant du primaire a aussi des matières assignées (souvent toutes) — ce n'est donc pas
+      // l'absence de matière qui distingue un généraliste du primaire, mais le cycle de sa classe
+      // (§retour direction des études). "Classes" = celles dont il est professeur principal.
+      const classesLists = await Promise.all(teachers.map((t) => getTeacherClasses(t.id)));
       const badges: IdBadgeProps[] = teachers.map((t, i) => {
         const fullName = `${t.firstName} ${t.lastName}`.trim();
+        const firstClass = classesLists[i][0];
+        const isPrimaire = classesLists[i].some((c) => c.schoolCycle === "PRIMAIRE");
         // Une seule matière sur le badge (§retour direction des études), même si l'enseignant en couvre
         // plusieurs — pas la peine de tout lister sur une carte aussi étroite (54mm).
         const firstSubjectId = subjectsLists[i][0]?.subjectId;
         const taughtSubject = firstSubjectId != null ? subjectLabel.get(firstSubjectId) : null;
-        const firstClass = classesLists[i][0];
-        const secondField = taughtSubject
-          ? { label: "Matière", value: taughtSubject }
-          : { label: "Classe", value: firstClass?.label ?? "—" };
+        const secondField = isPrimaire
+          ? { label: "Classe", value: firstClass?.label ?? "—" }
+          : { label: "Matière", value: taughtSubject ?? "—" };
         return {
           kind: "Badge enseignant",
           fullName, firstName: t.firstName, lastName: t.lastName,
@@ -362,31 +363,30 @@ export default function TeachersPage() {
   );
 }
 
-/** Contenu du badge enseignant : matière enseignée (ou classe si généraliste du primaire sans matière
- * assignée), statut, photo, couleurs du modèle « Enseignant » par défaut — extrait pour ne charger ces
- * requêtes que quand la modale est ouverte. */
+/** Contenu du badge enseignant : matière enseignée (ou classe si du primaire, cycle de la classe dont il
+ * est professeur principal), statut, photo, couleurs du modèle « Enseignant » par défaut — extrait pour
+ * ne charger ces requêtes que quand la modale est ouverte. */
 function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const teacherSubjectsQuery = useQuery(() => getTeacherSubjects(teacher.id), [teacher.id]);
-  // Un enseignant du primaire n'a généralement aucune matière assignée (généraliste, seul titulaire
-  // d'une classe) — dans ce cas, le badge affiche sa classe à la place (§retour direction des études).
-  const teacherClassesQuery = useQuery(
-    () => (teacherSubjectsQuery.data?.length === 0 ? getTeacherClasses(teacher.id) : Promise.resolve([])),
-    [teacher.id, teacherSubjectsQuery.data?.length === 0],
-  );
+  // Un enseignant du primaire a aussi des matières assignées (souvent toutes) — ce n'est donc pas
+  // l'absence de matière qui distingue un généraliste du primaire, mais le cycle de sa classe (§retour
+  // direction des études). "Classes" = celles dont il est professeur principal.
+  const teacherClassesQuery = useQuery(() => getTeacherClasses(teacher.id), [teacher.id]);
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
 
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
   // Une seule matière sur le badge (§retour direction des études), même si l'enseignant en couvre
   // plusieurs — pas la peine de tout lister sur une carte aussi étroite (54mm).
   const secondField = useMemo(() => {
+    const isPrimaire = (teacherClassesQuery.data ?? []).some((c) => c.schoolCycle === "PRIMAIRE");
+    if (isPrimaire) return { label: "Classe", value: teacherClassesQuery.data?.[0]?.label ?? "—" };
     const firstSubjectId = teacherSubjectsQuery.data?.[0]?.subjectId;
     const subject = firstSubjectId != null ? subjectLabel.get(firstSubjectId) : null;
-    if (subject) return { label: "Matière", value: subject };
-    return { label: "Classe", value: teacherClassesQuery.data?.[0]?.label ?? "—" };
+    return { label: "Matière", value: subject ?? "—" };
   }, [teacherSubjectsQuery.data, subjectLabel, teacherClassesQuery.data]);
 
   const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");

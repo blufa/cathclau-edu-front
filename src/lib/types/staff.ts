@@ -59,6 +59,10 @@ export interface TeacherClassInfo {
   id: number;
   label: string;
   levelLabel: string | null;
+  /** "MATERNELLE" | "PRIMAIRE" | "COLLEGE" | "LYCEE" | "SUPERIEUR" | null — identifie un enseignant du
+   * primaire (généraliste, badge : classe plutôt que matière) indépendamment de ses matières assignées
+   * (un enseignant du primaire peut en avoir plusieurs, contrairement à l'hypothèse initiale). */
+  schoolCycle: string | null;
 }
 
 /** A subject assignment of the teacher (academics ClassSubjectPublicInfo). */
