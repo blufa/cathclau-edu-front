@@ -36,6 +36,7 @@ import type { Student } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -94,6 +95,14 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   };
   const [status, setStatus] = useState<CardStatus | "">("");
   const [printedFilter, setPrintedFilter] = useState<"" | "YES" | "NO">("");
+  // Impression par classe (§retour direction des études) : le directeur filtre par classe, le système
+  // récupère tous ses élèves, il coche tout en un clic puis imprime la planche — en une seule fois.
+  const [classFilter, setClassFilter] = useState<string>("");
+  const currentYear = useMemo(() => {
+    const years = yearsQuery.data ?? [];
+    return years.find((y) => y.current) ?? years[0] ?? null;
+  }, [yearsQuery.data]);
+  const classesQuery = useQuery(() => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])), [currentYear?.id]);
   const [issuing, setIssuing] = useState(false);
   const [preview, setPreview] = useState<StudentCard | null>(null);
   const [previewClass, setPreviewClass] = useState<string | null>(null);
@@ -109,7 +118,8 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   }
 
   const rows = (q.data ?? []).filter((c) => !status || c.status === status)
-    .filter((c) => !printedFilter || (printedFilter === "YES" ? !!c.printedAt : !c.printedAt));
+    .filter((c) => !printedFilter || (printedFilter === "YES" ? !!c.printedAt : !c.printedAt))
+    .filter((c) => !classFilter || c.classId === Number(classFilter));
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try { await fn(); notifySuccess(ok); q.refetch(); } catch (e) { notifyError(e); }
@@ -200,6 +210,20 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
             <option value="NO">Non imprimées</option>
             <option value="YES">Déjà imprimées</option>
           </Select>
+          <SearchableSelect
+            triggerClassName="max-w-[220px] justify-between px-3"
+            value={classFilter}
+            onChange={setClassFilter}
+            options={[
+              { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "" },
+              ...(classesQuery.data ?? []).map((cl): SearchableOption => ({ value: String(cl.id), trigger: cl.label, label: cl.label, searchText: cl.label })),
+            ]}
+          />
+          {classFilter && rows.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setSelected(rows)}>
+              Sélectionner toute la classe ({rows.length})
+            </Button>
+          )}
         </div>
         {canEdit && <Button onClick={() => setIssuing(true)} leftSection={<Plus className="h-4 w-4" />}>Émettre une carte</Button>}
       </div>
