@@ -262,7 +262,12 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[]; onCancel: () => void; onDone: () => void }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const studentsQuery = useQuery(() => (query ? searchStudents({ search: query, size: 10 }).then((p) => p.content) : Promise.resolve([])), [query]);
+  // Sans recherche, affiche quand même une liste par défaut (élèves les plus récents) plutôt que rien —
+  // sinon un élève qu'on vient d'ajouter semble "absent" tant qu'on n'a pas tapé son nom.
+  const studentsQuery = useQuery(
+    () => searchStudents({ search: query || undefined, size: 20, sort: "id,desc" }).then((p) => p.content),
+    [query],
+  );
   const [loading, setLoading] = useState<number | null>(null);
   const defaultTemplate = templates.find((t) => t.isDefault) ?? templates[0];
 
@@ -312,7 +317,7 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
             <Button size="sm" loading={loading === s.id} onClick={() => issue(s)}>Émettre</Button>
           </div>
         ))}
-        {query && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-gray-400">Aucun élève trouvé.</p>}
+        {!studentsQuery.loading && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-gray-400">Aucun élève trouvé.</p>}
       </div>
       <div className="flex justify-end"><Button type="button" variant="secondary" onClick={onCancel}>Fermer</Button></div>
     </div>
