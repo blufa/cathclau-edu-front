@@ -9,7 +9,10 @@ import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { searchStudents } from "@/lib/api/students";
-import { cancelSubscription, deleteSubscription, getTransportPaidMonthsCount, listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
+import {
+  cancelSubscription, deleteSubscription, getTransportPaidForMonth, getTransportPaidMonthsCount,
+  listRoutes, listStops, listSubscriptions, subscribe,
+} from "@/lib/api/transport";
 import { DIRECTION_LABEL, SUB_STATUS_LABEL, type TransportDirection, type TransportRoute, type TransportSubscription } from "@/lib/types/transport";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +23,27 @@ import { SearchableSelect, type SearchableOption } from "@/components/ui/searcha
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
+const MONTH_FMT = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+
+function currentMonthValue(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Fenêtre de mois proposée au filtre (6 mois en arrière, 2 en avant autour d'aujourd'hui) — couvre
+ * largement une année scolaire sans dépendre d'un appel séparé pour ses dates de début/fin. */
+function monthOptions(): SearchableOption[] {
+  const now = new Date();
+  const options: SearchableOption[] = [];
+  for (let offset = -6; offset <= 2; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = MONTH_FMT.format(d);
+    options.push({ value, trigger: label, label, searchText: label });
+  }
+  return options;
+}
+
 export function SubscriptionsTab() {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
@@ -28,9 +52,19 @@ export function SubscriptionsTab() {
   const studentName = useMemo(() => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])), [studentsQuery.data]);
   const routeName = useMemo(() => new Map((routesQuery.data ?? []).map((r) => [r.id, r.name])), [routesQuery.data]);
   const [routeFilter, setRouteFilter] = useState<string>("");
+  // Par défaut, le mois en cours (§retour comptable : "afficher par défaut ceux qui ont payé le mois
+  // en cours") — "" = tous les mois, pas de filtre.
+  const [monthFilter, setMonthFilter] = useState<string>(currentMonthValue());
   const q = useQuery(() => listSubscriptions({ routeId: routeFilter ? Number(routeFilter) : undefined }), [routeFilter]);
+  const paidForMonthQuery = useQuery(
+    () => (monthFilter ? getTransportPaidForMonth(monthFilter) : Promise.resolve(null)),
+    [monthFilter],
+  );
+  const paidForMonthIds = useMemo(() => (paidForMonthQuery.data ? new Set(paidForMonthQuery.data) : null), [paidForMonthQuery.data]);
   // Un élève archivé (parti) n'a plus d'abonnement transport à gérer activement (§retour comptable).
-  const subscriptions = (q.data ?? []).filter((s) => studentName.has(s.studentId));
+  const subscriptions = (q.data ?? [])
+    .filter((s) => studentName.has(s.studentId))
+    .filter((s) => !paidForMonthIds || paidForMonthIds.has(s.studentId));
   const [subscribing, setSubscribing] = useState(false);
 
   // Nombre de mois réellement réglés par élève (§retour comptable : "trier par transport", précisé
@@ -80,21 +114,38 @@ export function SubscriptionsTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SearchableSelect
-          triggerClassName="max-w-[240px] justify-between px-3"
-          value={routeFilter}
-          onChange={setRouteFilter}
-          options={[
-            { value: "", trigger: "Toutes les lignes", label: "Toutes les lignes", searchText: "" },
-            ...(routesQuery.data ?? []).map((r): SearchableOption => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchableSelect
+            triggerClassName="max-w-[240px] justify-between px-3"
+            value={routeFilter}
+            onChange={setRouteFilter}
+            options={[
+              { value: "", trigger: "Toutes les lignes", label: "Toutes les lignes", searchText: "" },
+              ...(routesQuery.data ?? []).map((r): SearchableOption => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
+            ]}
+          />
+          <SearchableSelect
+            triggerClassName="max-w-[220px] justify-between px-3"
+            value={monthFilter}
+            onChange={setMonthFilter}
+            options={[
+              { value: "", trigger: "Tous les mois", label: "Tous les mois", searchText: "" },
+              ...monthOptions(),
+            ]}
+          />
+        </div>
         <Button leftSection={<Plus className="h-4 w-4" />} onClick={() => setSubscribing(true)}>Abonner un élève</Button>
       </div>
+      {monthFilter && (
+        <p className="text-xs text-gray-500">
+          Élèves ayant réglé le transport pour {MONTH_FMT.format(new Date(`${monthFilter}-01`))} — passez
+          sur « Tous les mois » pour voir tous les abonnés, payé ou non.
+        </p>
+      )}
       <DataTable
         columns={columns}
         rows={subscriptions}
-        loading={q.loading}
+        loading={q.loading || paidForMonthQuery.loading}
         getRowKey={(s) => s.id}
         emptyLabel="Aucun abonnement."
         searchable

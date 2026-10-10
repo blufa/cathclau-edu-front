@@ -10,8 +10,9 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { DataTable, type Column } from "@/components/ui/data-table";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
+import type { ClassStudent } from "@/lib/types/academics";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
 import { ClassSubjectsSection } from "./class-subjects-section";
 import { useClassQuery } from "../hooks/use-classes";
@@ -53,6 +54,22 @@ export default function ClassDetailPage() {
   const count = countQuery.data;
   const students = [...(studentsQuery.data ?? [])].sort((a, b) =>
     `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr"));
+  const studentColumns: Column<ClassStudent>[] = [
+    { key: "studentNumber", header: "Matricule", accessor: (s) => s.studentNumber ?? "", render: (s) => <span className="font-mono text-xs">{s.studentNumber}</span> },
+    {
+      key: "name", header: "Nom", accessor: (s) => `${s.firstName} ${s.lastName}`,
+      render: (s) => (
+        <Link href={`/students/detail?id=${s.id}`} className="font-medium text-brand-600 hover:underline">
+          {s.firstName} {s.lastName}
+        </Link>
+      ),
+    },
+    { key: "email", header: "Email", accessor: (s) => s.email ?? "", render: (s) => s.email ?? "—" },
+    {
+      key: "actions", header: "Actions", align: "right",
+      render: (s) => <QuickBadgeButton studentId={s.id} studentName={`${s.firstName} ${s.lastName}`} studentNumber={s.studentNumber} classId={id} />,
+    },
+  ];
   const levelLabel = classe.levelId
     ? (levelsQuery.data?.find((l) => l.id === classe.levelId)?.label ?? "—")
     : "—";
@@ -180,32 +197,14 @@ export default function ClassDetailPage() {
           ) : students.length === 0 ? (
             <p className="px-5 py-4 text-sm text-gray-400">Aucun élève inscrit.</p>
           ) : (
-            <Table>
-              <THead>
-                <tr>
-                  <TH>Matricule</TH>
-                  <TH>Nom</TH>
-                  <TH>Email</TH>
-                  <TH className="text-right">Actions</TH>
-                </tr>
-              </THead>
-              <TBody>
-                {students.map((s) => (
-                  <TR key={s.id}>
-                    <TD className="font-mono text-xs">{s.studentNumber}</TD>
-                    <TD>
-                      <Link href={`/students/detail?id=${s.id}`} className="font-medium text-brand-600 hover:underline">
-                        {s.firstName} {s.lastName}
-                      </Link>
-                    </TD>
-                    <TD>{s.email ?? "—"}</TD>
-                    <TD className="text-right">
-                      <QuickBadgeButton studentId={s.id} studentName={`${s.firstName} ${s.lastName}`} studentNumber={s.studentNumber} classId={id} />
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-            </Table>
+            <DataTable
+              columns={studentColumns}
+              rows={students}
+              getRowKey={(s) => s.id}
+              emptyLabel="Aucun élève inscrit."
+              searchable
+              searchPlaceholder="Rechercher un élève (nom, prénom, matricule)…"
+            />
           )}
         </CardBody>
       </Card>

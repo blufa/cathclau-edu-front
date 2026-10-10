@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@/hooks/use-query";
 import {
-  changeTenantStatus, deleteTenant, getTenantDetail, initiateSubscription, listPlans, updateTenant,
+  changeTenantStatus, deleteTenant, getTenantDetail, initiateSubscription, listPlans,
+  setTenantNotifyStaffOnPayment, updateTenant,
 } from "@/lib/api/platform";
 import { setImpersonatedTenantId } from "@/lib/auth/impersonation";
 import { RequireSuperAdmin } from "@/components/platform/require-super-admin";
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
@@ -94,6 +96,16 @@ function TenantDetail() {
 
   const t = data.tenant;
 
+  async function toggleNotifyStaffOnPayment(enabled: boolean) {
+    try {
+      await setTenantNotifyStaffOnPayment(id, enabled);
+      notifySuccess(enabled ? "Alerte personnel activée" : "Alerte personnel désactivée");
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -158,6 +170,27 @@ function TenantDetail() {
           </CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
+        <CardBody>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Alerter le personnel à chaque paiement reçu</p>
+              <p className="text-xs text-gray-500">
+                Le parent reçoit toujours un SMS de confirmation. Activez ceci pour qu&apos;en plus, le
+                fondateur/SCHOOL_ADMIN et la personne qui a physiquement encaissé reçoivent aussi un SMS
+                à chaque paiement — désactivé par défaut.
+              </p>
+            </div>
+            <Switch
+              checked={t.notifyStaffOnPayment}
+              onChange={toggleNotifyStaffOnPayment}
+              ariaLabel="Alerter le personnel à chaque paiement reçu"
+            />
+          </div>
+        </CardBody>
+      </Card>
 
       <TenantModulesPanel tenantId={t.id} />
 

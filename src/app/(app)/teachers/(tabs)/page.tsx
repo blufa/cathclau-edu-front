@@ -10,13 +10,15 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
   createTeacher,
   deleteTeacher,
-  getTeacherSubjects,
+  getAssignedClasses,
+  getAssignedLevels,
+  getAssignedSubjects,
   listTeachers,
   setTeacherActive,
   updateTeacher,
 } from "@/lib/api/staff";
 import { listCardTemplates } from "@/lib/api/student-card";
-import { getCurrentAcademicYear, listSubjects } from "@/lib/api/academics";
+import { getCurrentAcademicYear, listClasses, listLevels, listSubjects } from "@/lib/api/academics";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +48,26 @@ import {
 
 type ActiveFilter = "all" | "active" | "inactive";
 
+const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
+  PERMANENT: "Permanent", VACATAIRE: "Vacataire", CONTRACTUEL: "Contractuel",
+};
+
+/** "Matière" au secondaire, "Classe" au primaire/maternelle (§retour direction des études) — décidé par
+ * le cycle des niveaux affectés à l'enseignant (checklist "Niveaux enseignés" sur sa fiche), pas par la
+ * présence/absence de matières (un enseignant du primaire peut en avoir d'affectées lui aussi). */
+function resolveSecondField(
+  assignedLevelIds: number[], assignedClassIds: number[], assignedSubjectIds: number[],
+  levelCycle: Map<number, string | null | undefined>, classLabel: Map<number, string>, subjectLabel: Map<number, string>,
+): { label: string; value: string } {
+  const isGeneralist = assignedLevelIds.some((id) => levelCycle.get(id) === "PRIMAIRE" || levelCycle.get(id) === "MATERNELLE");
+  if (isGeneralist) {
+    const label = assignedClassIds.map((id) => classLabel.get(id)).find((l): l is string => !!l);
+    return { label: "Classe", value: label ?? "—" };
+  }
+  const label = assignedSubjectIds.map((id) => subjectLabel.get(id)).find((l): l is string => !!l);
+  return { label: "Matière", value: label ?? "—" };
+}
+
 export default function TeachersPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
@@ -67,21 +89,28 @@ export default function TeachersPage() {
   const tenantId = user?.tenantId ?? null;
   const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const classesQuery = useQuery(() => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])), [currentYearQuery.data?.id]);
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
+  const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
+  const levelCycle = useMemo(() => new Map((levelsQuery.data ?? []).map((l) => [l.id, l.cycle])), [levelsQuery.data]);
   const validUntil = currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null;
 
-  /** Construit les données de badge de plusieurs enseignants à la fois (planche d'impression) —
-   * résout les matières enseignées par enseignant (un appel chacun, comme TeacherBadgeContent). */
+  /** Construit les données de badge de plusieurs enseignants à la fois (planche d'impression) — résout
+   * niveaux/classes/matières affectés par enseignant (3 appels chacun, comme TeacherBadgeContent). */
   async function buildBadgeSheet(teachers: Teacher[]) {
     setBuildingSheet(true);
     try {
       const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
-      const subjectsLists = await Promise.all(teachers.map((t) => getTeacherSubjects(t.id)));
+      const [levelsLists, classesLists, subjectsLists] = await Promise.all([
+        Promise.all(teachers.map((t) => getAssignedLevels(t.id))),
+        Promise.all(teachers.map((t) => getAssignedClasses(t.id))),
+        Promise.all(teachers.map((t) => getAssignedSubjects(t.id))),
+      ]);
       const badges: IdBadgeProps[] = teachers.map((t, i) => {
         const fullName = `${t.firstName} ${t.lastName}`.trim();
-        const subjectIds = [...new Set(subjectsLists[i].map((a) => a.subjectId))];
-        const taughtSubjects = subjectIds.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
+        const secondField = resolveSecondField(levelsLists[i], classesLists[i], subjectsLists[i], levelCycle, classLabel, subjectLabel);
         return {
           kind: "Badge enseignant",
           fullName, firstName: t.firstName, lastName: t.lastName,
@@ -90,8 +119,8 @@ export default function TeachersPage() {
           validUntil,
           academicYearLabel: currentYearQuery.data?.label,
           fields: [
-            { label: "Téléphone", value: t.phone ?? "—" },
-            { label: "Matières", value: taughtSubjects || "—" },
+            secondField,
+            { label: "Statut", value: t.employmentStatus ? (EMPLOYMENT_STATUS_LABEL[t.employmentStatus] ?? t.employmentStatus) : "—" },
           ],
           qrData: buildIdentityQr({ type: "TEACHER", fullName, matricule: t.staffNumber }),
           primaryColor: colors.primaryColor,
@@ -347,21 +376,28 @@ export default function TeachersPage() {
   );
 }
 
-/** Contenu du badge enseignant : matières enseignées (à la place de la spécialité), photo, couleurs du
- * modèle « Enseignant » par défaut — extrait pour ne charger ces requêtes que quand la modale est ouverte. */
+/** Contenu du badge enseignant : matière enseignée au secondaire, ou classe au primaire/maternelle
+ * (cycle des niveaux affectés à l'enseignant), statut, photo, couleurs du modèle « Enseignant » par
+ * défaut — extrait pour ne charger ces requêtes que quand la modale est ouverte. */
 function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const templatesQuery = useCachedQuery(tenantId ? `card-templates:${tenantId}` : null, () => listCardTemplates(), [tenantId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
-  const teacherSubjectsQuery = useQuery(() => getTeacherSubjects(teacher.id), [teacher.id]);
+  const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
+  const classesQuery = useQuery(() => (currentYearQuery.data ? listClasses(currentYearQuery.data.id) : Promise.resolve([])), [currentYearQuery.data?.id]);
+  const assignedLevelsQuery = useQuery(() => getAssignedLevels(teacher.id), [teacher.id]);
+  const assignedClassesQuery = useQuery(() => getAssignedClasses(teacher.id), [teacher.id]);
+  const assignedSubjectsQuery = useQuery(() => getAssignedSubjects(teacher.id), [teacher.id]);
 
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
-  const taughtSubjects = useMemo(() => {
-    const ids = [...new Set((teacherSubjectsQuery.data ?? []).map((a) => a.subjectId))];
-    return ids.map((id) => subjectLabel.get(id)).filter((l): l is string => !!l).join(", ");
-  }, [teacherSubjectsQuery.data, subjectLabel]);
+  const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
+  const levelCycle = useMemo(() => new Map((levelsQuery.data ?? []).map((l) => [l.id, l.cycle])), [levelsQuery.data]);
+  const secondField = useMemo(
+    () => resolveSecondField(assignedLevelsQuery.data ?? [], assignedClassesQuery.data ?? [], assignedSubjectsQuery.data ?? [], levelCycle, classLabel, subjectLabel),
+    [assignedLevelsQuery.data, assignedClassesQuery.data, assignedSubjectsQuery.data, levelCycle, classLabel, subjectLabel],
+  );
 
   const colors = resolveBadgeColors(templatesQuery.data, "TEACHER");
 
@@ -376,8 +412,8 @@ function TeacherBadgeContent({ teacher, enrolled }: { teacher: Teacher; enrolled
       validUntil={currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null}
       academicYearLabel={currentYearQuery.data?.label}
       fields={[
-        { label: "Téléphone", value: teacher.phone ?? "—" },
-        { label: "Matières", value: taughtSubjects || "—" },
+        secondField,
+        { label: "Statut", value: teacher.employmentStatus ? (EMPLOYMENT_STATUS_LABEL[teacher.employmentStatus] ?? teacher.employmentStatus) : "—" },
       ]}
       qrData={buildIdentityQr({ type: "TEACHER", fullName: `${teacher.firstName} ${teacher.lastName}`, matricule: teacher.staffNumber })}
       footerNote={enrolled ? "QR de pointage — enseignant enrôlé pour les présences." : "Enrôlement en cours…"}

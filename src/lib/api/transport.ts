@@ -37,6 +37,12 @@ export function listSubscriptions(params?: { routeId?: number; studentId?: numbe
 export function getTransportPaidMonthsCount(): Promise<Record<string, number>> {
   return api.get<Record<string, number>>("/transport/subscriptions/paid-months-count");
 }
+
+/** Ids des élèves ayant réglé le transport pour {@code month} (format "YYYY-MM", mois en cours par
+ * défaut côté backend si omis) — §retour comptable : filtre "qui a payé le mois en cours". */
+export function getTransportPaidForMonth(month?: string): Promise<number[]> {
+  return api.get<number[]>("/transport/subscriptions/paid-for-month", { query: { month } });
+}
 export function subscribe(input: {
   routeId: number; stopId?: number | null; studentId: number; direction: TransportDirection;
   startDate?: string | null; monthlyFee?: number | null;

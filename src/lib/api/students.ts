@@ -56,14 +56,14 @@ export function searchStudents(params: StudentSearchParams): Promise<Page<Studen
  * autre valeur signifie "au moins N mois payés". */
 export function searchStudentsSummary(params: {
   search?: string; gender?: Gender; enrollmentStatus?: EnrollmentStatus; notEnrolled?: boolean;
-  transportSubscribed?: boolean; minPaidMonths?: number;
+  classId?: number;
   page?: number; size?: number;
 }): Promise<Page<StudentSummary>> {
   return api.get<Page<StudentSummary>>("/students/summary", {
     query: {
       search: params.search || undefined, gender: params.gender,
       enrollmentStatus: params.enrollmentStatus, notEnrolled: params.notEnrolled || undefined,
-      transportSubscribed: params.transportSubscribed, minPaidMonths: params.minPaidMonths,
+      classId: params.classId,
       page: params.page, size: params.size, sort: "lastName,asc",
     },
   });

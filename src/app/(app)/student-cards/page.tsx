@@ -36,6 +36,7 @@ import type { Student } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -94,6 +95,14 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   };
   const [status, setStatus] = useState<CardStatus | "">("");
   const [printedFilter, setPrintedFilter] = useState<"" | "YES" | "NO">("");
+  // Impression par classe (§retour direction des études) : le directeur filtre par classe, le système
+  // récupère tous ses élèves, il coche tout en un clic puis imprime la planche — en une seule fois.
+  const [classFilter, setClassFilter] = useState<string>("");
+  const currentYear = useMemo(() => {
+    const years = yearsQuery.data ?? [];
+    return years.find((y) => y.current) ?? years[0] ?? null;
+  }, [yearsQuery.data]);
+  const classesQuery = useQuery(() => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])), [currentYear?.id]);
   const [issuing, setIssuing] = useState(false);
   const [preview, setPreview] = useState<StudentCard | null>(null);
   const [previewClass, setPreviewClass] = useState<string | null>(null);
@@ -109,7 +118,8 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
   }
 
   const rows = (q.data ?? []).filter((c) => !status || c.status === status)
-    .filter((c) => !printedFilter || (printedFilter === "YES" ? !!c.printedAt : !c.printedAt));
+    .filter((c) => !printedFilter || (printedFilter === "YES" ? !!c.printedAt : !c.printedAt))
+    .filter((c) => !classFilter || c.classId === Number(classFilter));
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try { await fn(); notifySuccess(ok); q.refetch(); } catch (e) { notifyError(e); }
@@ -200,6 +210,20 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
             <option value="NO">Non imprimées</option>
             <option value="YES">Déjà imprimées</option>
           </Select>
+          <SearchableSelect
+            triggerClassName="max-w-[220px] justify-between px-3"
+            value={classFilter}
+            onChange={setClassFilter}
+            options={[
+              { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "" },
+              ...(classesQuery.data ?? []).map((cl): SearchableOption => ({ value: String(cl.id), trigger: cl.label, label: cl.label, searchText: cl.label })),
+            ]}
+          />
+          {classFilter && rows.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setSelected(rows)}>
+              Sélectionner toute la classe ({rows.length})
+            </Button>
+          )}
         </div>
         {canEdit && <Button onClick={() => setIssuing(true)} leftSection={<Plus className="h-4 w-4" />}>Émettre une carte</Button>}
       </div>
@@ -238,8 +262,28 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
 function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[]; onCancel: () => void; onDone: () => void }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const studentsQuery = useQuery(() => (query ? searchStudents({ search: query, size: 10 }).then((p) => p.content) : Promise.resolve([])), [query]);
+  const [classFilter, setClassFilter] = useState<string>("");
+  const currentYearQuery = useQuery(() => listAcademicYears(), []);
+  const currentYear = useMemo(() => {
+    const years = currentYearQuery.data ?? [];
+    return years.find((y) => y.current) ?? years[0] ?? null;
+  }, [currentYearQuery.data]);
+  const classesQuery = useQuery(() => (currentYear ? listClasses(currentYear.id) : Promise.resolve([])), [currentYear?.id]);
+  // Sans recherche ni classe choisie, affiche quand même une liste par défaut (élèves les plus
+  // récents) plutôt que rien — sinon un élève qu'on vient d'ajouter semble "absent" tant qu'on n'a
+  // pas tapé son nom. Avec une classe choisie, remonte toute la classe (jusqu'à 200) pour permettre
+  // l'émission groupée en un clic, pas seulement les 20 premiers.
+  const studentsQuery = useQuery(
+    () => searchStudents({
+      search: query || undefined,
+      classId: classFilter ? Number(classFilter) : undefined,
+      size: classFilter ? 200 : 20,
+      sort: "id,desc",
+    }).then((p) => p.content),
+    [query, classFilter],
+  );
   const [loading, setLoading] = useState<number | null>(null);
+  const [issuingAll, setIssuingAll] = useState(false);
   const defaultTemplate = templates.find((t) => t.isDefault) ?? templates[0];
 
   // Recherche dynamique : les résultats apparaissent dès la saisie (débounce 300 ms), sans bouton.
@@ -248,27 +292,47 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
     return () => clearTimeout(t);
   }, [search]);
 
+  /** Émet une carte pour un élève — la classe/année sont indispensables pour que le badge affiche la
+   * classe de l'élève, résolues depuis son inscription validée sur l'année courante, jamais laissées
+   * vides. N'appelle PAS onDone (laissé à l'appelant — un seul appel même en émission groupée). */
+  async function issueOne(s: Student) {
+    let classId: number | null = null;
+    let academicYearId: number | null = null;
+    try {
+      const detail = await getStudent(s.id);
+      const enrollment = detail.enrollments?.find((e) => e.status === "VALIDATED" && e.academicYearId === currentYear?.id)
+        ?? detail.enrollments?.find((e) => e.status === "VALIDATED");
+      classId = enrollment?.classId ?? null;
+      academicYearId = enrollment?.academicYearId ?? currentYear?.id ?? null;
+    } catch { /* pas bloquant : la carte est quand même émise, sans classe affichée */ }
+    await issueStudentCard(s.id, {
+      studentNumber: s.studentNumber, photoUrl: s.photo, cardTemplateId: defaultTemplate?.id ?? null,
+      classId, academicYearId,
+    });
+  }
+
   async function issue(s: Student) {
     setLoading(s.id);
     try {
-      // La classe/année sont indispensables pour que le badge affiche la classe de l'élève —
-      // résolues depuis son inscription validée sur l'année courante, jamais laissées vides.
-      let classId: number | null = null;
-      let academicYearId: number | null = null;
-      try {
-        const [detail, years] = await Promise.all([getStudent(s.id), listAcademicYears()]);
-        const currentYear = years.find((y) => y.current) ?? years[0];
-        const enrollment = detail.enrollments?.find((e) => e.status === "VALIDATED" && e.academicYearId === currentYear?.id)
-          ?? detail.enrollments?.find((e) => e.status === "VALIDATED");
-        classId = enrollment?.classId ?? null;
-        academicYearId = enrollment?.academicYearId ?? currentYear?.id ?? null;
-      } catch { /* pas bloquant : la carte est quand même émise, sans classe affichée */ }
-      await issueStudentCard(s.id, {
-        studentNumber: s.studentNumber, photoUrl: s.photo, cardTemplateId: defaultTemplate?.id ?? null,
-        classId, academicYearId,
-      });
+      await issueOne(s);
       onDone();
     } catch (e) { notifyError(e); } finally { setLoading(null); }
+  }
+
+  /** Émet une carte pour chaque élève de la classe filtrée en un clic (§retour direction des études) —
+   * jamais bloquant sur un échec individuel (élève déjà pourvu d'une carte active, etc.), compte-rendu
+   * global à la fin plutôt qu'une erreur par élève. */
+  async function issueAllInClass(students: Student[]) {
+    setIssuingAll(true);
+    let done = 0;
+    let failed = 0;
+    for (const s of students) {
+      try { await issueOne(s); done++; } catch { failed++; }
+    }
+    setIssuingAll(false);
+    if (done > 0) notifySuccess(`${done} carte(s) émise(s)${failed > 0 ? `, ${failed} échec(s) (déjà émises ?)` : ""}`);
+    else if (failed > 0) notifyError(new Error(`Aucune carte émise (${failed} échec(s) — élèves déjà pourvus d'une carte active ?)`));
+    onDone();
   }
 
   return (
@@ -277,8 +341,24 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <Input className="w-full pl-9" placeholder="Rechercher un élève (nom, prénom, matricule)…" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchableSelect
+          triggerClassName="max-w-[220px] justify-between px-3"
+          value={classFilter}
+          onChange={setClassFilter}
+          options={[
+            { value: "", trigger: "Toutes les classes", label: "Toutes les classes", searchText: "" },
+            ...(classesQuery.data ?? []).map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
+          ]}
+        />
+        {classFilter && (studentsQuery.data ?? []).length > 0 && (
+          <Button size="sm" variant="secondary" loading={issuingAll} onClick={() => issueAllInClass(studentsQuery.data ?? [])}>
+            Émettre pour toute la classe ({(studentsQuery.data ?? []).length})
+          </Button>
+        )}
+      </div>
       {!defaultTemplate && <p className="text-xs text-warning-600">Aucun modèle de carte — créez-en un dans l&apos;onglet Modèles (le défaut sera utilisé).</p>}
-      <div className="space-y-1">
+      <div className="max-h-[50vh] space-y-1 overflow-y-auto">
         {(studentsQuery.data ?? []).map((s) => (
           <div key={s.id} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2">
             <div>
@@ -288,7 +368,7 @@ function IssueForm({ templates, onCancel, onDone }: { templates: CardTemplate[];
             <Button size="sm" loading={loading === s.id} onClick={() => issue(s)}>Émettre</Button>
           </div>
         ))}
-        {query && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-gray-400">Aucun élève trouvé.</p>}
+        {!studentsQuery.loading && (studentsQuery.data ?? []).length === 0 && <p className="text-sm text-gray-400">Aucun élève trouvé.</p>}
       </div>
       <div className="flex justify-end"><Button type="button" variant="secondary" onClick={onCancel}>Fermer</Button></div>
     </div>
