@@ -29,7 +29,11 @@ export function CashierSessionReminderModal() {
   const [dismissed, setDismissed] = useState(false);
   const [opening, setOpening] = useState(false);
 
-  const canCollectCash = hasAnyPermission(user, ["paiement:create", "depense:create"]);
+  // SUPER_ADMIN a toutes les permissions même hors impersonation (aucune école choisie, "Plateforme")
+  // — sans tenantId effectif, "ouvrir ma caisse" n'aurait aucune école à qui rattacher la session, le
+  // rappel n'a donc de sens que dans le contexte d'une école (personnel normal, ou SUPER_ADMIN qui
+  // impersonne une école précise — voir auth-provider.tsx, tenantId = impersonatedTenantId alors).
+  const canCollectCash = user?.tenantId != null && hasAnyPermission(user, ["paiement:create", "depense:create"]);
 
   // Lu une seule fois côté client, pendant le rendu (pas dans un Effect, voir react.dev/learn/
   // you-might-not-need-an-effect) — le rendu serveur initial (sans window) et la première passe

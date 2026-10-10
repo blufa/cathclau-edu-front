@@ -50,10 +50,13 @@ export function useNavGating() {
   // Barrière caisse (§angles morts comptables) : même règle que le backend (PaymentService,
   // MonthlyExpenseSheetService) — un item `cashGate` est grisé tant que l'utilisateur n'a pas ouvert
   // sa caisse. Tant que l'état n'est pas encore connu (chargement), on n'affiche pas de faux positif.
+  // Sans école effective (SUPER_ADMIN hors impersonation, "Plateforme") la barrière ne s'applique pas
+  // du tout — aucune caisse à ouvrir pour une école qui n'est pas choisie.
   const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
+  const hasEffectiveTenant = user?.tenantId != null;
 
   const isDisabled = (item: NavItem) => {
-    if (item.cashGate && !sessionLoading && !sessionOpen) return true;
+    if (item.cashGate && hasEffectiveTenant && !sessionLoading && !sessionOpen) return true;
     if (!item.module) return false;
     if (paymentRequired) return true;
     // Pas encore chargé, ou aucun module provisionné (ex. seed sans lignes de module) : on affiche

@@ -103,6 +103,11 @@ export default function PayrollPage() {
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") && !hasAnyPermission(user, ["paie:manage"])) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration / comptabilité.</div>;
   }
+  // Grille des salaires (taux horaire/fixe) et structures salariales : relèvent de la direction, pas
+  // de la comptabilité — le comptable garde fiches de paie/déductions/avances, mais plus ces deux
+  // onglets (demande utilisateur). hasRole() fait déjà passer SUPER_ADMIN pour tout rôle demandé,
+  // donc pas de cas particulier à ajouter ici pour lui.
+  const isDirectionOnly = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
   return (
     <div className="space-y-6">
       <Reveal y={12}>
@@ -112,14 +117,14 @@ export default function PayrollPage() {
       <Tabs defaultValue="payslips">
         <TabsList>
           <TabsTrigger value="payslips" icon={Banknote}>Fiches de paie</TabsTrigger>
-          <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>
-          <TabsTrigger value="structures" icon={SettingsIcon}>Structures salariales</TabsTrigger>
+          {isDirectionOnly && <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>}
+          {isDirectionOnly && <TabsTrigger value="structures" icon={SettingsIcon}>Structures salariales</TabsTrigger>}
           <TabsTrigger value="deductions" icon={HandCoins}>Déductions scolarité</TabsTrigger>
           <TabsTrigger value="advances" icon={Wallet}>Avances sur salaire</TabsTrigger>
         </TabsList>
         <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
-        <TabsPanel value="compensation"><CompensationTab /></TabsPanel>
-        <TabsPanel value="structures"><StructuresTab /></TabsPanel>
+        {isDirectionOnly && <TabsPanel value="compensation"><CompensationTab /></TabsPanel>}
+        {isDirectionOnly && <TabsPanel value="structures"><StructuresTab /></TabsPanel>}
         <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"])} /></TabsPanel>
         <TabsPanel value="advances"><SalaryAdvancePanel /></TabsPanel>
       </Tabs>
