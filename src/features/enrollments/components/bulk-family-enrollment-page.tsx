@@ -892,13 +892,11 @@ function EnrollmentReviewModal({
     return !!rule?.staffBenefit;
   };
 
-  // Famille nombreuse (§retour comptable, demande utilisateur : "famille de plus de 5 élèves") et
-  // aucune exonération choisie sur AUCUN enfant — pure déduction côté client sur les données déjà en
-  // mémoire (aucun champ dédié "remise fratrie" n'existe dans le catalogue, voir ExemptionRule), donc
-  // volontairement générique plutôt que de deviner quelle règle serait "la bonne" ni quel enfant
-  // précisément devrait en bénéficier (chaque enfant de la fratrie est donc signalé, pas un seul).
-  const noExemptionAtAll = children_.every((c) => !c.exemptionRuleId);
-  const largeFamilyWarning = children_.length >= 5 && noExemptionAtAll;
+  // Aucune exonération choisie — vaut pour n'importe quel enfant, pas seulement dans une grande
+  // famille (demande utilisateur : "même si c'est un enfant inscrit, il faut demander si cet enfant
+  // ne doit pas avoir d'exonération" — certaines exonérations sont à 100%, ex. bourse/orphelin, et
+  // concernent un seul enfant isolé aussi bien qu'une fratrie nombreuse).
+  const noExemptionFor = children_.filter((c) => !c.exemptionRuleId);
 
   // Parent détecté personnel mais enfant(s) sans exonération "avantage personnel" précisément —
   // même détection que le bandeau déjà affiché plus haut sur le formulaire (staffLinkQuery/
@@ -907,33 +905,49 @@ function EnrollmentReviewModal({
     ? children_.filter((c) => !isStaffBenefit(c.exemptionRuleId))
     : [];
   const flaggedKeys = new Set([
-    ...(largeFamilyWarning ? children_.map((c) => c.key) : []),
+    ...noExemptionFor.map((c) => c.key),
     ...staffBenefitMissingFor.map((c) => c.key),
   ]);
   const hasExemptionWarning = flaggedKeys.size > 0;
 
   // Blocage volontaire (demande utilisateur, "tu dois même le rendre obligatoire") : impossible de
   // confirmer tant qu'un oubli probable est détecté, sauf si le comptable coche explicitement qu'il
-  // a vérifié — jamais le système qui décide à sa place d'appliquer ou non une exonération. Remis à
-  // zéro à chaque réouverture : une coche restée active d'un passage précédent ne doit jamais
-  // débloquer silencieusement un nouvel état (ex. après "Retour" pour corriger, puis réinscription).
+  // a vérifié — jamais le système qui décide à sa place d'appliquer ou non une exonération. La
+  // fréquence de paiement (mensuel ou standard) doit elle aussi être confirmée à chaque fois, même
+  // sans exonération en jeu (demande utilisateur : s'assurer que le parent paiera bien chaque ligne
+  // au rythme prévu). Les deux sont remises à zéro à chaque réouverture : une coche restée active
+  // d'un passage précédent ne doit jamais débloquer silencieusement un nouvel état (ex. après
+  // "Retour" pour corriger, puis réinscription).
   const [acknowledged, setAcknowledged] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open) setAcknowledged(false);
+    if (open) { setAcknowledged(false); setPaymentConfirmed(false); }
   }, [open]);
-  const confirmDisabled = running || (hasExemptionWarning && !acknowledged);
+  const confirmDisabled = running || (hasExemptionWarning && !acknowledged) || !paymentConfirmed;
 
   return (
     <Modal open={open} onClose={onClose} title="Vérifier avant d'inscrire" className="max-w-2xl">
       <div className="space-y-4">
-        {largeFamilyWarning && (
+        {noExemptionFor.length > 0 && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              Cette fratrie compte {children_.length} enfants et aucune exonération n&apos;a été
-              appliquée — vérifiez si une remise fratrie s&apos;applique.
-            </span>
+            <div>
+              <p>
+                {noExemptionFor.length === 1
+                  ? "Aucune exonération n'a été appliquée à cet enfant :"
+                  : `Cette famille compte ${children_.length} enfant${children_.length > 1 ? "s" : ""} et aucune exonération n'a été appliquée à ${noExemptionFor.length === children_.length ? "aucun d'entre eux" : `${noExemptionFor.length} d'entre eux`} :`}
+              </p>
+              <ul className="mt-1 list-inside list-disc">
+                {noExemptionFor.map((c) => (
+                  <li key={c.key}>{c.firstName} {c.lastName}</li>
+                ))}
+              </ul>
+              <p className="mt-1">
+                Vérifiez qu&apos;aucun n&apos;a droit à une remise (famille nombreuse, bourse, orphelin…)
+                avant de continuer — certaines exonérations sont à 100&nbsp;% et faciles à oublier.
+              </p>
+            </div>
           </div>
         )}
         {staffBenefitMissingFor.length > 0 && (
@@ -958,6 +972,7 @@ function EnrollmentReviewModal({
                 <th className="px-3 py-2">Classe</th>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Exonération</th>
+                <th className="px-3 py-2">Paiement</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -984,6 +999,9 @@ function EnrollmentReviewModal({
                         <span className={flagged ? "font-medium text-amber-700" : undefined}>{label ?? "Aucune"}</span>
                       </span>
                     </td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {c.monthlyPaymentOptIn ? "Mensuel (9 factures)" : "Standard"}
+                    </td>
                   </tr>
                 );
               })}
@@ -991,13 +1009,23 @@ function EnrollmentReviewModal({
           </table>
         </div>
 
-        {hasExemptionWarning && (
+        <div className="space-y-2">
+          {hasExemptionWarning && (
+            <Checkbox
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              label="Je confirme avoir vérifié — aucune exonération supplémentaire ne s'applique."
+            />
+          )}
+          {/* Toujours demandée, même sans exonération en jeu (demande utilisateur) : le comptable doit
+              confirmer avec le parent la fréquence de paiement de chaque ligne de l'élève avant de
+              continuer — colonne "Paiement" ci-dessus pour relire le choix (Mensuel/Standard) par enfant. */}
           <Checkbox
-            checked={acknowledged}
-            onChange={(e) => setAcknowledged(e.target.checked)}
-            label="Je confirme avoir vérifié — aucune exonération supplémentaire ne s'applique."
+            checked={paymentConfirmed}
+            onChange={(e) => setPaymentConfirmed(e.target.checked)}
+            label="Je confirme avoir vérifié avec le parent le mode de paiement (mensuel ou standard) de chaque enfant."
           />
-        )}
+        </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Retour</Button>
