@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Loader2, Plus, Trash2, UploadCloud, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, Loader2, Plus, Trash2, UploadCloud, X, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -37,6 +37,7 @@ import {
 } from "@/lib/offline/desktop-enrollment";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Modal } from "@/components/ui/modal";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, Input, Label } from "@/components/ui/input";
@@ -227,6 +228,10 @@ export default function BulkFamilyEnrollmentPage() {
   const [children, setChildren] = useState<ChildDraft[]>([emptyChild()]);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
+  // Relecture obligatoire avant soumission (§retour comptable — le comptable se trompe souvent de
+  // type Inscription/Réinscription, ou oublie une exonération fratrie/personnel) : le bouton
+  // "Inscrire" ouvre d'abord ce récapitulatif, `submit()` n'est déclenché que depuis la modale.
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   // Barrière caisse (§retour comptable) : une nouvelle inscription s'accompagne presque toujours d'un
   // encaissement immédiat des frais au guichet — même garde que pour "Dépenses"/"Encaisser" (voir
@@ -823,7 +828,15 @@ export default function BulkFamilyEnrollmentPage() {
               )}>Voir les élèves</Button>
             </Link>
           ) : (
-            <Button onClick={submit} loading={running} disabled={(finished && !errorCount) || cashierBlocked}>
+            <Button
+              onClick={() => {
+                const validationError = validate();
+                if (validationError) { notifyError(validationError); return; }
+                setReviewOpen(true);
+              }}
+              loading={running}
+              disabled={(finished && !errorCount) || cashierBlocked}
+            >
               {finished ? "Terminé" : `Inscrire ${children.length} enfant(s)`}
             </Button>
           )}
@@ -838,7 +851,160 @@ export default function BulkFamilyEnrollmentPage() {
           onClose={() => { setShowCollect(false); resetForm(); }}
         />
       )}
+
+      <EnrollmentReviewModal
+        open={reviewOpen}
+        children_={children}
+        classLabelById={classLabelById}
+        exemptionRules={activeExemptionRules}
+        isStaffParent={isStaffParent}
+        running={running}
+        onClose={() => setReviewOpen(false)}
+        onConfirm={() => { setReviewOpen(false); submit(); }}
+      />
     </div>
+  );
+}
+
+/** Dernier coup d'œil avant soumission (§retour comptable — oublis fréquents : mauvais type
+ * Inscription/Réinscription, exonération fratrie/personnel non cochée). Ne coche/décoche jamais
+ * rien à la place du comptable — purement un récapitulatif + deux rappels non bloquants ; la
+ * décision finale lui appartient toujours ("Confirmer et inscrire" reste cliquable même avec un
+ * rappel affiché). */
+function EnrollmentReviewModal({
+  open, children_, classLabelById, exemptionRules, isStaffParent, running, onClose, onConfirm,
+}: {
+  open: boolean;
+  children_: ChildDraft[];
+  classLabelById: Map<number, string>;
+  exemptionRules: ExemptionRule[];
+  isStaffParent: boolean;
+  running: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const exemptionLabel = (ruleId: string) => {
+    const rule = exemptionRules.find((r) => String(r.id) === ruleId);
+    return rule ? rule.label : null;
+  };
+  const isStaffBenefit = (ruleId: string) => {
+    const rule = exemptionRules.find((r) => String(r.id) === ruleId);
+    return !!rule?.staffBenefit;
+  };
+
+  // Famille nombreuse (§retour comptable, demande utilisateur : "famille de plus de 5 élèves") et
+  // aucune exonération choisie sur AUCUN enfant — pure déduction côté client sur les données déjà en
+  // mémoire (aucun champ dédié "remise fratrie" n'existe dans le catalogue, voir ExemptionRule), donc
+  // volontairement générique plutôt que de deviner quelle règle serait "la bonne" ni quel enfant
+  // précisément devrait en bénéficier (chaque enfant de la fratrie est donc signalé, pas un seul).
+  const noExemptionAtAll = children_.every((c) => !c.exemptionRuleId);
+  const largeFamilyWarning = children_.length >= 5 && noExemptionAtAll;
+
+  // Parent détecté personnel mais enfant(s) sans exonération "avantage personnel" précisément —
+  // même détection que le bandeau déjà affiché plus haut sur le formulaire (staffLinkQuery/
+  // isStaffParent), reprise ici enfant par enfant pour nommer ceux concernés.
+  const staffBenefitMissingFor = isStaffParent
+    ? children_.filter((c) => !isStaffBenefit(c.exemptionRuleId))
+    : [];
+  const flaggedKeys = new Set([
+    ...(largeFamilyWarning ? children_.map((c) => c.key) : []),
+    ...staffBenefitMissingFor.map((c) => c.key),
+  ]);
+  const hasExemptionWarning = flaggedKeys.size > 0;
+
+  // Blocage volontaire (demande utilisateur, "tu dois même le rendre obligatoire") : impossible de
+  // confirmer tant qu'un oubli probable est détecté, sauf si le comptable coche explicitement qu'il
+  // a vérifié — jamais le système qui décide à sa place d'appliquer ou non une exonération. Remis à
+  // zéro à chaque réouverture : une coche restée active d'un passage précédent ne doit jamais
+  // débloquer silencieusement un nouvel état (ex. après "Retour" pour corriger, puis réinscription).
+  const [acknowledged, setAcknowledged] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open) setAcknowledged(false);
+  }, [open]);
+  const confirmDisabled = running || (hasExemptionWarning && !acknowledged);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Vérifier avant d'inscrire" className="max-w-2xl">
+      <div className="space-y-4">
+        {largeFamilyWarning && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Cette fratrie compte {children_.length} enfants et aucune exonération n&apos;a été
+              appliquée — vérifiez si une remise fratrie s&apos;applique.
+            </span>
+          </div>
+        )}
+        {staffBenefitMissingFor.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p>Le parent est membre du personnel — exonération « avantage personnel » non appliquée pour :</p>
+              <ul className="mt-1 list-inside list-disc">
+                {staffBenefitMissingFor.map((c) => (
+                  <li key={c.key}>{c.firstName} {c.lastName}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-hidden rounded-xl border border-gray-200">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-left text-xs font-medium uppercase text-gray-500">
+              <tr>
+                <th className="px-3 py-2">Enfant</th>
+                <th className="px-3 py-2">Classe</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Exonération</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {children_.map((c) => {
+                const classId = c.classId ? Number(c.classId) : null;
+                const label = exemptionLabel(c.exemptionRuleId);
+                const flagged = flaggedKeys.has(c.key);
+                return (
+                  <tr key={c.key}>
+                    <td className="px-3 py-2 font-medium text-gray-900">{c.firstName} {c.lastName}</td>
+                    <td className="px-3 py-2 text-gray-600">{classId ? classLabelById.get(classId) ?? "—" : "—"}</td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {/* Icône purement visuelle (jamais bloquante) : force l'œil à repasser sur CE
+                          choix précis — le système ne peut pas savoir si Inscription/Réinscription
+                          est correct (aucun historique la 1ère année d'utilisation du logiciel). */}
+                      <span className="inline-flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+                        {c.enrollmentType === "NEW" ? "Inscription" : "Réinscription"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">
+                      <span className="inline-flex items-center gap-1.5">
+                        {flagged && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                        <span className={flagged ? "font-medium text-amber-700" : undefined}>{label ?? "Aucune"}</span>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {hasExemptionWarning && (
+          <Checkbox
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+            label="Je confirme avoir vérifié — aucune exonération supplémentaire ne s'applique."
+          />
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Retour</Button>
+          <Button type="button" onClick={onConfirm} loading={running} disabled={confirmDisabled}>Confirmer et inscrire</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
