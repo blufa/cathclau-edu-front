@@ -292,7 +292,7 @@ function PayslipsTab() {
           onDone={(n) => { setBatchOpen(false); notifySuccess(`${n} fiche(s) générée(s)`); q.refetch(); }} />
       </Modal>
 
-      <Modal open={!!linesFor} onClose={() => setLinesFor(null)} title={linesFor ? `Détail — ${personName(linesFor)} (${linesFor.periodLabel})` : ""}>
+      <Modal open={!!linesFor} onClose={() => setLinesFor(null)} title={linesFor ? `${personName(linesFor)} (${linesFor.periodLabel})` : ""}>
         {linesFor && <LinesPanel payslip={linesFor} onChanged={() => q.refetch()} />}
       </Modal>
 
@@ -933,10 +933,6 @@ function EmployeeCompensationPanel({ employeeId, employees, onBack }: {
           <p className="text-xs text-gray-500">Salaire de base (fixe)</p>
           <p className="mt-1 text-lg font-bold text-gray-900">{formatGNF(emp?.baseSalary ?? 0)}</p>
         </div>
-        <p className="mt-3 text-xs text-gray-400">
-          Le personnel non-enseignant n&apos;a pas d&apos;heures de cours : son salaire est un montant fixe
-          réglé directement sur sa fiche Personnel, pas ici.
-        </p>
         <div className="mt-3">
           <Link href="/teachers/staff" className="text-sm font-medium text-brand-600 hover:underline">
             Modifier depuis la fiche Personnel →
@@ -1036,10 +1032,6 @@ function TeacherCompensationPanel({ teacherId, teachers, onBack }: {
             ) : null}
             {p && (
               <>
-                <p className="mt-2 text-xs text-gray-400">
-                  Montant brut, avant déductions (CNSS, frais scolarité du personnel…) — le net à payer
-                  n&apos;est calculé qu&apos;une fois la fiche de paie générée ci-dessous.
-                </p>
                 <div className="mt-3 flex justify-end">
                   <Button onClick={genPayslip} loading={genLoading}>Générer la fiche de paie</Button>
                 </div>
@@ -1049,14 +1041,8 @@ function TeacherCompensationPanel({ teacherId, teachers, onBack }: {
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50/30 p-4">
             <h3 className="mb-1 text-sm font-semibold text-gray-700">
-              Estimation prévisionnelle (emploi du temps) — par typologie de classe, sans saisie manuelle
+              Estimation prévisionnelle (Emploi du temps)
             </h3>
-            <p className="mb-3 text-xs text-amber-700">
-              Cette estimation compte les heures prévues à l&apos;emploi du temps même si la séance n&apos;a pas
-              encore eu lieu. Pour un enseignant payé à l&apos;heure, générez le bulletin réel depuis
-              « Paie du mois » ci-dessus une fois les séances marquées réalisées — ne l&apos;utilisez pas comme
-              bulletin définitif.
-            </p>
             {theoreticalQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : tp ? (
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 {[
@@ -1132,11 +1118,11 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
           </Select>
         </Field>
         <Field>
-          <Label>Tarif horaire — classe normale</Label>
+          <Label>Tarif horaire | Classe normale</Label>
           <MoneyInput value={hourlyRateNormal} onValueChange={setHourlyRateNormal} />
         </Field>
         <Field>
-          <Label>Tarif horaire — classe d&apos;examen</Label>
+          <Label>Tarif horaire | Classe d&apos;examen</Label>
           <MoneyInput value={hourlyRateExam} onValueChange={setHourlyRateExam} />
         </Field>
         <Field>
@@ -1151,10 +1137,6 @@ function CompForm({ teacherId, initial, teacher, onSaved }: {
           : <span />}
         <Button onClick={save} loading={saving}>Enregistrer</Button>
       </div>
-      <p className="mt-2 text-xs text-gray-400">
-        Horaire : paie = heures effectives × tarif. Fixe : salaire fixe + heures de cours effectives × tarif
-        (direction qui enseigne aussi). Deux tarifs distincts selon la typologie de la classe (normale / examen).
-      </p>
     </div>
   );
 }
@@ -1193,12 +1175,6 @@ function VacationPayMonths({ teacherId }: { teacherId: number }) {
   return (
     <div className="mt-3 rounded-xl border border-gray-200 p-3">
       <p className="text-sm font-medium text-gray-700">Mois payés pendant les vacances</p>
-      <p className="mt-1 text-xs text-gray-400">
-        Par défaut, les jours fériés et vacances scolaires ne comptent pas dans les heures de cours
-        dues du mois. Ajoutez ici les mois précis (avantage accordé au cas par cas par la direction,
-        pas toute l&apos;année) où cet enseignant doit quand même être compté comme en poste — le
-        salaire fixe, lui, reste de toute façon toujours versé en entier.
-      </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {months.length === 0 && !q.loading && <span className="text-xs text-gray-400">Aucun mois ajouté.</span>}
         {months.map((m: TeacherVacationPayMonth) => (
