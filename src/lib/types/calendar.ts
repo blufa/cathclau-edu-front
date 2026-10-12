@@ -1,9 +1,10 @@
 export type AcademicEventType =
-  | "HOLIDAY" | "VACATION" | "EXAM" | "MEETING" | "FEE_DUE" | "RESULT" | "ENROLLMENT" | "OTHER";
+  | "HOLIDAY" | "VACATION" | "CONGE" | "EXAM" | "MEETING" | "FEE_DUE" | "RESULT" | "ENROLLMENT" | "OTHER";
 
 export const EVENT_TYPE_LABEL: Record<AcademicEventType, string> = {
   HOLIDAY: "Jour férié",
   VACATION: "Vacances",
+  CONGE: "Congé",
   EXAM: "Composition / Examen",
   MEETING: "Réunion / Conseil",
   FEE_DUE: "Échéance de paiement",
@@ -15,6 +16,7 @@ export const EVENT_TYPE_LABEL: Record<AcademicEventType, string> = {
 export const EVENT_TYPE_TONE: Record<AcademicEventType, "red" | "amber" | "indigo" | "green" | "gray"> = {
   HOLIDAY: "red",
   VACATION: "amber",
+  CONGE: "gray",
   EXAM: "indigo",
   MEETING: "green",
   FEE_DUE: "amber",
