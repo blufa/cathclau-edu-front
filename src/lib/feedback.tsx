@@ -9,9 +9,16 @@ export function notifySuccess(message: string, title = "Succès") {
   toast.success(title, { description: message });
 }
 
-/** Shows an error toast, extracting the server-side problem detail when available. */
+/** Shows an error toast, extracting the server-side problem detail when available. Falls back to
+ * `.message` for a plain Error/exception, or the raw text for a hand-written validation string (ex.
+ * `notifyError(validationError)` where `validationError` is a local string, not a caught exception) —
+ * before this, anything that wasn't an ApiError silently showed the generic fallback instead of the
+ * actual reason, defeating the purpose of a specific, user-facing validation message. */
 export function notifyError(error: unknown, fallback = "Une erreur est survenue") {
-  const message = error instanceof ApiError ? error.userMessage : fallback;
+  const message = error instanceof ApiError ? error.userMessage
+    : error instanceof Error ? error.message
+    : typeof error === "string" ? error
+    : fallback;
   toast.error("Erreur", { description: message });
 }
 
