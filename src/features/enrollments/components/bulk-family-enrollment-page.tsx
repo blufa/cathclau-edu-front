@@ -911,20 +911,19 @@ function EnrollmentReviewModal({
   const hasExemptionWarning = flaggedKeys.size > 0;
 
   // Blocage volontaire (demande utilisateur, "tu dois même le rendre obligatoire") : impossible de
-  // confirmer tant qu'un oubli probable est détecté, sauf si le comptable coche explicitement qu'il
-  // a vérifié — jamais le système qui décide à sa place d'appliquer ou non une exonération. La
-  // fréquence de paiement (mensuel ou standard) doit elle aussi être confirmée à chaque fois, même
-  // sans exonération en jeu (demande utilisateur : s'assurer que le parent paiera bien chaque ligne
-  // au rythme prévu). Les deux sont remises à zéro à chaque réouverture : une coche restée active
-  // d'un passage précédent ne doit jamais débloquer silencieusement un nouvel état (ex. après
-  // "Retour" pour corriger, puis réinscription).
+  // confirmer sans cocher explicitement avoir vérifié — jamais le système qui décide à sa place
+  // d'appliquer ou non une exonération. La fréquence de paiement (mensuel ou standard) doit elle
+  // aussi être confirmée à chaque fois, même sans exonération en jeu (demande utilisateur : s'assurer
+  // que le parent paiera bien chaque ligne au rythme prévu). Les deux sont remises à zéro à chaque
+  // réouverture : une coche restée active d'un passage précédent ne doit jamais débloquer
+  // silencieusement un nouvel état (ex. après "Retour" pour corriger, puis réinscription).
   const [acknowledged, setAcknowledged] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) { setAcknowledged(false); setPaymentConfirmed(false); }
   }, [open]);
-  const confirmDisabled = running || (hasExemptionWarning && !acknowledged) || !paymentConfirmed;
+  const confirmDisabled = running || !acknowledged || !paymentConfirmed;
 
   return (
     <Modal open={open} onClose={onClose} title="Vérifier avant d'inscrire" className="max-w-2xl">
@@ -1010,13 +1009,16 @@ function EnrollmentReviewModal({
         </div>
 
         <div className="space-y-2">
-          {hasExemptionWarning && (
-            <Checkbox
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-              label="Je confirme avoir vérifié qu&apos;aucune exonération ne s'applique."
-            />
-          )}
+          {/* Toujours affichée (plus seulement quand un oubli est détecté) : le libellé reflète l'état
+              courant — redevient positif dès qu'un retour en arrière corrige l'oubli (demande
+              utilisateur), au lieu de disparaître d'un coup sans confirmation finale. */}
+          <Checkbox
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+            label={hasExemptionWarning
+              ? "Je confirme avoir vérifié qu'aucune exonération ne s'applique."
+              : "Je confirme avoir vérifié qu'une exonération est appliquée."}
+          />
           {/* Toujours demandée, même sans exonération en jeu (demande utilisateur) : le comptable doit
               confirmer avec le parent la fréquence de paiement de chaque ligne de l'élève avant de
               continuer — colonne "Paiement" ci-dessus pour relire le choix (Mensuel/Standard) par enfant. */}
