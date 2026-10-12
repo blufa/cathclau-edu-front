@@ -944,8 +944,8 @@ function EnrollmentReviewModal({
                 ))}
               </ul>
               <p className="mt-1">
-                Vérifiez qu&apos;aucun n&apos;a droit à une remise (famille nombreuse, bourse, orphelin…)
-                avant de continuer — certaines exonérations sont à 100&nbsp;% et faciles à oublier.
+                Vérifiez qu&apos;aucun n&apos;a droit à une remise
+                avant de continuer.
               </p>
             </div>
           </div>
@@ -954,7 +954,7 @@ function EnrollmentReviewModal({
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p>Le parent est membre du personnel — exonération « avantage personnel » non appliquée pour :</p>
+              <p>Le parent est membre du personnel aucun avantage n&apos;est appliqué pour :</p>
               <ul className="mt-1 list-inside list-disc">
                 {staffBenefitMissingFor.map((c) => (
                   <li key={c.key}>{c.firstName} {c.lastName}</li>
@@ -1014,7 +1014,7 @@ function EnrollmentReviewModal({
             <Checkbox
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              label="Je confirme avoir vérifié — aucune exonération supplémentaire ne s'applique."
+              label="Je confirme avoir vérifié qu&apos;aucune exonération ne s'applique."
             />
           )}
           {/* Toujours demandée, même sans exonération en jeu (demande utilisateur) : le comptable doit
@@ -1023,7 +1023,7 @@ function EnrollmentReviewModal({
           <Checkbox
             checked={paymentConfirmed}
             onChange={(e) => setPaymentConfirmed(e.target.checked)}
-            label="Je confirme avoir vérifié avec le parent le mode de paiement (mensuel ou standard) de chaque enfant."
+            label="Je confirme avoir vérifié avec le parent le mode de paiement de chaque enfant."
           />
         </div>
 
