@@ -103,8 +103,10 @@ interface ChildDraft {
   exemptionApplied?: boolean;
   feesGenerated?: boolean;
   // Inscription ou réinscription (§retour comptable) : détermine quelle facture d'inscription générer
-  // — jamais les deux, même si la classe a les deux frais configurés.
-  enrollmentType: EnrollmentType;
+  // — jamais les deux, même si la classe a les deux frais configurés. null tant que le comptable n'a
+  // coché ni l'une ni l'autre case (demande utilisateur : plus de valeur par défaut qui laisserait
+  // passer un oubli — validate() bloque tant que ce n'est pas explicitement choisi).
+  enrollmentType: EnrollmentType | null;
   // Exonération choisie dans le catalogue pré-configuré (§retour comptable), accordée en direct avant
   // la génération des factures pour qu'elle s'applique dès le départ. "" = aucune.
   exemptionRuleId: string;
@@ -125,7 +127,7 @@ function emptyChild(): ChildDraft {
     lastNameTouched: false, addressTouched: false,
     classId: "", relationship: "FATHER",
     status: "pending",
-    enrollmentType: "NEW",
+    enrollmentType: null,
     exemptionRuleId: "", monthlyPaymentOptIn: false,
   };
 }
@@ -133,11 +135,6 @@ function emptyChild(): ChildDraft {
 const GENDER_OPTIONS: SearchableOption[] = [
   { value: "MALE", trigger: "Garçon", label: "Garçon", searchText: "garçon" },
   { value: "FEMALE", trigger: "Fille", label: "Fille", searchText: "fille" },
-];
-
-const ENROLLMENT_TYPE_OPTIONS: SearchableOption[] = [
-  { value: "NEW", trigger: "Inscription (nouvel élève)", label: "Inscription (nouvel élève)", searchText: "inscription nouvel élève" },
-  { value: "RE_ENROLLMENT", trigger: "Réinscription (déjà scolarisé ici)", label: "Réinscription (déjà scolarisé ici)", searchText: "réinscription déjà scolarisé" },
 ];
 
 type ParentMode = "new" | "existing" | "staff";
@@ -298,6 +295,9 @@ export default function BulkFamilyEnrollmentPage() {
       if (!c.firstName.trim() || !c.lastName.trim() || !c.classId) {
         return "Chaque enfant doit avoir un prénom, un nom et une classe.";
       }
+      if (!c.enrollmentType) {
+        return "Chaque enfant doit avoir un type (Inscription ou Réinscription).";
+      }
     }
     return null;
   }
@@ -313,7 +313,8 @@ export default function BulkFamilyEnrollmentPage() {
       birthDate: child.birthDate || null, address: child.address.trim() || null,
       originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
       classId: Number(child.classId), relationship: child.relationship,
-      enrollmentType: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
+      // Non-null : validate() refuse déjà toute soumission tant qu'un enfant n'a pas de type choisi.
+      enrollmentType: child.enrollmentType!, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
       exemption: rule ? {
         type: rule.type, percentage: rule.percentage != null ? Number(rule.percentage) : null,
         amount: rule.amount != null ? Number(rule.amount) : null,
@@ -372,7 +373,7 @@ export default function BulkFamilyEnrollmentPage() {
         if (!enrolled) {
           await enroll({
             studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
-            type: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
+            type: child.enrollmentType!, monthlyPaymentOptIn: child.monthlyPaymentOptIn, // non-null : voir validate()
           });
           enrolled = true;
           updateChild(child.key, { enrolled: true });
@@ -414,7 +415,7 @@ export default function BulkFamilyEnrollmentPage() {
           try {
             generatedInvoices = await generateAllForEnrollment({
               studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
-              enrollmentType: child.enrollmentType, wantsTransport: false, transportFeeId: null,
+              enrollmentType: child.enrollmentType!, wantsTransport: false, transportFeeId: null, // non-null : voir validate()
             });
             feesGenerated = true;
             updateChild(child.key, { feesGenerated: true });
@@ -1164,14 +1165,26 @@ function ChildCard({
           />
         </Field>
         <Field>
-          <Label>Type</Label>
-          <SearchableSelect
-            disabled={locked}
-            value={child.enrollmentType}
-            onChange={(v) => onUpdate({ enrollmentType: v as EnrollmentType })}
-            triggerClassName="w-full justify-between px-3"
-            options={ENROLLMENT_TYPE_OPTIONS}
-          />
+          <Label>Type <span className="text-error-500">*</span></Label>
+          {/* Deux cases plutôt qu'un menu déroulant avec une valeur par défaut (demande utilisateur,
+              retour terrain : "Inscription" pré-sélectionnée se laissait passer sans vrai choix,
+              même après la modale de relecture) — aucune cochée par défaut, le choix est obligatoire
+              (voir validate()). Mutuellement exclusives : cocher l'une écrase enrollmentType avec sa
+              valeur, ce qui décoche automatiquement l'autre au rendu suivant. */}
+          <div className="flex flex-col gap-1.5 pt-1">
+            <Checkbox
+              disabled={locked}
+              checked={child.enrollmentType === "NEW"}
+              onChange={(e) => onUpdate({ enrollmentType: e.target.checked ? "NEW" : null })}
+              label="Inscription (nouvel élève)"
+            />
+            <Checkbox
+              disabled={locked}
+              checked={child.enrollmentType === "RE_ENROLLMENT"}
+              onChange={(e) => onUpdate({ enrollmentType: e.target.checked ? "RE_ENROLLMENT" : null })}
+              label="Réinscription (déjà scolarisé ici)"
+            />
+          </div>
         </Field>
         <Field>
           <Label>Exonération (optionnel)</Label>
