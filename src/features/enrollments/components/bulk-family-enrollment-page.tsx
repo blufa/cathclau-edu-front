@@ -15,9 +15,7 @@ import {
   RELATIONSHIP_LABEL, type ParentStaffLink, type Relationship,
 } from "@/lib/api/parents";
 import { searchStaff, type StaffSearchResult } from "@/lib/api/staff";
-import {
-  searchPreviousClasses, searchSchools, suggestAddresses, suggestFirstNames, suggestLastNames,
-} from "@/lib/api/directory";
+import { suggestAddresses, suggestFirstNames, suggestLastNames } from "@/lib/api/directory";
 import { enroll } from "@/lib/api/enrollments";
 import {
   cancelInvoice, deleteInvoice, generateAllForEnrollment,
@@ -44,7 +42,6 @@ import { Field, Input, Label } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
-import { DatePicker } from "@/components/ui/date-picker";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
@@ -68,6 +65,45 @@ function useDebouncedSuggestions(fetchFn: (q: string) => Promise<string[]>, minL
   return [options, query] as const;
 }
 
+/** Choix obligatoire entre options mutuellement exclusives, en cartes bien visibles plutôt qu'un menu
+ * déroulant avec une valeur par défaut qu'on laisse passer sans vrai choix (demande utilisateur,
+ * appliqué à la fois au type Inscription/Réinscription et au sexe) — aucune cochée par défaut (`value`
+ * démarre à `null`), responsive : pleine largeur, empilées, le texte passe à la ligne sur mobile au
+ * lieu de déborder. */
+function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled }: {
+  value: T | null;
+  options: readonly (readonly [T, string])[];
+  onChange: (v: T | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      {options.map(([optValue, text]) => {
+        const isChecked = value === optValue;
+        return (
+          <label
+            key={optValue}
+            className={`flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${
+              disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            } ${isChecked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"}`}
+          >
+            <input
+              type="checkbox"
+              className="h-5 w-5 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600 focus-visible:ring-2 focus-visible:ring-brand-500/30"
+              disabled={disabled}
+              checked={isChecked}
+              onChange={(e) => onChange(e.target.checked ? optValue : null)}
+            />
+            <span className={`text-sm break-words ${isChecked ? "font-semibold text-brand-900" : "font-medium text-gray-700"}`}>
+              {text}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 // "queued" : mis en file locale automatiquement après un échec RÉSEAU (jamais un clic manuel) — sera
 // synchronisé tout seul au retour de la connexion (§retour comptable, file 100% automatique).
 type ChildStatus = "pending" | "creating" | "done" | "error" | "queued";
@@ -76,7 +112,9 @@ interface ChildDraft {
   key: string;
   firstName: string;
   lastName: string;
-  gender: Gender;
+  // null tant que le comptable n'a coché ni l'une ni l'autre case (même traitement que
+  // enrollmentType ci-dessous, demande utilisateur : plus de valeur par défaut qui se laisse passer).
+  gender: Gender | null;
   birthDate: string;
   // Coordonnées et parcours scolaire antérieur de l'enfant (fiche identité).
   address: string;
@@ -103,8 +141,10 @@ interface ChildDraft {
   exemptionApplied?: boolean;
   feesGenerated?: boolean;
   // Inscription ou réinscription (§retour comptable) : détermine quelle facture d'inscription générer
-  // — jamais les deux, même si la classe a les deux frais configurés.
-  enrollmentType: EnrollmentType;
+  // — jamais les deux, même si la classe a les deux frais configurés. null tant que le comptable n'a
+  // coché ni l'une ni l'autre case (demande utilisateur : plus de valeur par défaut qui laisserait
+  // passer un oubli — validate() bloque tant que ce n'est pas explicitement choisi).
+  enrollmentType: EnrollmentType | null;
   // Exonération choisie dans le catalogue pré-configuré (§retour comptable), accordée en direct avant
   // la génération des factures pour qu'elle s'applique dès le départ. "" = aucune.
   exemptionRuleId: string;
@@ -120,25 +160,15 @@ interface ChildDraft {
 function emptyChild(): ChildDraft {
   return {
     key: Math.random().toString(36).slice(2),
-    firstName: "", lastName: "", gender: "MALE", birthDate: "",
+    firstName: "", lastName: "", gender: null, birthDate: "",
     address: "", originSchool: "", previousClass: "",
     lastNameTouched: false, addressTouched: false,
     classId: "", relationship: "FATHER",
     status: "pending",
-    enrollmentType: "NEW",
+    enrollmentType: null,
     exemptionRuleId: "", monthlyPaymentOptIn: false,
   };
 }
-
-const GENDER_OPTIONS: SearchableOption[] = [
-  { value: "MALE", trigger: "Garçon", label: "Garçon", searchText: "garçon" },
-  { value: "FEMALE", trigger: "Fille", label: "Fille", searchText: "fille" },
-];
-
-const ENROLLMENT_TYPE_OPTIONS: SearchableOption[] = [
-  { value: "NEW", trigger: "Inscription (nouvel élève)", label: "Inscription (nouvel élève)", searchText: "inscription nouvel élève" },
-  { value: "RE_ENROLLMENT", trigger: "Réinscription (déjà scolarisé ici)", label: "Réinscription (déjà scolarisé ici)", searchText: "réinscription déjà scolarisé" },
-];
 
 type ParentMode = "new" | "existing" | "staff";
 
@@ -298,6 +328,12 @@ export default function BulkFamilyEnrollmentPage() {
       if (!c.firstName.trim() || !c.lastName.trim() || !c.classId) {
         return "Chaque enfant doit avoir un prénom, un nom et une classe.";
       }
+      if (!c.enrollmentType) {
+        return "Chaque enfant doit avoir un type (Inscription ou Réinscription).";
+      }
+      if (!c.gender) {
+        return "Chaque enfant doit avoir un sexe (Garçon ou Fille).";
+      }
     }
     return null;
   }
@@ -309,11 +345,12 @@ export default function BulkFamilyEnrollmentPage() {
     const rule = child.exemptionRuleId ? activeExemptionRules.find((r) => String(r.id) === child.exemptionRuleId) : undefined;
     return {
       key: child.key,
-      firstName: child.firstName.trim(), lastName: child.lastName.trim(), gender: child.gender,
+      firstName: child.firstName.trim(), lastName: child.lastName.trim(), gender: child.gender!, // non-null : voir validate()
       birthDate: child.birthDate || null, address: child.address.trim() || null,
       originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
       classId: Number(child.classId), relationship: child.relationship,
-      enrollmentType: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
+      // Non-null : validate() refuse déjà toute soumission tant qu'un enfant n'a pas de type choisi.
+      enrollmentType: child.enrollmentType!, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
       exemption: rule ? {
         type: rule.type, percentage: rule.percentage != null ? Number(rule.percentage) : null,
         amount: rule.amount != null ? Number(rule.amount) : null,
@@ -355,7 +392,7 @@ export default function BulkFamilyEnrollmentPage() {
         if (studentId == null) {
           const student = await createStudent({
             firstName: child.firstName.trim(), lastName: child.lastName.trim(),
-            gender: child.gender, birthDate: child.birthDate || null,
+            gender: child.gender!, birthDate: child.birthDate || null, // non-null : voir validate()
             address: child.address.trim() || null,
             originSchool: child.originSchool.trim() || null, previousClass: child.previousClass.trim() || null,
           });
@@ -372,7 +409,7 @@ export default function BulkFamilyEnrollmentPage() {
         if (!enrolled) {
           await enroll({
             studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
-            type: child.enrollmentType, monthlyPaymentOptIn: child.monthlyPaymentOptIn,
+            type: child.enrollmentType!, monthlyPaymentOptIn: child.monthlyPaymentOptIn, // non-null : voir validate()
           });
           enrolled = true;
           updateChild(child.key, { enrolled: true });
@@ -414,7 +451,7 @@ export default function BulkFamilyEnrollmentPage() {
           try {
             generatedInvoices = await generateAllForEnrollment({
               studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
-              enrollmentType: child.enrollmentType, wantsTransport: false, transportFeeId: null,
+              enrollmentType: child.enrollmentType!, wantsTransport: false, transportFeeId: null, // non-null : voir validate()
             });
             feesGenerated = true;
             updateChild(child.key, { feesGenerated: true });
@@ -1057,15 +1094,12 @@ function ChildCard({
   const locked = running || child.status === "done" || child.status === "queued";
   const selectedExemptionRule = exemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
 
-  // Prénom / nom / adresse / école d'origine / dernière classe : suggestions depuis les valeurs déjà
-  // saisies sur la plateforme (saisie libre toujours possible) — un champ par enfant, débouncé
-  // indépendamment. Prénom/nom/adresse cherchent aussi bien côté élèves que parents du tenant (une
-  // fratrie partage souvent le même nom ou la même adresse qu'un élève/parent déjà enregistré).
+  // Prénom / nom : suggestions depuis les valeurs déjà saisies sur la plateforme (saisie libre
+  // toujours possible) — un champ par enfant, débouncé indépendamment. Cherchent aussi bien côté
+  // élèves que parents du tenant (une fratrie partage souvent le même nom qu'un élève/parent déjà
+  // enregistré).
   const [firstNameOptions, fetchFirstNames] = useDebouncedSuggestions(suggestFirstNames, 2);
   const [lastNameOptions, fetchLastNames] = useDebouncedSuggestions(suggestLastNames, 2);
-  const [addressOptions, fetchAddresses] = useDebouncedSuggestions(suggestAddresses, 2);
-  const [schoolOptions, fetchSchools] = useDebouncedSuggestions(searchSchools, 2);
-  const [classOptions, fetchPreviousClasses] = useDebouncedSuggestions(searchPreviousClasses, 1);
 
   return (
     <div className="rounded-xl border border-gray-200 p-3">
@@ -1100,47 +1134,6 @@ function ChildCard({
           />
         </Field>
         <Field>
-          <Label>Sexe</Label>
-          <SearchableSelect
-            disabled={locked}
-            value={child.gender}
-            onChange={(v) => onUpdate({ gender: v as Gender })}
-            triggerClassName="w-full justify-between px-3"
-            options={GENDER_OPTIONS}
-          />
-        </Field>
-        <Field>
-          <Label>Date de naissance</Label>
-          <DatePicker value={child.birthDate} onChange={(v) => onUpdate({ birthDate: v })} clearable disabled={locked} />
-        </Field>
-        <Field>
-          <Label>Adresse</Label>
-          <Combobox
-            disabled={locked}
-            value={child.address}
-            options={addressOptions}
-            onChange={(val) => { onUpdate({ address: val, addressTouched: true }); fetchAddresses(val); }}
-          />
-        </Field>
-        <Field>
-          <Label>École d&apos;origine</Label>
-          <Combobox
-            disabled={locked}
-            value={child.originSchool}
-            options={schoolOptions}
-            onChange={(val) => { onUpdate({ originSchool: val }); fetchSchools(val); }}
-          />
-        </Field>
-        <Field>
-          <Label>Dernière classe</Label>
-          <Combobox
-            disabled={locked}
-            value={child.previousClass}
-            options={classOptions}
-            onChange={(val) => { onUpdate({ previousClass: val }); fetchPreviousClasses(val); }}
-          />
-        </Field>
-        <Field>
           <Label>Classe <span className="text-error-500">*</span></Label>
           <SearchableSelect
             disabled={locked}
@@ -1161,16 +1154,6 @@ function ChildCard({
             options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r): SearchableOption => ({
               value: r, trigger: RELATIONSHIP_LABEL[r], label: RELATIONSHIP_LABEL[r], searchText: RELATIONSHIP_LABEL[r],
             }))}
-          />
-        </Field>
-        <Field>
-          <Label>Type</Label>
-          <SearchableSelect
-            disabled={locked}
-            value={child.enrollmentType}
-            onChange={(v) => onUpdate({ enrollmentType: v as EnrollmentType })}
-            triggerClassName="w-full justify-between px-3"
-            options={ENROLLMENT_TYPE_OPTIONS}
           />
         </Field>
         <Field>
@@ -1197,6 +1180,33 @@ function ChildCard({
             ]}
           />
         </Field>
+        {/* Sexe/Type en pleine largeur (sm:col-span-3) : ce sont des cartes à cocher sur plusieurs
+            lignes (demande utilisateur, "il faut bien rendre visible"), pas des champs compacts d'une
+            ligne — les mélanger aux champs courts ci-dessus cassait l'alignement des rangées de la
+            grille. Groupées en fin de formulaire pour un ordre propre une fois les champs texte retirés
+            (demande utilisateur, "il faut bien ordonner le reste"). */}
+        <div className="sm:col-span-3">
+          <Field>
+            <Label>Sexe <span className="text-error-500">*</span></Label>
+            <RequiredChoiceCards
+              disabled={locked}
+              value={child.gender}
+              onChange={(v) => onUpdate({ gender: v })}
+              options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
+            />
+          </Field>
+        </div>
+        <div className="sm:col-span-3">
+          <Field>
+            <Label>Type <span className="text-error-500">*</span></Label>
+            <RequiredChoiceCards
+              disabled={locked}
+              value={child.enrollmentType}
+              onChange={(v) => onUpdate({ enrollmentType: v })}
+              options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
+            />
+          </Field>
+        </div>
       </div>
 
       {/* Transport retiré d'ici (§retour comptable) — l'abonnement au bus se fait désormais après

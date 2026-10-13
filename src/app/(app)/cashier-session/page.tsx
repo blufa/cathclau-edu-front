@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Wallet } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { listUsers } from "@/lib/api/iam";
@@ -52,6 +53,10 @@ export default function CashierSessionPage() {
     () => (canSeeAllHistory ? listUsers(0, 100) : Promise.resolve(null)),
     [canSeeAllHistory],
   );
+  // Même état que la sidebar ("Dépenses") et les boutons "Encaisser" ailleurs dans l'app (store
+  // partagé) — sans ce refetch après ouverture/clôture, ces écrans restaient grisés jusqu'au
+  // rechargement complet de la page (§retour comptable, caisse ouverte mais Dépenses toujours grisée).
+  const { refetch: refetchGate } = useCashierSessionGate();
   const cashierName = useMemo(() => {
     const map = new Map<number, string>();
     (usersQuery.data?.content ?? []).forEach((u) => map.set(u.id, `${u.firstName} ${u.lastName}`));
@@ -86,6 +91,7 @@ export default function CashierSessionPage() {
       await openCashierSession();
       notifySuccess("Caisse ouverte");
       currentQuery.refetch();
+      refetchGate();
     } catch (err) {
       if (isNetworkError(err) && isDesktop()) {
         await openOfflineCashierSession(user?.tenantId ?? 0);
@@ -230,7 +236,7 @@ export default function CashierSessionPage() {
                 }
               }
             }}
-            onDone={() => { setClosing(false); currentQuery.refetch(); historyQuery.refetch(); }}
+            onDone={() => { setClosing(false); currentQuery.refetch(); historyQuery.refetch(); refetchGate(); }}
           />
         ) : pendingOffline ? (
           <CloseSessionForm
@@ -246,6 +252,7 @@ export default function CashierSessionPage() {
               setPendingTotal(0);
               currentQuery.refetch();
               historyQuery.refetch();
+              refetchGate();
             }}
           />
         ) : null}

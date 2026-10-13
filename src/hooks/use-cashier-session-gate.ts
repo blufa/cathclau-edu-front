@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@/hooks/use-query";
-import { getCurrentCashierSession } from "@/lib/api/payment";
+import { useEffect } from "react";
+import { useCashierSessionStore } from "@/lib/store/cashier-session-store";
 import { useAuth } from "@/providers/auth-provider";
 import { isExemptFromCashierGate } from "@/lib/auth/permissions";
 
@@ -15,14 +15,28 @@ import { isExemptFromCashierGate } from "@/lib/auth/permissions";
  * renvoie `sessionOpen: true` pour eux afin que tous les consommateurs de ce hook (boutons
  * "Encaisser", nav "Dépenses", rappel à la connexion) se débloquent sans dupliquer le check dans
  * chaque composant — même règle, un seul endroit.
+ *
+ * L'état lui-même vient d'un store partagé (`cashier-session-store`), pas d'une requête locale :
+ * sans ça, ouvrir sa caisse sur /cashier-session ne mettait à jour QUE cette page, et la sidebar
+ * (montée une seule fois dans AppShell) restait grisée jusqu'au rechargement complet.
  */
 export function useCashierSessionGate() {
   const { user } = useAuth();
   const exempt = isExemptFromCashierGate(user);
-  const q = useQuery(() => (exempt ? Promise.resolve(null) : getCurrentCashierSession()), [exempt]);
+  const sessionOpen = useCashierSessionStore((s) => s.sessionOpen);
+  const loading = useCashierSessionStore((s) => s.loading);
+  const fetchedForUserId = useCashierSessionStore((s) => s.fetchedForUserId);
+  const refresh = useCashierSessionStore((s) => s.refresh);
+
+  useEffect(() => {
+    if (exempt) return;
+    if (fetchedForUserId === (user?.userId ?? null)) return;
+    void refresh(user?.userId ?? null);
+  }, [exempt, user?.userId, fetchedForUserId, refresh]);
+
   return {
-    sessionOpen: exempt ? true : q.data != null,
-    loading: exempt ? false : q.loading,
-    refetch: q.refetch,
+    sessionOpen: exempt ? true : sessionOpen === true,
+    loading: exempt ? false : loading,
+    refetch: () => refresh(user?.userId ?? null),
   };
 }
