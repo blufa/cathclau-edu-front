@@ -20,7 +20,11 @@ const SubscriptionContext = createContext<SubscriptionContextValue | null>(null)
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const tenantScoped = !!user?.tenantId && !user.roles.includes("SUPER_ADMIN");
+  // user.tenantId est déjà résolu vers l'école impersonnée pour un SUPER_ADMIN (voir
+  // auth-provider.tsx) — exclure le rôle en plus empêchait tout accès au tableau de bord pendant
+  // l'impersonation (bug réel constaté : école bien impersonnée dans le header, mais /dashboard
+  // affichait quand même le message "administrateur de la plateforme").
+  const tenantScoped = !!user?.tenantId;
   const isSchoolAdmin = !!user?.roles.includes("SCHOOL_ADMIN");
 
   const [subscription, setSubscription] = useState<Subscription | null>(null);
