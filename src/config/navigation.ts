@@ -224,6 +224,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "Frais plateforme", href: "/platform/frais", icon: Banknote, roles: ["SUPER_ADMIN"] },
       { label: "Préfectures DPE/DCE", href: "/platform/prefectures", icon: Landmark, roles: ["SUPER_ADMIN"] },
       { label: "Blog", href: "/platform/blog/posts", icon: Newspaper, roles: ["SUPER_ADMIN", "REDACTEUR"] },
+      { label: "Intégrité des données", href: "/platform/data-integrity", icon: ShieldAlert, roles: ["SUPER_ADMIN"] },
     ],
   },
   {
