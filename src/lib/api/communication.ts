@@ -30,11 +30,18 @@ export function sendCommunication(input: SendCommunicationInput): Promise<Commun
   return api.post<Communication>("/communications", input);
 }
 
-/** Tous les élèves d'une classe avec leur statut de paiement de la mensualité (à jour/retard/échéance
- * proche), leur progression en tranches et leurs contacts parents — pour trier/filtrer avant une
- * relance SMS ciblée. */
-export function listPaymentReminderCandidates(classId: number): Promise<PaymentReminderCandidate[]> {
-  return api.get<PaymentReminderCandidate[]>("/communications/payment-reminders", { query: { classId } });
+/** Tous les élèves (d'une classe, ou de toutes si `classId` omis) avec leur statut de paiement de la
+ * mensualité (à jour/retard/échéance proche), leur progression en tranches et leurs contacts parents —
+ * pour trier/filtrer avant une relance SMS ciblée ou une impression. */
+export function listPaymentReminderCandidates(classId?: number | null): Promise<PaymentReminderCandidate[]> {
+  return api.get<PaymentReminderCandidate[]>("/communications/payment-reminders", { query: { classId: classId ?? undefined } });
+}
+
+/** PDF (même en-tête que les autres documents officiels) de la liste exactement telle que filtrée à
+ * l'écran — le backend recalcule le statut courant des élèves sélectionnés plutôt que de faire
+ * confiance aux données déjà affichées (évite un PDF qui reflèterait un état périmé). */
+export function printPaymentStatusList(classId: number | null, studentIds: number[]): Promise<string> {
+  return api.postBlobUrl("/communications/payment-reminders/pdf", { classId, studentIds });
 }
 
 /** Diffusion de masse segmentée (tous les parents, une classe, garçons/filles, enseignants, élève

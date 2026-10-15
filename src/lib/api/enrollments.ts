@@ -62,3 +62,12 @@ export function updatePlatformAccess(id: number, optIn: boolean): Promise<Enroll
 export function updateMonthlyPayment(id: number, optIn: boolean): Promise<Enrollment> {
   return api.patch<Enrollment>(`/enrollments/${id}/monthly-payment`, { optIn });
 }
+
+export interface ArrearsSummary { studentId: number; totalDue: string; invoiceCount: number; }
+
+/** Dette (factures impayées d'une année antérieure à academicYearId) de chaque élève listé — pour
+ * bloquer la réinscription d'un élève qui n'est pas à jour, même s'il est admis (§retour comptable). */
+export function getArrears(studentIds: number[], academicYearId: number): Promise<ArrearsSummary[]> {
+  if (studentIds.length === 0) return Promise.resolve([]);
+  return api.get<ArrearsSummary[]>("/enrollments/arrears", { query: { studentIds: studentIds.join(","), academicYearId } });
+}

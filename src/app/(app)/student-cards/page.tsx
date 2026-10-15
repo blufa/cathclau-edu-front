@@ -149,7 +149,7 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
           academicYearLabel: years.find((y) => y.id === c.academicYearId)?.label ?? null,
           fields: [
             { label: "Classe", value: c.classId != null ? (classLabel.get(c.classId) ?? "—") : "—" },
-            { label: "Né le", value: formatDate(student?.birthDate) },
+            { label: "Adresse", value: student?.address ?? "—" },
           ],
           qrData: buildIdentityQr({ type: "STUDENT", fullName, matricule: c.studentNumber }),
           primaryColor: colors.primaryColor,
