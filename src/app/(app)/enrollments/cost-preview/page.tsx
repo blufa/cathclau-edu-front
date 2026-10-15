@@ -166,7 +166,11 @@ function ChildCostPreview({
     [installmentsQuery.data],
   );
 
-  const ready = !!classId && !!kind;
+  // Les tranches, frais annexes et le transport ne dépendent pas du type (inscription/réinscription) —
+  // seule la ligne de frais d'inscription/réinscription en dépend (voir plus bas, absente si kind est
+  // vide). Avant, "ready" exigeait aussi kind, donc choisir un trajet de transport avant de cocher
+  // Inscription/Réinscription n'affichait rien du tout (§retour utilisateur "rien ne se passe").
+  const ready = !!classId;
   const loading = feesQuery.loading || (!!monthlyFee && installmentsQuery.loading);
 
   const lines: CostLine[] = useMemo(() => {
@@ -225,64 +229,70 @@ function ChildCostPreview({
             <Label>Classe <span className="text-error-500">*</span></Label>
             <SearchableSelect value={classId} options={classOptions}
               onChange={(v) => onChange({ classId: v, kind: null, routeId: "", overrides: {} })}
-              triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucune classe" />
+              triggerClassName="w-48 justify-between px-3" noResultsLabel="Aucune classe" />
           </Field>
           <Field>
             <Label>Transport (optionnel)</Label>
             <SearchableSelect value={routeId} options={routeOptions} onChange={(v) => onChange({ routeId: v })}
-              triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucun trajet" />
+              triggerClassName="w-48 justify-between px-3" noResultsLabel="Aucun trajet" />
           </Field>
+          {classId && (
+            <div className="flex gap-2">
+              {(["ENROLLMENT", "RE_ENROLLMENT"] as EnrollmentKind[]).map((k) => {
+                const checked = kind === k;
+                return (
+                  <label key={k} className={`flex h-11 items-center gap-2 whitespace-nowrap rounded-lg border-2 px-3 text-sm transition-colors cursor-pointer ${
+                    checked ? "border-brand-500 bg-brand-50 font-semibold text-brand-900" : "border-gray-200 font-medium text-gray-700 hover:border-gray-300"
+                  }`}>
+                    <input type="checkbox" className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
+                      checked={checked} onChange={(e) => onChange({ kind: e.target.checked ? k : null, overrides: {} })} />
+                    {k === "ENROLLMENT" ? "Inscription" : "Réinscription"}
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
-
-        {classId && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:max-w-md">
-            {(["ENROLLMENT", "RE_ENROLLMENT"] as EnrollmentKind[]).map((k) => {
-              const checked = kind === k;
-              return (
-                <label key={k} className={`flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors cursor-pointer ${
-                  checked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"
-                }`}>
-                  <input type="checkbox" className="h-5 w-5 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
-                    checked={checked} onChange={(e) => onChange({ kind: e.target.checked ? k : null, overrides: {} })} />
-                  <span className={`text-sm ${checked ? "font-semibold text-brand-900" : "font-medium text-gray-700"}`}>
-                    {k === "ENROLLMENT" ? "Inscription (nouvel élève)" : "Réinscription (déjà scolarisé ici)"}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        )}
 
         {ready && (
           loading ? (
             <div className="flex justify-center py-10"><Spinner /></div>
           ) : (
-            <div className="space-y-1 border-t border-gray-100 pt-3">
-              {!enrollmentFee && (
-                <p className="pb-3 text-sm text-warning-700">
+            <div className="space-y-2 border-t border-gray-100 pt-3">
+              {!kind && (
+                <p className="pb-1 text-sm text-gray-400">
+                  Cochez aussi Inscription ou Réinscription pour inclure ce frais dans le total.
+                </p>
+              )}
+              {kind && !enrollmentFee && (
+                <p className="pb-1 text-sm text-warning-700">
                   Aucun frais {kind === "ENROLLMENT" ? "d'inscription" : "de réinscription"} configuré pour cette classe.
                 </p>
               )}
               {monthlyFee && installments.length === 0 && (
-                <p className="pb-3 text-sm text-warning-700">Aucune tranche de mensualité configurée pour cette classe.</p>
+                <p className="pb-1 text-sm text-warning-700">Aucune tranche de mensualité configurée pour cette classe.</p>
               )}
               {!monthlyFee && (
-                <p className="pb-3 text-sm text-warning-700">Aucune mensualité configurée pour cette classe.</p>
+                <p className="pb-1 text-sm text-warning-700">Aucune mensualité configurée pour cette classe.</p>
               )}
-              {lines.map((l) => {
-                const checked = overrides[l.key] ?? l.defaultChecked;
-                return (
-                  <label key={l.key} className="flex cursor-pointer items-center justify-between gap-3 border-b border-gray-100 py-2.5 last:border-0">
-                    <span className="flex items-center gap-3">
-                      <input type="checkbox" className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
-                        checked={checked} onChange={(e) => onChange({ overrides: { ...overrides, [l.key]: e.target.checked } })} />
-                      <span className="text-sm text-gray-700">{l.label}</span>
-                    </span>
-                    <span className={`font-semibold ${checked ? "text-gray-900" : "text-gray-400"}`}>{formatGNF(l.amount)}</span>
-                  </label>
-                );
-              })}
-              <div className="flex items-center justify-between pt-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {lines.map((l) => {
+                  const checked = overrides[l.key] ?? l.defaultChecked;
+                  return (
+                    <label key={l.key} className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${
+                      checked ? "border-brand-300 bg-brand-50" : "border-gray-200 hover:border-gray-300"
+                    }`}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <input type="checkbox" className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
+                          checked={checked} onChange={(e) => onChange({ overrides: { ...overrides, [l.key]: e.target.checked } })} />
+                        <span className="truncate text-sm text-gray-700">{l.label}</span>
+                      </span>
+                      <span className={`shrink-0 text-sm font-semibold ${checked ? "text-gray-900" : "text-gray-400"}`}>{formatGNF(l.amount)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between pt-2">
                 <span className="text-base font-semibold text-gray-900">Montant pour cet enfant</span>
                 <span className="text-xl font-bold text-brand-700">{formatGNF(total)}</span>
               </div>
