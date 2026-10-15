@@ -14,6 +14,7 @@ export default function EnrollmentsLayout({ children }: { children: ReactNode })
           // ajouté ici volontairement (absent des autres onglets de cette barre), voir la même note
           // dans navigation.ts (§retour comptable, "Inscription et rentrée" plutôt que "Communication").
           { label: "Suivi des paiements", href: "/communications/payment-reminders", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["communication:send"], module: "STUDENTS" },
+          { label: "Combien pour démarrer ?", href: "/enrollments/cost-preview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["frais_scolaire:read"], module: "STUDENTS" },
         ]}
       />
       {children}

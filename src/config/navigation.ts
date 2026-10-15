@@ -100,6 +100,10 @@ export const NAVIGATION: NavSection[] = [
           // use-nav-gating.ts), un comptable pense "inscription/scolarité" avant "communication"
           // pour retrouver le suivi des paiements (§retour comptable).
           { label: "Suivi des paiements", href: "/communications/payment-reminders", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["communication:send"], module: "STUDENTS" },
+          // §retour comptable : "le parent demande la 7ème, il doit payer combien pour commencer ?" —
+          // frais d'inscription/réinscription + 1ère tranche de mensualité, sans détour par la page
+          // Frais scolaires ni commencer une inscription juste pour voir le prix.
+          { label: "Combien pour démarrer ?", href: "/enrollments/cost-preview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["frais_scolaire:read"], module: "STUDENTS" },
         ],
       },
       { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
