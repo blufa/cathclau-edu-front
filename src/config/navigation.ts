@@ -94,6 +94,12 @@ export const NAVIGATION: NavSection[] = [
           { label: "Réinscription (rentrée)", href: "/enrollments/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS", cashGate: true },
           { label: "Mouvements & attente", href: "/enrollments/movements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
           { label: "Tableau de la rentrée", href: "/enrollments/overview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
+          // Mêmes rôles/permission que l'onglet "Relances paiement" sous Communication (deux portes
+          // d'entrée vers le même écran) — ACCOUNTANT ajouté ici volontairement, contrairement aux
+          // autres enfants de cette section : chaque enfant est filtré indépendamment (voir
+          // use-nav-gating.ts), un comptable pense "inscription/scolarité" avant "communication"
+          // pour retrouver le suivi des paiements (§retour comptable).
+          { label: "Suivi des paiements", href: "/communications/payment-reminders", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["communication:send"], module: "STUDENTS" },
         ],
       },
       { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
