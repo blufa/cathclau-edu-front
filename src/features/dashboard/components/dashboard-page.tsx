@@ -5,8 +5,6 @@ import { AlertTriangle, CalendarClock, CalendarCheck, GraduationCap, Percent, Re
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useSubscription } from "@/providers/subscription-provider";
-import { setAutoRenewal } from "@/lib/api/platform";
-import { Switch } from "@/components/ui/switch";
 import { INVOICE_STATUS_LABEL, type Invoice, type InvoiceStatus } from "@/lib/types/billing";
 import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE } from "@/lib/types/calendar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,12 +16,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { BarBreakdownChart, type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
 import { PieBreakdownChart } from "@/components/charts/pie-breakdown-chart";
-import { SubscriptionStatusBadge } from "@/components/platform/status-badge";
-import { QuotaProgress } from "@/components/platform/quota-progress";
 import { PendingSubscriptionBanner } from "@/components/platform/pending-subscription-banner";
 import { Reveal } from "@/components/public/reveal";
 import { formatDate, formatGNF } from "@/lib/format";
-import { notifyError, notifySuccess } from "@/lib/feedback";
 import { GettingStarted } from "./getting-started";
 import {
   useAcademicDashboardQuery,
@@ -73,7 +68,7 @@ function statusBreakdown(invoices: Invoice[]): BreakdownItem[] {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { subscription, plan, tenantStatus, loading: subLoading, tenantScoped, refresh } = useSubscription();
+  const { plan, loading: subLoading, tenantScoped } = useSubscription();
   const tenantId = user?.tenantId ?? null;
 
   const studentsQuery = useStudentsCountQuery(tenantScoped);
@@ -111,15 +106,6 @@ export default function DashboardPage() {
   // École qui a déjà des données réelles → on affiche le tableau financier ; sinon (école neuve) on
   // laisse le guide « Premiers pas » être le centre de la page, sans widgets vides qui l'encombrent.
   const hasData = consumed > 0 || invoices.length > 0;
-
-  async function toggleAutoRenew(enabled: boolean) {
-    if (!subscription) return;
-    try {
-      await setAutoRenewal(subscription.id, enabled);
-      notifySuccess(enabled ? "Renouvellement automatique activé" : "Renouvellement automatique désactivé");
-      refresh();
-    } catch (err) { notifyError(err); }
-  }
 
   return (
     <div className="space-y-6">
@@ -334,44 +320,6 @@ export default function DashboardPage() {
             </div>
           </Reveal>
           )}
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle>Mon abonnement</CardTitle></CardHeader>
-              <CardBody className="space-y-3 text-sm text-gray-700">
-                {subscription ? (
-                  <>
-                    <div className="flex justify-between"><span className="text-gray-500">Plan</span><span>{plan?.name ?? "—"}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Statut</span><SubscriptionStatusBadge status={subscription.status} /></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Fin de période</span><span>{formatDate(subscription.endDate)}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Montant</span><span>{formatGNF(subscription.amount)}</span></div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500">Renouvellement auto</span>
-                      <Switch checked={!!subscription.autoRenewal} onChange={toggleAutoRenew} ariaLabel="Renouvellement automatique" />
-                    </div>
-                    <div className="flex gap-2 pt-2"><Button component={Link} href="/subscription" size="sm">Gérer l&apos;abonnement</Button></div>
-                  </>
-                ) : tenantStatus === "ACTIVE" ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between"><span className="text-gray-500">Statut</span><span className="font-medium text-success-600">École activée</span></div>
-                    <p className="text-xs text-gray-400">Votre établissement est actif. Aucune action requise.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-gray-500">
-                      {tenantStatus === "TRIAL" ? "Vous êtes en période d'essai. Choisissez un plan pour continuer." : "Choisissez un plan pour activer durablement votre école."}
-                    </p>
-                    <Button component={Link} href="/subscription" size="sm">Voir les plans</Button>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle>Quota élèves</CardTitle></CardHeader>
-              <CardBody><QuotaProgress consumed={consumed} limit={plan?.studentLimit ?? null} /></CardBody>
-            </Card>
-          </div>
 
           {/* Dernières factures élèves */}
           {hasData && (

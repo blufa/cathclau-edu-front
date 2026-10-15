@@ -738,10 +738,6 @@ export default function BulkFamilyEnrollmentPage() {
               </Field>
               <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={newParent.phone} onChange={(v) => setNewParent({ ...newParent, phone: v })} />
               <Field>
-                <Label>Profession (optionnel)</Label>
-                <Input disabled={running || finished} value={newParent.occupation} onChange={(e) => setNewParent({ ...newParent, occupation: e.target.value })} />
-              </Field>
-              <Field>
                 <Label>Adresse (optionnel)</Label>
                 <Combobox
                   disabled={running || finished}
