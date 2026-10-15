@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GraduationCap, Rocket } from "lucide-react";
+import { GraduationCap, Rocket, Wallet } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getClassStudents, listAcademicYears, listClasses, listLevels } from "@/lib/api/academics";
-import { reenroll } from "@/lib/api/enrollments";
+import { getArrears, reenroll } from "@/lib/api/enrollments";
 import type { ClassStudent, Classe } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -18,8 +18,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/stat-card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
-import { notifySuccess } from "@/lib/feedback";
+import { formatGNF } from "@/lib/format";
+import { notifyError, notifySuccess } from "@/lib/feedback";
 import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
+import { MultiChildCollectModal } from "@/features/billing/components/multi-child-collect-modal";
 
 const EMPTY_OPTION: SearchableOption = { value: "", trigger: "— Choisir —", label: "— Choisir —", searchText: "" };
 function toOptions(items: { id: number; label: string }[]): SearchableOption[] {
@@ -51,9 +53,17 @@ export default function ReEnrollmentPage() {
   const targetClassesQuery = useQuery(() => (effectiveTarget ? listClasses(Number(effectiveTarget)) : Promise.resolve([])), [effectiveTarget]);
   const studentsQuery = useQuery(() => (sourceClassId ? getClassStudents(Number(sourceClassId)) : Promise.resolve([])), [sourceClassId]);
 
+  // Dette de l'année précédente (§retour comptable) : un élève admis mais pas à jour dans ses
+  // finances ne doit pas pouvoir être réinscrit, ni en passage ni en redoublant la même classe.
+  const arrearsQuery = useQuery(() => {
+    const ids = (studentsQuery.data ?? []).map((s) => s.id);
+    return ids.length && effectiveTarget ? getArrears(ids, Number(effectiveTarget)) : Promise.resolve([]);
+  }, [studentsQuery.data, effectiveTarget]);
+
   const [overrides, setOverrides] = useState<Record<number, RowOverride>>({});
   const [results, setResults] = useState<Record<number, RowResult>>({});
   const [running, setRunning] = useState(false);
+  const [payingStudent, setPayingStudent] = useState<{ id: number; name: string } | null>(null);
 
   // Barrière caisse (§retour comptable) : la réinscription régénère les factures de frais, réglées au
   // guichet au même moment — même garde que "Nouvelle inscription" (voir BulkFamilyEnrollmentPage).
@@ -82,10 +92,13 @@ export default function ReEnrollmentPage() {
   const promotionClassId = firstTargetClassForLevel(nextLevelId(sourceClass?.levelId));
   const sameLevelClassId = firstTargetClassForLevel(sourceClass?.levelId ?? null);
 
+  const arrearsByStudent = new Map((arrearsQuery.data ?? []).map((a) => [a.studentId, a]));
+  const isBlocked = (id: number) => Number(arrearsByStudent.get(id)?.totalDue ?? 0) > 0;
+
   function rowOf(s: ClassStudent) {
     const o = overrides[s.id] ?? {};
     const redoublant = o.redoublant ?? false;
-    const include = o.include ?? true;
+    const include = isBlocked(s.id) ? false : (o.include ?? true);
     const targetClassId = o.targetClassId ?? (redoublant ? sameLevelClassId : promotionClassId);
     return { include, redoublant, targetClassId };
   }
@@ -106,8 +119,12 @@ export default function ReEnrollmentPage() {
       try {
         await reenroll({ studentId: s.id, classId: Number(r.targetClassId), academicYearId: Number(effectiveTarget), type: "RE_ENROLLMENT" });
         res[s.id] = "ok";
-      } catch {
+      } catch (err) {
         res[s.id] = "error";
+        // Défense en profondeur : l'UI bloque déjà les élèves en dette avant ce point (case "Inclure"
+        // désactivée), mais si le serveur rejette malgré tout (ex. dette apparue entre-temps), le
+        // comptable doit voir le vrai message plutôt qu'un échec muet.
+        notifyError(err);
       }
     }
     setResults(res);
@@ -167,16 +184,18 @@ export default function ReEnrollmentPage() {
         <>
           <Table>
             <THead><tr>
-              <TH>Inclure</TH><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Redoublant</TH><TH>Classe cible ({years.find((y) => String(y.id) === effectiveTarget)?.label ?? ""})</TH><TH>Résultat</TH>
+              <TH>Inclure</TH><TH>Élève</TH><TH className="hidden sm:table-cell">Matricule</TH><TH>Redoublant</TH><TH>Classe cible ({years.find((y) => String(y.id) === effectiveTarget)?.label ?? ""})</TH><TH>Factures impayées (année précédente)</TH><TH>Résultat</TH>
             </tr></THead>
             <TBody>
               {students.length === 0 && <TR><TD colSpan={100} className="py-10 text-center text-slate-400">Aucun élève dans cette classe.</TD></TR>}
               {students.map((s) => {
                 const r = rowOf(s);
+                const blocked = isBlocked(s.id);
                 return (
                   <TR key={s.id}>
                     <TD>
-                      <input type="checkbox" className="h-4 w-4 cursor-pointer accent-brand-600" checked={r.include}
+                      <input type="checkbox" className="h-4 w-4 cursor-pointer accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        checked={r.include} disabled={blocked}
                         onChange={(e) => setRow(s.id, { include: e.target.checked })} />
                     </TD>
                     <TD className="font-medium text-slate-900">{s.firstName} {s.lastName}</TD>
@@ -194,8 +213,20 @@ export default function ReEnrollmentPage() {
                       />
                     </TD>
                     <TD>
+                      {blocked ? (
+                        <div className="flex items-center gap-2">
+                          <Badge tone="red">{formatGNF(arrearsByStudent.get(s.id)?.totalDue ?? 0)}</Badge>
+                          <Button size="sm" variant="secondary" leftSection={<Wallet className="h-3.5 w-3.5" />}
+                            onClick={() => setPayingStudent({ id: s.id, name: `${s.firstName} ${s.lastName}` })}>
+                            Encaisser
+                          </Button>
+                        </div>
+                      ) : "—"}
+                    </TD>
+                    <TD>
                       {results[s.id] === "ok" ? <Badge tone="green">Réinscrit</Badge>
                         : results[s.id] === "error" ? <Badge tone="red">Échec / déjà inscrit</Badge>
+                        : blocked ? <Badge tone="red">Bloqué</Badge>
                         : r.redoublant ? <Badge tone="amber">Redouble</Badge> : <Badge tone="indigo">Passe</Badge>}
                     </TD>
                   </TR>
@@ -203,6 +234,14 @@ export default function ReEnrollmentPage() {
               })}
             </TBody>
           </Table>
+
+          <MultiChildCollectModal
+            students={payingStudent ? [payingStudent] : []}
+            tenantId={tenantId}
+            open={payingStudent != null}
+            onClose={() => setPayingStudent(null)}
+            onCollected={() => { setPayingStudent(null); arrearsQuery.refetch(); }}
+          />
 
           {canDo && (
             <div className="flex flex-col items-end gap-2">
