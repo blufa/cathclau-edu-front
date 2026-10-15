@@ -642,10 +642,6 @@ export default function BulkFamilyEnrollmentPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Nouvelle inscription</h1>
-        <p className="text-sm text-gray-500">
-          Créez le parent une seule fois, puis inscrivez un ou plusieurs enfants d&apos;un coup, même
-          dans des classes différentes — factures générées automatiquement.
-        </p>
       </Reveal>
 
       <Card>
