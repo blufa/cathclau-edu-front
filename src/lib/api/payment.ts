@@ -187,3 +187,9 @@ export function getReceiptPdf(id: number): Promise<{ url?: string; status?: stri
 export function getReceiptPdfObjectUrlById(id: number): Promise<string> {
   return api.blobUrl(`/payments/receipts/${id}/pdf/download`);
 }
+
+/** Recalcule le nom de l'élève sur le reçu depuis sa fiche actuelle (faute de frappe corrigée après
+ * la génération) et invalide le PDF déjà mis en cache. */
+export function refreshReceiptStudentName(id: number): Promise<Receipt> {
+  return api.post<Receipt>(`/payments/receipts/${id}/refresh-student-name`);
+}
