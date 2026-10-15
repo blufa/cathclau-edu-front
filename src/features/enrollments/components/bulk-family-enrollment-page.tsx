@@ -1164,77 +1164,76 @@ function ChildCard({
         </Field>
       </div>
 
-      {/* Sexe + Lien de parenté côte à côte, puis Type + Exonération côte à côte (demande
-          utilisateur) : les quatre sont des cases à cocher pleine hauteur, pas des champs compacts
-          d'une ligne — groupées deux par deux en flex plutôt que mélangées à la grille ci-dessus,
-          pour ne pas casser l'alignement des rangées courtes (Prénom/Nom/Classe). */}
-      <div className="mt-3 flex flex-col sm:flex-row gap-3">
-        <div className="flex-1">
-          <Field>
-            <Label>Sexe <span className="text-error-500">*</span></Label>
-            <RequiredChoiceCards
-              horizontal
-              disabled={locked}
-              value={child.gender}
-              onChange={(v) => onUpdate({ gender: v })}
-              options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
-            />
-          </Field>
-        </div>
-        <div className="flex-1">
-          <Field>
-            <Label>Lien de parenté</Label>
-            <RequiredChoiceCards
-              disabled={locked}
-              value={child.relationship}
-              onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
-              options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
-            />
-          </Field>
-        </div>
+      {/* Sexe, Lien de parenté, Type, Exonération : quatre sections indépendantes pleine largeur,
+          chacune sur sa propre rangée (§retour utilisateur — les coupler 2 par 2 en flex "ne colle
+          pas" quand l'une a 2 options et l'autre 8 : forcer la même hauteur de rangée entre un champ
+          court et un champ long reste bancal à n'importe quelle largeur d'écran, pas seulement sur
+          mobile). Sexe/Type restent compacts via `horizontal` (leurs 2 options côte à côte au lieu
+          d'empilées) ; Lien de parenté/Exonération gardent une liste verticale, chacun adapté à son
+          propre nombre d'options plutôt qu'imposé par son voisin. */}
+      <div className="mt-3">
+        <Field>
+          <Label>Sexe <span className="text-error-500">*</span></Label>
+          <RequiredChoiceCards
+            horizontal
+            disabled={locked}
+            value={child.gender}
+            onChange={(v) => onUpdate({ gender: v })}
+            options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
+          />
+        </Field>
       </div>
-      <div className="mt-3 flex flex-col sm:flex-row gap-3">
-        <div className="flex-1">
-          <Field>
-            <Label>Type <span className="text-error-500">*</span></Label>
-            <RequiredChoiceCards
-              horizontal
-              disabled={locked}
-              value={child.enrollmentType}
-              onChange={(v) => onUpdate({ enrollmentType: v })}
-              options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
-            />
-          </Field>
-        </div>
-        <div className="flex-1">
-          {/* Exonération en cases à cocher (comme Sexe/Type) plutôt qu'un menu déroulant (§retour
-              comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/fermé
-              passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
-              tout de suite). */}
-          <Field>
-            <Label>Exonération (optionnel)</Label>
-            <RequiredChoiceCards
-              disabled={locked}
-              value={child.exemptionRuleId}
-              onChange={(v) => {
-                const ruleId = v ?? "";
-                const rule = exemptionRules.find((r) => String(r.id) === ruleId);
-                // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
-                // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
-                // masquée (elle ne concerne que ce cas précis).
-                onUpdate({ exemptionRuleId: ruleId, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
-              }}
-              options={[
-                ["", "Aucune"] as const,
-                ...exemptionRules.map((r) => {
-                  const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
-                  const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
-                  return [String(r.id), label] as const;
-                }),
-              ]}
-            />
-          </Field>
-        </div>
+      <div className="mt-3">
+        <Field>
+          <Label>Lien de parenté</Label>
+          <RequiredChoiceCards
+            disabled={locked}
+            value={child.relationship}
+            onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
+            options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
+          />
+        </Field>
+      </div>
+      <div className="mt-3">
+        <Field>
+          <Label>Type <span className="text-error-500">*</span></Label>
+          <RequiredChoiceCards
+            horizontal
+            disabled={locked}
+            value={child.enrollmentType}
+            onChange={(v) => onUpdate({ enrollmentType: v })}
+            options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
+          />
+        </Field>
+      </div>
+      <div className="mt-3">
+        {/* Exonération en cases à cocher (comme Sexe/Type) plutôt qu'un menu déroulant (§retour
+            comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/fermé
+            passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
+            tout de suite). */}
+        <Field>
+          <Label>Exonération (optionnel)</Label>
+          <RequiredChoiceCards
+            disabled={locked}
+            value={child.exemptionRuleId}
+            onChange={(v) => {
+              const ruleId = v ?? "";
+              const rule = exemptionRules.find((r) => String(r.id) === ruleId);
+              // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
+              // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
+              // masquée (elle ne concerne que ce cas précis).
+              onUpdate({ exemptionRuleId: ruleId, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
+            }}
+            options={[
+              ["", "Aucune"] as const,
+              ...exemptionRules.map((r) => {
+                const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
+                const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
+                return [String(r.id), label] as const;
+              }),
+            ]}
+          />
+        </Field>
       </div>
 
       {/* Transport retiré d'ici (§retour comptable) — l'abonnement au bus se fait désormais après
