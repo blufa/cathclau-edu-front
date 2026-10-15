@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { listFeesByClass, listInstallments } from "@/lib/api/billing";
 import { listRoutes } from "@/lib/api/transport";
+import type { TransportRoute } from "@/lib/types/transport";
 import { Card, CardBody } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Field, Label } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Reveal } from "@/components/public/reveal";
@@ -23,12 +26,25 @@ interface CostLine {
   defaultChecked: boolean;
 }
 
+interface ChildConfig {
+  id: string;
+  classId: string;
+  kind: EnrollmentKind | null;
+  routeId: string;
+  overrides: Record<string, boolean>;
+}
+
+let nextChildId = 1;
+function newChild(): ChildConfig {
+  return { id: `child-${nextChildId++}`, classId: "", kind: null, routeId: "", overrides: {} };
+}
+
 /**
  * Réponse rapide à "le parent demande la 7ème, il doit payer combien pour commencer ?" (§retour
- * comptable) : le comptable choisit la classe puis coche, parmi les frais réellement configurés pour
- * cette classe (inscription/réinscription, chaque tranche de mensualité, frais annexes, transport),
- * ceux que le parent doit payer maintenant — sans détour par la page Frais scolaires ni commencer une
- * inscription juste pour voir le prix. Lecture seule, aucune facture/élève créé ici.
+ * comptable) : le comptable choisit la classe (une ligne par enfant — un parent en a souvent 2 à 4,
+ * dans des classes différentes) puis coche, parmi les frais réellement configurés, ceux que le parent
+ * doit payer maintenant — sans détour par la page Frais scolaires ni commencer une inscription juste
+ * pour voir le prix. Lecture seule, aucune facture/élève créé ici.
  */
 export default function EnrollmentCostPreviewPage() {
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
@@ -40,30 +56,106 @@ export default function EnrollmentCostPreviewPage() {
     [classesQuery.data],
   );
   const routesQuery = useCachedQuery("transport-routes", listRoutes, []);
+  const routes = useMemo(() => routesQuery.data ?? [], [routesQuery.data]);
   const routeOptions: SearchableOption[] = useMemo(
     () => [
       { value: "", trigger: "Aucun", label: "Aucun", searchText: "" },
-      ...(routesQuery.data ?? []).filter((r) => r.active).map((r) => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
+      ...routes.filter((r) => r.active).map((r) => ({ value: String(r.id), trigger: r.name, label: r.name, searchText: r.name })),
     ],
-    [routesQuery.data],
+    [routes],
   );
 
-  const [classId, setClassId] = useState("");
-  const [kind, setKind] = useState<EnrollmentKind | null>(null);
-  const [routeId, setRouteId] = useState("");
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [children, setChildren] = useState<ChildConfig[]>([newChild()]);
+  const [totals, setTotals] = useState<Record<string, number>>({});
 
-  function resetSelection() {
-    setKind(null);
-    setRouteId("");
-    setOverrides({});
-  }
+  const updateChild = useCallback((id: string, next: Partial<ChildConfig>) => {
+    setChildren((prev) => prev.map((c) => (c.id === id ? { ...c, ...next } : c)));
+  }, []);
+  const removeChild = useCallback((id: string) => {
+    setChildren((prev) => prev.filter((c) => c.id !== id));
+    setTotals((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+  const setChildTotal = useCallback((id: string, total: number) => {
+    setTotals((prev) => (prev[id] === total ? prev : { ...prev, [id]: total }));
+  }, []);
+
+  const grandTotal = Object.values(totals).reduce((s, t) => s + t, 0);
+
+  return (
+    <div className="space-y-6">
+      <Reveal y={12}>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Combien pour démarrer ?</h1>
+        <p className="text-sm text-gray-500">
+          Choisissez une classe par enfant — un parent en a souvent plusieurs, dans des classes
+          différentes — puis cochez les frais à payer maintenant pour chacun.
+        </p>
+      </Reveal>
+
+      <div className="space-y-4">
+        {children.map((child, idx) => (
+          <ChildCostPreview
+            key={child.id}
+            child={child}
+            index={idx}
+            classOptions={classOptions}
+            routeOptions={routeOptions}
+            routes={routes}
+            onChange={(next) => updateChild(child.id, next)}
+            onTotalChange={(total) => setChildTotal(child.id, total)}
+            onRemove={() => removeChild(child.id)}
+            removable={children.length > 1}
+          />
+        ))}
+      </div>
+
+      <Button variant="secondary" onClick={() => setChildren((prev) => [...prev, newChild()])} leftSection={<Plus className="h-4 w-4" />}>
+        Ajouter un enfant
+      </Button>
+
+      {children.length > 1 && (
+        <Card>
+          <CardBody className="flex items-center justify-between">
+            <span className="text-base font-semibold text-gray-900">Total pour les {children.length} enfants</span>
+            <span className="text-xl font-bold text-brand-700">{formatGNF(grandTotal)}</span>
+          </CardBody>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ChildCostPreview({
+  child,
+  index,
+  classOptions,
+  routeOptions,
+  routes,
+  onChange,
+  onTotalChange,
+  onRemove,
+  removable,
+}: {
+  child: ChildConfig;
+  index: number;
+  classOptions: SearchableOption[];
+  routeOptions: SearchableOption[];
+  routes: TransportRoute[];
+  onChange: (next: Partial<ChildConfig>) => void;
+  onTotalChange: (total: number) => void;
+  onRemove: () => void;
+  removable: boolean;
+}) {
+  const { classId, kind, routeId, overrides } = child;
 
   const feesQuery = useQuery(() => (classId ? listFeesByClass(Number(classId)) : Promise.resolve([])), [classId]);
   const enrollmentFee = (feesQuery.data ?? []).find((f) => f.type === kind);
   const monthlyFee = (feesQuery.data ?? []).find((f) => f.type === "MONTHLY");
   const annexFees = (feesQuery.data ?? []).filter((f) => f.type === "CANTEEN" || f.type === "EXAM" || f.type === "OTHER");
-  const route = (routesQuery.data ?? []).find((r) => String(r.id) === routeId);
+  const route = routes.find((r) => String(r.id) === routeId);
 
   const installmentsQuery = useQuery(
     () => (monthlyFee ? listInstallments(monthlyFee.id) : Promise.resolve([])),
@@ -96,74 +188,76 @@ export default function EnrollmentCostPreviewPage() {
       });
     });
     annexFees.forEach((f) => {
-      result.push({
-        key: `fee-${f.id}`,
-        label: f.label || "Autre (frais annexe)",
-        amount: Number(f.amount),
-        defaultChecked: false,
-      });
+      result.push({ key: `fee-${f.id}`, label: f.label || "Autre (frais annexe)", amount: Number(f.amount), defaultChecked: false });
     });
     if (route && route.monthlyFee != null) {
-      result.push({
-        key: "transport",
-        label: `Transport — ${route.name}`,
-        amount: Number(route.monthlyFee),
-        defaultChecked: false,
-      });
+      result.push({ key: "transport", label: `Transport — ${route.name}`, amount: Number(route.monthlyFee), defaultChecked: false });
     }
     return result;
   }, [enrollmentFee, kind, installments, annexFees, route]);
 
-  const total = lines.reduce((sum, l) => sum + ((overrides[l.key] ?? l.defaultChecked) ? l.amount : 0), 0);
+  const total = useMemo(
+    () => (ready ? lines.reduce((sum, l) => sum + ((overrides[l.key] ?? l.defaultChecked) ? l.amount : 0), 0) : 0),
+    [ready, lines, overrides],
+  );
+
+  // Fait remonter le total de cet enfant au parent (pour le grand total) — le parent recrée
+  // onTotalChange à chaque rendu, mais la mise à jour est sans effet si le total n'a pas changé (voir
+  // setChildTotal), donc ça converge.
+  useEffect(() => {
+    onTotalChange(total);
+  }, [total, onTotalChange]);
 
   return (
-    <div className="space-y-6">
-      <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Combien pour démarrer ?</h1>
-        <p className="text-sm text-gray-500">
-          Choisissez une classe, puis cochez les frais que le parent doit payer maintenant — inscription,
-          tranche(s) de mensualité, frais annexes, transport...
-        </p>
-      </Reveal>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <Field>
-          <Label>Classe <span className="text-error-500">*</span></Label>
-          <SearchableSelect value={classId} options={classOptions} onChange={(v) => { setClassId(v); resetSelection(); }}
-            triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucune classe" />
-        </Field>
-        <Field>
-          <Label>Transport (optionnel)</Label>
-          <SearchableSelect value={routeId} options={routeOptions} onChange={setRouteId}
-            triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucun trajet" />
-        </Field>
-      </div>
-
-      {classId && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:max-w-md">
-          {(["ENROLLMENT", "RE_ENROLLMENT"] as EnrollmentKind[]).map((k) => {
-            const checked = kind === k;
-            return (
-              <label key={k} className={`flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors cursor-pointer ${
-                checked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"
-              }`}>
-                <input type="checkbox" className="h-5 w-5 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
-                  checked={checked} onChange={(e) => { setKind(e.target.checked ? k : null); setOverrides({}); }} />
-                <span className={`text-sm ${checked ? "font-semibold text-brand-900" : "font-medium text-gray-700"}`}>
-                  {k === "ENROLLMENT" ? "Inscription (nouvel élève)" : "Réinscription (déjà scolarisé ici)"}
-                </span>
-              </label>
-            );
-          })}
+    <Card>
+      <CardBody className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-500">Enfant {index + 1}</span>
+          {removable && (
+            <button type="button" onClick={onRemove} className="text-gray-400 hover:text-error-600" aria-label="Retirer cet enfant">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-      )}
 
-      {ready && (
-        loading ? (
-          <div className="flex justify-center py-10"><Spinner /></div>
-        ) : (
-          <Card>
-            <CardBody className="space-y-1">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field>
+            <Label>Classe <span className="text-error-500">*</span></Label>
+            <SearchableSelect value={classId} options={classOptions}
+              onChange={(v) => onChange({ classId: v, kind: null, routeId: "", overrides: {} })}
+              triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucune classe" />
+          </Field>
+          <Field>
+            <Label>Transport (optionnel)</Label>
+            <SearchableSelect value={routeId} options={routeOptions} onChange={(v) => onChange({ routeId: v })}
+              triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucun trajet" />
+          </Field>
+        </div>
+
+        {classId && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:max-w-md">
+            {(["ENROLLMENT", "RE_ENROLLMENT"] as EnrollmentKind[]).map((k) => {
+              const checked = kind === k;
+              return (
+                <label key={k} className={`flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors cursor-pointer ${
+                  checked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"
+                }`}>
+                  <input type="checkbox" className="h-5 w-5 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
+                    checked={checked} onChange={(e) => onChange({ kind: e.target.checked ? k : null, overrides: {} })} />
+                  <span className={`text-sm ${checked ? "font-semibold text-brand-900" : "font-medium text-gray-700"}`}>
+                    {k === "ENROLLMENT" ? "Inscription (nouvel élève)" : "Réinscription (déjà scolarisé ici)"}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {ready && (
+          loading ? (
+            <div className="flex justify-center py-10"><Spinner /></div>
+          ) : (
+            <div className="space-y-1 border-t border-gray-100 pt-3">
               {!enrollmentFee && (
                 <p className="pb-3 text-sm text-warning-700">
                   Aucun frais {kind === "ENROLLMENT" ? "d'inscription" : "de réinscription"} configuré pour cette classe.
@@ -181,7 +275,7 @@ export default function EnrollmentCostPreviewPage() {
                   <label key={l.key} className="flex cursor-pointer items-center justify-between gap-3 border-b border-gray-100 py-2.5 last:border-0">
                     <span className="flex items-center gap-3">
                       <input type="checkbox" className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600"
-                        checked={checked} onChange={(e) => setOverrides((prev) => ({ ...prev, [l.key]: e.target.checked }))} />
+                        checked={checked} onChange={(e) => onChange({ overrides: { ...overrides, [l.key]: e.target.checked } })} />
                       <span className="text-sm text-gray-700">{l.label}</span>
                     </span>
                     <span className={`font-semibold ${checked ? "text-gray-900" : "text-gray-400"}`}>{formatGNF(l.amount)}</span>
@@ -189,13 +283,13 @@ export default function EnrollmentCostPreviewPage() {
                 );
               })}
               <div className="flex items-center justify-between pt-3">
-                <span className="text-base font-semibold text-gray-900">Montant pour commencer</span>
+                <span className="text-base font-semibold text-gray-900">Montant pour cet enfant</span>
                 <span className="text-xl font-bold text-brand-700">{formatGNF(total)}</span>
               </div>
-            </CardBody>
-          </Card>
-        )
-      )}
-    </div>
+            </div>
+          )
+        )}
+      </CardBody>
+    </Card>
   );
 }
