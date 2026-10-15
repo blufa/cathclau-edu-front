@@ -70,20 +70,25 @@ function useDebouncedSuggestions(fetchFn: (q: string) => Promise<string[]>, minL
  * appliqué à la fois au type Inscription/Réinscription et au sexe) — aucune cochée par défaut (`value`
  * démarre à `null`), responsive : pleine largeur, empilées, le texte passe à la ligne sur mobile au
  * lieu de déborder. */
-function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled }: {
+function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled, horizontal }: {
   value: T | null;
   options: readonly (readonly [T, string])[];
   onChange: (v: T | null) => void;
   disabled?: boolean;
+  /** Côte à côte plutôt qu'empilées — pour une paire d'options courtes (Sexe, Type) à côté d'un
+   * champ à liste longue (Lien de parenté, Exonération) : empilées, ces 2 cartes laissaient un grand
+   * vide sous elles face à une liste de 8 options (§retour utilisateur, "trop d'espace, design
+   * moche") ; côte à côte, leur hauteur totale se rapproche de l'autre colonne. */
+  horizontal?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 pt-1">
+    <div className={horizontal ? "flex flex-col gap-2 pt-1 sm:flex-row" : "flex flex-col gap-2 pt-1"}>
       {options.map(([optValue, text]) => {
         const isChecked = value === optValue;
         return (
           <label
             key={optValue}
-            className={`flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${
+            className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${horizontal ? "w-full sm:flex-1" : "w-full"} ${
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
             } ${isChecked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"}`}
           >
@@ -1168,6 +1173,7 @@ function ChildCard({
           <Field>
             <Label>Sexe <span className="text-error-500">*</span></Label>
             <RequiredChoiceCards
+              horizontal
               disabled={locked}
               value={child.gender}
               onChange={(v) => onUpdate({ gender: v })}
@@ -1192,6 +1198,7 @@ function ChildCard({
           <Field>
             <Label>Type <span className="text-error-500">*</span></Label>
             <RequiredChoiceCards
+              horizontal
               disabled={locked}
               value={child.enrollmentType}
               onChange={(v) => onUpdate({ enrollmentType: v })}
