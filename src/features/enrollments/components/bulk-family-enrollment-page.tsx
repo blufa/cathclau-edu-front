@@ -70,20 +70,32 @@ function useDebouncedSuggestions(fetchFn: (q: string) => Promise<string[]>, minL
  * appliqué à la fois au type Inscription/Réinscription et au sexe) — aucune cochée par défaut (`value`
  * démarre à `null`), responsive : pleine largeur, empilées, le texte passe à la ligne sur mobile au
  * lieu de déborder. */
-function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled }: {
+function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled, horizontal, columns }: {
   value: T | null;
   options: readonly (readonly [T, string])[];
   onChange: (v: T | null) => void;
   disabled?: boolean;
+  /** Les 2 options côte à côte sur une seule rangée (ex. Sexe, Type : exactement 2 options courtes)
+   * plutôt qu'empilées verticalement. */
+  horizontal?: boolean;
+  /** Grille à 2 colonnes au lieu d'une liste empilée — pour une liste plus longue (Lien de parenté :
+   * 8 options) qu'un simple côte-à-côte ne suffit pas à raccourcir (§retour utilisateur, "je crois
+   * il ne sera pas long" : 2 colonnes réduisent 8 lignes à 4). Classe Tailwind écrite en toutes
+   * lettres (pas d'interpolation `grid-cols-${n}`) : le JIT de Tailwind ne génère que les classes
+   * trouvées littéralement dans le code source. */
+  columns?: 2;
 }) {
+  const layout = columns === 2
+    ? "grid grid-cols-2 gap-2 pt-1"
+    : horizontal ? "flex flex-col gap-2 pt-1 sm:flex-row" : "flex flex-col gap-2 pt-1";
   return (
-    <div className="flex flex-col gap-2 pt-1">
+    <div className={layout}>
       {options.map(([optValue, text]) => {
         const isChecked = value === optValue;
         return (
           <label
             key={optValue}
-            className={`flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${
+            className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${horizontal && !columns ? "w-full sm:flex-1" : "w-full"} ${
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
             } ${isChecked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"}`}
           >
@@ -630,10 +642,6 @@ export default function BulkFamilyEnrollmentPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Nouvelle inscription</h1>
-        <p className="text-sm text-gray-500">
-          Créez le parent une seule fois, puis inscrivez un ou plusieurs enfants d&apos;un coup, même
-          dans des classes différentes — factures générées automatiquement.
-        </p>
       </Reveal>
 
       <Card>
@@ -730,10 +738,6 @@ export default function BulkFamilyEnrollmentPage() {
               </Field>
               <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={newParent.phone} onChange={(v) => setNewParent({ ...newParent, phone: v })} />
               <Field>
-                <Label>Email (optionnel)</Label>
-                <Input disabled={running || finished} value={newParent.email} onChange={(e) => setNewParent({ ...newParent, email: e.target.value })} />
-              </Field>
-              <Field>
                 <Label>Profession (optionnel)</Label>
                 <Input disabled={running || finished} value={newParent.occupation} onChange={(e) => setNewParent({ ...newParent, occupation: e.target.value })} />
               </Field>
@@ -812,6 +816,23 @@ export default function BulkFamilyEnrollmentPage() {
           </div>
         </CardHeader>
         <CardBody className="space-y-3">
+          {/* La liste "Exonération" sur chaque enfant ci-dessous reste silencieusement vide dans les
+              DEUX cas suivants (indiscernables sans ce bandeau, §retour comptable — "je ne vois pas
+              charger les exonérations") : l'appel réseau a échoué, OU aucun type n'a jamais été
+              configuré pour cette école (catalogue propre à chaque tenant, voir ExemptionRuleController). */}
+          {exemptionRulesQuery.error && (
+            <p className="rounded-lg bg-error-50 px-3 py-2 text-xs text-error-700">
+              Impossible de charger les types d&apos;exonération (problème réseau). Rechargez la page —
+              si le problème persiste, contactez le support.
+            </p>
+          )}
+          {!exemptionRulesQuery.loading && !exemptionRulesQuery.error && activeExemptionRules.length === 0 && (
+            <p className="rounded-lg bg-warning-50 px-3 py-2 text-xs text-warning-800">
+              Aucun type d&apos;exonération n&apos;est configuré pour cette école. Si un enfant doit en
+              bénéficier, demandez à la direction d&apos;en créer un (Facturation → Règles de
+              facturation) avant de continuer l&apos;inscription.
+            </p>
+          )}
           {children.map((child, i) => (
             <ChildCard
               key={child.key}
@@ -1144,69 +1165,80 @@ function ChildCard({
             options={classes.map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label }))}
           />
         </Field>
+      </div>
+
+      {/* Sexe, Lien de parenté, Type, Exonération : quatre sections indépendantes pleine largeur,
+          chacune sur sa propre rangée (§retour utilisateur — les coupler 2 par 2 en flex "ne colle
+          pas" quand l'une a 2 options et l'autre 8 : forcer la même hauteur de rangée entre un champ
+          court et un champ long reste bancal à n'importe quelle largeur d'écran, pas seulement sur
+          mobile). Sexe/Type restent compacts via `horizontal` (leurs 2 options côte à côte au lieu
+          d'empilées) ; Lien de parenté/Exonération gardent une liste verticale, chacun adapté à son
+          propre nombre d'options plutôt qu'imposé par son voisin. */}
+      <div className="mt-3">
         <Field>
-          <Label>Lien de parenté</Label>
-          <SearchableSelect
+          <Label>Sexe <span className="text-error-500">*</span></Label>
+          <RequiredChoiceCards
+            horizontal
             disabled={locked}
-            value={child.relationship}
-            onChange={(v) => onUpdate({ relationship: v as Relationship })}
-            triggerClassName="w-full justify-between px-3"
-            options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r): SearchableOption => ({
-              value: r, trigger: RELATIONSHIP_LABEL[r], label: RELATIONSHIP_LABEL[r], searchText: RELATIONSHIP_LABEL[r],
-            }))}
+            value={child.gender}
+            onChange={(v) => onUpdate({ gender: v })}
+            options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
           />
         </Field>
+      </div>
+      <div className="mt-3">
+        <Field>
+          <Label>Lien de parenté</Label>
+          <RequiredChoiceCards
+            columns={2}
+            disabled={locked}
+            value={child.relationship}
+            onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
+            options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
+          />
+        </Field>
+      </div>
+      <div className="mt-3">
+        <Field>
+          <Label>Type <span className="text-error-500">*</span></Label>
+          <RequiredChoiceCards
+            horizontal
+            disabled={locked}
+            value={child.enrollmentType}
+            onChange={(v) => onUpdate({ enrollmentType: v })}
+            options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
+          />
+        </Field>
+      </div>
+      <div className="mt-3">
+        {/* Exonération en cases à cocher (comme Sexe/Type) plutôt qu'un menu déroulant (§retour
+            comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/fermé
+            passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
+            tout de suite). */}
         <Field>
           <Label>Exonération (optionnel)</Label>
-          <SearchableSelect
+          <RequiredChoiceCards
+            columns={2}
             disabled={locked}
             value={child.exemptionRuleId}
             onChange={(v) => {
-              const rule = exemptionRules.find((r) => String(r.id) === v);
+              const ruleId = v ?? "";
+              const rule = exemptionRules.find((r) => String(r.id) === ruleId);
               // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
               // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
               // masquée (elle ne concerne que ce cas précis).
-              onUpdate({ exemptionRuleId: v, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
+              onUpdate({ exemptionRuleId: ruleId, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
             }}
-            triggerClassName="w-full justify-between px-3"
-            noResultsLabel="Aucun type d'exonération configuré"
             options={[
-              { value: "", trigger: "Aucune", label: "Aucune", searchText: "aucune" },
-              ...exemptionRules.map((r): SearchableOption => {
+              ["", "Aucune"] as const,
+              ...exemptionRules.map((r) => {
                 const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
                 const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
-                return { value: String(r.id), trigger: label, label, searchText: label };
+                return [String(r.id), label] as const;
               }),
             ]}
           />
         </Field>
-        {/* Sexe/Type en pleine largeur (sm:col-span-3) : ce sont des cartes à cocher sur plusieurs
-            lignes (demande utilisateur, "il faut bien rendre visible"), pas des champs compacts d'une
-            ligne — les mélanger aux champs courts ci-dessus cassait l'alignement des rangées de la
-            grille. Groupées en fin de formulaire pour un ordre propre une fois les champs texte retirés
-            (demande utilisateur, "il faut bien ordonner le reste"). */}
-        <div className="sm:col-span-3">
-          <Field>
-            <Label>Sexe <span className="text-error-500">*</span></Label>
-            <RequiredChoiceCards
-              disabled={locked}
-              value={child.gender}
-              onChange={(v) => onUpdate({ gender: v })}
-              options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
-            />
-          </Field>
-        </div>
-        <div className="sm:col-span-3">
-          <Field>
-            <Label>Type <span className="text-error-500">*</span></Label>
-            <RequiredChoiceCards
-              disabled={locked}
-              value={child.enrollmentType}
-              onChange={(v) => onUpdate({ enrollmentType: v })}
-              options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
-            />
-          </Field>
-        </div>
       </div>
 
       {/* Transport retiré d'ici (§retour comptable) — l'abonnement au bus se fait désormais après

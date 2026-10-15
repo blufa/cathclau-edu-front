@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CalendarCheck, GraduationCap, MessageSquare, Percent, Receipt, Wallet, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarCheck, GraduationCap, Percent, Receipt, Wallet, TrendingUp } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useSubscription } from "@/providers/subscription-provider";
 import { setAutoRenewal } from "@/lib/api/platform";
 import { Switch } from "@/components/ui/switch";
 import { INVOICE_STATUS_LABEL, type Invoice, type InvoiceStatus } from "@/lib/types/billing";
-import { CHANNEL_LABEL, REASON_LABEL } from "@/lib/types/communication";
 import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE } from "@/lib/types/calendar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -23,14 +22,13 @@ import { SubscriptionStatusBadge } from "@/components/platform/status-badge";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { PendingSubscriptionBanner } from "@/components/platform/pending-subscription-banner";
 import { Reveal } from "@/components/public/reveal";
-import { formatDate, formatDateTime, formatGNF } from "@/lib/format";
+import { formatDate, formatGNF } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { GettingStarted } from "./getting-started";
 import {
   useAcademicDashboardQuery,
   useAverageDistributionQuery,
   useCurrentPeriodQuery,
-  useRecentCommunicationsQuery,
   useRecentInvoicesQuery,
   useStudentsCountQuery,
   useTodayAttendanceQuery,
@@ -85,7 +83,6 @@ export default function DashboardPage() {
   const academicQuery = useAcademicDashboardQuery(currentPeriod?.id ?? null, tenantScoped);
   const academicClassIds = (academicQuery.data?.classes ?? []).map((c) => c.classId);
   const distributionQuery = useAverageDistributionQuery(academicClassIds, currentPeriod?.id ?? null, tenantScoped && !!academicQuery.data);
-  const communicationsQuery = useRecentCommunicationsQuery(tenantId, tenantScoped);
   const attendanceQuery = useTodayAttendanceQuery(tenantScoped);
   const upcomingInstallmentsQuery = useUpcomingInstallmentsQuery(tenantScoped);
   const upcomingEventsQuery = useUpcomingEventsQuery(tenantScoped);
@@ -241,33 +238,9 @@ export default function DashboardPage() {
           </Reveal>
           )}
 
-          {(communicationsQuery.data?.length || distributionQuery.data || upcomingInstallmentsQuery.data || upcomingEventsQuery.data) && (
+          {(distributionQuery.data || upcomingInstallmentsQuery.data || upcomingEventsQuery.data) && (
           <Reveal y={12}>
             <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-              <Card>
-                <CardHeader><CardTitle>Messages récents</CardTitle></CardHeader>
-                <CardBody>
-                  {!communicationsQuery.data || communicationsQuery.data.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-gray-400">Aucune communication envoyée.</p>
-                  ) : (
-                    <ul className="divide-y divide-gray-100">
-                      {communicationsQuery.data.map((c) => (
-                        <li key={c.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
-                          <div className="min-w-0 flex-1">
-                            <p className="flex items-center gap-2 font-medium text-gray-900">
-                              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-brand-500" />
-                              {c.subject || REASON_LABEL[c.reason]}
-                            </p>
-                            <p className="truncate text-xs text-gray-500">{CHANNEL_LABEL[c.channel]} — {c.content}</p>
-                          </div>
-                          <span className="shrink-0 text-xs text-gray-400">{c.sentAt ? formatDateTime(c.sentAt) : "—"}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="pt-3"><Button component={Link} href="/communications" size="sm" variant="ghost">Toutes les communications →</Button></div>
-                </CardBody>
-              </Card>
               <Card>
                 <CardHeader><CardTitle>Prochaines échéances</CardTitle></CardHeader>
                 <CardBody>

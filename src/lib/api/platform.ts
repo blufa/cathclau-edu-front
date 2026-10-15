@@ -52,6 +52,8 @@ export interface SchoolProfile {
   slug: string;
   email: string | null;
   phone: string | null;
+  /** Second school phone number (optional) — see Tenant#phone2. */
+  phone2: string | null;
   logo: string | null;
   brandColor: string | null;
   address: string | null;
@@ -95,7 +97,7 @@ export interface SchoolProfile {
 
 export type SchoolProfileInput = Pick<
   SchoolProfile,
-  "schoolName" | "logo" | "brandColor" | "address" | "city" | "country" | "phone" | "email"
+  "schoolName" | "logo" | "brandColor" | "address" | "city" | "country" | "phone" | "phone2" | "email"
   | "website" | "director" | "founderPhone" | "accreditationNumber" | "openingAuthorization" | "motto" | "slogan"
   | "ire" | "dpeLabel" | "sousPrefectureLabel"
   | "payoutMerchantNumber" | "payoutOperator" | "payoutAccountName"

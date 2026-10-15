@@ -13,6 +13,7 @@ import { DesktopOfflineBanner } from "@/components/offline/desktop-offline-banne
 import { DesktopSyncBootstrap } from "@/components/offline/desktop-sync-bootstrap";
 import { GlobalPdfPreview } from "@/components/offline/global-pdf-preview";
 import { CashierSessionReminderModal } from "./cashier-session-reminder-modal";
+import { IdleLogout } from "./idle-logout";
 import { cn } from "@/lib/utils";
 
 const HEADER_HEIGHT = 64;
@@ -58,6 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <DesktopSyncBootstrap />
               <GlobalPdfPreview />
               <CashierSessionReminderModal />
+              <IdleLogout />
               {children}
             </div>
           </main>

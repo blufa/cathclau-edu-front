@@ -118,6 +118,7 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         city: profile.city,
         country: profile.country,
         phone: profile.phone,
+        phone2: profile.phone2,
         email: profile.email,
         website: profile.website,
         director: profile.director,
@@ -157,9 +158,14 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <Field><Label>Pays</Label><Input value={profile.country ?? ""} disabled={ro} onChange={(e) => set("country", e.target.value)} /></Field>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <PhoneInput label="Téléphone" value={profile.phone ?? ""} disabled={ro} onChange={(v) => set("phone", v)} />
-        <Field><Label>Email</Label><Input value={profile.email ?? ""} disabled={ro} onChange={(e) => set("email", e.target.value)} /></Field>
+        <PhoneInput label="Téléphone de l'école" value={profile.phone ?? ""} disabled={ro} onChange={(v) => set("phone", v)} />
+        <PhoneInput label="Second téléphone (optionnel)" value={profile.phone2 ?? ""} disabled={ro} onChange={(v) => set("phone2", v)} />
       </div>
+      <p className="-mt-2 text-xs text-gray-400">
+        Imprimés sur les badges et reçus — mettez les numéros de l&apos;école, pas le numéro personnel
+        du directeur (voir &quot;Numéro du fondateur&quot; ci-dessous pour les alertes qui lui sont réservées).
+      </p>
+      <Field><Label>Email</Label><Input value={profile.email ?? ""} disabled={ro} onChange={(e) => set("email", e.target.value)} /></Field>
       <Field><Label>Site web</Label><Input value={profile.website ?? ""} disabled={ro} onChange={(e) => set("website", e.target.value)} /></Field>
       <Field><Label>Directeur</Label><Input value={profile.director ?? ""} disabled={ro} onChange={(e) => set("director", e.target.value)} /></Field>
       <Field>
