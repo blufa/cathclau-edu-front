@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
-import { listFeesByClass, listInstallments } from "@/lib/api/billing";
+import { listFeesByClass, listFeesByRoute, listInstallments } from "@/lib/api/billing";
 import { listRoutes } from "@/lib/api/transport";
 import type { TransportRoute } from "@/lib/types/transport";
 import { Card, CardBody } from "@/components/ui/card";
@@ -162,13 +162,22 @@ function ChildCostPreview({
     [installmentsQuery.data],
   );
 
+  // Le tarif réel du transport est un frais (SchoolFee type TRANSPORT, rattaché par routeId) côté
+  // facturation — PAS la colonne monthlyFee de TransportRoute (souvent vide/non tenue à jour, voir
+  // §retour utilisateur : "il y'a le tarif dessus" alors que route.monthlyFee était null en base).
+  const transportFeesQuery = useQuery(
+    () => (route ? listFeesByRoute(route.id) : Promise.resolve([])),
+    [route?.id],
+  );
+  const transportFee = (transportFeesQuery.data ?? []).find((f) => f.type === "TRANSPORT");
+
   // Les tranches, frais annexes et le transport ne dépendent pas du type (inscription/réinscription) —
   // seule la ligne de frais d'inscription/réinscription en dépend (voir plus bas, absente si kind est
   // vide). Et le transport ne dépend même pas de la classe (une ligne dessert plusieurs classes) :
   // choisir un trajet seul, sans classe, doit déjà afficher son tarif (§retour utilisateur répété
   // "rien ne se passe" — choisir uniquement classe ou uniquement transport doit afficher quelque chose).
   const ready = !!classId || !!routeId;
-  const loading = feesQuery.loading || (!!monthlyFee && installmentsQuery.loading);
+  const loading = feesQuery.loading || (!!monthlyFee && installmentsQuery.loading) || (!!route && transportFeesQuery.loading);
 
   const lines: CostLine[] = useMemo(() => {
     const result: CostLine[] = [];
@@ -191,11 +200,11 @@ function ChildCostPreview({
     annexFees.forEach((f) => {
       result.push({ key: `fee-${f.id}`, label: f.label || "Autre (frais annexe)", amount: Number(f.amount), defaultChecked: false });
     });
-    if (route && route.monthlyFee != null) {
-      result.push({ key: "transport", label: `Transport — ${route.name}`, amount: Number(route.monthlyFee), defaultChecked: false });
+    if (route && transportFee) {
+      result.push({ key: "transport", label: `Transport — ${route.name}`, amount: Number(transportFee.amount), defaultChecked: false });
     }
     return result;
-  }, [enrollmentFee, kind, installments, annexFees, route]);
+  }, [enrollmentFee, kind, installments, annexFees, route, transportFee]);
 
   const total = useMemo(
     () => (ready ? lines.reduce((sum, l) => sum + ((overrides[l.key] ?? l.defaultChecked) ? l.amount : 0), 0) : 0),
@@ -275,7 +284,7 @@ function ChildCostPreview({
               {classId && !monthlyFee && (
                 <p className="pb-1 text-sm text-warning-700">Aucune mensualité configurée pour cette classe.</p>
               )}
-              {routeId && route && route.monthlyFee == null && (
+              {routeId && route && !transportFeesQuery.loading && !transportFee && (
                 <p className="pb-1 text-sm text-warning-700">Aucun tarif configuré pour ce trajet de transport.</p>
               )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
