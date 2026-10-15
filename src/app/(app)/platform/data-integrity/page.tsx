@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { isSuperAdmin } from "@/lib/auth/permissions";
 import {
   scanDataIntegrity, fixHeadcount, deleteOrphanedInvoice, deleteOrphanedPayment,
+  deleteOrphanedRows, ORPHAN_TABLE_LABEL, type OrphanRowGroup,
 } from "@/lib/api/data-integrity";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,53 @@ import { Spinner } from "@/components/ui/spinner";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF } from "@/lib/format";
+
+function rowGroupKey(g: OrphanRowGroup) {
+  return `rows-${g.table}-${g.studentId}`;
+}
+
+function OrphanRowGroupTable({ groups, platformWide, busyKey, run }: {
+  groups: OrphanRowGroup[];
+  platformWide?: boolean;
+  busyKey: string | null;
+  run: (key: string, action: () => Promise<unknown>, successMessage: string) => void;
+}) {
+  if (groups.length === 0) {
+    return <p className="py-6 text-center text-sm text-gray-400">Aucune ligne orpheline.</p>;
+  }
+  return (
+    <Table>
+      <THead>
+        <TR><TH>Table</TH><TH>Élève (id, supprimé)</TH><TH>Lignes</TH><TH className="text-right">Actions</TH></TR>
+      </THead>
+      <TBody>
+        {groups.map((g) => (
+          <TR key={rowGroupKey(g)}>
+            <TD className="font-medium text-gray-900">{ORPHAN_TABLE_LABEL[g.table] ?? g.table}</TD>
+            <TD className="text-gray-500">#{g.studentId}</TD>
+            <TD>{g.rowCount}</TD>
+            <TD className="text-right">
+              <Button
+                size="sm"
+                variant="danger"
+                loading={busyKey === rowGroupKey(g)}
+                onClick={() => confirmAction({
+                  title: "Supprimer les lignes orphelines",
+                  message: `Supprimer définitivement ${g.rowCount} ligne(s) « ${ORPHAN_TABLE_LABEL[g.table] ?? g.table} » pour l'élève #${g.studentId} (déjà supprimé)${platformWide ? " — hors scope école, visible depuis n'importe quelle école impersonnée" : ""} ?`,
+                  confirmLabel: "Supprimer",
+                  danger: true,
+                  onConfirm: () => run(rowGroupKey(g), () => deleteOrphanedRows(g.table, g.studentId), "Lignes orphelines supprimées."),
+                })}
+              >
+                Supprimer
+              </Button>
+            </TD>
+          </TR>
+        ))}
+      </TBody>
+    </Table>
+  );
+}
 
 /**
  * Vérification/correction de la cohérence des données de l'école impersonnée (§retour utilisateur —
@@ -52,6 +100,7 @@ export default function DataIntegrityPage() {
   const result = q.data;
   const totalIssues = result
     ? result.headcountMismatches.length + result.orphanedInvoices.length + result.orphanedPayments.length
+      + result.orphanedOtherTables.length + result.orphanedStudentDocuments.length
     : 0;
 
   return (
@@ -199,6 +248,24 @@ export default function DataIntegrityPage() {
                   </TBody>
                 </Table>
               )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Autres lignes orphelines (bulletins, notes, présences, inscriptions...)</CardTitle></CardHeader>
+            <CardBody>
+              <OrphanRowGroupTable groups={result.orphanedOtherTables} busyKey={busyKey} run={run} />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Documents élève orphelins</CardTitle></CardHeader>
+            <CardBody>
+              <p className="mb-3 text-xs text-gray-400">
+                Sans lien direct vers une école une fois l&apos;élève supprimé — liste valable pour
+                toutes les écoles, pas seulement celle actuellement impersonnée.
+              </p>
+              <OrphanRowGroupTable groups={result.orphanedStudentDocuments} platformWide busyKey={busyKey} run={run} />
             </CardBody>
           </Card>
         </>
