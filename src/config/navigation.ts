@@ -94,12 +94,12 @@ export const NAVIGATION: NavSection[] = [
           { label: "Réinscription (rentrée)", href: "/enrollments/re-enrollment", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:create"], module: "STUDENTS", cashGate: true },
           { label: "Mouvements & attente", href: "/enrollments/movements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
           { label: "Tableau de la rentrée", href: "/enrollments/overview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
-          // Mêmes rôles/permission que l'onglet "Relances paiement" sous Communication (deux portes
-          // d'entrée vers le même écran) — ACCOUNTANT ajouté ici volontairement, contrairement aux
-          // autres enfants de cette section : chaque enfant est filtré indépendamment (voir
-          // use-nav-gating.ts), un comptable pense "inscription/scolarité" avant "communication"
-          // pour retrouver le suivi des paiements (§retour comptable).
-          { label: "Suivi des paiements", href: "/communications/payment-reminders", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["communication:send"], module: "STUDENTS" },
+          // ACCOUNTANT ajouté ici volontairement, contrairement aux autres enfants de cette section :
+          // chaque enfant est filtré indépendamment (voir use-nav-gating.ts) — page déplacée sous
+          // /enrollments (seule porte d'entrée désormais, retirée de la barre Communication : y
+          // naviguer depuis "Inscription et rentrée" ne doit pas faire sauter sur la barre d'onglets
+          // Communication, §retour utilisateur "ce n'est pas normal").
+          { label: "Suivi des paiements", href: "/enrollments/payment-status", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["communication:send"], module: "STUDENTS" },
           // §retour comptable : "le parent demande la 7ème, il doit payer combien pour commencer ?" —
           // frais d'inscription/réinscription + 1ère tranche de mensualité, sans détour par la page
           // Frais scolaires ni commencer une inscription juste pour voir le prix.

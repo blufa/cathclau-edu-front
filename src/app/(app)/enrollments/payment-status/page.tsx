@@ -140,7 +140,7 @@ export default function PaymentRemindersPage() {
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Relances paiement</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Suivi des paiements</h1>
         <p className="text-sm text-gray-500">
           Toutes les classes par défaut, ou choisissez-en une — triez/filtrez par statut et tranches
           payées avant d&apos;envoyer un SMS ou d&apos;imprimer la liste.
