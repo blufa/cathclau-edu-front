@@ -1222,6 +1222,7 @@ function ChildCard({
         <Field>
           <Label>Exonération (optionnel)</Label>
           <RequiredChoiceCards
+            columns={2}
             disabled={locked}
             value={child.exemptionRuleId}
             onChange={(v) => {
