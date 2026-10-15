@@ -5,7 +5,6 @@ import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getStudent } from "@/lib/api/students";
 import { getClass, listAcademicYears } from "@/lib/api/academics";
-import { useBranding } from "@/providers/branding-provider";
 import type { CardTemplate, StudentCard } from "@/lib/types/student-card";
 import { IdBadge, type IdBadgeField } from "@/components/cards/id-badge";
 import { buildIdentityQr } from "@/lib/identity-qr";
@@ -25,7 +24,6 @@ export function StudentCardPreview({
    * par défaut ; passé par la page parente qui les a déjà chargés. */
   templates?: CardTemplate[];
 }) {
-  const branding = useBranding().branding;
   // Date de naissance + adresse : pas portées par StudentCard, on va les chercher sur la fiche élève
   // complète — uniquement quand la carte est affichée, pour ne pas alourdir les listes qui émettent
   // le badge en un clic.
@@ -48,7 +46,6 @@ export function StudentCardPreview({
     ? [
         { label: "Classe", value: classLabel ?? "—" },
         { label: "Adresse", value: student?.address ?? "—" },
-        { label: "Tél.", value: [branding?.phone, branding?.phone2].filter(Boolean).join(" / ") || "—" },
       ]
     : [];
   const colors = resolveBadgeColors(templates, "STUDENT");

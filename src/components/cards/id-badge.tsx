@@ -208,6 +208,9 @@ function IdBadgeLandscape({
           {/* Pied de carte : QR de vérification (agrandi) + hiérarchie administrative (IRE/DPE-DCE). */}
           <div className="flex items-end justify-between gap-2.5 border-t border-slate-100 px-3.5 py-2 print:px-2 print:py-1" style={softerTint}>
             <div className="min-w-0 flex-1 space-y-0.5">
+              {(branding?.phone || branding?.phone2) && (
+                <FieldRow label="Tél." value={[branding?.phone, branding?.phone2].filter(Boolean).join(" / ")} />
+              )}
               {branding?.ire && <FieldRow label="IRE" value={branding.ire} />}
               {branding?.dpeLabel && <FieldRow label="DPE/DCE" value={branding.dpeLabel} />}
               {footerNote && (
