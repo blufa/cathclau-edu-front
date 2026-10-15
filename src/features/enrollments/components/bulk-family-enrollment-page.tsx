@@ -70,25 +70,32 @@ function useDebouncedSuggestions(fetchFn: (q: string) => Promise<string[]>, minL
  * appliqué à la fois au type Inscription/Réinscription et au sexe) — aucune cochée par défaut (`value`
  * démarre à `null`), responsive : pleine largeur, empilées, le texte passe à la ligne sur mobile au
  * lieu de déborder. */
-function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled, horizontal }: {
+function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled, horizontal, columns }: {
   value: T | null;
   options: readonly (readonly [T, string])[];
   onChange: (v: T | null) => void;
   disabled?: boolean;
-  /** Côte à côte plutôt qu'empilées — pour une paire d'options courtes (Sexe, Type) à côté d'un
-   * champ à liste longue (Lien de parenté, Exonération) : empilées, ces 2 cartes laissaient un grand
-   * vide sous elles face à une liste de 8 options (§retour utilisateur, "trop d'espace, design
-   * moche") ; côte à côte, leur hauteur totale se rapproche de l'autre colonne. */
+  /** Les 2 options côte à côte sur une seule rangée (ex. Sexe, Type : exactement 2 options courtes)
+   * plutôt qu'empilées verticalement. */
   horizontal?: boolean;
+  /** Grille à 2 colonnes au lieu d'une liste empilée — pour une liste plus longue (Lien de parenté :
+   * 8 options) qu'un simple côte-à-côte ne suffit pas à raccourcir (§retour utilisateur, "je crois
+   * il ne sera pas long" : 2 colonnes réduisent 8 lignes à 4). Classe Tailwind écrite en toutes
+   * lettres (pas d'interpolation `grid-cols-${n}`) : le JIT de Tailwind ne génère que les classes
+   * trouvées littéralement dans le code source. */
+  columns?: 2;
 }) {
+  const layout = columns === 2
+    ? "grid grid-cols-2 gap-2 pt-1"
+    : horizontal ? "flex flex-col gap-2 pt-1 sm:flex-row" : "flex flex-col gap-2 pt-1";
   return (
-    <div className={horizontal ? "flex flex-col gap-2 pt-1 sm:flex-row" : "flex flex-col gap-2 pt-1"}>
+    <div className={layout}>
       {options.map(([optValue, text]) => {
         const isChecked = value === optValue;
         return (
           <label
             key={optValue}
-            className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${horizontal ? "w-full sm:flex-1" : "w-full"} ${
+            className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${horizontal && !columns ? "w-full sm:flex-1" : "w-full"} ${
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
             } ${isChecked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"}`}
           >
@@ -1187,6 +1194,7 @@ function ChildCard({
         <Field>
           <Label>Lien de parenté</Label>
           <RequiredChoiceCards
+            columns={2}
             disabled={locked}
             value={child.relationship}
             onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
