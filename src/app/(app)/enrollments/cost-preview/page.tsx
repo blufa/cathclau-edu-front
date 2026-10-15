@@ -89,10 +89,6 @@ export default function EnrollmentCostPreviewPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Combien pour démarrer ?</h1>
-        <p className="text-sm text-gray-500">
-          Choisissez une classe par enfant — un parent en a souvent plusieurs, dans des classes
-          différentes — puis cochez les frais à payer maintenant pour chacun.
-        </p>
       </Reveal>
 
       <div className="space-y-4">
@@ -168,9 +164,10 @@ function ChildCostPreview({
 
   // Les tranches, frais annexes et le transport ne dépendent pas du type (inscription/réinscription) —
   // seule la ligne de frais d'inscription/réinscription en dépend (voir plus bas, absente si kind est
-  // vide). Avant, "ready" exigeait aussi kind, donc choisir un trajet de transport avant de cocher
-  // Inscription/Réinscription n'affichait rien du tout (§retour utilisateur "rien ne se passe").
-  const ready = !!classId;
+  // vide). Et le transport ne dépend même pas de la classe (une ligne dessert plusieurs classes) :
+  // choisir un trajet seul, sans classe, doit déjà afficher son tarif (§retour utilisateur répété
+  // "rien ne se passe" — choisir uniquement classe ou uniquement transport doit afficher quelque chose).
+  const ready = !!classId || !!routeId;
   const loading = feesQuery.loading || (!!monthlyFee && installmentsQuery.loading);
 
   const lines: CostLine[] = useMemo(() => {
@@ -259,21 +256,27 @@ function ChildCostPreview({
             <div className="flex justify-center py-10"><Spinner /></div>
           ) : (
             <div className="space-y-2 border-t border-gray-100 pt-3">
-              {!kind && (
+              {!classId && routeId && (
+                <p className="pb-1 text-sm text-gray-400">Choisissez aussi une classe pour voir l&apos;inscription et la mensualité.</p>
+              )}
+              {classId && !kind && (
                 <p className="pb-1 text-sm text-gray-400">
                   Cochez aussi Inscription ou Réinscription pour inclure ce frais dans le total.
                 </p>
               )}
-              {kind && !enrollmentFee && (
+              {classId && kind && !enrollmentFee && (
                 <p className="pb-1 text-sm text-warning-700">
                   Aucun frais {kind === "ENROLLMENT" ? "d'inscription" : "de réinscription"} configuré pour cette classe.
                 </p>
               )}
-              {monthlyFee && installments.length === 0 && (
+              {classId && monthlyFee && installments.length === 0 && (
                 <p className="pb-1 text-sm text-warning-700">Aucune tranche de mensualité configurée pour cette classe.</p>
               )}
-              {!monthlyFee && (
+              {classId && !monthlyFee && (
                 <p className="pb-1 text-sm text-warning-700">Aucune mensualité configurée pour cette classe.</p>
+              )}
+              {routeId && route && route.monthlyFee == null && (
+                <p className="pb-1 text-sm text-warning-700">Aucun tarif configuré pour ce trajet de transport.</p>
               )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {lines.map((l) => {
