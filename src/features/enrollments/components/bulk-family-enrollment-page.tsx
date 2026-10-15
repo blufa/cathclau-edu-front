@@ -1157,23 +1157,53 @@ function ChildCard({
             options={classes.map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label }))}
           />
         </Field>
-        <Field>
-          <Label>Lien de parenté</Label>
-          <SearchableSelect
-            disabled={locked}
-            value={child.relationship}
-            onChange={(v) => onUpdate({ relationship: v as Relationship })}
-            triggerClassName="w-full justify-between px-3"
-            options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r): SearchableOption => ({
-              value: r, trigger: RELATIONSHIP_LABEL[r], label: RELATIONSHIP_LABEL[r], searchText: RELATIONSHIP_LABEL[r],
-            }))}
-          />
-        </Field>
-        {/* Exonération en cases à cocher (comme Sexe/Type ci-dessous) plutôt qu'un menu déroulant
-            (§retour comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/
-            fermé passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
-            tout de suite). Pleine largeur comme Sexe/Type pour la même raison d'alignement de grille. */}
-        <div className="sm:col-span-3">
+      </div>
+
+      {/* Sexe + Lien de parenté côte à côte, puis Type + Exonération côte à côte (demande
+          utilisateur) : les quatre sont des cases à cocher pleine hauteur, pas des champs compacts
+          d'une ligne — groupées deux par deux en flex plutôt que mélangées à la grille ci-dessus,
+          pour ne pas casser l'alignement des rangées courtes (Prénom/Nom/Classe). */}
+      <div className="mt-3 flex flex-col sm:flex-row gap-3">
+        <div className="flex-1">
+          <Field>
+            <Label>Sexe <span className="text-error-500">*</span></Label>
+            <RequiredChoiceCards
+              disabled={locked}
+              value={child.gender}
+              onChange={(v) => onUpdate({ gender: v })}
+              options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
+            />
+          </Field>
+        </div>
+        <div className="flex-1">
+          <Field>
+            <Label>Lien de parenté</Label>
+            <RequiredChoiceCards
+              disabled={locked}
+              value={child.relationship}
+              onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
+              options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
+            />
+          </Field>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-col sm:flex-row gap-3">
+        <div className="flex-1">
+          <Field>
+            <Label>Type <span className="text-error-500">*</span></Label>
+            <RequiredChoiceCards
+              disabled={locked}
+              value={child.enrollmentType}
+              onChange={(v) => onUpdate({ enrollmentType: v })}
+              options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
+            />
+          </Field>
+        </div>
+        <div className="flex-1">
+          {/* Exonération en cases à cocher (comme Sexe/Type) plutôt qu'un menu déroulant (§retour
+              comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/fermé
+              passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
+              tout de suite). */}
           <Field>
             <Label>Exonération (optionnel)</Label>
             <RequiredChoiceCards
@@ -1195,33 +1225,6 @@ function ChildCard({
                   return [String(r.id), label] as const;
                 }),
               ]}
-            />
-          </Field>
-        </div>
-        {/* Sexe/Type en pleine largeur (sm:col-span-3) : ce sont des cartes à cocher sur plusieurs
-            lignes (demande utilisateur, "il faut bien rendre visible"), pas des champs compacts d'une
-            ligne — les mélanger aux champs courts ci-dessus cassait l'alignement des rangées de la
-            grille. Groupées en fin de formulaire pour un ordre propre une fois les champs texte retirés
-            (demande utilisateur, "il faut bien ordonner le reste"). */}
-        <div className="sm:col-span-3">
-          <Field>
-            <Label>Sexe <span className="text-error-500">*</span></Label>
-            <RequiredChoiceCards
-              disabled={locked}
-              value={child.gender}
-              onChange={(v) => onUpdate({ gender: v })}
-              options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
-            />
-          </Field>
-        </div>
-        <div className="sm:col-span-3">
-          <Field>
-            <Label>Type <span className="text-error-500">*</span></Label>
-            <RequiredChoiceCards
-              disabled={locked}
-              value={child.enrollmentType}
-              onChange={(v) => onUpdate({ enrollmentType: v })}
-              options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
             />
           </Field>
         </div>
