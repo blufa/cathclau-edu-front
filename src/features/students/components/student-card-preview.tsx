@@ -47,7 +47,6 @@ export function StudentCardPreview({
   const fields: IdBadgeField[] = card
     ? [
         { label: "Classe", value: classLabel ?? "—" },
-        { label: "Né le", value: formatDate(student?.birthDate) },
         { label: "Adresse", value: student?.address ?? "—" },
         { label: "Tél.", value: [branding?.phone, branding?.phone2].filter(Boolean).join(" / ") || "—" },
       ]
