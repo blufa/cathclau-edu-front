@@ -171,13 +171,26 @@ function ChildCostPreview({
   );
   const transportFee = (transportFeesQuery.data ?? []).find((f) => f.type === "TRANSPORT");
 
+  // Le frais transport est lui aussi découpé en mensualités (une Installment par mois de l'année
+  // scolaire, ex. octobre→juin) — §retour utilisateur : il veut une case par mois, pas un seul
+  // montant global, pour pouvoir cocher exactement le nombre de mois que le parent paie maintenant.
+  const transportInstallmentsQuery = useQuery(
+    () => (transportFee ? listInstallments(transportFee.id) : Promise.resolve([])),
+    [transportFee?.id],
+  );
+  const transportInstallments = useMemo(
+    () => [...(transportInstallmentsQuery.data ?? [])].sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999")),
+    [transportInstallmentsQuery.data],
+  );
+
   // Les tranches, frais annexes et le transport ne dépendent pas du type (inscription/réinscription) —
   // seule la ligne de frais d'inscription/réinscription en dépend (voir plus bas, absente si kind est
   // vide). Et le transport ne dépend même pas de la classe (une ligne dessert plusieurs classes) :
   // choisir un trajet seul, sans classe, doit déjà afficher son tarif (§retour utilisateur répété
   // "rien ne se passe" — choisir uniquement classe ou uniquement transport doit afficher quelque chose).
   const ready = !!classId || !!routeId;
-  const loading = feesQuery.loading || (!!monthlyFee && installmentsQuery.loading) || (!!route && transportFeesQuery.loading);
+  const loading = feesQuery.loading || (!!monthlyFee && installmentsQuery.loading)
+    || (!!route && transportFeesQuery.loading) || (!!transportFee && transportInstallmentsQuery.loading);
 
   const lines: CostLine[] = useMemo(() => {
     const result: CostLine[] = [];
@@ -200,11 +213,18 @@ function ChildCostPreview({
     annexFees.forEach((f) => {
       result.push({ key: `fee-${f.id}`, label: f.label || "Autre (frais annexe)", amount: Number(f.amount), defaultChecked: false });
     });
-    if (route && transportFee) {
-      result.push({ key: "transport", label: `Transport — ${route.name}`, amount: Number(transportFee.amount), defaultChecked: false });
+    if (route) {
+      transportInstallments.forEach((i) => {
+        result.push({
+          key: `transport-${i.id}`,
+          label: `Transport — ${route.name} — ${i.label}`,
+          amount: Number(i.amount),
+          defaultChecked: false,
+        });
+      });
     }
     return result;
-  }, [enrollmentFee, kind, installments, annexFees, route, transportFee]);
+  }, [enrollmentFee, kind, installments, annexFees, route, transportInstallments]);
 
   const total = useMemo(
     () => (ready ? lines.reduce((sum, l) => sum + ((overrides[l.key] ?? l.defaultChecked) ? l.amount : 0), 0) : 0),
@@ -286,6 +306,9 @@ function ChildCostPreview({
               )}
               {routeId && route && !transportFeesQuery.loading && !transportFee && (
                 <p className="pb-1 text-sm text-warning-700">Aucun tarif configuré pour ce trajet de transport.</p>
+              )}
+              {routeId && route && transportFee && !transportInstallmentsQuery.loading && transportInstallments.length === 0 && (
+                <p className="pb-1 text-sm text-warning-700">Aucune mensualité de transport configurée pour ce trajet.</p>
               )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {lines.map((l) => {
