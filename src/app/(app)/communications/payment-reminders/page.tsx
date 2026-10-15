@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Printer, Send } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
-import { listPaymentReminderCandidates, sendCommunication } from "@/lib/api/communication";
+import { listPaymentReminderCandidates, printPaymentStatusList, sendCommunication } from "@/lib/api/communication";
 import {
   CHANNEL_LABEL,
   PAYMENT_REMINDER_STATUS_LABEL,
@@ -22,6 +22,7 @@ import { Field, Label, Textarea } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Reveal } from "@/components/public/reveal";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { FilePreview } from "@/components/ui/file-preview";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatGNF, smsSegmentInfo } from "@/lib/format";
 
@@ -29,7 +30,7 @@ const STATUS_TONE: Record<PaymentReminderStatus, "red" | "amber" | "green"> = {
   OVERDUE: "red", UPCOMING: "amber", UP_TO_DATE: "green",
 };
 
-type TrancheFilter = "ALL" | "0" | "1" | "2" | "3+";
+const ALL_CLASSES = "ALL";
 
 /**
  * Pour une classe choisie, tous ses élèves avec leur statut de paiement de la mensualité (à jour/
@@ -50,25 +51,54 @@ export default function PaymentRemindersPage() {
     [classesQuery.data],
   );
 
-  const [classId, setClassId] = useState("");
+  // ALL_CLASSES ("Toutes les classes") par défaut : plus besoin de choisir une classe avant de voir
+  // la liste (§retour comptable — "sur la liste des élèves il veut filtrer par classe" implique
+  // pouvoir aussi NE PAS filtrer par classe, pour voir tout le monde d'un coup).
+  const [classId, setClassId] = useState(ALL_CLASSES);
   const [statusFilter, setStatusFilter] = useState<PaymentReminderStatus | "ALL">("ALL");
-  const [trancheFilter, setTrancheFilter] = useState<TrancheFilter>("ALL");
+  const [trancheFilter, setTrancheFilter] = useState<"ALL" | number>("ALL");
 
-  const q = useQuery(() => (classId ? listPaymentReminderCandidates(Number(classId)) : Promise.resolve([])), [classId]);
+  const q = useQuery(
+    () => listPaymentReminderCandidates(classId === ALL_CLASSES ? null : Number(classId)),
+    [classId],
+  );
   const [selected, setSelected] = useState<PaymentReminderCandidate[]>([]);
   const [sending, setSending] = useState(false);
+  const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
+  const [printing, setPrinting] = useState(false);
+
+  // Nombre réel de tranches payées observé dans les données chargées — un élève peut en avoir payé
+  // plus que le nombre de tranches configuré pour SA classe (ex. 6 pour une mensualité annuelle),
+  // donc l'éventail d'options proposées s'adapte à ce qui existe vraiment plutôt qu'une borne fixe.
+  const maxTranchesPaid = Math.max(0, ...(q.data ?? []).map((r) => r.tranchesPaid));
 
   const rows = (q.data ?? []).filter((r) => {
     if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
     if (trancheFilter === "ALL") return true;
-    if (trancheFilter === "3+") return r.tranchesPaid >= 3;
-    return r.tranchesPaid === Number(trancheFilter);
+    return r.tranchesPaid === trancheFilter;
   });
+
+  async function printList() {
+    if (selected.length === 0) return;
+    setPrinting(true);
+    try {
+      const url = await printPaymentStatusList(classId === ALL_CLASSES ? null : Number(classId), selected.map((s) => s.studentId));
+      setPreview({ url, title: `Suivi des paiements — ${selected.length} élève(s)` });
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPrinting(false);
+    }
+  }
 
   const columns: Column<PaymentReminderCandidate>[] = [
     {
       key: "studentName", header: "Élève", sortable: true, accessor: (r) => r.studentName,
       render: (r) => <span className="font-medium text-gray-900">{r.studentName}</span>,
+    },
+    {
+      key: "className", header: "Classe", sortable: true, accessor: (r) => r.className ?? "",
+      render: (r) => <span className="text-gray-600">{r.className ?? "—"}</span>,
     },
     {
       key: "status", header: "Statut", sortable: true, accessor: (r) => r.status,
@@ -112,14 +142,15 @@ export default function PaymentRemindersPage() {
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Relances paiement</h1>
         <p className="text-sm text-gray-500">
-          Choisissez une classe pour voir le statut de paiement de tous ses élèves — triez/filtrez avant d&apos;envoyer un SMS.
+          Toutes les classes par défaut, ou choisissez-en une — triez/filtrez par statut et tranches
+          payées avant d&apos;envoyer un SMS ou d&apos;imprimer la liste.
         </p>
       </Reveal>
 
       <div className="flex flex-wrap items-end gap-3">
         <Field>
-          <Label>Classe <span className="text-error-500">*</span></Label>
-          <SearchableSelect value={classId} options={classOptions} onChange={setClassId}
+          <Label>Classe</Label>
+          <SearchableSelect value={classId} options={[{ value: ALL_CLASSES, trigger: "Toutes les classes", label: "Toutes les classes", searchText: "toutes" }, ...classOptions]} onChange={setClassId}
             triggerClassName="w-56 justify-between px-3" noResultsLabel="Aucune classe" />
         </Field>
         <Field>
@@ -133,37 +164,40 @@ export default function PaymentRemindersPage() {
         </Field>
         <Field>
           <Label>Tranches payées</Label>
-          <Select className="w-44" value={trancheFilter} onChange={(e) => setTrancheFilter(e.target.value as TrancheFilter)}>
+          <Select className="w-44" value={trancheFilter} onChange={(e) => setTrancheFilter(e.target.value === "ALL" ? "ALL" : Number(e.target.value))}>
             <option value="ALL">Toutes</option>
-            <option value="0">Aucune tranche payée</option>
-            <option value="1">1 tranche payée</option>
-            <option value="2">2 tranches payées</option>
-            <option value="3+">3 tranches ou plus</option>
+            {Array.from({ length: maxTranchesPaid + 1 }, (_, n) => (
+              <option key={n} value={n}>{n === 0 ? "Aucune tranche payée" : `${n} tranche${n > 1 ? "s" : ""} payée${n > 1 ? "s" : ""}`}</option>
+            ))}
           </Select>
         </Field>
       </div>
 
-      {!classId ? (
-        <p className="rounded-xl bg-gray-50 px-4 py-10 text-center text-sm text-gray-400">Choisissez une classe pour afficher ses élèves.</p>
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          loading={q.loading}
-          error={!!q.error}
-          getRowKey={(r) => r.studentId}
-          emptyLabel="Aucun élève ne correspond à ces filtres."
-          searchable
-          searchPlaceholder="Rechercher un élève..."
-          selectable
-          onSelectionChange={setSelected}
-          toolbar={
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={q.loading}
+        error={!!q.error}
+        getRowKey={(r) => r.studentId}
+        emptyLabel="Aucun élève ne correspond à ces filtres."
+        searchable
+        searchPlaceholder="Rechercher un élève..."
+        selectable
+        onSelectionChange={setSelected}
+        toolbar={
+          <>
+            <Button size="sm" variant="secondary" disabled={selected.length === 0} loading={printing}
+              leftSection={<Printer className="h-4 w-4" />} onClick={() => void printList()}>
+              Imprimer {selected.length > 0 ? `(${selected.length})` : ""}
+            </Button>
             <Button size="sm" disabled={selected.length === 0} leftSection={<Send className="h-4 w-4" />} onClick={() => setSending(true)}>
               Relancer {selected.length > 0 ? `(${selected.length})` : ""}
             </Button>
-          }
-        />
-      )}
+          </>
+        }
+      />
+
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
 
       <Modal open={sending} onClose={() => setSending(false)} title={`Relance SMS — ${selected.length} élève(s)`}>
         <ReminderSendForm tenantId={tenantId} senderId={user?.userId ?? null} candidates={selected}

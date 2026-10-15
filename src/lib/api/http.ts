@@ -174,9 +174,26 @@ export async function apiBlobUrl(path: string, options: RequestOptions = {}): Pr
   return URL.createObjectURL(res.data);
 }
 
+/** Comme {@link apiBlobUrl}, mais en POST avec un corps JSON — pour un export dont les critères
+ * (ex. une liste d'identifiants sélectionnés à l'écran) sont trop volumineux/structurés pour une
+ * simple query string. */
+export async function apiPostBlobUrl(path: string, body: unknown, options: RequestOptions = {}): Promise<string> {
+  const res = await http.request<Blob>({
+    method: "POST",
+    url: path,
+    data: body,
+    headers: options.headers,
+    requireAuth: options.auth,
+    signal: options.signal,
+    responseType: "blob",
+  });
+  return URL.createObjectURL(res.data);
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, "GET", options ?? {}),
   blobUrl: (path: string, options?: RequestOptions) => apiBlobUrl(path, options),
+  postBlobUrl: (path: string, body: unknown, options?: RequestOptions) => apiPostBlobUrl(path, body, options),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, "POST", { ...options, body }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
