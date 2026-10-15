@@ -730,10 +730,6 @@ export default function BulkFamilyEnrollmentPage() {
               </Field>
               <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={newParent.phone} onChange={(v) => setNewParent({ ...newParent, phone: v })} />
               <Field>
-                <Label>Email (optionnel)</Label>
-                <Input disabled={running || finished} value={newParent.email} onChange={(e) => setNewParent({ ...newParent, email: e.target.value })} />
-              </Field>
-              <Field>
                 <Label>Profession (optionnel)</Label>
                 <Input disabled={running || finished} value={newParent.occupation} onChange={(e) => setNewParent({ ...newParent, occupation: e.target.value })} />
               </Field>
@@ -812,6 +808,23 @@ export default function BulkFamilyEnrollmentPage() {
           </div>
         </CardHeader>
         <CardBody className="space-y-3">
+          {/* La liste "Exonération" sur chaque enfant ci-dessous reste silencieusement vide dans les
+              DEUX cas suivants (indiscernables sans ce bandeau, §retour comptable — "je ne vois pas
+              charger les exonérations") : l'appel réseau a échoué, OU aucun type n'a jamais été
+              configuré pour cette école (catalogue propre à chaque tenant, voir ExemptionRuleController). */}
+          {exemptionRulesQuery.error && (
+            <p className="rounded-lg bg-error-50 px-3 py-2 text-xs text-error-700">
+              Impossible de charger les types d&apos;exonération (problème réseau). Rechargez la page —
+              si le problème persiste, contactez le support.
+            </p>
+          )}
+          {!exemptionRulesQuery.loading && !exemptionRulesQuery.error && activeExemptionRules.length === 0 && (
+            <p className="rounded-lg bg-warning-50 px-3 py-2 text-xs text-warning-800">
+              Aucun type d&apos;exonération n&apos;est configuré pour cette école. Si un enfant doit en
+              bénéficier, demandez à la direction d&apos;en créer un (Facturation → Règles de
+              facturation) avant de continuer l&apos;inscription.
+            </p>
+          )}
           {children.map((child, i) => (
             <ChildCard
               key={child.key}
@@ -1156,30 +1169,35 @@ function ChildCard({
             }))}
           />
         </Field>
-        <Field>
-          <Label>Exonération (optionnel)</Label>
-          <SearchableSelect
-            disabled={locked}
-            value={child.exemptionRuleId}
-            onChange={(v) => {
-              const rule = exemptionRules.find((r) => String(r.id) === v);
-              // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
-              // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
-              // masquée (elle ne concerne que ce cas précis).
-              onUpdate({ exemptionRuleId: v, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
-            }}
-            triggerClassName="w-full justify-between px-3"
-            noResultsLabel="Aucun type d'exonération configuré"
-            options={[
-              { value: "", trigger: "Aucune", label: "Aucune", searchText: "aucune" },
-              ...exemptionRules.map((r): SearchableOption => {
-                const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
-                const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
-                return { value: String(r.id), trigger: label, label, searchText: label };
-              }),
-            ]}
-          />
-        </Field>
+        {/* Exonération en cases à cocher (comme Sexe/Type ci-dessous) plutôt qu'un menu déroulant
+            (§retour comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/
+            fermé passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
+            tout de suite). Pleine largeur comme Sexe/Type pour la même raison d'alignement de grille. */}
+        <div className="sm:col-span-3">
+          <Field>
+            <Label>Exonération (optionnel)</Label>
+            <RequiredChoiceCards
+              disabled={locked}
+              value={child.exemptionRuleId}
+              onChange={(v) => {
+                const ruleId = v ?? "";
+                const rule = exemptionRules.find((r) => String(r.id) === ruleId);
+                // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
+                // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
+                // masquée (elle ne concerne que ce cas précis).
+                onUpdate({ exemptionRuleId: ruleId, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
+              }}
+              options={[
+                ["", "Aucune"] as const,
+                ...exemptionRules.map((r) => {
+                  const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
+                  const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
+                  return [String(r.id), label] as const;
+                }),
+              ]}
+            />
+          </Field>
+        </div>
         {/* Sexe/Type en pleine largeur (sm:col-span-3) : ce sont des cartes à cocher sur plusieurs
             lignes (demande utilisateur, "il faut bien rendre visible"), pas des champs compacts d'une
             ligne — les mélanger aux champs courts ci-dessus cassait l'alignement des rangées de la
