@@ -17,6 +17,8 @@ export interface TenantBranding {
   sousPrefectureLabel: string | null;
   /** Numéro de téléphone de l'école (jamais un numéro de parent), imprimé sur les badges élève. */
   phone: string | null;
+  /** Second numéro de l'école (optionnel), imprimé en plus de `phone` sur les badges élève. */
+  phone2: string | null;
   /** Adresse postale de l'école, imprimée sur les badges élève. */
   address: string | null;
   /** E-mail de contact de l'école. */

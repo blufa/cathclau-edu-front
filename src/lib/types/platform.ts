@@ -57,6 +57,8 @@ export interface Tenant {
   slug: string;
   email: string | null;
   phone: string | null;
+  /** Second school phone number (optional), distinct from `phone` — see Tenant#phone2 côté backend. */
+  phone2: string | null;
   address: string | null;
   city: string | null;
   country: string | null;
@@ -199,6 +201,7 @@ export interface CreateTenantInput {
   /** Identifiant de connexion de l'admin (login par username OU email) ; généré si vide. */
   username?: string;
   phone: string;
+  phone2?: string;
   address?: string;
   city?: string;
   country?: string;
@@ -217,6 +220,7 @@ export interface UpdateTenantInput {
   city?: string | null;
   country?: string | null;
   phone?: string | null;
+  phone2?: string | null;
   email?: string | null;
   website?: string | null;
   director?: string | null;

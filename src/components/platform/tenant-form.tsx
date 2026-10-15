@@ -27,6 +27,7 @@ const schema = z
     email: z.string(),
     username: z.string(),
     phone: z.string(),
+    phone2: z.string(),
     city: z.string(),
     country: z.string(),
     director: z.string(),
@@ -51,6 +52,10 @@ const schema = z
       const err = phoneRule(v.phone);
       if (err) ctx.addIssue({ code: "custom", path: ["phone"], message: err });
     }
+    if (v.phone2.trim()) {
+      const err2 = phoneRule(v.phone2);
+      if (err2) ctx.addIssue({ code: "custom", path: ["phone2"], message: err2 });
+    }
     if (v.adminPassword && v.adminPassword.length < 8) {
       ctx.addIssue({ code: "custom", path: ["adminPassword"], message: "8 caractères minimum" });
     }
@@ -63,7 +68,7 @@ type FormValues = z.infer<typeof schema>;
 const STEPS = [{ label: "École" }, { label: "Contact & accès" }, { label: "Compte" }];
 const FIELD_STEP: Record<string, number> = {
   schoolName: 0, slug: 0, typeValues: 0,
-  email: 1, username: 1, phone: 1,
+  email: 1, username: 1, phone: 1, phone2: 1,
   adminPassword: 2, confirmPassword: 2,
 };
 
@@ -77,7 +82,7 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
   const { handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      schoolName: "", slug: "", email: "", username: "", phone: "", city: "", country: "Guinée",
+      schoolName: "", slug: "", email: "", username: "", phone: "", phone2: "", city: "", country: "Guinée",
       director: "", typeValues: ["PRIMAIRE"], initialState: "TRIAL",
       adminPassword: "", confirmPassword: "",
     },
@@ -112,6 +117,7 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
         email: values.email || undefined,
         username: values.username || undefined,
         phone: values.phone,
+        phone2: values.phone2 || undefined,
         city: values.city || undefined,
         country: values.country || undefined,
         director: values.director || undefined,
@@ -202,7 +208,12 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
             <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />
             {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
           </Field>
-          <PhoneInput label="Téléphone" required value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
+          <PhoneInput label="Téléphone de l'école" required value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
+          <p className="-mt-3 text-xs text-gray-400">
+            Imprimé sur les badges et reçus — différent de l&apos;identifiant de connexion ci-dessus, ne
+            mettez pas ici le numéro personnel du directeur.
+          </p>
+          <PhoneInput label="Second téléphone de l'école (optionnel)" value={v.phone2} onChange={(val) => setValue("phone2", val)} error={errors.phone2?.message} />
         </div>
       )}
 
