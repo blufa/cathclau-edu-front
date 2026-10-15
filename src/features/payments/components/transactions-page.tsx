@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, FileText, RotateCw } from "lucide-react";
+import { Search, FileText } from "lucide-react";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
@@ -15,9 +15,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { notifyError } from "@/lib/feedback";
 import { formatGNF, formatDateTime } from "@/lib/format";
-import { useReceiptByReferenceQuery, useReceiptsQuery, useRefreshReceiptStudentNameMutation } from "../hooks/use-receipts";
+import { useReceiptByReferenceQuery, useReceiptsQuery } from "../hooks/use-receipts";
 
 export default function PaymentTransactionsPage() {
   const { user } = useAuth();
@@ -62,22 +62,11 @@ function ReceiptsTab() {
   const foundQuery = useReceiptByReferenceQuery(debouncedReference);
   const found = foundQuery.data ?? null;
   const searching = foundQuery.isFetching;
-  const refreshNameMutation = useRefreshReceiptStudentNameMutation();
 
   async function openPdf(r: Receipt) {
     setOpeningId(r.id);
     try { setPreview({ url: await getReceiptPdfObjectUrlById(r.id), title: `Reçu ${r.reference}` }); }
     catch (err) { notifyError(err); } finally { setOpeningId(null); }
-  }
-
-  // §retour comptable : le nom de l'élève est figé au moment de l'émission — s'il a été mal saisi
-  // puis corrigé sur la fiche élève, le reçu déjà généré gardait l'ancien nom indéfiniment (PDF
-  // Cloudinary mis en cache). Ce bouton recalcule le nom et invalide ce cache.
-  async function refreshName(r: Receipt) {
-    try {
-      await refreshNameMutation.mutateAsync(r.id);
-      notifySuccess("Nom de l'élève mis à jour sur le reçu.");
-    } catch (err) { notifyError(err); }
   }
 
   const rows = q.data ?? [];
@@ -144,14 +133,7 @@ function ReceiptsTab() {
                   <TD className="font-medium text-gray-900">{formatGNF(r.amount)}</TD>
                   <TD className="text-sm text-gray-500">{formatDateTime(r.generatedAt)}</TD>
                   <TD className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button size="sm" variant="ghost" title="Nom de l'élève mal saisi ? Le recalculer depuis sa fiche"
-                        loading={refreshNameMutation.isPending && refreshNameMutation.variables === r.id}
-                        onClick={() => refreshName(r)}>
-                        <RotateCw className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="ghost" loading={openingId === r.id} onClick={() => openPdf(r)}>Ouvrir PDF</Button>
-                    </div>
+                    <Button size="sm" variant="ghost" loading={openingId === r.id} onClick={() => openPdf(r)}>Ouvrir PDF</Button>
                   </TD>
                 </TR>
               ))}

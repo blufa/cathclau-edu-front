@@ -12,5 +12,4 @@ export {
   listReceipts,
   getReceiptByReference,
   getReceiptPdfObjectUrlById,
-  refreshReceiptStudentName,
 } from "@/lib/api/payment";
