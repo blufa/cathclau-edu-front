@@ -167,13 +167,15 @@ export function IdBadgePortrait({
           </div>
 
           {/* Coordonnées de l'école (jamais celles d'un parent) + hiérarchie administrative. */}
-          {(branding?.address || branding?.phone || branding?.ire || branding?.dpeLabel || branding?.sousPrefectureLabel) && (
+          {(branding?.address || branding?.phone || branding?.phone2 || branding?.ire || branding?.dpeLabel || branding?.sousPrefectureLabel) && (
             <div className="mt-2.5 space-y-0.5 px-3 text-center print:mt-[0.6mm] print:px-[1.5mm]">
               {branding?.address && (
                 <p className="truncate text-[10px] font-semibold text-slate-700 print:text-[1.7mm]">{branding.address}</p>
               )}
-              {branding?.phone && (
-                <p className="truncate text-[9px] text-slate-500 print:text-[1.5mm]">{branding.phone}</p>
+              {(branding?.phone || branding?.phone2) && (
+                <p className="truncate text-[9px] text-slate-500 print:text-[1.5mm]">
+                  {[branding?.phone, branding?.phone2].filter(Boolean).join(" / ")}
+                </p>
               )}
               {(branding?.ire || branding?.dpeLabel || branding?.sousPrefectureLabel) && (
                 <p className="truncate text-[7.5px] text-slate-400 print:text-[1.3mm]">

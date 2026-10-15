@@ -136,6 +136,7 @@ function TenantDetail() {
               <Info label="Type" value={t.establishmentTypes?.length ? t.establishmentTypes.map((x) => ESTABLISHMENT_TYPE_LABEL[x]).join(", ") : "—"} />
               <Info label="Email" value={t.email} />
               <Info label="Téléphone" value={t.phone} />
+              <Info label="Second téléphone" value={t.phone2} />
               <Info label="Ville" value={t.city} />
               <Info label="Pays" value={t.country} />
               <Info label="Directeur" value={t.director} />
@@ -259,6 +260,7 @@ const schema = z.object({
   schoolName: z.string().trim().min(1, "Nom requis"),
   email: z.string(),
   phone: z.string(),
+  phone2: z.string(),
   city: z.string(),
   country: z.string(),
   director: z.string(),
@@ -273,7 +275,7 @@ function EditTenantForm({ tenant, onCancel, onSaved }: { tenant: Tenant; onCance
   const { handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      schoolName: tenant.schoolName, email: tenant.email ?? "", phone: tenant.phone ?? "",
+      schoolName: tenant.schoolName, email: tenant.email ?? "", phone: tenant.phone ?? "", phone2: tenant.phone2 ?? "",
       city: tenant.city ?? "", country: tenant.country ?? "", director: tenant.director ?? "",
       logo: "", brandColor: "", website: "",
     },
@@ -305,7 +307,8 @@ function EditTenantForm({ tenant, onCancel, onSaved }: { tenant: Tenant; onCance
         <Label>Email</Label>
         <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} />
       </Field>
-      <PhoneInput label="Téléphone" value={v.phone} onChange={(val) => setValue("phone", val)} />
+      <PhoneInput label="Téléphone de l'école" value={v.phone} onChange={(val) => setValue("phone", val)} />
+      <PhoneInput label="Second téléphone (optionnel)" value={v.phone2} onChange={(val) => setValue("phone2", val)} />
       <Field>
         <Label>Ville</Label>
         <Input value={v.city} onChange={(e) => setValue("city", e.target.value)} />

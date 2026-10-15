@@ -523,7 +523,8 @@ export default function FounderDashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Exonérations actives" value={(founder?.subsidy.totalExemptions ?? 0) + (founder?.subsidy.partialExemptions ?? 0)} icon={Users} accent="indigo"
-              hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s), ${founder?.subsidy.partialExemptions ?? 0} partielle(s)`} />
+              hint={`${founder?.subsidy.totalExemptions ?? 0} totale(s) (${formatGNF(founder?.subsidy.totalExemptionEstimatedValue)}), `
+                + `${founder?.subsidy.partialExemptions ?? 0} partielle(s) (${formatGNF(founder?.subsidy.exemptionDiscountAmount)})`} />
             <StatCard title="Remises exonérations appliquées" value={formatGNF(founder?.subsidy.exemptionDiscountAmount)} icon={Wallet} accent="teal"
               hint={`${founder?.subsidy.exemptionDiscountInvoiceCount ?? 0} facture(s), dont ${founder?.subsidy.exemptionDiscountInvoicePaidCount ?? 0} encaissée(s)`} />
             {/* Une exonération à 100% ne produit jamais de facture (pour qu'elle ne soit jamais cochée
