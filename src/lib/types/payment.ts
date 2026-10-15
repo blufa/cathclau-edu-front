@@ -99,6 +99,9 @@ export interface Receipt {
   amount: string;
   pdfFile: string | null;
   generatedAt: string | null;
+  /** Nom de l'élève payeur, figé au moment de l'émission — voir refreshReceiptStudentName si une
+   * faute de frappe a été corrigée après coup sur la fiche élève. */
+  studentName: string | null;
 }
 
 // ── Provider transactions (traçabilité des appels fournisseur) ───────────────

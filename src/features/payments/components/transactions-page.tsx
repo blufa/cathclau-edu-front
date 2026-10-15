@@ -122,13 +122,14 @@ function ReceiptsTab() {
         <div className="rounded-2xl border border-gray-200 bg-white">
           <Table>
             <THead>
-              <TR><TH>Numéro du reçu</TH><TH>Montant</TH><TH>Émis le</TH><TH className="text-right">Actions</TH></TR>
+              <TR><TH>Numéro du reçu</TH><TH>Élève</TH><TH>Montant</TH><TH>Émis le</TH><TH className="text-right">Actions</TH></TR>
             </THead>
             <TBody>
-              {rows.length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucun reçu.</TD></TR>}
+              {rows.length === 0 && <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun reçu.</TD></TR>}
               {rows.map((r) => (
                 <TR key={r.id}>
                   <TD className="font-mono text-xs text-gray-600">{r.reference}</TD>
+                  <TD className="text-sm text-gray-700">{r.studentName ?? "—"}</TD>
                   <TD className="font-medium text-gray-900">{formatGNF(r.amount)}</TD>
                   <TD className="text-sm text-gray-500">{formatDateTime(r.generatedAt)}</TD>
                   <TD className="text-right">
