@@ -29,10 +29,10 @@ const ORGANIZATION_JSON_LD = {
  * Les 6 pages reconstruites en Vankine natif (refont-front.md) fournissent chacune leur propre
  * Header5/Footer5 (mêmes classes CSS que le template, scopées sous .vankine-scope) : notre
  * header/footer Tailwind est donc masqué sur ces routes précises, pour éviter un header/footer en
- * double. Les autres pages publiques (contact, aide, mentions légales, inscription...) restent en
- * Tailwind avec PublicHeader/PublicFooter tant qu'elles ne sont pas converties. */
+ * double. Les autres pages publiques (contact, aide, mentions légales...) restent en Tailwind avec
+ * PublicHeader/PublicFooter tant qu'elles ne sont pas converties. */
 function isVankineNativeRoute(pathname: string): boolean {
-  if (pathname === "/" || pathname === "/a-propos" || pathname === "/tarifs" || pathname === "/faqs" || pathname === "/aide" || pathname === "/contact" || pathname === "/signup") return true;
+  if (pathname === "/" || pathname === "/a-propos" || pathname === "/faqs" || pathname === "/aide" || pathname === "/contact") return true;
   if (pathname === "/blog" || pathname.startsWith("/blog/")) return true;
   if (pathname.startsWith("/fonctionnalites/")) return true;
   return false;

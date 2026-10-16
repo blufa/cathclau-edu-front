@@ -44,7 +44,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     if (status === "authenticated") router.replace(roleHome(user));
   }, [status, user, router]);
 
-  // Apply the tenant's public branding (logo + colour) on the login/signup screens.
+  // Apply the tenant's public branding (logo + colour) on the login screen.
   useEffect(() => {
     const slug = resolveTenantSlug();
     if (!slug) return;

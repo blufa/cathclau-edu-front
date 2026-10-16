@@ -8,7 +8,6 @@ import { getBranding } from "@/lib/branding";
 
 const NAV = [
   { label: "Fonctionnalités", href: "/fonctionnalites" },
-  { label: "Tarifs", href: "/tarifs" },
   { label: "Blog", href: "/blog" },
   { label: "À propos", href: "/a-propos" },
   { label: "FAQ", href: "/faqs" },

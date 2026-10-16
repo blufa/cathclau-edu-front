@@ -11,8 +11,6 @@ import type {
   Prefecture,
   PrefectureInput,
   SchoolBranding,
-  SignupInput,
-  SignupResult,
   Subscription,
   SubscriptionInvoice,
   SubscriptionPayment,
@@ -27,16 +25,12 @@ import type {
   TenantModule,
 } from "@/lib/types/platform";
 
-// ── Public: plans (tarifs) ───────────────────────────────────────────────────
+// ── Public: plans (page Abonnement, gestion des plans plateforme) ────────────
 export function listPlans(): Promise<Plan[]> {
   return api.get<Plan[]>("/platform/plans", { auth: false });
 }
 
-// ── Public: self-service signup & verification ───────────────────────────────
-export function signup(input: SignupInput): Promise<SignupResult> {
-  return api.post<SignupResult>("/public/signup", input, { auth: false });
-}
-
+// ── Public: verification ──────────────────────────────────────────────────────
 export function verifyEmail(token: string): Promise<void> {
   return api.post<void>("/public/verify-email", { token }, { auth: false });
 }

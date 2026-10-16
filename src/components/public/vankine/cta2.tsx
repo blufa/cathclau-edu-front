@@ -12,8 +12,8 @@ export function Cta2() {
             </div>
           </div>
           <div className="theme_btn_all">
-            <Link href="/signup" className="theme_btn">
-              Créer mon école <span><i className="fi-rr-arrow-small-up" /></span>
+            <Link href="/login" className="theme_btn">
+              Connexion <span><i className="fi-rr-arrow-small-up" /></span>
             </Link>
           </div>
           <div className="d-flex align-items-center contact_header_one">

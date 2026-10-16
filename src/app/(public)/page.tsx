@@ -121,8 +121,8 @@ export default function LandingPage() {
                   <a href="tel:+224614324299" className="hover:text-white">+224 614 32 42 99</a>
                 </div>
               </div>
-              <Button component={Link} href="/signup" size="lg" className="rounded-full bg-white px-6 text-brand-700 hover:bg-brand-50">
-                Créer mon école
+              <Button component={Link} href="/login" size="lg" className="rounded-full bg-white px-6 text-brand-700 hover:bg-brand-50">
+                Connexion
               </Button>
             </div>
           </div>
