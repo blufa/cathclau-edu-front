@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { getBranding } from "@/lib/branding";
 
 const NAV = [
+  { label: "À propos", href: "/a-propos" },
   { label: "Fonctionnalités", href: "/fonctionnalites" },
   { label: "Blog", href: "/blog" },
-  { label: "À propos", href: "/a-propos" },
   { label: "FAQ", href: "/faqs" },
 ];
 

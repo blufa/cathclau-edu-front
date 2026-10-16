@@ -13,10 +13,10 @@ const COLUMNS = [
   {
     title: "Produit",
     links: [
+      { label: "À propos", href: "/a-propos" },
       { label: "Modules", href: "/#modules" },
       { label: "Sécurité", href: "/#securite" },
       { label: "Fonctionnalités", href: "/fonctionnalites" },
-      { label: "À propos", href: "/a-propos" },
       { label: "Blog", href: "/blog" },
     ],
   },
