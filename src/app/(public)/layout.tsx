@@ -16,7 +16,7 @@ const ORGANIZATION_JSON_LD = {
   url: SITE_URL,
   logo: `${SITE_URL}/images/logo.png`,
   email: "contact@cathclau.edu",
-  telephone: "+224620000000",
+  telephone: "+224614324299",
   address: {
     "@type": "PostalAddress",
     addressLocality: "Conakry",

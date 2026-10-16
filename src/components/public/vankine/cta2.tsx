@@ -20,7 +20,7 @@ export function Cta2() {
             <div className="icon_s"><i className="fi-rr-headphones" /></div>
             <div className="content">
               <h6 className="tite">Besoin d&apos;aide ?</h6>
-              <div className="title_20"><Link href="tel:+224620000000">+224 620 00 00 00</Link></div>
+              <div className="title_20"><Link href="tel:+224614324299">+224 614 32 42 99</Link></div>
             </div>
           </div>
         </div>

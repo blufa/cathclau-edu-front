@@ -53,7 +53,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 text-center">
         <h3 className="text-xl font-bold tracking-tight text-gray-900">Connexion</h3>
       </div>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

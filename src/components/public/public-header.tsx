@@ -35,8 +35,8 @@ export function PublicHeader() {
             <a href="mailto:contact@cathclau.edu" className="flex items-center gap-2 transition hover:text-brand-600">
               <Mail className="h-3.5 w-3.5 text-brand-600" /> contact@cathclau.edu
             </a>
-            <a href="tel:+224620000000" className="flex items-center gap-2 transition hover:text-brand-600">
-              <Phone className="h-3.5 w-3.5 text-brand-600" /> +224 620 00 00 00
+            <a href="tel:+224614324299" className="flex items-center gap-2 transition hover:text-brand-600">
+              <Phone className="h-3.5 w-3.5 text-brand-600" /> +224 614 32 42 99
             </a>
           </div>
         </div>

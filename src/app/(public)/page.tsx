@@ -118,7 +118,7 @@ export default function LandingPage() {
                 </h2>
                 <div className="mt-2 flex items-center justify-center gap-2 text-sm text-white/80 sm:justify-start">
                   <Headset className="h-4 w-4" />
-                  <a href="tel:+224620000000" className="hover:text-white">+224 620 00 00 00</a>
+                  <a href="tel:+224614324299" className="hover:text-white">+224 614 32 42 99</a>
                 </div>
               </div>
               <Button component={Link} href="/signup" size="lg" className="rounded-full bg-white px-6 text-brand-700 hover:bg-brand-50">

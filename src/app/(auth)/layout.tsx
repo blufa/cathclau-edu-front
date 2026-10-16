@@ -110,7 +110,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               ))}
             </ul>
           </div>
-          <p className="relative z-10 text-xs text-white/60">Besoin d&apos;aide ? +224 620 00 00 00</p>
+          <p className="relative z-10 text-xs text-white/60">Besoin d&apos;aide ? +224 614 32 42 99</p>
         </div>
       )}
 

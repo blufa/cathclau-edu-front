@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 const COORDS = [
   { icon: "fi-rr-marker", title: "Adresse", lines: ["Conakry, Guinée"] },
   { icon: "fi-rr-envelope", title: "E-mail", lines: ["contact@cathclau.edu"], href: "mailto:contact@cathclau.edu" },
-  { icon: "fi-rr-phone-call", title: "Téléphone", lines: ["+224 620 00 00 00"], href: "tel:+224620000000" },
+  { icon: "fi-rr-phone-call", title: "Téléphone", lines: ["+224 614 32 42 99"], href: "tel:+224614324299" },
 ];
 
 /**
