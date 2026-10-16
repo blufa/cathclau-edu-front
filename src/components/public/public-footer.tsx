@@ -13,11 +13,10 @@ const COLUMNS = [
   {
     title: "Produit",
     links: [
+      { label: "À propos", href: "/a-propos" },
       { label: "Modules", href: "/#modules" },
       { label: "Sécurité", href: "/#securite" },
-      { label: "Tarifs", href: "/tarifs" },
       { label: "Fonctionnalités", href: "/fonctionnalites" },
-      { label: "À propos", href: "/a-propos" },
       { label: "Blog", href: "/blog" },
     ],
   },
@@ -27,13 +26,11 @@ const COLUMNS = [
       { label: "FAQ", href: "/faqs" },
       { label: "Centre d'aide", href: "/aide" },
       { label: "Contact", href: "/contact" },
-      { label: "Demander une démo", href: "/signup" },
     ],
   },
   {
     title: "Compte",
     links: [
-      { label: "Créer mon école", href: "/signup" },
       { label: "Connexion", href: "/login" },
     ],
   },

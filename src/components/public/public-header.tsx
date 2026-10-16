@@ -7,10 +7,9 @@ import { Button } from "@/components/ui/button";
 import { getBranding } from "@/lib/branding";
 
 const NAV = [
-  { label: "Fonctionnalités", href: "/fonctionnalites" },
-  { label: "Tarifs", href: "/tarifs" },
-  { label: "Blog", href: "/blog" },
   { label: "À propos", href: "/a-propos" },
+  { label: "Fonctionnalités", href: "/fonctionnalites" },
+  { label: "Blog", href: "/blog" },
   { label: "FAQ", href: "/faqs" },
 ];
 
@@ -35,8 +34,8 @@ export function PublicHeader() {
             <a href="mailto:contact@cathclau.edu" className="flex items-center gap-2 transition hover:text-brand-600">
               <Mail className="h-3.5 w-3.5 text-brand-600" /> contact@cathclau.edu
             </a>
-            <a href="tel:+224620000000" className="flex items-center gap-2 transition hover:text-brand-600">
-              <Phone className="h-3.5 w-3.5 text-brand-600" /> +224 620 00 00 00
+            <a href="tel:+224614324299" className="flex items-center gap-2 transition hover:text-brand-600">
+              <Phone className="h-3.5 w-3.5 text-brand-600" /> +224 614 32 42 99
             </a>
           </div>
         </div>
@@ -65,11 +64,8 @@ export function PublicHeader() {
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
-            <Link href="/login" className="rounded-full px-3 py-2 text-sm font-medium text-white/90 hover:text-white">
+            <Button component={Link} href="/login" size="sm" className="rounded-full bg-white text-brand-700 hover:bg-brand-50">
               Connexion
-            </Link>
-            <Button component={Link} href="/signup" size="sm" className="rounded-full bg-white text-brand-700 hover:bg-brand-50">
-              Essai gratuit
             </Button>
           </div>
 
@@ -101,11 +97,8 @@ export function PublicHeader() {
                   {n.label}
                 </Link>
               ))}
-              <Link href="/login" onClick={close} className="text-sm font-medium text-gray-700">
+              <Button component={Link} href="/login" onClick={close} fullWidth className="rounded-full">
                 Connexion
-              </Link>
-              <Button component={Link} href="/signup" onClick={close} fullWidth className="rounded-full">
-                Essai gratuit
               </Button>
             </div>
           </div>

@@ -21,12 +21,17 @@ export function IdleLogout() {
 
   const handleIdle = useCallback(() => {
     void (async () => {
+      // La redirection vers /login ne doit jamais dépendre du réseau (§retour utilisateur, mobile en
+      // connexion instable) : logout() est déjà défensif côté client (authService.logout() avale
+      // l'échec de révocation serveur et vide le token local dans tous les cas), mais on s'assure ici
+      // qu'un incident imprévu ne laisse jamais quelqu'un bloqué sur l'écran courant au lieu de /login.
       try {
         await logout();
         notifyInfo("Vous avez été déconnecté après 15 minutes sans activité — reconnectez-vous pour continuer.", "Déconnecté pour inactivité");
-        router.replace("/login");
       } catch (err) {
         notifyError(err, "Déconnexion automatique impossible");
+      } finally {
+        router.replace("/login");
       }
     })();
   }, [logout, router]);

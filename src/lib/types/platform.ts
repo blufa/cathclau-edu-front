@@ -152,14 +152,6 @@ export interface PlanChange {
   effectiveDate: string;
 }
 
-// ── Public signup ────────────────────────────────────────────────────────────
-export interface SignupResult {
-  tenantId: number;
-  slug: string;
-  status: TenantStatus;
-  message: string;
-}
-
 export interface SchoolBranding {
   tenantId: number;
   slug: string;
@@ -169,30 +161,6 @@ export interface SchoolBranding {
 }
 
 // ── Input commands ──────────────────────────────────────────────────────────
-export interface SignupInput {
-  nomEcole: string;
-  slugSouhaite?: string;
-  /** Email facultatif (tout le monde n'en a pas). */
-  emailDirecteur?: string;
-  /** Identifiant de connexion : l'admin se connecte avec le username OU l'email. */
-  username: string;
-  password: string;
-  directeur?: string;
-  ville?: string;
-  pays?: string;
-  /** Un ou plusieurs types d'établissement. */
-  typesEtablissement?: EstablishmentType[];
-  planSouhaite?: string;
-  /** Numéro marchand de reversement (facultatif à l'inscription, complétable dans les paramètres). */
-  numeroMarchand?: string;
-  /** Opérateur du numéro marchand (ORANGE_MONEY, MTN_MONEY, WAVE…). */
-  operateurMarchand?: string;
-  // Compte administrateur de l'école (obligatoire).
-  prenomAdmin: string;
-  nomAdmin: string;
-  telephoneAdmin?: string;
-}
-
 export interface CreateTenantInput {
   schoolName: string;
   slug?: string;

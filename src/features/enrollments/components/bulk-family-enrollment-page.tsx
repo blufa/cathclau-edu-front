@@ -27,7 +27,7 @@ import {
 import type { EnrollmentType, Gender } from "@/lib/types/student";
 import type { Parent } from "@/lib/types/student";
 import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
-import { isNetworkError } from "@/lib/api/errors";
+import { ApiError, isNetworkError } from "@/lib/api/errors";
 import { isDesktop } from "@/lib/offline/desktop-runtime";
 import { useNetworkStore } from "@/lib/offline/network-store";
 import {
@@ -812,14 +812,24 @@ export default function BulkFamilyEnrollmentPage() {
           </div>
         </CardHeader>
         <CardBody className="space-y-3">
-          {/* La liste "Exonération" sur chaque enfant ci-dessous reste silencieusement vide dans les
-              DEUX cas suivants (indiscernables sans ce bandeau, §retour comptable — "je ne vois pas
-              charger les exonérations") : l'appel réseau a échoué, OU aucun type n'a jamais été
-              configuré pour cette école (catalogue propre à chaque tenant, voir ExemptionRuleController). */}
+          {/* La liste "Exonération" sur chaque enfant ci-dessous reste silencieusement vide dans
+              PLUSIEURS cas (indiscernables sans ce bandeau, §retour comptable — "je ne vois pas charger
+              les exonérations") : droits insuffisants (403), vraie coupure réseau, ou aucun type jamais
+              configuré pour cette école (catalogue propre à chaque tenant, voir
+              ExemptionRuleController). Un seul message générique "problème réseau" pour les trois
+              induisait en erreur une comptable pourtant connectée avec son propre compte, dont le rôle
+              ACCOUNTANT a bien ce droit en base (V204/V205) — le vrai coupable le plus probable pour un
+              compte déjà correctement configuré : les permissions sont figées dans le JWT à la
+              connexion (24h, voir JwtService), donc un rôle modifié APRÈS sa dernière connexion
+              (migration ou édition du rôle par la direction) ne se reflète qu'après reconnexion. D'où
+              le conseil de se reconnecter en premier, avant de soupçonner le rôle lui-même. */}
           {exemptionRulesQuery.error && (
             <p className="rounded-lg bg-error-50 px-3 py-2 text-xs text-error-700">
-              Impossible de charger les types d&apos;exonération (problème réseau). Rechargez la page —
-              si le problème persiste, contactez le support.
+              {exemptionRulesQuery.error instanceof ApiError && exemptionRulesQuery.error.status === 403
+                ? "Vous n'avez pas le droit de consulter les types d'exonération. Déconnectez-vous puis reconnectez-vous (vos droits ont pu changer depuis votre dernière connexion) — si le problème persiste, demandez à la direction de vérifier votre rôle (Rôles & permissions → \"Consulter les règles de facturation\")."
+                : isNetworkError(exemptionRulesQuery.error)
+                  ? "Impossible de charger les types d'exonération (pas de connexion). Vérifiez votre connexion et rechargez la page."
+                  : "Impossible de charger les types d'exonération. Rechargez la page — si le problème persiste, contactez le support."}
             </p>
           )}
           {!exemptionRulesQuery.loading && !exemptionRulesQuery.error && activeExemptionRules.length === 0 && (

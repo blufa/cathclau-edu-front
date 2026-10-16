@@ -36,24 +36,24 @@ export default function LandingPage() {
       <PublicHeader />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-gradient-to-b from-brand-50 to-white">
-          <div className="mx-auto max-w-6xl px-4 py-16 text-center sm:py-24">
+        <section className="relative overflow-hidden bg-gradient-to-b from-brand-50 to-white">
+          {/* Dégradés décoratifs — purement visuels, aucun contenu inventé derrière. */}
+          <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-brand-200/40 blur-3xl" />
+          <div className="pointer-events-none absolute -right-20 top-10 h-80 w-80 rounded-full bg-brand-300/30 blur-3xl" />
+          <div className="relative mx-auto max-w-6xl px-4 py-16 text-center sm:py-24">
             <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
               Bienvenue sur CathClau Edu
             </p>
             <h1 className="mx-auto mt-3 max-w-3xl text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-              Gagnez du temps pour ce qui compte : vos élèves
+              Votre école, simplifiée.
             </h1>
             <p className="mx-auto mt-4 max-w-2xl text-base text-gray-600 sm:text-lg">
               Élèves, scolarité, présences, notes, facturation et communication aux familles,
               réunis dans une seule plateforme, 100&nbsp;% web.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button component={Link} href="/signup" size="lg" className="rounded-full px-6">
-                Essai gratuit 30 jours
-              </Button>
-              <Button component={Link} href="/tarifs" variant="outline" size="lg" className="rounded-full px-6">
-                Voir les tarifs
+            <div className="mt-8 flex justify-center">
+              <Button component={Link} href="/login" size="lg" className="rounded-full px-6 shadow-lg shadow-brand-500/20">
+                Connexion
               </Button>
             </div>
           </div>
@@ -70,9 +70,9 @@ export default function LandingPage() {
               <Link
                 key={m.slug}
                 href={`/fonctionnalites/${m.slug}`}
-                className="group rounded-2xl border border-gray-200 p-6 shadow-sm transition hover:border-brand-300 hover:shadow-md"
+                className="group rounded-2xl border border-gray-200 p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lg hover:shadow-brand-500/10"
               >
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition group-hover:bg-brand-600 group-hover:text-white">
                   <m.icon className="h-5 w-5" />
                 </div>
                 <h3 className="mt-4 text-base font-semibold text-gray-900 group-hover:text-brand-700">
@@ -109,19 +109,22 @@ export default function LandingPage() {
 
         {/* CTA final */}
         <section className="mx-auto max-w-6xl px-4 py-16">
-          <div className="flex flex-col items-center justify-between gap-6 rounded-2xl bg-brand-600 px-6 py-10 text-center sm:flex-row sm:px-10 sm:text-left">
-            <div>
-              <h2 className="text-xl font-bold text-white sm:text-2xl">
-                Prêt à moderniser la gestion de votre établissement ?
-              </h2>
-              <div className="mt-2 flex items-center justify-center gap-2 text-sm text-white/80 sm:justify-start">
-                <Headset className="h-4 w-4" />
-                <a href="tel:+224620000000" className="hover:text-white">+224 620 00 00 00</a>
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-600 to-brand-700 px-6 py-10 shadow-xl shadow-brand-900/10 sm:px-10">
+            <div className="pointer-events-none absolute -right-10 -top-10 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+            <div className="relative flex flex-col items-center justify-between gap-6 text-center sm:flex-row sm:text-left">
+              <div>
+                <h2 className="text-xl font-bold text-white sm:text-2xl">
+                  Prêt à moderniser la gestion de votre établissement ?
+                </h2>
+                <div className="mt-2 flex items-center justify-center gap-2 text-sm text-white/80 sm:justify-start">
+                  <Headset className="h-4 w-4" />
+                  <a href="tel:+224614324299" className="hover:text-white">+224 614 32 42 99</a>
+                </div>
               </div>
+              <Button component={Link} href="/login" size="lg" className="rounded-full bg-white px-6 text-brand-700 hover:bg-brand-50">
+                Connexion
+              </Button>
             </div>
-            <Button component={Link} href="/signup" size="lg" className="rounded-full bg-white px-6 text-brand-700 hover:bg-brand-50">
-              Créer mon école
-            </Button>
           </div>
         </section>
       </main>
