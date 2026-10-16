@@ -83,10 +83,10 @@ type ChoiceAccent = keyof typeof CHOICE_ACCENTS;
 function ChoiceSectionHeader({ icon: Icon, accent, children }: { icon: React.ComponentType<{ className?: string }>; accent: ChoiceAccent; children: React.ReactNode }) {
   return (
     <div className="mb-2 flex items-center gap-2">
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${CHOICE_ACCENTS[accent].icon}`}>
-        <Icon className="h-4 w-4" />
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${CHOICE_ACCENTS[accent].icon}`}>
+        <Icon className="h-5 w-5" />
       </span>
-      <Label className="!mb-0">{children}</Label>
+      <Label className={`!mb-0 text-base font-bold ${CHOICE_ACCENTS[accent].text}`}>{children}</Label>
     </div>
   );
 }
@@ -1173,7 +1173,7 @@ function ChildCard({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field>
-          <Label>Prénom <span className="text-error-500">*</span></Label>
+          <Label className="text-base font-bold text-gray-900">Prénom <span className="text-error-500">*</span></Label>
           <Combobox
             disabled={locked}
             value={child.firstName}
@@ -1182,7 +1182,7 @@ function ChildCard({
           />
         </Field>
         <Field>
-          <Label>Nom <span className="text-error-500">*</span></Label>
+          <Label className="text-base font-bold text-gray-900">Nom <span className="text-error-500">*</span></Label>
           <Combobox
             disabled={locked}
             value={child.lastName}
@@ -1191,7 +1191,7 @@ function ChildCard({
           />
         </Field>
         <Field>
-          <Label>Classe <span className="text-error-500">*</span></Label>
+          <Label className="text-base font-bold text-gray-900">Classe <span className="text-error-500">*</span></Label>
           <SearchableSelect
             disabled={locked}
             value={child.classId}
