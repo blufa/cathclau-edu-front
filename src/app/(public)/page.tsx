@@ -51,12 +51,9 @@ export default function LandingPage() {
               Élèves, scolarité, présences, notes, facturation et communication aux familles,
               réunis dans une seule plateforme, 100&nbsp;% web.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-8 flex justify-center">
               <Button component={Link} href="/login" size="lg" className="rounded-full px-6 shadow-lg shadow-brand-500/20">
                 Connexion
-              </Button>
-              <Button component={Link} href="/tarifs" variant="outline" size="lg" className="rounded-full border-2 px-6">
-                Voir les tarifs
               </Button>
             </div>
           </div>
