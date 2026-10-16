@@ -55,7 +55,6 @@ export default function LoginPage() {
     <>
       <div className="mb-6">
         <h3 className="text-xl font-bold tracking-tight text-gray-900">Connexion</h3>
-        <p className="mt-1 text-sm text-gray-500">Heureux de vous revoir — accédez à votre espace.</p>
       </div>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {verified && <Alert tone="brand">Votre e-mail est vérifié et votre école activée. Connectez-vous pour accéder à votre tableau de bord.</Alert>}
