@@ -45,7 +45,7 @@ export default function LandingPage() {
               Bienvenue sur CathClau Edu
             </p>
             <h1 className="mx-auto mt-3 max-w-3xl text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-              Gagnez du temps pour ce qui compte : vos élèves
+              Votre école, simplifiée.
             </h1>
             <p className="mx-auto mt-4 max-w-2xl text-base text-gray-600 sm:text-lg">
               Élèves, scolarité, présences, notes, facturation et communication aux familles,
