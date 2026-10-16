@@ -87,9 +87,9 @@ export default function FeaturesPage() {
           <h2 className="text-3xl font-bold tracking-tight text-slate-900">
             Envie de voir la plateforme en action ?
           </h2>
-          <p className="text-slate-600">Créez votre école et explorez tous les modules gratuitement pendant 30 jours.</p>
-          <LinkButton href="/signup" size="md">
-            Démarrer l&apos;essai gratuit
+          <p className="text-slate-600">Connectez-vous à votre espace école pour explorer tous les modules.</p>
+          <LinkButton href="/login" size="md">
+            Connexion
           </LinkButton>
         </Reveal>
       </section>

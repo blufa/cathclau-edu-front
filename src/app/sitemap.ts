@@ -10,12 +10,10 @@ export const dynamic = "force-static";
 const STATIC_ROUTES: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"] }[] = [
   { path: "/", priority: 1, changeFrequency: "weekly" },
   { path: "/a-propos", priority: 0.6, changeFrequency: "monthly" },
-  { path: "/tarifs", priority: 0.9, changeFrequency: "monthly" },
   { path: "/fonctionnalites", priority: 0.8, changeFrequency: "monthly" },
   { path: "/faqs", priority: 0.6, changeFrequency: "monthly" },
   { path: "/aide", priority: 0.5, changeFrequency: "monthly" },
   { path: "/contact", priority: 0.6, changeFrequency: "yearly" },
-  { path: "/signup", priority: 0.8, changeFrequency: "yearly" },
   { path: "/blog", priority: 0.7, changeFrequency: "daily" },
   { path: "/confidentialite", priority: 0.3, changeFrequency: "yearly" },
   { path: "/mentions-legales", priority: 0.3, changeFrequency: "yearly" },
@@ -23,9 +21,10 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
 
 /**
  * Sitemap dynamique : pages statiques + fiches fonctionnalités (une par module) + articles de blog
- * publiés. Les pages transactionnelles (signup/verify-email, resend-verification, reset-password,
+ * publiés. Les pages transactionnelles (verify-email, resend-verification, reset-password,
  * maintenance) et tout l'espace applicatif authentifié en sont volontairement exclus — voir
- * src/app/robots.ts pour l'espace applicatif.
+ * src/app/robots.ts pour l'espace applicatif. Pas d'inscription en self-service (signup) ni de page
+ * tarifs publique : une école démarre via la direction, pas par CTA public.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((r) => ({

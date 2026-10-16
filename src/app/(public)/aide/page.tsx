@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 const TOPICS = [
-  { icon: "flaticon-next", title: "Démarrer", text: "Créer son école, vérifier l'e-mail et inviter ses équipes.", href: "/signup" },
+  { icon: "flaticon-next", title: "Démarrer", text: "Se connecter à son espace école et inviter ses équipes.", href: "/login" },
   { icon: "flaticon-management", title: "Scolarité", text: "Élèves, inscriptions, classes, notes et bulletins.", href: "/fonctionnalites/scolarite" },
   { icon: "flaticon-money-bag", title: "Facturation & paiements", text: "Frais, échéances et paiements mobile money.", href: "/fonctionnalites/facturation" },
   { icon: "flaticon-telephone", title: "Communication", text: "SMS, e-mail et WhatsApp aux familles.", href: "/fonctionnalites/communication" },

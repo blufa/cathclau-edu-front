@@ -37,7 +37,15 @@ declare module "axios" {
   }
 }
 
-const http = axios.create({ baseURL: BASE_URL });
+// Sans `timeout`, axios attend indéfiniment (0 = pas de limite) : sur un réseau mobile instable
+// (§retour comptable — "ça ne fait que tourner, rien ne se passe" en inscrivant un élève), une requête
+// qui ne reçoit jamais de réponse laisse le bouton en chargement pour toujours, sans erreur ni retour
+// possible. 30s laisse une marge large pour un traitement serveur lent (ex. génération groupée de
+// plusieurs factures à l'inscription) tout en garantissant qu'un échec silencieux finisse par échouer
+// PROPREMENT (ApiError status=0, déjà traité comme hors-ligne par isNetworkError — voir toApiError).
+const REQUEST_TIMEOUT_MS = 30_000;
+
+const http = axios.create({ baseURL: BASE_URL, timeout: REQUEST_TIMEOUT_MS });
 
 http.interceptors.request.use((config) => {
   const withAuth = config.requireAuth !== false;
@@ -62,7 +70,7 @@ async function refreshAccessToken(): Promise<boolean> {
     const res = await axios.post<{ accessToken: string; refreshToken: string }>(
       `${BASE_URL}/auth/refresh`,
       { refreshToken },
-      { headers: { "Content-Type": "application/json" } },
+      { headers: { "Content-Type": "application/json" }, timeout: REQUEST_TIMEOUT_MS },
     );
     setTokens(res.data.accessToken, res.data.refreshToken);
     return true;
@@ -95,7 +103,13 @@ async function toApiError(error: AxiosError): Promise<ApiError> {
   } else if (data && typeof data === "object") {
     problem = data as ProblemDetail;
   }
-  return new ApiError(status, problem?.title ?? error.message, problem);
+  // Un dépassement du timeout ci-dessus (ECONNABORTED) renvoie par défaut un message axios technique
+  // en anglais ("timeout of 30000ms exceeded") — remplacé par un message clair, cohérent avec les
+  // autres erreurs réseau affichées à l'écran.
+  const message = error.code === "ECONNABORTED"
+    ? "Le serveur met trop de temps à répondre. Vérifiez votre connexion et réessayez."
+    : (problem?.title ?? error.message);
+  return new ApiError(status, message, problem);
 }
 
 http.interceptors.response.use(

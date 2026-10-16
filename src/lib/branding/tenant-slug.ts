@@ -1,4 +1,4 @@
-/** Resolves the current school's slug for public pages (login/signup), from the subdomain or a query param. */
+/** Resolves the current school's slug for public pages (login), from the subdomain or a query param. */
 
 const RESERVED = new Set(["www", "app", "localhost", "127", "0", "staging", "preprod", "demo"]);
 
