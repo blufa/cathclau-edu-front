@@ -65,11 +65,8 @@ export function PublicHeader() {
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
-            <Link href="/login" className="rounded-full px-3 py-2 text-sm font-medium text-white/90 hover:text-white">
+            <Button component={Link} href="/login" size="sm" className="rounded-full bg-white text-brand-700 hover:bg-brand-50">
               Connexion
-            </Link>
-            <Button component={Link} href="/signup" size="sm" className="rounded-full bg-white text-brand-700 hover:bg-brand-50">
-              Essai gratuit
             </Button>
           </div>
 
@@ -101,11 +98,8 @@ export function PublicHeader() {
                   {n.label}
                 </Link>
               ))}
-              <Link href="/login" onClick={close} className="text-sm font-medium text-gray-700">
+              <Button component={Link} href="/login" onClick={close} fullWidth className="rounded-full">
                 Connexion
-              </Link>
-              <Button component={Link} href="/signup" onClick={close} fullWidth className="rounded-full">
-                Essai gratuit
               </Button>
             </div>
           </div>
