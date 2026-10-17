@@ -196,6 +196,7 @@ export const NAVIGATION: NavSection[] = [
         label: "Messagerie & annonces", icon: MessagesSquare,
         children: [
           { label: "Messages", href: "/communications", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["communication:send"], module: "COMMUNICATION" },
+          { label: "Relances paiement", href: "/communications/payment-reminders", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["communication:send"], module: "COMMUNICATION" },
           { label: "Annonces", href: "/communications/announcements", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["annonce:manage"] },
           { label: "Modèles", href: "/communications/templates", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["modele:manage"], module: "COMMUNICATION" },
         ],
