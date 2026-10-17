@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Building2, Hash, Palette, Wallet } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
+import { phoneRule } from "@/lib/phone";
 import { useAuth } from "@/providers/auth-provider";
 import { useBranding } from "@/providers/branding-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
@@ -92,6 +93,11 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
   const [profile, setProfile] = useState<SchoolProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // §retour utilisateur : un numéro incomplet (ex. "620" au lieu de "620 01 39 16") pouvait être
+  // enregistré sans aucun avertissement — fini par atterrir comme destinataire d'alertes SMS, rejeté en
+  // boucle par le fournisseur jusqu'à saturer le serveur (incident de production). Validé ici avant
+  // tout enregistrement, avec le même `phoneRule` que le formulaire de création d'école.
+  const [phoneErrors, setPhoneErrors] = useState<{ phone?: string | null; phone2?: string | null; founderPhone?: string | null }>({});
 
   useEffect(() => {
     let active = true;
@@ -108,6 +114,16 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
 
   async function save() {
     if (!profile) return;
+    const errors = {
+      phone: phoneRule(profile.phone),
+      phone2: phoneRule(profile.phone2),
+      founderPhone: phoneRule(profile.founderPhone),
+    };
+    setPhoneErrors(errors);
+    if (errors.phone || errors.phone2 || errors.founderPhone) {
+      notifyError(null, "Corrigez le(s) numéro(s) de téléphone en rouge avant d'enregistrer.");
+      return;
+    }
     setSaving(true);
     try {
       const updated = await updateSchoolProfile({
@@ -158,8 +174,10 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <Field><Label>Pays</Label><Input value={profile.country ?? ""} disabled={ro} onChange={(e) => set("country", e.target.value)} /></Field>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <PhoneInput label="Téléphone de l'école" value={profile.phone ?? ""} disabled={ro} onChange={(v) => set("phone", v)} />
-        <PhoneInput label="Second téléphone (optionnel)" value={profile.phone2 ?? ""} disabled={ro} onChange={(v) => set("phone2", v)} />
+        <PhoneInput label="Téléphone de l'école" value={profile.phone ?? ""} disabled={ro}
+          error={phoneErrors.phone} onChange={(v) => { set("phone", v); setPhoneErrors((e) => ({ ...e, phone: null })); }} />
+        <PhoneInput label="Second téléphone (optionnel)" value={profile.phone2 ?? ""} disabled={ro}
+          error={phoneErrors.phone2} onChange={(v) => { set("phone2", v); setPhoneErrors((e) => ({ ...e, phone2: null })); }} />
       </div>
       <p className="-mt-2 text-xs text-gray-400">
         Imprimés sur les badges et reçus — mettez les numéros de l&apos;école, pas le numéro personnel
@@ -175,7 +193,8 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
           sont envoyées sur ce numéro. Tant qu&apos;il n&apos;est pas renseigné, elles continuent
           d&apos;être envoyées à tous les comptes administrateur de l&apos;école.
         </p>
-        <PhoneInput value={profile.founderPhone ?? ""} disabled={ro} onChange={(v) => set("founderPhone", v)} />
+        <PhoneInput value={profile.founderPhone ?? ""} disabled={ro}
+          error={phoneErrors.founderPhone} onChange={(v) => { set("founderPhone", v); setPhoneErrors((e) => ({ ...e, founderPhone: null })); }} />
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field><Label>Numéro d&apos;agrément</Label><Input value={profile.accreditationNumber ?? ""} disabled={ro} onChange={(e) => set("accreditationNumber", e.target.value)} /></Field>

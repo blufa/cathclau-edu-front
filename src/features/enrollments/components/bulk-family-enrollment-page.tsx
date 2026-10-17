@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Eye, Loader2, Plus, Trash2, UploadCloud, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, Eye, Loader2, Percent, Plus, Trash2, UploadCloud, User, Users, X, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -65,12 +65,38 @@ function useDebouncedSuggestions(fetchFn: (q: string) => Promise<string[]>, minL
   return [options, query] as const;
 }
 
+/** Une couleur d'accent distincte par bloc de choix (Sexe/Lien de parenté/Type/Exonération) — §retour
+ * utilisateur : empilés les uns sous les autres avec le même bleu "brand" partout, ces quatre blocs se
+ * confondaient au premier coup d'œil, risque de cocher la mauvaise case dans le mauvais bloc. Classes
+ * Tailwind écrites en toutes lettres (pas d'interpolation `border-${color}-500`) : le JIT de Tailwind
+ * ne génère que les classes trouvées littéralement dans le code source. */
+const CHOICE_ACCENTS = {
+  sky: { border: "border-sky-500 bg-sky-50", text: "text-sky-900", checkbox: "accent-sky-600", icon: "bg-sky-100 text-sky-600" },
+  emerald: { border: "border-emerald-500 bg-emerald-50", text: "text-emerald-900", checkbox: "accent-emerald-600", icon: "bg-emerald-100 text-emerald-600" },
+  indigo: { border: "border-indigo-500 bg-indigo-50", text: "text-indigo-900", checkbox: "accent-indigo-600", icon: "bg-indigo-100 text-indigo-600" },
+  amber: { border: "border-amber-500 bg-amber-50", text: "text-amber-900", checkbox: "accent-amber-600", icon: "bg-amber-100 text-amber-600" },
+} as const;
+type ChoiceAccent = keyof typeof CHOICE_ACCENTS;
+
+/** En-tête d'un bloc de choix : pastille d'icône colorée + libellé — même couleur que les cartes du
+ * bloc juste en dessous (voir `accent`), pour que le bloc entier se reconnaisse d'un coup d'œil. */
+function ChoiceSectionHeader({ icon: Icon, accent, children }: { icon: React.ComponentType<{ className?: string }>; accent: ChoiceAccent; children: React.ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${CHOICE_ACCENTS[accent].icon}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <Label className={`!mb-0 text-base font-bold ${CHOICE_ACCENTS[accent].text}`}>{children}</Label>
+    </div>
+  );
+}
+
 /** Choix obligatoire entre options mutuellement exclusives, en cartes bien visibles plutôt qu'un menu
  * déroulant avec une valeur par défaut qu'on laisse passer sans vrai choix (demande utilisateur,
  * appliqué à la fois au type Inscription/Réinscription et au sexe) — aucune cochée par défaut (`value`
  * démarre à `null`), responsive : pleine largeur, empilées, le texte passe à la ligne sur mobile au
  * lieu de déborder. */
-function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled, horizontal, columns }: {
+function RequiredChoiceCards<T extends string>({ value, options, onChange, disabled, horizontal, columns, accent = "sky" }: {
   value: T | null;
   options: readonly (readonly [T, string])[];
   onChange: (v: T | null) => void;
@@ -84,10 +110,14 @@ function RequiredChoiceCards<T extends string>({ value, options, onChange, disab
    * lettres (pas d'interpolation `grid-cols-${n}`) : le JIT de Tailwind ne génère que les classes
    * trouvées littéralement dans le code source. */
   columns?: 2;
+  /** Couleur d'accent de ce bloc (voir CHOICE_ACCENTS) — distingue visuellement les blocs empilés les
+   * uns sous les autres, "sky" par défaut pour les usages qui ne passent rien d'explicite. */
+  accent?: ChoiceAccent;
 }) {
   const layout = columns === 2
     ? "grid grid-cols-2 gap-2 pt-1"
     : horizontal ? "flex flex-col gap-2 pt-1 sm:flex-row" : "flex flex-col gap-2 pt-1";
+  const a = CHOICE_ACCENTS[accent];
   return (
     <div className={layout}>
       {options.map(([optValue, text]) => {
@@ -97,16 +127,16 @@ function RequiredChoiceCards<T extends string>({ value, options, onChange, disab
             key={optValue}
             className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition-colors ${horizontal && !columns ? "w-full sm:flex-1" : "w-full"} ${
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-            } ${isChecked ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"}`}
+            } ${isChecked ? a.border : "border-gray-200 bg-white hover:border-gray-300"}`}
           >
             <input
               type="checkbox"
-              className="h-5 w-5 shrink-0 rounded border-gray-300 text-brand-600 accent-brand-600 focus-visible:ring-2 focus-visible:ring-brand-500/30"
+              className={`h-5 w-5 shrink-0 rounded border-gray-300 focus-visible:ring-2 ${a.checkbox}`}
               disabled={disabled}
               checked={isChecked}
               onChange={(e) => onChange(e.target.checked ? optValue : null)}
             />
-            <span className={`text-sm break-words ${isChecked ? "font-semibold text-brand-900" : "font-medium text-gray-700"}`}>
+            <span className={`text-sm break-words ${isChecked ? `font-semibold ${a.text}` : "font-medium text-gray-700"}`}>
               {text}
             </span>
           </label>
@@ -1143,7 +1173,7 @@ function ChildCard({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field>
-          <Label>Prénom <span className="text-error-500">*</span></Label>
+          <Label className="text-base font-bold text-gray-900">Prénom <span className="text-error-500">*</span></Label>
           <Combobox
             disabled={locked}
             value={child.firstName}
@@ -1152,7 +1182,7 @@ function ChildCard({
           />
         </Field>
         <Field>
-          <Label>Nom <span className="text-error-500">*</span></Label>
+          <Label className="text-base font-bold text-gray-900">Nom <span className="text-error-500">*</span></Label>
           <Combobox
             disabled={locked}
             value={child.lastName}
@@ -1161,7 +1191,7 @@ function ChildCard({
           />
         </Field>
         <Field>
-          <Label>Classe <span className="text-error-500">*</span></Label>
+          <Label className="text-base font-bold text-gray-900">Classe <span className="text-error-500">*</span></Label>
           <SearchableSelect
             disabled={locked}
             value={child.classId}
@@ -1179,72 +1209,71 @@ function ChildCard({
           court et un champ long reste bancal à n'importe quelle largeur d'écran, pas seulement sur
           mobile). Sexe/Type restent compacts via `horizontal` (leurs 2 options côte à côte au lieu
           d'empilées) ; Lien de parenté/Exonération gardent une liste verticale, chacun adapté à son
-          propre nombre d'options plutôt qu'imposé par son voisin. */}
-      <div className="mt-3">
-        <Field>
-          <Label>Sexe <span className="text-error-500">*</span></Label>
-          <RequiredChoiceCards
-            horizontal
-            disabled={locked}
-            value={child.gender}
-            onChange={(v) => onUpdate({ gender: v })}
-            options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
-          />
-        </Field>
+          propre nombre d'options plutôt qu'imposé par son voisin. Chaque bloc a maintenant sa propre
+          couleur d'accent + icône (voir ChoiceSectionHeader/CHOICE_ACCENTS) — empilés les uns sous
+          les autres avec la même couleur partout, ils se confondaient au premier coup d'œil (§retour
+          utilisateur : "pour que le comptable n'arrive à rien mélanger"). */}
+      <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/40 p-3">
+        <ChoiceSectionHeader icon={User} accent="sky">Sexe <span className="text-error-500">*</span></ChoiceSectionHeader>
+        <RequiredChoiceCards
+          horizontal
+          accent="sky"
+          disabled={locked}
+          value={child.gender}
+          onChange={(v) => onUpdate({ gender: v })}
+          options={[["MALE", "Garçon"], ["FEMALE", "Fille"]] as const}
+        />
       </div>
-      <div className="mt-3">
-        <Field>
-          <Label>Lien de parenté</Label>
-          <RequiredChoiceCards
-            columns={2}
-            disabled={locked}
-            value={child.relationship}
-            onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
-            options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
-          />
-        </Field>
+      <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
+        <ChoiceSectionHeader icon={Users} accent="emerald">Lien de parenté</ChoiceSectionHeader>
+        <RequiredChoiceCards
+          columns={2}
+          accent="emerald"
+          disabled={locked}
+          value={child.relationship}
+          onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
+          options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
+        />
       </div>
-      <div className="mt-3">
-        <Field>
-          <Label>Type <span className="text-error-500">*</span></Label>
-          <RequiredChoiceCards
-            horizontal
-            disabled={locked}
-            value={child.enrollmentType}
-            onChange={(v) => onUpdate({ enrollmentType: v })}
-            options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
-          />
-        </Field>
+      <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+        <ChoiceSectionHeader icon={ClipboardList} accent="indigo">Type <span className="text-error-500">*</span></ChoiceSectionHeader>
+        <RequiredChoiceCards
+          horizontal
+          accent="indigo"
+          disabled={locked}
+          value={child.enrollmentType}
+          onChange={(v) => onUpdate({ enrollmentType: v })}
+          options={[["NEW", "Inscription (nouvel élève)"], ["RE_ENROLLMENT", "Réinscription (déjà scolarisé ici)"]] as const}
+        />
       </div>
-      <div className="mt-3">
+      <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/40 p-3">
         {/* Exonération en cases à cocher (comme Sexe/Type) plutôt qu'un menu déroulant (§retour
             comptable — "il ne voit pas charger les exonérations" : un menu qui reste vide/fermé
             passe inaperçu, une liste de cartes vide ou l'avertissement juste au-dessus se voit
             tout de suite). */}
-        <Field>
-          <Label>Exonération (optionnel)</Label>
-          <RequiredChoiceCards
-            columns={2}
-            disabled={locked}
-            value={child.exemptionRuleId}
-            onChange={(v) => {
-              const ruleId = v ?? "";
-              const rule = exemptionRules.find((r) => String(r.id) === ruleId);
-              // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
-              // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
-              // masquée (elle ne concerne que ce cas précis).
-              onUpdate({ exemptionRuleId: ruleId, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
-            }}
-            options={[
-              ["", "Aucune"] as const,
-              ...exemptionRules.map((r) => {
-                const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
-                const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
-                return [String(r.id), label] as const;
-              }),
-            ]}
-          />
-        </Field>
+        <ChoiceSectionHeader icon={Percent} accent="amber">Exonération (optionnel)</ChoiceSectionHeader>
+        <RequiredChoiceCards
+          columns={2}
+          accent="amber"
+          disabled={locked}
+          value={child.exemptionRuleId}
+          onChange={(v) => {
+            const ruleId = v ?? "";
+            const rule = exemptionRules.find((r) => String(r.id) === ruleId);
+            // Décoche automatiquement la facturation mensuelle si l'exonération choisie n'est
+            // plus "avantage personnel" — évite un flag orphelin invisible une fois la case
+            // masquée (elle ne concerne que ce cas précis).
+            onUpdate({ exemptionRuleId: ruleId, monthlyPaymentOptIn: rule?.staffBenefit ? child.monthlyPaymentOptIn : false });
+          }}
+          options={[
+            ["", "Aucune"] as const,
+            ...exemptionRules.map((r) => {
+              const detail = r.percentage != null ? `${r.percentage}%` : r.amount != null ? formatGNF(r.amount) : "";
+              const label = `${r.label} — ${EXEMPTION_TYPE_LABEL[r.type]}${detail ? ` (${detail})` : ""}`;
+              return [String(r.id), label] as const;
+            }),
+          ]}
+        />
       </div>
 
       {/* Transport retiré d'ici (§retour comptable) — l'abonnement au bus se fait désormais après
