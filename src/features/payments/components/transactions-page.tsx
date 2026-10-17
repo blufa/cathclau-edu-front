@@ -142,7 +142,7 @@ function ReceiptsTab() {
         </div>
       )}
 
-      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </div>
   );
 }
