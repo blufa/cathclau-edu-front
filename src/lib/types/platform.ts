@@ -168,7 +168,11 @@ export interface CreateTenantInput {
   email?: string;
   /** Identifiant de connexion de l'admin (login par username OU email) ; généré si vide. */
   username?: string;
-  phone: string;
+  /** Téléphone personnel de l'administrateur — c'est avec CE numéro qu'il se connecte, distinct du
+   * téléphone de l'école (voir `phone`/`phone2`). */
+  adminPhone: string;
+  /** Téléphone de l'école, affiché sur badges/documents — optionnel, distinct de `adminPhone`. */
+  phone?: string;
   phone2?: string;
   address?: string;
   city?: string;
