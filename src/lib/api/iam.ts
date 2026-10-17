@@ -122,3 +122,15 @@ export function getUserDirectPermissions(userId: number): Promise<Permission[]> 
 export function setUserPermissions(userId: number, permissionIds: number[]): Promise<void> {
   return api.post<void>(`/users/${userId}/permissions`, { permissionIds });
 }
+
+/** Permissions retirées à CET utilisateur précis, même si son rôle (partagé par toute la plateforme)
+ * les accorde — réservé au SUPER_ADMIN. */
+export function getUserRevokedPermissions(userId: number): Promise<Permission[]> {
+  return api.get<Permission[]>(`/users/${userId}/revoked-permissions`);
+}
+
+/** Remplace les permissions révoquées pour l'utilisateur — réservé au SUPER_ADMIN ; force une
+ * reconnexion pour que la réduction de privilèges s'applique tout de suite. */
+export function setUserRevokedPermissions(userId: number, permissionIds: number[]): Promise<void> {
+  return api.post<void>(`/users/${userId}/revoked-permissions`, { permissionIds });
+}
