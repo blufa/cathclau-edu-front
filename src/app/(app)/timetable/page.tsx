@@ -42,8 +42,10 @@ import { FixedScheduleForm } from "@/components/timetable/fixed-schedule-form";
 import { MoveScheduleForWeekForm } from "@/components/timetable/move-schedule-for-week-form";
 import { TimetableGrid } from "@/components/timetable/timetable-grid";
 import { TeacherLateSmsButton } from "@/components/timetable/teacher-late-sms-button";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
+import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
 import { cn } from "@/lib/utils";
 
 const DAYS: { key: JourSemaine; label: string }[] = [
@@ -96,6 +98,7 @@ export default function TimetablePage() {
   const [printingAll, setPrintingAll] = useState(false);
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const profileQuery = useCachedQuery(tenantId ? `school-profile:${tenantId}` : null, getSchoolProfile, [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
@@ -251,12 +254,12 @@ export default function TimetablePage() {
       return `<td>${cells}</td>`;
     }).join("");
     const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Emploi du temps</title>`
-      + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}h1{font-size:18px;margin:0 0 2px}`
+      + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}${PRINT_HEADER_CSS}h1{font-size:18px;margin:0 0 2px}`
       + `.sub{color:#64748b;font-size:12px;margin-bottom:12px}table{width:100%;border-collapse:collapse}`
       + `th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
       + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
       + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}@media print{body{padding:0}}</style>`
-      + `</head><body><h1>Emploi du temps — ${esc(heading)}</h1><div class="sub">${new Date().toLocaleDateString("fr-FR")}</div>`
+      + `</head><body>${officialPrintHeaderHtml(profileQuery.data)}<h1>Emploi du temps — ${esc(heading)}</h1><div class="sub">${new Date().toLocaleDateString("fr-FR")}</div>`
       + `<table><thead><tr>${DAYS.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
       + `</body></html>`;
     printHtmlDocument(html);
@@ -285,11 +288,11 @@ export default function TimetablePage() {
           }).join("") || `<span class="empty">—</span>`;
           return `<td>${cells}</td>`;
         }).join("");
-        return `<section class="page"><h1>Emploi du temps — ${esc(c.label)}</h1>`
+        return `<section class="page">${officialPrintHeaderHtml(profileQuery.data)}<h1>Emploi du temps — ${esc(c.label)}</h1>`
           + `<table><thead><tr>${DAYS.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table></section>`;
       }));
       const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Emplois du temps — toutes les classes</title>`
-        + `<style>@page{size:landscape}body{font-family:system-ui,Arial,sans-serif;color:#0f172a}`
+        + `<style>@page{size:landscape}body{font-family:system-ui,Arial,sans-serif;color:#0f172a}${PRINT_HEADER_CSS}`
         + `.page{padding:24px;page-break-after:always}.page:last-child{page-break-after:auto}`
         + `h1{font-size:18px;margin:0 0 12px}table{width:100%;border-collapse:collapse}`
         + `th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
