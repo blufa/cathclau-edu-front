@@ -77,6 +77,8 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
+import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { openPdfInApp } from "@/lib/open-pdf";
 
 export default function GradingPage() {
@@ -177,6 +179,7 @@ function monthLabelOf(key: string): string {
 function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting }: { classId: number; className: string; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
+  const profileQuery = useCachedQuery(tenantId ? `school-profile:${tenantId}` : null, getSchoolProfile, [tenantId]);
   const assessmentsQuery = useCachedQuery(`assessments-class:${classId}`, () => listAssessmentsByClass(classId), [classId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
@@ -289,10 +292,11 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
       const subject = subjectLabel.get(group.subjectId) ?? `#${group.subjectId}`;
       printHtmlDocument(
         `<!doctype html><html><head><meta charset="utf-8"><title>Relevé mensuel — ${subject}</title>`
-        + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}`
+        + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}${PRINT_HEADER_CSS}`
         + `h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#475569;font-size:13px;margin-bottom:16px}`
         + `table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #cbd5e1;padding:6px 8px}`
         + `th{background:#f1f5f9;text-align:left}@media print{body{padding:0}}</style></head><body>`
+        + `${officialPrintHeaderHtml(profileQuery.data)}`
         + `<h1>RELEVÉ MENSUEL DE NOTES</h1><div class="sub">${subject} — ${monthLabelOf(group.monthKey)} — ${className || ""}</div>`
         + `<table><thead><tr><th>N°</th><th>Matricule</th><th>Nom & prénom</th>${evalCols}<th style="text-align:center">Moyenne /20</th></tr></thead>`
         + `<tbody>${rows}</tbody></table>`
@@ -422,9 +426,9 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
         {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
       </Modal>
-      <FilePreview url={releveUrl} title="Relevé de notes" open={releveUrl != null} onClose={() => setReleveUrl(null)} />
-      <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} />
-      <FilePreview url={monthlyPdfUrl} title="Relevé du mois" open={monthlyPdfUrl != null} onClose={() => setMonthlyPdfUrl(null)} />
+      <FilePreview url={releveUrl} title="Relevé de notes" open={releveUrl != null} onClose={() => setReleveUrl(null)} autoPrint />
+      <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} autoPrint />
+      <FilePreview url={monthlyPdfUrl} title="Relevé du mois" open={monthlyPdfUrl != null} onClose={() => setMonthlyPdfUrl(null)} autoPrint />
     </div>
   );
 }
