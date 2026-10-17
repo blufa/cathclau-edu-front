@@ -26,6 +26,7 @@ const schema = z
     slug: z.string(),
     email: z.string(),
     username: z.string(),
+    adminPhone: z.string(),
     phone: z.string(),
     phone2: z.string(),
     city: z.string(),
@@ -46,9 +47,13 @@ const schema = z
     if (!v.username && !v.email.trim()) {
       ctx.addIssue({ code: "custom", path: ["username"], message: "Renseignez un email ou un identifiant" });
     }
-    if (!v.phone.trim()) {
-      ctx.addIssue({ code: "custom", path: ["phone"], message: "Téléphone requis" });
+    if (!v.adminPhone.trim()) {
+      ctx.addIssue({ code: "custom", path: ["adminPhone"], message: "Téléphone de connexion requis" });
     } else {
+      const err = phoneRule(v.adminPhone);
+      if (err) ctx.addIssue({ code: "custom", path: ["adminPhone"], message: err });
+    }
+    if (v.phone.trim()) {
       const err = phoneRule(v.phone);
       if (err) ctx.addIssue({ code: "custom", path: ["phone"], message: err });
     }
@@ -68,7 +73,7 @@ type FormValues = z.infer<typeof schema>;
 const STEPS = [{ label: "École" }, { label: "Contact & accès" }, { label: "Compte" }];
 const FIELD_STEP: Record<string, number> = {
   schoolName: 0, slug: 0, typeValues: 0,
-  email: 1, username: 1, phone: 1, phone2: 1,
+  email: 1, username: 1, adminPhone: 1, phone: 1, phone2: 1,
   adminPassword: 2, confirmPassword: 2,
 };
 
@@ -82,7 +87,7 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
   const { handleSubmit, watch, setValue, trigger, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      schoolName: "", slug: "", email: "", username: "", phone: "", phone2: "", city: "", country: "Guinée",
+      schoolName: "", slug: "", email: "", username: "", adminPhone: "", phone: "", phone2: "", city: "", country: "Guinée",
       director: "", typeValues: ["PRIMAIRE"], initialState: "TRIAL",
       adminPassword: "", confirmPassword: "",
     },
@@ -100,7 +105,7 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
       if (!ok) return;
     }
     if (active === 1) {
-      const ok = await trigger(["email", "username", "phone"]);
+      const ok = await trigger(["email", "username", "adminPhone", "phone"]);
       if (!ok) return;
     }
     setActive((s) => Math.min(s + 1, STEPS.length - 1));
@@ -116,7 +121,8 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
         slug: values.slug || slugify(values.schoolName),
         email: values.email || undefined,
         username: values.username || undefined,
-        phone: values.phone,
+        adminPhone: values.adminPhone,
+        phone: values.phone || undefined,
         phone2: values.phone2 || undefined,
         city: values.city || undefined,
         country: values.country || undefined,
@@ -208,11 +214,20 @@ export function TenantForm({ onSubmit, onCancel }: TenantFormProps) {
             <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} aria-invalid={!!errors.email} />
             {errors.email && <p className="text-xs text-error-600">{errors.email.message}</p>}
           </Field>
-          <PhoneInput label="Téléphone de l'école" required value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
-          <p className="-mt-3 text-xs text-gray-400">
-            Imprimé sur les badges et reçus — différent de l&apos;identifiant de connexion ci-dessus, ne
-            mettez pas ici le numéro personnel du directeur.
-          </p>
+          <div>
+            <PhoneInput label="Téléphone de connexion de l'admin" required value={v.adminPhone}
+              onChange={(val) => setValue("adminPhone", val)} error={errors.adminPhone?.message} />
+            <p className="mt-1 text-xs text-gray-400">
+              Le numéro personnel avec lequel l&apos;administrateur se connectera — pas le standard de l&apos;école.
+            </p>
+          </div>
+          <div>
+            <PhoneInput label="Téléphone de l'école (optionnel)" value={v.phone}
+              onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
+            <p className="mt-1 text-xs text-gray-400">
+              Affiché sur les badges et documents officiels — distinct du numéro de connexion ci-dessus. Peut aussi être renseigné plus tard dans Paramètres.
+            </p>
+          </div>
           <PhoneInput label="Second téléphone de l'école (optionnel)" value={v.phone2} onChange={(val) => setValue("phone2", val)} error={errors.phone2?.message} />
         </div>
       )}
