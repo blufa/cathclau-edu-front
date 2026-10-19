@@ -29,6 +29,8 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission } from "@/lib/auth/permissions";
 import { useCashierSessionGate } from "@/hooks/use-cashier-session-gate";
 import { printHtmlDocument } from "@/lib/print-node";
+import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { FileText, Plus, Receipt as ReceiptIcon } from "lucide-react";
 import { WhatsAppInvoiceButton } from "@/components/billing/whatsapp-invoice-button";
 
@@ -77,6 +79,7 @@ export function StudentInvoicesPanel({
 }) {
   const { user } = useAuth();
   const canDeleteInvoice = hasAnyPermission(user, ["facture:delete"]);
+  const profileQuery = useCachedQuery(`school-profile:${tenantId}`, getSchoolProfile, [tenantId]);
   const q = useCachedQuery(`student-invoices:${studentId}`, () => listInvoicesByStudent(studentId), [studentId]);
   const payments = useCachedQuery(`student-payments:${studentId}`, () => listPaymentsByStudent(studentId), [studentId]);
   // Surplus de transfert de classe (§retour comptable) : un rappel visible tant qu'il n'est pas
@@ -390,9 +393,10 @@ export function StudentInvoicesPanel({
   function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
     const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
     printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
-      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      <style>body{font-family:sans-serif;padding:24px;color:#111}${PRINT_HEADER_CSS}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
+        ${officialPrintHeaderHtml(profileQuery.data)}
         <h1>Reçu PROVISOIRE</h1>
         <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
         <p>Référence locale : OFFLINE-${entry.id.slice(0, 8).toUpperCase()}</p>
@@ -407,9 +411,10 @@ export function StudentInvoicesPanel({
   function printProvisionalReceiptDesktop(group: PendingOfflinePaymentGroup) {
     const channelLabel = PAYMENT_CHANNEL_LABEL[group.modePaiement as PaymentChannel] ?? group.modePaiement;
     printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
-      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      <style>body{font-family:sans-serif;padding:24px;color:#111}${PRINT_HEADER_CSS}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
+        ${officialPrintHeaderHtml(profileQuery.data)}
         <h1>Reçu PROVISOIRE</h1>
         <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
         <p>Date : ${new Date(group.datePaiement).toLocaleString("fr-FR")}</p>
@@ -679,7 +684,7 @@ export function StudentInvoicesPanel({
         </div>
       )}
 
-      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </>
   );
 }

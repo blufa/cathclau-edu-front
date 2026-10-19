@@ -371,6 +371,22 @@ export default function AttendanceScanPage() {
     }
   }, [startJsQrLoop, startNativeDetectorLoop]);
 
+  // Démarrage automatique de la caméra à l'arrivée sur la page (demande direction, §retour fondateur) :
+  // le surveillant tape l'onglet "Scan" du menu téléphone et doit pouvoir scanner immédiatement, sans
+  // taper en plus "Démarrer le scan" — un clic de moins à chaque arrivée/sortie de chaque élève/
+  // enseignant/personnel de la journée. startCamera gère déjà l'échec (permission refusée, navigateur
+  // sans caméra) en affichant `error` ; pas de retry automatique pour ne pas re-déclencher la demande
+  // de permission du navigateur en boucle si l'utilisateur l'a explicitement refusée.
+  useEffect(() => {
+    if (!canScan) return;
+    // setTimeout(0) : startCamera() appelle setError(null) tout de suite en synchrone (avant son
+    // premier await) — un appel direct ici déclenche l'avertissement React "setState synchrone dans un
+    // effet" (cascading renders). Reporté d'un tick, sans impact perceptible pour l'utilisateur.
+    const id = setTimeout(() => startCamera(), 0);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   if (!canScan) return <p className="rounded-xl bg-error-50 px-4 py-6 text-sm text-error-700">Accès non autorisé.</p>;
@@ -392,12 +408,6 @@ export default function AttendanceScanPage() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <ScanLine className="h-6 w-6 text-brand-600" /> Pointage par scan de carte
         </h1>
-        <p className="text-sm text-gray-500">
-          Un seul scan à l&apos;arrivée et un seul à la sortie pour toute la plage de cours continue de
-          la journée (téléphone ou ordinateur) — pas besoin de rescanner entre deux cours qui se
-          suivent. Le statut (présent/retard) et la durée réalisée sont calculés automatiquement à
-          partir de l&apos;emploi du temps — vous choisissez seulement le sens du scan.
-        </p>
       </Reveal>
 
       {queuedCount > 0 && (
@@ -443,7 +453,6 @@ export default function AttendanceScanPage() {
                 <Button variant="ghost" className="text-error-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Arrêter</Button>
               )}
             </div>
-            <p className="text-xs text-gray-400">Le sens sélectionné ci-dessus est appliqué à chaque carte scannée. Un re-scan corrige le pointage de la séance.</p>
           </CardBody>
         </Card>
 

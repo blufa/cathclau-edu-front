@@ -215,7 +215,7 @@ function StudentRecord({ student, periodLabel, canPublish, onChangeStudent }: {
         {detail && <ReportCardLines card={detail} />}
       </Modal>
 
-      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </div>
   );
 }
@@ -368,7 +368,7 @@ function ClassDocumentsPanel() {
         </p>
       )}
 
-      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </div>
   );
 }

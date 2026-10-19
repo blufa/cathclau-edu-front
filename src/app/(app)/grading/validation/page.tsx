@@ -132,7 +132,7 @@ export default function ValidationPage() {
         </div>
       )}
 
-      <FilePreview url={palmares} title="Palmarès de la classe" open={palmares != null} onClose={() => setPalmares(null)} />
+      <FilePreview url={palmares} title="Palmarès de la classe" open={palmares != null} onClose={() => setPalmares(null)} autoPrint />
     </div>
   );
 }
