@@ -45,7 +45,7 @@ import { TeacherLateSmsButton } from "@/components/timetable/teacher-late-sms-bu
 import { getSchoolProfile } from "@/lib/api/platform";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
-import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
+import { buildTimetableDocumentHtml, type TimetablePrintPage, type TimetablePrintSlot } from "@/lib/print-timetable";
 import { cn } from "@/lib/utils";
 
 const DAYS: { key: JourSemaine; label: string }[] = [
@@ -230,38 +230,53 @@ export default function TimetablePage() {
   }, [effectiveQuery.data]);
 
   function printTimetable() {
-    const subjectLabel = new Map(subjects.map((s) => [s.id, s.label]));
-    const roomLabel = new Map(rooms.map((r) => [r.id, r.label]));
-    const heading = mode === "class"
-      ? (effectiveClassId ? (classLabel.get(effectiveClassId) ?? `Classe #${effectiveClassId}`) : "")
-      : (effectiveTeacherId ? (teacherName.get(effectiveTeacherId) ?? `#${effectiveTeacherId}`) : "");
-    const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
     const printByDay = isGridView ? slotsByDay : effectiveByDay;
-    const cols = DAYS.map((d) => {
-      const list = (printByDay.get(d.key) ?? []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime));
-      const cells = list.map((s) => {
-        const who = mode === "class"
-          ? (s.teacherId != null ? (teacherName.get(s.teacherId) ?? "") : "")
-          : (classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`);
-        const phone = mode === "class" && s.teacherId != null ? (teacherPhone.get(s.teacherId) ?? null) : null;
-        const room = s.roomId != null ? (roomLabel.get(s.roomId) ?? "") : "";
-        const title = s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse");
-        return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
-          + `<div class="subj">${esc(title)}</div>`
-          + (who ? `<div>${esc(who)}${phone ? ` — ${esc(phone)}` : ""}</div>` : "")
-          + (room ? `<div class="room">Salle : ${esc(room)}</div>` : "") + `</div>`;
-      }).join("") || `<span class="empty">—</span>`;
-      return `<td>${cells}</td>`;
-    }).join("");
-    const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Emploi du temps</title>`
-      + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}${PRINT_HEADER_CSS}h1{font-size:18px;margin:0 0 2px}`
-      + `.sub{color:#64748b;font-size:12px;margin-bottom:12px}table{width:100%;border-collapse:collapse}`
-      + `th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
-      + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
-      + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}@media print{body{padding:0}}</style>`
-      + `</head><body>${officialPrintHeaderHtml(profileQuery.data)}<h1>Emploi du temps — ${esc(heading)}</h1><div class="sub">${new Date().toLocaleDateString("fr-FR")}</div>`
-      + `<table><thead><tr>${DAYS.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table>`
-      + `</body></html>`;
+    const yearLabel = years.find((y) => y.id === yearId)?.label ?? null;
+
+    const slotsByDayLabel: Record<string, TimetablePrintSlot[]> = {};
+    for (const d of DAYS) {
+      slotsByDayLabel[d.key] = (printByDay.get(d.key) ?? []).map((s) => {
+        if (mode === "class") {
+          return {
+            startTime: hhmm(s.startTime), endTime: hhmm(s.endTime),
+            title: s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse"),
+            subLabel: s.teacherId != null ? (teacherName.get(s.teacherId) ?? null) : null,
+            colorKey: s.subjectId ?? s.label ?? "x",
+          };
+        }
+        return {
+          startTime: hhmm(s.startTime), endTime: hhmm(s.endTime),
+          title: classLabel.get(s.schoolClassId) ?? `Classe #${s.schoolClassId}`,
+          subLabel: s.roomId != null ? (roomLabel.get(s.roomId) ?? null) : null,
+          colorKey: s.schoolClassId,
+        };
+      });
+    }
+    const allSlots = Object.values(slotsByDayLabel).flat();
+
+    let page: TimetablePrintPage;
+    if (mode === "class") {
+      const heading = effectiveClassId ? (classLabel.get(effectiveClassId) ?? `Classe #${effectiveClassId}`) : "";
+      const allRoomIds = new Set((isGridView ? slotsQuery.data ?? [] : effectiveQuery.data ?? []).map((s) => s.roomId).filter((r): r is number => r != null));
+      const singleRoom = allRoomIds.size === 1 ? roomLabel.get([...allRoomIds][0]) ?? null : null;
+      page = {
+        heading, kicker: "EMPLOI DU TEMPS", badgeLabel: "SALLE", badgeValue: singleRoom ?? "—",
+        slotsByDayLabel, bandMinutes: isSecondaryCycle(effectiveClassCycle) ? 120 : 60,
+      };
+    } else {
+      const heading = effectiveTeacherId ? (teacherName.get(effectiveTeacherId) ?? `#${effectiveTeacherId}`) : "";
+      const totalMinutes = allSlots.reduce((sum, s) => {
+        const [h1, m1] = s.startTime.split(":").map(Number);
+        const [h2, m2] = s.endTime.split(":").map(Number);
+        return sum + (h2 * 60 + m2 - (h1 * 60 + m1));
+      }, 0);
+      page = {
+        heading, kicker: "EMPLOI DU TEMPS · PROFESSEUR", badgeLabel: "VOLUME",
+        badgeValue: `${Math.round(totalMinutes / 60)} h`, slotsByDayLabel, bandMinutes: 60,
+      };
+    }
+
+    const html = buildTimetableDocumentHtml(profileQuery.data, [page], yearLabel);
     printHtmlDocument(html);
   }
 
@@ -271,34 +286,27 @@ export default function TimetablePage() {
     if (classes.length === 0) return;
     setPrintingAll(true);
     try {
-      const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
-      const subjectLabelAll = new Map(subjects.map((s) => [s.id, s.label]));
-      const roomLabelAll = new Map(rooms.map((r) => [r.id, r.label]));
-      const perClass = await Promise.all(classes.map(async (c) => {
+      const yearLabel = years.find((y) => y.id === yearId)?.label ?? null;
+      const pages: TimetablePrintPage[] = await Promise.all(classes.map(async (c) => {
         const slots = await getScheduleByClass(c.id);
-        const byDay = new Map(DAYS.map((d) => [d.key, slots.filter((s) => s.day === d.key).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))]));
-        const cols = DAYS.map((d) => {
-          const cells = (byDay.get(d.key) ?? []).map((s) => {
-            const title = s.subjectId != null ? esc(subjectLabelAll.get(s.subjectId) ?? `Matière #${s.subjectId}`) : esc(s.label ?? "Heure creuse");
-            const who = s.teacherId != null ? esc(teacherName.get(s.teacherId) ?? "") : "";
-            const phone = s.teacherId != null ? teacherPhone.get(s.teacherId) : null;
-            const room = s.roomId != null ? esc(roomLabelAll.get(s.roomId) ?? "") : "";
-            return `<div class="slot"><div class="time">${s.startTime.slice(0, 5)} – ${s.endTime.slice(0, 5)}</div>`
-              + `<div class="subj">${title}</div>` + (who ? `<div>${who}${phone ? ` — ${esc(phone)}` : ""}</div>` : "") + (room ? `<div class="room">Salle : ${room}</div>` : "") + `</div>`;
-          }).join("") || `<span class="empty">—</span>`;
-          return `<td>${cells}</td>`;
-        }).join("");
-        return `<section class="page">${officialPrintHeaderHtml(profileQuery.data)}<h1>Emploi du temps — ${esc(c.label)}</h1>`
-          + `<table><thead><tr>${DAYS.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead><tbody><tr>${cols}</tr></tbody></table></section>`;
+        const cycle = c.levelId != null ? levelCycleById.get(c.levelId) ?? null : null;
+        const slotsByDayLabel: Record<string, TimetablePrintSlot[]> = {};
+        for (const d of DAYS) {
+          slotsByDayLabel[d.key] = slots.filter((s) => s.day === d.key).map((s) => ({
+            startTime: hhmm(s.startTime), endTime: hhmm(s.endTime),
+            title: s.subjectId != null ? (subjectLabel.get(s.subjectId) ?? `Matière #${s.subjectId}`) : (s.label ?? "Heure creuse"),
+            subLabel: s.teacherId != null ? (teacherName.get(s.teacherId) ?? null) : null,
+            colorKey: s.subjectId ?? s.label ?? "x",
+          }));
+        }
+        const roomIds = new Set(slots.map((s) => s.roomId).filter((r): r is number => r != null));
+        const singleRoom = roomIds.size === 1 ? roomLabel.get([...roomIds][0]) ?? null : null;
+        return {
+          heading: c.label, kicker: "EMPLOI DU TEMPS", badgeLabel: "SALLE", badgeValue: singleRoom ?? "—",
+          slotsByDayLabel, bandMinutes: isSecondaryCycle(cycle) ? 120 : 60,
+        };
       }));
-      const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Emplois du temps — toutes les classes</title>`
-        + `<style>@page{size:landscape}body{font-family:system-ui,Arial,sans-serif;color:#0f172a}${PRINT_HEADER_CSS}`
-        + `.page{padding:24px;page-break-after:always}.page:last-child{page-break-after:auto}`
-        + `h1{font-size:18px;margin:0 0 12px}table{width:100%;border-collapse:collapse}`
-        + `th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;width:16.6%}th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
-        + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
-        + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}@media print{.page{padding:0 0 24px}}</style>`
-        + `</head><body>${perClass.join("")}</body></html>`;
+      const html = buildTimetableDocumentHtml(profileQuery.data, pages, yearLabel);
       printHtmlDocument(html);
     } catch (err) {
       notifyError(err);
