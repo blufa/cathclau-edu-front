@@ -72,7 +72,7 @@ function withAlpha(hex: string, alpha: string): string | undefined {
  * « DPE/DCE ». */
 function FieldRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight print:text-[6.5px]">
+    <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight print:text-[8.5px]">
       <span className="w-16 shrink-0 text-slate-400 print:w-11">{label}</span>
       <span className={mono ? "truncate font-mono font-medium text-slate-700" : "truncate font-medium text-slate-700"}>{value}</span>
     </div>
@@ -133,20 +133,20 @@ function IdBadgeLandscape({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={branding.logo} alt="logo" className="h-full w-full rounded-full object-cover" />
                   ) : (
-                    <span className="text-[13px] font-extrabold print:text-[7px]" style={{ color: accent }}>
+                    <span className="text-[13px] font-extrabold print:text-[8px]" style={{ color: accent }}>
                       {(branding?.schoolName ?? "É")[0]}
                     </span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 pt-0.5">
-                  <p className="truncate text-[13.5px] font-semibold leading-tight text-slate-800 print:text-[7.5px]">
+                  <p className="truncate text-[13.5px] font-semibold leading-tight text-slate-800 print:text-[8.5px]">
                     {branding?.schoolName ?? "Établissement"}
                   </p>
                   {branding?.slogan && (
-                    <p className="truncate text-[8.5px] italic leading-tight text-slate-400 print:text-[5px]">{branding.slogan}</p>
+                    <p className="truncate text-[8.5px] italic leading-tight text-slate-400 print:text-[6px]">{branding.slogan}</p>
                   )}
                   <span
-                    className="mt-1 inline-block rounded-full px-2 py-[1px] text-[9px] font-medium text-white print:mt-0.5 print:px-1 print:text-[5.5px]"
+                    className="mt-1 inline-block rounded-full px-2 py-[1px] text-[9px] font-medium text-white print:mt-0.5 print:px-1 print:text-[6.5px]"
                     style={{ backgroundColor: accent }}
                   >
                     {kind}
@@ -173,7 +173,7 @@ function IdBadgeLandscape({
                     </div>
                   )}
                   {idNumber && (
-                    <p className="max-w-[80px] truncate text-center font-mono text-[9px] text-slate-400 print:max-w-14 print:text-[5px]">{idNumber}</p>
+                    <p className="max-w-[80px] truncate text-center font-mono text-[9px] text-slate-400 print:max-w-14 print:text-[6px]">{idNumber}</p>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1 pt-0.5 print:space-y-0.5">
@@ -196,7 +196,7 @@ function IdBadgeLandscape({
             {academicYearLabel && (
               <div className="flex w-5 shrink-0 items-center justify-center border-l border-slate-100 print:w-3" style={softTint}>
                 <span
-                  className="rotate-180 whitespace-nowrap text-[7.5px] font-medium tracking-wide [writing-mode:vertical-rl] print:text-[4.5px]"
+                  className="rotate-180 whitespace-nowrap text-[7.5px] font-medium tracking-wide [writing-mode:vertical-rl] print:text-[5.5px]"
                   style={{ color: accent }}
                 >
                   {academicYearLabel}
@@ -214,15 +214,15 @@ function IdBadgeLandscape({
               {branding?.ire && <FieldRow label="IRE" value={branding.ire} />}
               {branding?.dpeLabel && <FieldRow label="DPE/DCE" value={branding.dpeLabel} />}
               {footerNote && (
-                <p className="mt-0.5 truncate text-[7.5px] font-medium italic text-slate-400 print:text-[4.5px]">{footerNote}</p>
+                <p className="mt-0.5 truncate text-[7.5px] font-medium italic text-slate-400 print:text-[5.5px]">{footerNote}</p>
               )}
             </div>
             <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-white p-1.5 shadow-sm print:h-16 print:w-16 print:border"
+              className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 bg-white p-1.5 shadow-sm print:h-20 print:w-20 print:border"
               style={{ borderColor: accent }}
             >
               {qrData ? (
-                <QRCodeSVG value={qrData} size={64} level="M" marginSize={0} className="h-full w-full" />
+                <QRCodeSVG value={qrData} size={80} level="M" marginSize={0} className="h-full w-full" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-[8px] text-slate-400">—</div>
               )}
