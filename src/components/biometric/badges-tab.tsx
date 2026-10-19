@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import { generateBadge, type BadgeResult } from "@/lib/api/biometric";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
-import type { BiometricSubjectType } from "@/lib/types/biometric";
+import { SUBJECT_TYPE_LABEL, type BiometricSubjectType } from "@/lib/types/biometric";
 import { useDirectory } from "@/components/biometric/use-directory";
 import { useQuery } from "@/hooks/use-query";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ function qrUrl(data: string, size = 220) {
  * le QR « BADGE|tenant|type|id » est ensuite scannable au pointage (kiosk « Scanner les cartes »).
  */
 export function BadgesTab() {
-  const { teachers, students } = useDirectory();
+  const { teachers, students, employees } = useDirectory();
   const yearQuery = useQuery(getCurrentAcademicYear, []);
   const yearLabel = yearQuery.data?.label ?? "";
   const [subjectType, setSubjectType] = useState<BiometricSubjectType>("STUDENT");
@@ -30,19 +30,22 @@ export function BadgesTab() {
   const [badge, setBadge] = useState<BadgeResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const directory = useMemo(
+    () => (subjectType === "STUDENT" ? students : subjectType === "TEACHER" ? teachers : employees),
+    [subjectType, students, teachers, employees],
+  );
+
   const options: SearchableOption[] = useMemo(() => {
-    const src = subjectType === "STUDENT" ? students : teachers;
-    return src.map((p) => {
+    return directory.map((p) => {
       const label = `${p.firstName} ${p.lastName}`;
       return { value: String(p.id), trigger: label, label, searchText: label };
     });
-  }, [subjectType, students, teachers]);
+  }, [directory]);
 
   const selectedName = useMemo(() => {
-    const src = subjectType === "STUDENT" ? students : teachers;
-    const p = src.find((x) => String(x.id) === subjectId);
+    const p = directory.find((x) => String(x.id) === subjectId);
     return p ? `${p.firstName} ${p.lastName}` : "";
-  }, [subjectType, subjectId, students, teachers]);
+  }, [directory, subjectId]);
 
   async function generate() {
     if (!subjectId) { notifyError("Sélectionnez une personne."); return; }
@@ -78,10 +81,10 @@ export function BadgesTab() {
         <CardBody className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-700">Générer un badge</h3>
           <div className="flex gap-2">
-            {(["STUDENT", "TEACHER"] as BiometricSubjectType[]).map((t) => (
+            {(["STUDENT", "TEACHER", "EMPLOYEE"] as BiometricSubjectType[]).map((t) => (
               <button key={t} type="button" onClick={() => { setSubjectType(t); setSubjectId(""); setBadge(null); }}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${subjectType === t ? "bg-brand-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                {t === "STUDENT" ? "Élève" : "Enseignant / Personnel"}
+                {SUBJECT_TYPE_LABEL[t]}
               </button>
             ))}
           </div>

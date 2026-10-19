@@ -23,7 +23,7 @@ import { notifyError, notifySuccess } from "@/lib/feedback";
 
 export function EnrollTab() {
   const devicesQuery = useQuery(listDevices, []);
-  const { teachers, students, name } = useDirectory();
+  const { teachers, students, employees, name } = useDirectory();
   const [deviceFilter, setDeviceFilter] = useState("");
   const q = useQuery(() => listEnrollments(deviceFilter ? Number(deviceFilter) : undefined), [deviceFilter]);
   const [enrolling, setEnrolling] = useState(false);
@@ -60,7 +60,7 @@ export function EnrollTab() {
         </Table>
       )}
       <Modal open={enrolling} onClose={() => setEnrolling(false)} title="Enrôler une personne">
-        <EnrollForm devices={devicesQuery.data ?? []} teachers={teachers} students={students}
+        <EnrollForm devices={devicesQuery.data ?? []} teachers={teachers} students={students} employees={employees}
           onCancel={() => setEnrolling(false)} onDone={() => { setEnrolling(false); notifySuccess("Enrôlé"); q.refetch(); }} />
       </Modal>
     </div>
@@ -76,10 +76,11 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-function EnrollForm({ devices, teachers, students, onCancel, onDone }: {
+function EnrollForm({ devices, teachers, students, employees, onCancel, onDone }: {
   devices: BiometricDevice[];
   teachers: { id: number; firstName: string; lastName: string }[];
   students: { id: number; firstName: string; lastName: string; studentNumber: string }[];
+  employees: { id: number; firstName: string | null; lastName: string | null }[];
   onCancel: () => void; onDone: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -93,9 +94,11 @@ function EnrollForm({ devices, teachers, students, onCancel, onDone }: {
   const subjectOptions: SearchableOption[] = useMemo(() => {
     const src = v.subjectType === "TEACHER"
       ? teachers.map((t) => ({ value: String(t.id), label: `${t.firstName} ${t.lastName}` }))
+      : v.subjectType === "EMPLOYEE"
+      ? employees.map((e) => ({ value: String(e.id), label: `${e.firstName} ${e.lastName}` }))
       : students.map((s) => ({ value: String(s.id), label: `${s.firstName} ${s.lastName} (${s.studentNumber})` }));
     return src.map((o) => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label }));
-  }, [v.subjectType, teachers, students]);
+  }, [v.subjectType, teachers, students, employees]);
 
   async function submit(values: FormValues) {
     setLoading(true);
@@ -120,6 +123,7 @@ function EnrollForm({ devices, teachers, students, onCancel, onDone }: {
           <Select value={v.subjectType} onChange={(e) => { setValue("subjectType", e.target.value); setValue("subjectId", ""); }}>
             <option value="STUDENT">Élève</option>
             <option value="TEACHER">Enseignant</option>
+            <option value="EMPLOYEE">Personnel</option>
           </Select>
         </Field>
         <Field>

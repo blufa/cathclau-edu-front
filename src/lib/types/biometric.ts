@@ -1,7 +1,7 @@
 export type BiometricDeviceType = "FINGERPRINT" | "FACE" | "BOTH";
 export type BiometricProtocol = "ZK" | "PUSH" | "HTTP";
 export type DeviceStatus = "CONNECTED" | "DISCONNECTED" | "UNKNOWN";
-export type BiometricSubjectType = "STUDENT" | "TEACHER";
+export type BiometricSubjectType = "STUDENT" | "TEACHER" | "EMPLOYEE";
 export type BiometricType = "FINGERPRINT" | "FACE";
 export type EnrollmentStatus = "PENDING" | "ENROLLED";
 export type PunchDirection = "IN" | "OUT" | "UNKNOWN";
@@ -9,7 +9,7 @@ export type PunchDirection = "IN" | "OUT" | "UNKNOWN";
 export const DEVICE_TYPE_LABEL: Record<BiometricDeviceType, string> = { FINGERPRINT: "Empreinte", FACE: "Visage", BOTH: "Empreinte + Visage" };
 export const PROTOCOL_LABEL: Record<BiometricProtocol, string> = { ZK: "ZKTeco", PUSH: "Push API", HTTP: "HTTP API" };
 export const DEVICE_STATUS_LABEL: Record<DeviceStatus, string> = { CONNECTED: "Connecté", DISCONNECTED: "Déconnecté", UNKNOWN: "Inconnu" };
-export const SUBJECT_TYPE_LABEL: Record<BiometricSubjectType, string> = { STUDENT: "Élève", TEACHER: "Enseignant" };
+export const SUBJECT_TYPE_LABEL: Record<BiometricSubjectType, string> = { STUDENT: "Élève", TEACHER: "Enseignant", EMPLOYEE: "Personnel" };
 export const BIOMETRIC_TYPE_LABEL: Record<BiometricType, string> = { FINGERPRINT: "Empreinte", FACE: "Visage" };
 export const DIRECTION_LABEL: Record<PunchDirection, string> = { IN: "Entrée", OUT: "Sortie", UNKNOWN: "—" };
 
