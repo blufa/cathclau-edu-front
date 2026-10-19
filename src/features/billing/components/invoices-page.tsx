@@ -355,7 +355,7 @@ export default function InvoicesPage() {
         {discountFor && <DiscountForm invoice={discountFor} onDone={() => { setDiscountFor(null); notifySuccess("Remise appliquée"); q.refetch(); }} onCancel={() => setDiscountFor(null)} />}
       </Modal>
 
-      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </div>
   );
 }

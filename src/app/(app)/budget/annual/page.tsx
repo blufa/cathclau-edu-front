@@ -239,7 +239,7 @@ function BudgetDetail({ budget, canWrite, canApprove, onSubmit, onApprove, onRej
         </div>
       </Modal>
 
-      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </div>
   );
 }

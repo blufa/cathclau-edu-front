@@ -30,6 +30,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
+import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { openPdfInApp } from "@/lib/open-pdf";
 import { formatGNF } from "@/lib/format";
 import { TeacherAvailabilitySection } from "@/components/staff/teacher-availability";
@@ -78,6 +80,7 @@ export default function TeacherDetailPage() {
   const id = Number(searchParams.get("id"));
 
   const { user } = useAuth();
+  const profileQuery = useCachedQuery(user?.tenantId ? `school-profile:${user.tenantId}` : null, getSchoolProfile, [user?.tenantId]);
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["enseignant:create", "enseignant:update"]);
   const canViewPayroll = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"]);
   const canViewLatenessReport = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY") || hasAnyPermission(user, ["paie:manage"]);
@@ -198,7 +201,8 @@ export default function TeacherDetailPage() {
       + `th{background:#f1f5f9;font-size:11px;text-transform:uppercase;letter-spacing:.04em}`
       + `.slot{margin-bottom:8px;padding:6px;background:#eff6ff;border-radius:6px}.time{font-weight:700;font-size:11px;color:#1d4ed8}`
       + `.subj{font-weight:600;font-size:12px}.room{color:#64748b;font-size:11px}.empty{color:#cbd5e1}`
-      + `.list{margin:0 0 16px;font-size:12px}@media print{body{padding:0}}</style></head><body>`
+      + `.list{margin:0 0 16px;font-size:12px}@media print{body{padding:0}}${PRINT_HEADER_CSS}</style></head><body>`
+      + `${officialPrintHeaderHtml(profileQuery.data)}`
       + `<h1>Fiche enseignant — ${esc(t.firstName)} ${esc(t.lastName)}</h1>`
       + `<div class="sub">${esc(t.staffNumber ?? "")} — ${new Date().toLocaleDateString("fr-FR")}</div>`
       + `<div class="info">`

@@ -12,6 +12,7 @@ import {
   getStudentParents,
   listParents,
   RELATIONSHIP_LABEL,
+  SELECTABLE_RELATIONSHIPS,
   setPrimaryGuardian,
   unlinkParentFromStudent,
   updateParent,
@@ -329,7 +330,7 @@ export function AddParentForm({ studentId, onCancel, onDone }: { studentId: numb
       <Field>
         <Label>Lien de parenté</Label>
         <Select value={relationship} onChange={(e) => setRelationship(e.target.value as Relationship)}>
-          {(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => (
+          {SELECTABLE_RELATIONSHIPS.map((r) => (
             <option key={r} value={r}>{RELATIONSHIP_LABEL[r]}</option>
           ))}
         </Select>

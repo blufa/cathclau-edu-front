@@ -15,6 +15,11 @@ export const RELATIONSHIP_LABEL: Record<Relationship, string> = {
   SOEUR: "Sœur",
 };
 
+/** Options proposées à la création/édition (§retour comptable : Tante/Oncle/Frère/Sœur ne sont pas des
+ * tuteurs légaux pertinents à l'inscription) — RELATIONSHIP_LABEL reste complet pour continuer à
+ * afficher correctement les fiches déjà enregistrées avec une de ces valeurs. */
+export const SELECTABLE_RELATIONSHIPS: Relationship[] = ["FATHER", "MOTHER", "GUARDIAN", "TUTRICE"];
+
 export interface ParentInput {
   firstName: string;
   lastName: string;

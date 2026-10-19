@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useQuery } from "@/hooks/use-query";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent } from "@/lib/api/billing";
 import { isNetworkError } from "@/lib/api/errors";
@@ -21,6 +23,7 @@ import { FilePreview } from "@/components/ui/file-preview";
 import { formatGNF, monthShortLabel } from "@/lib/format";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
+import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
 import { FileText } from "lucide-react";
 
 const PAYMENT_CHANNELS: { value: PaymentChannel; label: string }[] = [
@@ -116,6 +119,7 @@ export function MultiChildCollectModal({
 }: {
   students: { id: number; name: string }[]; tenantId: number; open: boolean; onClose: () => void; onCollected: () => void;
 }) {
+  const profileQuery = useCachedQuery(`school-profile:${tenantId}`, getSchoolProfile, [tenantId]);
   const q = useQuery(async () => {
     if (!open || students.length === 0) return [] as ChildRow[];
     const year = await getCurrentAcademicYear();
@@ -191,9 +195,10 @@ export function MultiChildCollectModal({
   function printProvisionalReceipt(entry: (typeof queuedPayments)[number]) {
     const total = entry.input.shares.reduce((s, x) => s + x.amount, 0);
     printHtmlDocument(`<!doctype html><html><head><title>Reçu provisoire</title>
-      <style>body{font-family:sans-serif;padding:24px;color:#111}
+      <style>body{font-family:sans-serif;padding:24px;color:#111}${PRINT_HEADER_CSS}
       h1{font-size:16px}p{margin:6px 0}.tag{color:#b45309;font-weight:600}</style></head>
       <body>
+        ${officialPrintHeaderHtml(profileQuery.data)}
         <h1>Reçu PROVISOIRE</h1>
         <p class="tag">Enregistré hors-ligne — sera remplacé par le reçu officiel après synchronisation.</p>
         <p>Référence locale : OFFLINE-${entry.id.slice(0, 8).toUpperCase()}</p>

@@ -54,7 +54,7 @@ export function CertificateAction({ studentId }: { studentId: number }) {
         </div>
       </Modal>
 
-      <FilePreview open={!!pdfUrl} onClose={() => setPdfUrl(null)} url={pdfUrl} title="Certificat de radiation / transfert" />
+      <FilePreview open={!!pdfUrl} onClose={() => setPdfUrl(null)} url={pdfUrl} title="Certificat de radiation / transfert" autoPrint />
     </>
   );
 }

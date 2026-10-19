@@ -12,7 +12,7 @@ import { GRADE_LABEL_BY_CODE, gradeProgressionRank } from "@/lib/academics-grade
 import { createStudent } from "@/lib/api/students";
 import {
   createParent, getParentStaffLink, linkParentToStudent, listParents,
-  RELATIONSHIP_LABEL, type ParentStaffLink, type Relationship,
+  RELATIONSHIP_LABEL, SELECTABLE_RELATIONSHIPS, type ParentStaffLink, type Relationship,
 } from "@/lib/api/parents";
 import { searchStaff, type StaffSearchResult } from "@/lib/api/staff";
 import { suggestAddresses, suggestFirstNames, suggestLastNames } from "@/lib/api/directory";
@@ -1232,7 +1232,7 @@ function ChildCard({
           disabled={locked}
           value={child.relationship}
           onChange={(v) => onUpdate({ relationship: (v ?? "FATHER") as Relationship })}
-          options={(Object.keys(RELATIONSHIP_LABEL) as Relationship[]).map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
+          options={SELECTABLE_RELATIONSHIPS.map((r) => [r, RELATIONSHIP_LABEL[r]] as const)}
         />
       </div>
       <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">

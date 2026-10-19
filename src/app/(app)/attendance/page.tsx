@@ -325,7 +325,7 @@ export default function AttendancePage() {
         )}
       </Tabs>
 
-      <FilePreview url={pdf?.url ?? null} title={pdf?.title} open={pdf != null} onClose={() => setPdf(null)} />
+      <FilePreview url={pdf?.url ?? null} title={pdf?.title} open={pdf != null} onClose={() => setPdf(null)} autoPrint />
     </div>
   );
 }
