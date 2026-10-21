@@ -43,10 +43,22 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: id ? { deviceId: { exact: id } } : true,
-        audio: false,
-      });
+      // §11.1 cahier des charges : caméra ARRIÈRE par défaut sur mobile (photo d'identité prise par
+      // quelqu'un d'autre, pas un selfie) — "environment" n'est qu'une préférence pour le navigateur,
+      // jamais une garantie sur tous les appareils (voir fallback ci-dessous). Un appareil choisi
+      // explicitement dans la liste (id fourni) prime toujours sur cette préférence.
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: id ? { deviceId: { exact: id } } : { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+      } catch {
+        // Certains navigateurs/appareils (webcam d'ordinateur sans "environment", contrainte refusée)
+        // échouent sur facingMode — on retente sans contrainte plutôt que de bloquer la capture.
+        if (id) throw new Error("device-failed");
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;

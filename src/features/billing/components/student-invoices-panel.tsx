@@ -335,6 +335,20 @@ export function StudentInvoicesPanel({
     } catch (err) { notifyGenerationError(err); } finally { setCreatingInvoice(false); }
   }
 
+  /** Confirmation explicite du montant avant ajout (§13 cahier des charges — particulièrement utile
+   * pour un frais facultatif : l'action d'engager une dépense pour l'élève doit être volontaire). */
+  function confirmAddFee() {
+    const fee = availableFees.find((f) => String(f.id) === selectedFeeId);
+    if (!fee) return;
+    const feeLabel = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
+    confirmAction({
+      title: "Ajouter ce frais",
+      message: `Ajouter "${feeLabel}" (${formatGNF(fee.amount)})${fee.mandatory ? "" : " — frais facultatif"} à cet élève ?`,
+      confirmLabel: "Ajouter",
+      onConfirm: addFee,
+    });
+  }
+
   async function subscribeTransport() {
     if (!routeId) return;
     setSubscribingTransport(true);
@@ -617,7 +631,10 @@ export function StudentInvoicesPanel({
                       <SearchableSelect
                         value={selectedFeeId}
                         options={availableFees.map((f): SearchableOption => {
-                          const label = `${f.type === "OTHER" && f.label ? f.label : FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
+                          // §13 cahier des charges : le statut facultatif doit être visible au moment
+                          // de choisir le frais à ajouter, pas seulement dans l'écran de configuration.
+                          const base = `${f.type === "OTHER" && f.label ? f.label : FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
+                          const label = f.mandatory ? base : `${base} · Facultatif`;
                           return { value: String(f.id), trigger: label, label, searchText: label };
                         })}
                         onChange={setSelectedFeeId}
@@ -627,7 +644,7 @@ export function StudentInvoicesPanel({
                     </Field>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => { setAddingFee(false); setSelectedFeeId(""); }}>Annuler</Button>
-                  <Button size="sm" onClick={addFee} loading={creatingInvoice} disabled={!selectedFeeId}>Ajouter</Button>
+                  <Button size="sm" onClick={confirmAddFee} loading={creatingInvoice} disabled={!selectedFeeId}>Ajouter</Button>
                 </div>
               )}
             </div>

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Receipt, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, FileText, GraduationCap, IdCard, Pencil, Receipt, Users } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole, isSuperAdmin } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -17,7 +17,7 @@ import {
   transferEnrollmentClass,
   updatePlatformAccess,
 } from "@/lib/api/enrollments";
-import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
+import type { CreateStudentInput, Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import type { Classe } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -36,9 +36,10 @@ import { ParentsManager } from "./parents-manager";
 import { DocumentsManager } from "./documents-manager";
 import { CertificateAction } from "./certificate-action";
 import { PurgeStudentAction } from "./purge-student-action";
+import { StudentForm } from "./student-form";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { ApiError } from "@/lib/api/errors";
-import { useStudentQuery } from "../hooks/use-students";
+import { useStudentQuery, useUpdateStudentMutation } from "../hooks/use-students";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red" | "indigo"> = {
   PENDING: "amber",
@@ -70,10 +71,14 @@ export default function StudentDetailPage() {
   const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["inscription:create"]);
   const canDecide = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["inscription:validate"]);
   const canCollect = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY") || hasAnyPermission(user, ["paiement:create"]);
+  // §12 cahier des charges : même garde que le bouton "Modifier" déjà existant sur la liste (list-page.tsx).
+  const canEditStudent = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["eleve:create", "eleve:update"]);
 
   const { data, isLoading: loading, error, refetch } = useStudentQuery(id);
+  const updateMutation = useUpdateStudentMutation();
   const [enrolling, setEnrolling] = useState(false);
   const [editing, setEditing] = useState<Enrollment | null>(null);
+  const [editingStudent, setEditingStudent] = useState(false);
   const [collecting, setCollecting] = useState<{ classId: number | null } | null>(null);
   const [transferring, setTransferring] = useState<Enrollment | null>(null);
 
@@ -189,6 +194,17 @@ export default function StudentDetailPage() {
     });
   }
 
+  async function handleUpdateStudent(input: CreateStudentInput) {
+    try {
+      await updateMutation.mutateAsync({ id, input });
+      setEditingStudent(false);
+      notifySuccess("Élève mis à jour");
+      refetch();
+    } catch (err) {
+      notifyError(err);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -243,17 +259,33 @@ export default function StudentDetailPage() {
             )}
           </div>
         </div>
-        {/* Zone dangereuse : réservée au SUPER_ADMIN (plateforme), invisible pour le personnel de
-            l'école — suppression définitive (factures, paiements, inscriptions, classe…), distincte
-            de l'archivage réversible accessible par ailleurs. */}
-        {isSuperAdmin(user) && (
-          <PurgeStudentAction
-            studentId={student.id}
-            studentNumber={student.studentNumber}
-            studentName={`${student.firstName} ${student.lastName}`}
-          />
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {canEditStudent && (
+            <Button size="sm" variant="secondary" leftSection={<Pencil className="h-4 w-4" />} onClick={() => setEditingStudent(true)}>
+              Modifier
+            </Button>
+          )}
+          {/* Zone dangereuse : réservée au SUPER_ADMIN (plateforme), invisible pour le personnel de
+              l'école — suppression définitive (factures, paiements, inscriptions, classe…), distincte
+              de l'archivage réversible accessible par ailleurs. */}
+          {isSuperAdmin(user) && (
+            <PurgeStudentAction
+              studentId={student.id}
+              studentNumber={student.studentNumber}
+              studentName={`${student.firstName} ${student.lastName}`}
+            />
+          )}
+        </div>
       </div>
+
+      <Modal open={editingStudent} onClose={() => setEditingStudent(false)} title="Modifier l'élève" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <StudentForm
+          initial={student}
+          submitLabel="Enregistrer"
+          onSubmit={handleUpdateStudent}
+          onCancel={() => setEditingStudent(false)}
+        />
+      </Modal>
 
       <Tabs defaultValue="invoices">
         <TabsList>

@@ -27,6 +27,10 @@ export interface SchoolFee {
   academicYear: string | null;
   /** Nom du frais quand type = OTHER (ex. "Tenue scolaire", "Bus de transport"). */
   label: string | null;
+  /** Facturé automatiquement à l'inscription (true, comportement historique) ou seulement ajouté
+   * explicitement par le comptable à l'élève concerné (false) — ex. un paquet de RAM facultatif
+   * (§13 cahier des charges). */
+  mandatory: boolean;
 }
 
 /** Les factures effectivement créées pour un frais donné, à la génération groupée d'inscription
@@ -54,6 +58,8 @@ export interface SchoolFeeInput {
   amount: number;
   academicYear?: string | null;
   label?: string | null;
+  /** Omis ou null = obligatoire (comportement historique). */
+  mandatory?: boolean | null;
 }
 
 export type InstallmentStatus = "PENDING" | "PAID" | "OVERDUE";
