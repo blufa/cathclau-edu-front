@@ -25,8 +25,11 @@ export function updateEnrollment(id: number, input: EnrollInput): Promise<Enroll
   return api.put<Enrollment>(`/enrollments/${id}`, input);
 }
 
-export function validateEnrollment(id: number): Promise<Enrollment> {
-  return api.patch<Enrollment>(`/enrollments/${id}/validate`);
+/** overrideCapacity=true force la validation malgré une classe déjà à sa capacité maximale (§6
+ * cahier des charges) — à n'envoyer que suite à une confirmation explicite de l'utilisateur après
+ * avoir reçu le conflit CAPACITE_ATTEINTE, jamais par défaut. */
+export function validateEnrollment(id: number, overrideCapacity = false): Promise<Enrollment> {
+  return api.patch<Enrollment>(`/enrollments/${id}/validate`, undefined, { query: { overrideCapacity } });
 }
 
 export function cancelEnrollment(id: number): Promise<Enrollment> {
@@ -45,8 +48,8 @@ export function abandonEnrollment(id: number): Promise<Enrollment> {
  * impayées de l'ancienne classe sont annulées et tout ce qui a déjà été payé dessus est reporté en
  * crédit sur les nouvelles mensualités générées pour la nouvelle classe — sans notification de
  * paiement trompeuse pour le parent. */
-export function transferEnrollmentClass(id: number, newClassId: number): Promise<Enrollment> {
-  return api.patch<Enrollment>(`/enrollments/${id}/transfer-class`, { newClassId });
+export function transferEnrollmentClass(id: number, newClassId: number, overrideCapacity = false): Promise<Enrollment> {
+  return api.patch<Enrollment>(`/enrollments/${id}/transfer-class`, { newClassId, overrideCapacity });
 }
 
 export function deleteEnrollment(id: number): Promise<void> {

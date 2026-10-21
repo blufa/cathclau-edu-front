@@ -182,8 +182,9 @@ export default function ClassesListPage() {
       render: (c) => {
         const headcount = c.headcount ?? 0;
         const full = c.maxCapacity != null && headcount >= c.maxCapacity;
+        const nearFull = !full && c.maxCapacity != null && headcount >= c.maxCapacity * 0.9;
         return (
-          <Badge tone={full ? "red" : "green"}>
+          <Badge tone={full ? "red" : nearFull ? "amber" : "green"}>
             {headcount}
             {c.maxCapacity != null ? ` / ${c.maxCapacity}` : ""}
           </Badge>

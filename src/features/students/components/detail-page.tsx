@@ -37,6 +37,7 @@ import { DocumentsManager } from "./documents-manager";
 import { CertificateAction } from "./certificate-action";
 import { PurgeStudentAction } from "./purge-student-action";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { ApiError } from "@/lib/api/errors";
 import { useStudentQuery } from "../hooks/use-students";
 
 const STATUS_TONE: Record<EnrollmentStatus, "amber" | "green" | "red" | "indigo"> = {
@@ -539,19 +540,29 @@ function TransferClassModal({ enrollment, classOptions, onClose, onTransferred }
 }) {
   const [classId, setClassId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  // Renseigné quand le transfert échoue parce que la classe cible a atteint sa capacité maximale
+  // (§6 cahier des charges) — propose de forcer plutôt que de bloquer purement et simplement.
+  const [capacityWarning, setCapacityWarning] = useState<{ currentCount: number; maxCapacity: number } | null>(null);
   const options: SearchableOption[] = classOptions.map((c) => ({
     value: String(c.id), trigger: c.label, label: c.label, searchText: c.label,
   }));
 
-  async function submit() {
+  async function submit(overrideCapacity = false) {
     if (!classId) return;
     setSubmitting(true);
     try {
-      await transferEnrollmentClass(enrollment.id, Number(classId));
+      await transferEnrollmentClass(enrollment.id, Number(classId), overrideCapacity);
       notifySuccess("Élève transféré vers la nouvelle classe");
       onTransferred();
     } catch (err) {
-      notifyError(err);
+      if (err instanceof ApiError && err.problem?.raison === "CAPACITE_ATTEINTE") {
+        setCapacityWarning({
+          currentCount: err.problem.currentCount ?? 0,
+          maxCapacity: err.problem.maxCapacity ?? 0,
+        });
+      } else {
+        notifyError(err);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -570,13 +581,24 @@ function TransferClassModal({ enrollment, classOptions, onClose, onTransferred }
           {options.length === 0 ? (
             <p className="text-sm text-slate-400">Aucune autre classe disponible pour cette année scolaire.</p>
           ) : (
-            <SearchableSelect value={classId} options={options} onChange={setClassId}
+            <SearchableSelect value={classId} options={options}
+              onChange={(v) => { setClassId(v); setCapacityWarning(null); }}
               triggerClassName="w-full justify-between px-3" />
           )}
         </Field>
+        {capacityWarning && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+            Cette classe a atteint sa capacité maximale ({capacityWarning.currentCount}/{capacityWarning.maxCapacity}
+            {" "}élèves). Vous pouvez forcer le transfert malgré tout, ou choisir une autre classe.
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose} disabled={submitting}>Annuler</Button>
-          <Button onClick={submit} disabled={!classId} loading={submitting}>Transférer</Button>
+          {capacityWarning ? (
+            <Button variant="danger" onClick={() => submit(true)} loading={submitting}>Forcer le transfert</Button>
+          ) : (
+            <Button onClick={() => submit(false)} disabled={!classId} loading={submitting}>Transférer</Button>
+          )}
         </div>
       </div>
     </Modal>
