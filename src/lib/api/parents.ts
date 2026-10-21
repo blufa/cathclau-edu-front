@@ -75,6 +75,12 @@ export function createParent(
   return api.post<Parent>("/parents", { ...input, userId, staffType, staffId });
 }
 
+/** Ids des parents de l'école ayant au moins un enfant lié — le complément parmi {@link listParents}
+ * sont des prospects/contacts sans enfant (§7 cahier des charges, répertoire parents/prospects). */
+export function getLinkedParentIds(): Promise<number[]> {
+  return api.get<number[]>("/parents/linked-ids");
+}
+
 /** userId : lie un compte de connexion créé APRÈS coup (ex. « Créer un accès » oublié à la création) —
  * null = ne touche pas au lien existant. Même principe pour staffType/staffId (lien direct sans compte). */
 export function updateParent(
