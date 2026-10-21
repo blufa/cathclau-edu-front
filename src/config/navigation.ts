@@ -21,6 +21,7 @@ import {
   School,
   Settings,
   Gauge,
+  HandCoins,
   PiggyBank,
   ShieldAlert,
   NotebookPen,
@@ -196,6 +197,11 @@ export const NAVIGATION: NavSection[] = [
       // et au sur-lignage involontaire de "Encaissements" dans la sidebar (isActive matche par préfixe
       // d'URL, donc toute route sous /payments/... activait aussi ce groupe, voir useNavGating).
       { label: "Session de caisse", href: "/cashier-session", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
+      // Dépôts comptable → fondateur, avec validation explicite et SMS bidirectionnel (§5 cahier des
+      // charges) — depot:read suffit pour voir l'entrée (comptable ET fondateur l'ont tous deux),
+      // le bouton "Nouveau dépôt"/les actions Valider-Rejeter se gèrent ensuite dans la page elle-même
+      // selon depot:create/depot:valider (voir isNavItemAllowed : permissions fait foi seul).
+      { label: "Dépôts de fonds", href: "/cash-deposits", icon: HandCoins, permissions: ["depot:read"], module: "PAYMENTS" },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
       // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
       // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).
