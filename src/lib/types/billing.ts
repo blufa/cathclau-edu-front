@@ -188,6 +188,33 @@ export interface ClassTransferRefund {
   refundedAt: string | null;
 }
 
+/** Un lot de trop-perçu de l'élève (§4 cahier des charges) — posé automatiquement quand un
+ * encaissement dépasse le solde dû d'une facture. remainingAmount décroît à chaque application
+ * jusqu'à épuisement (amount reste le montant d'origine, immuable, pour l'historique). */
+export interface StudentCredit {
+  id: number;
+  tenantId: number | null;
+  studentId: number;
+  amount: string;
+  remainingAmount: string;
+  sourcePaymentId: number | null;
+  sourceInvoiceId: number | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+/** Une application (même partielle) d'un crédit à une facture — l'historique traçable. */
+export interface StudentCreditUsage {
+  id: number;
+  tenantId: number | null;
+  studentId: number;
+  creditId: number;
+  targetInvoiceId: number;
+  amount: string;
+  appliedByUserId: number | null;
+  appliedAt: string;
+}
+
 export interface ExemptionInput {
   studentId: number;
   type: ExemptionType;
