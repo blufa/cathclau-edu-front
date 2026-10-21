@@ -72,8 +72,8 @@ function withAlpha(hex: string, alpha: string): string | undefined {
  * « DPE/DCE ». */
 function FieldRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight print:text-[8.5px]">
-      <span className="w-16 shrink-0 text-slate-400 print:w-11">{label}</span>
+    <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight print:text-[9.5px]">
+      <span className="w-16 shrink-0 text-slate-600 print:w-11">{label}</span>
       <span className={mono ? "truncate font-mono font-medium text-slate-700" : "truncate font-medium text-slate-700"}>{value}</span>
     </div>
   );
@@ -143,7 +143,7 @@ function IdBadgeLandscape({
                     {branding?.schoolName ?? "Établissement"}
                   </p>
                   {branding?.slogan && (
-                    <p className="truncate text-[8.5px] italic leading-tight text-slate-400 print:text-[6px]">{branding.slogan}</p>
+                    <p className="truncate text-[8.5px] italic leading-tight text-slate-600 print:text-[7px]">{branding.slogan}</p>
                   )}
                   <span
                     className="mt-1 inline-block rounded-full px-2 py-[1px] text-[9px] font-medium text-white print:mt-0.5 print:px-1 print:text-[6.5px]"
@@ -173,7 +173,7 @@ function IdBadgeLandscape({
                     </div>
                   )}
                   {idNumber && (
-                    <p className="max-w-[80px] truncate text-center font-mono text-[9px] text-slate-400 print:max-w-14 print:text-[6px]">{idNumber}</p>
+                    <p className="max-w-[80px] truncate text-center font-mono text-[9px] text-slate-600 print:max-w-14 print:text-[7px]">{idNumber}</p>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1 pt-0.5 print:space-y-0.5">
@@ -214,7 +214,7 @@ function IdBadgeLandscape({
               {branding?.ire && <FieldRow label="IRE" value={branding.ire} />}
               {branding?.dpeLabel && <FieldRow label="DPE/DCE" value={branding.dpeLabel} />}
               {footerNote && (
-                <p className="mt-0.5 truncate text-[7.5px] font-medium italic text-slate-400 print:text-[5.5px]">{footerNote}</p>
+                <p className="mt-0.5 truncate text-[7.5px] font-medium italic text-slate-600 print:text-[7px]">{footerNote}</p>
               )}
             </div>
             <div

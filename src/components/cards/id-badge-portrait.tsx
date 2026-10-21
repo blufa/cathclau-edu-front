@@ -123,7 +123,7 @@ export function IdBadgePortrait({
 
           {/* Identité, centrée. */}
           <div className="mt-2.5 px-3 text-center print:mt-[0.4mm] print:px-[1.5mm]">
-            {firstName && <p className="truncate text-[13px] text-slate-500 print:text-[2.6mm]">{firstName}</p>}
+            {firstName && <p className="truncate text-[13px] text-slate-600 print:text-[3.1mm]">{firstName}</p>}
             <p className="truncate text-[22px] font-extrabold leading-tight text-slate-900 print:text-[4.4mm]">
               {lastName ?? fullName}
             </p>
@@ -137,8 +137,8 @@ export function IdBadgePortrait({
                 <div key={f.label} className="flex items-start">
                   {i > 0 && <div className="mt-0.5 mr-2 h-8 w-px shrink-0 bg-slate-200 print:mr-[1.2mm] print:h-[4.5mm]" />}
                   <div className="min-w-0 text-center">
-                    <p className={`font-semibold uppercase tracking-wider text-slate-400 ${metaFields.length >= 3 ? "text-[7.5px] print:text-[1.6mm]" : "text-[9px] print:text-[1.8mm]"}`}>{f.label}</p>
-                    <p className={`truncate font-bold text-slate-800 ${metaFields.length >= 3 ? "text-[11px] print:text-[2.2mm]" : "text-[13px] print:text-[2.5mm]"}`}>{f.value}</p>
+                    <p className={`font-semibold uppercase tracking-wider text-slate-600 ${metaFields.length >= 3 ? "text-[7.5px] print:text-[2mm]" : "text-[9px] print:text-[2.2mm]"}`}>{f.label}</p>
+                    <p className={`truncate font-bold text-slate-800 ${metaFields.length >= 3 ? "text-[11px] print:text-[2.6mm]" : "text-[13px] print:text-[2.9mm]"}`}>{f.value}</p>
                   </div>
                 </div>
               ))}
@@ -157,12 +157,12 @@ export function IdBadgePortrait({
               )}
             </div>
             <div className="min-w-0 flex-1 space-y-[3px] print:space-y-[0.5mm]">
-              <p className="text-[8px] font-semibold uppercase tracking-wider text-slate-400 print:text-[1.6mm]">N° d&apos;identification</p>
-              <p className="truncate text-[13.5px] font-bold text-slate-800 print:text-[2.5mm]">{idNumber ?? "—"}</p>
+              <p className="text-[8px] font-semibold uppercase tracking-wider text-slate-600 print:text-[2mm]">N° d&apos;identification</p>
+              <p className="truncate text-[13.5px] font-bold text-slate-800 print:text-[2.9mm]">{idNumber ?? "—"}</p>
               {validUntil && (
                 <>
-                  <p className="text-[8px] font-semibold uppercase tracking-wider text-slate-400 print:text-[1.6mm]">Valide jusqu&apos;au</p>
-                  <p className="truncate text-[12px] font-bold text-slate-800 print:text-[2.2mm]">{validUntil}</p>
+                  <p className="text-[8px] font-semibold uppercase tracking-wider text-slate-600 print:text-[2mm]">Valide jusqu&apos;au</p>
+                  <p className="truncate text-[12px] font-bold text-slate-800 print:text-[2.6mm]">{validUntil}</p>
                 </>
               )}
             </div>
@@ -172,15 +172,15 @@ export function IdBadgePortrait({
           {(branding?.address || branding?.phone || branding?.phone2 || branding?.ire || branding?.dpeLabel || branding?.sousPrefectureLabel) && (
             <div className="mt-2.5 space-y-0.5 px-3 text-center print:mt-[0.6mm] print:px-[1.5mm]">
               {branding?.address && (
-                <p className="truncate text-[10px] font-semibold text-slate-700 print:text-[2mm]">{branding.address}</p>
+                <p className="truncate text-[10px] font-semibold text-slate-700 print:text-[2.4mm]">{branding.address}</p>
               )}
               {(branding?.phone || branding?.phone2) && (
-                <p className="truncate text-[9px] text-slate-500 print:text-[1.8mm]">
+                <p className="truncate text-[9px] text-slate-600 print:text-[2.2mm]">
                   {[branding?.phone, branding?.phone2].filter(Boolean).join(" / ")}
                 </p>
               )}
               {(branding?.ire || branding?.dpeLabel || branding?.sousPrefectureLabel) && (
-                <p className="truncate text-[7.5px] text-slate-400 print:text-[1.6mm]">
+                <p className="truncate text-[7.5px] text-slate-600 print:text-[2mm]">
                   {[
                     branding?.ire && `IRE : ${branding.ire}`,
                     branding?.dpeLabel && `DPE/DCE : ${branding.dpeLabel}`,
