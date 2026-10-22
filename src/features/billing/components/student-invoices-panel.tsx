@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, listClassTransferRefunds, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, markClassTransferRefundRefunded, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, applyStudentCreditToInvoice, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, getStudentCreditBalance, listClassTransferRefunds, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, markClassTransferRefundRefunded, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
@@ -87,6 +87,21 @@ export function StudentInvoicesPanel({
   // à l'écran pour que le comptable puisse le résoudre.
   const refundsQuery = useCachedQuery(`class-transfer-refunds:${studentId}`, () => listClassTransferRefunds(studentId), [studentId]);
   const pendingRefunds = (refundsQuery.data ?? []).filter((r) => !r.refundedAt);
+  // Trop-perçu (§4 cahier des charges) : crédit disponible de l'élève, posé automatiquement quand un
+  // encaissement dépasse le solde dû d'une facture — applicable à n'importe quelle facture future.
+  const creditQuery = useCachedQuery(`student-credit-balance:${studentId}`, () => getStudentCreditBalance(studentId), [studentId]);
+  const availableCredit = Number(creditQuery.data?.availableBalance ?? 0);
+  const [applyCreditTargetId, setApplyCreditTargetId] = useState<number | null>(null);
+  const [applyingCredit, setApplyingCredit] = useState(false);
+  async function applyCredit(invoiceId: number, amount: number) {
+    setApplyingCredit(true);
+    try {
+      await applyStudentCreditToInvoice(studentId, invoiceId, amount);
+      notifySuccess("Crédit appliqué à la facture");
+      creditQuery.refetch();
+      refetchAll();
+    } catch (err) { notifyError(err); } finally { setApplyingCredit(false); }
+  }
   const [markingRefundedId, setMarkingRefundedId] = useState<number | null>(null);
   async function markRefunded(id: number) {
     setMarkingRefundedId(id);
@@ -320,6 +335,20 @@ export function StudentInvoicesPanel({
     } catch (err) { notifyGenerationError(err); } finally { setCreatingInvoice(false); }
   }
 
+  /** Confirmation explicite du montant avant ajout (§13 cahier des charges — particulièrement utile
+   * pour un frais facultatif : l'action d'engager une dépense pour l'élève doit être volontaire). */
+  function confirmAddFee() {
+    const fee = availableFees.find((f) => String(f.id) === selectedFeeId);
+    if (!fee) return;
+    const feeLabel = fee.type === "OTHER" && fee.label ? fee.label : FEE_TYPE_LABEL[fee.type];
+    confirmAction({
+      title: "Ajouter ce frais",
+      message: `Ajouter "${feeLabel}" (${formatGNF(fee.amount)})${fee.mandatory ? "" : " — frais facultatif"} à cet élève ?`,
+      confirmLabel: "Ajouter",
+      onConfirm: addFee,
+    });
+  }
+
   async function subscribeTransport() {
     if (!routeId) return;
     setSubscribingTransport(true);
@@ -438,6 +467,43 @@ export function StudentInvoicesPanel({
               </Button>
             </div>
           ))}
+        </div>
+      )}
+      {availableCredit > 0 && (
+        <div className="mb-4 space-y-2 rounded-xl border border-teal-300 bg-teal-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-teal-900">
+            <span className="font-semibold">Crédit disponible : {formatGNF(availableCredit)} (trop-perçu)</span>
+          </div>
+          {payable.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={applyCreditTargetId != null ? String(applyCreditTargetId) : ""}
+                onChange={(e) => setApplyCreditTargetId(e.target.value ? Number(e.target.value) : null)}
+                className="max-w-xs"
+              >
+                <option value="">Appliquer à…</option>
+                {payable.map((inv) => (
+                  <option key={inv.id} value={inv.id}>{labelFor(inv)} — {formatGNF(remainingOf(inv))}</option>
+                ))}
+              </Select>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={applyingCredit}
+                disabled={applyCreditTargetId == null}
+                onClick={() => {
+                  const target = payable.find((inv) => inv.id === applyCreditTargetId);
+                  if (!target) return;
+                  void applyCredit(target.id, Math.min(availableCredit, remainingOf(target)));
+                  setApplyCreditTargetId(null);
+                }}
+              >
+                Appliquer le crédit
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-teal-700">Aucune facture à régler pour l&apos;instant — le crédit reste disponible pour une prochaine facture.</p>
+          )}
         </div>
       )}
       {q.loading ? (
@@ -565,7 +631,10 @@ export function StudentInvoicesPanel({
                       <SearchableSelect
                         value={selectedFeeId}
                         options={availableFees.map((f): SearchableOption => {
-                          const label = `${f.type === "OTHER" && f.label ? f.label : FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
+                          // §13 cahier des charges : le statut facultatif doit être visible au moment
+                          // de choisir le frais à ajouter, pas seulement dans l'écran de configuration.
+                          const base = `${f.type === "OTHER" && f.label ? f.label : FEE_TYPE_LABEL[f.type]} — ${formatGNF(f.amount)}`;
+                          const label = f.mandatory ? base : `${base} · Facultatif`;
                           return { value: String(f.id), trigger: label, label, searchText: label };
                         })}
                         onChange={setSelectedFeeId}
@@ -575,7 +644,7 @@ export function StudentInvoicesPanel({
                     </Field>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => { setAddingFee(false); setSelectedFeeId(""); }}>Annuler</Button>
-                  <Button size="sm" onClick={addFee} loading={creatingInvoice} disabled={!selectedFeeId}>Ajouter</Button>
+                  <Button size="sm" onClick={confirmAddFee} loading={creatingInvoice} disabled={!selectedFeeId}>Ajouter</Button>
                 </div>
               )}
             </div>

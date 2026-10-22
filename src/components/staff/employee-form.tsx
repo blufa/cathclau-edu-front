@@ -129,7 +129,7 @@ export function EmployeeForm({
       {initial && (
         <Field>
           <Label>Photo (badge personnel)</Label>
-          <FileUpload variant="image" folder="staff/photos" value={photo} onChange={onPhotoChange} />
+          <FileUpload variant="image" folder="staff/photos" value={photo} onChange={onPhotoChange} allowCapture />
         </Field>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

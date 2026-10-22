@@ -37,11 +37,15 @@ function slotLabel(start: string, end: string): string {
   return `${start.replace(":", "h")}–${end.replace(":", "h")}`;
 }
 
-/** Construit les bandes de la grille : la plage par défaut (08h-18h par bandes de `bandMinutes`),
- * étendue avant et/ou après si des créneaux réellement enregistrés (`slots`) débordent de cette plage. */
-function buildSlots(slots: EmploiDuTemps[], bandMinutes: number): { start: string; end: string; label: string }[] {
-  let rangeStart = timeToMinutes(DEFAULT_SLOT_START);
-  let rangeEnd = timeToMinutes(DEFAULT_SLOT_END);
+/** Construit les bandes de la grille : la plage par défaut (`gridStart`-`gridEnd` par bandes de
+ * `bandMinutes`, 08h-18h/60min si non précisé — voir §3.2 grille primaire personnalisable), étendue
+ * avant et/ou après si des créneaux réellement enregistrés (`slots`) débordent de cette plage. */
+function buildSlots(
+  slots: EmploiDuTemps[], bandMinutes: number,
+  gridStart: string = DEFAULT_SLOT_START, gridEnd: string = DEFAULT_SLOT_END,
+): { start: string; end: string; label: string }[] {
+  let rangeStart = timeToMinutes(gridStart);
+  let rangeEnd = timeToMinutes(gridEnd);
   for (const s of slots) {
     rangeStart = Math.min(rangeStart, timeToMinutes(s.startTime.slice(0, 5)));
     rangeEnd = Math.max(rangeEnd, timeToMinutes(s.endTime.slice(0, 5)));
@@ -80,6 +84,8 @@ export function TimetableGrid({
   subjects,
   teacherName,
   slotBandMinutes,
+  gridStartTime,
+  gridEndTime,
   canWrite,
   onChanged,
 }: {
@@ -91,6 +97,10 @@ export function TimetableGrid({
   teacherName?: Map<number, string>;
   /** Largeur des bandes horaires en minutes (ex. 120 pour le secondaire, 60 ailleurs) — repli sur 1h. */
   slotBandMinutes?: number;
+  /** Heure de début/fin par défaut de la grille (ex. grille primaire personnalisable, §3.2) — repli
+   *  sur 08h00-18h00 si non précisé. */
+  gridStartTime?: string;
+  gridEndTime?: string;
   /** Lecture seule (pas de emploi:manage) : aucun contrôle interactif dans les cellules, juste le
    *  libellé — jamais la possibilité de cliquer pour ensuite se voir refuser par le serveur. */
   canWrite: boolean;
@@ -98,8 +108,8 @@ export function TimetableGrid({
 }) {
   const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
   const fixedSlots = useMemo(
-    () => buildSlots(slots, slotBandMinutes ?? DEFAULT_SLOT_BAND_MINUTES),
-    [slots, slotBandMinutes],
+    () => buildSlots(slots, slotBandMinutes ?? DEFAULT_SLOT_BAND_MINUTES, gridStartTime, gridEndTime),
+    [slots, slotBandMinutes, gridStartTime, gridEndTime],
   );
 
   // Codes enseignants connus pour chaque matière de la classe (ex. CH1, CH2) — permet de réaffecter

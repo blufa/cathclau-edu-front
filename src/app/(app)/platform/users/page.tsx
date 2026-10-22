@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { StatCard } from "@/components/ui/stat-card";
 import { DataTable, type Column } from "@/components/ui/data-table";
-import { formatDate } from "@/lib/format";
+import { formatDateTime, formatMinutes, sessionDurationMinutes } from "@/lib/format";
 import { notifySuccess } from "@/lib/feedback";
 
 const TENANTS_PAGE_SIZE = 500;
@@ -112,8 +112,20 @@ function PlatformUsersTable() {
     {
       key: "lastLoginAt",
       header: "Dernière connexion",
-      accessor: (u) => u.lastLoginAt?.slice(0, 10) ?? "",
-      render: (u) => <span className="text-slate-500">{u.lastLoginAt ? formatDate(u.lastLoginAt) : "—"}</span>,
+      accessor: (u) => u.lastLoginAt ?? "",
+      render: (u) => {
+        const duration = sessionDurationMinutes(u.lastLoginAt, u.lastActivityAt);
+        return (
+          <span className="text-slate-500">
+            {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "—"}
+            {u.lastLoginAt && (
+              <span className="ml-1 text-xs text-slate-400">
+                ({duration != null ? formatMinutes(duration) : "durée inconnue"})
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: "actions",

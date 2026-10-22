@@ -21,6 +21,7 @@ import {
   School,
   Settings,
   Gauge,
+  HandCoins,
   PiggyBank,
   ShieldAlert,
   NotebookPen,
@@ -51,9 +52,12 @@ export interface NavItem {
    * TEACHER/PARENT/STUDENT en libre-service) qui ne passent pas par le catalogue de permissions.
    * Omitted = visible à tout utilisateur authentifié. */
   roles?: RoleCode[];
-  /** Permissions (au moins une) qui donnent aussi accès à cet item, pour un rôle personnalisé sans
-   * code fixe (créé via /users/roles). Un item avec `roles` ET `permissions` est visible si l'un ou
-   * l'autre matche — voir useNavGating / role-access.ts. */
+  /** Permissions (au moins une) qui donnent accès à cet item, y compris pour un rôle personnalisé
+   * sans code fixe (créé via /users/roles). Quand `permissions` est précisé, c'est LUI qui fait foi
+   * (même si `roles` est aussi précisé) — un rôle listé ne peut jamais court-circuiter une permission
+   * explicitement révoquée à un utilisateur précis (écran "Privilèges"). `roles` ne sert alors que
+   * d'étiquette indicative ; il redevient décisif seul, en l'absence de `permissions`. Voir
+   * isNavItemAllowed (lib/auth/permissions.ts). */
   permissions?: string[];
   /** Rôles système exclus même si `permissions` matche — ex. eleve:read est aussi accordé à PARENT
    * pour son propre portail (/students/me), pas pour la page admin « Élèves » (liste complète). */
@@ -78,7 +82,10 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Pilotage",
     items: [
-      { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["eleve:read", "facture:read"], excludeRoles: ["PARENT"] },
+      // excludeRoles TEACHER : eleve:read est aussi accordé à l'Enseignant (pour consulter ses élèves
+      // en évaluation/présence), ce qui lui ouvrirait sinon ce tableau de bord général d'école — qui
+      // ne lui est pas destiné (§1.3 cahier des charges, "l'enseignant ne doit voir que son espace").
+      { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["eleve:read", "facture:read"], excludeRoles: ["PARENT", "TEACHER"] },
       { label: "Vision Fondateur", href: "/founder", icon: TrendingUp, roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["dashboard:direction"] },
       { label: "Rapports & analytique", href: "/reports", icon: Gauge, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["dashboard:admin"] },
     ],
@@ -106,7 +113,9 @@ export const NAVIGATION: NavSection[] = [
           { label: "Tableau de la rentrée", href: "/enrollments/overview", roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["inscription:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
         ],
       },
-      { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT"], module: "STUDENTS" },
+      // excludeRoles TEACHER : même raison que "Tableau de bord" ci-dessus — eleve:read ne doit pas
+      // lui ouvrir l'annuaire élèves complet de l'école, seulement ses propres classes (/my-classes).
+      { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT", "TEACHER"], module: "STUDENTS" },
       { label: "Parents", href: "/parents", icon: Users, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["parent:manage"], excludeRoles: ["PARENT"], module: "STUDENTS" },
       { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
       {
@@ -116,7 +125,7 @@ export const NAVIGATION: NavSection[] = [
           { label: "Personnel administratif", href: "/teachers/staff", roles: ["SCHOOL_ADMIN", "DIRECTOR"], permissions: ["personnel:read"], module: "STAFF" },
         ],
       },
-      { label: "Guichet d'accueil", href: "/guichet", icon: Receipt, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], excludeRoles: ["PARENT"] },
+      { label: "Guichet d'accueil", href: "/guichet", icon: Receipt, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], excludeRoles: ["PARENT", "TEACHER"] },
       // classe:read est aussi accordé à l'Enseignant (pour son propre usage, voir /my-classes) : on
       // l'exclut ici pour ne pas dupliquer l'entrée de menu — mais tout autre rôle (ex. Comptable) à
       // qui l'admin accorde classe:read voit maintenant bien cet item (avant : uniquement rôles fixes,
@@ -188,6 +197,11 @@ export const NAVIGATION: NavSection[] = [
       // et au sur-lignage involontaire de "Encaissements" dans la sidebar (isActive matche par préfixe
       // d'URL, donc toute route sous /payments/... activait aussi ce groupe, voir useNavGating).
       { label: "Session de caisse", href: "/cashier-session", icon: Wallet, roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT", "SECRETARY"], permissions: ["paiement:create"], module: "PAYMENTS" },
+      // Dépôts comptable → fondateur, avec validation explicite et SMS bidirectionnel (§5 cahier des
+      // charges) — depot:read suffit pour voir l'entrée (comptable ET fondateur l'ont tous deux),
+      // le bouton "Nouveau dépôt"/les actions Valider-Rejeter se gèrent ensuite dans la page elle-même
+      // selon depot:create/depot:valider (voir isNavItemAllowed : permissions fait foi seul).
+      { label: "Dépôts de fonds", href: "/cash-deposits", icon: HandCoins, permissions: ["depot:read"], module: "PAYMENTS" },
       // "Comptabilité" (module SYSCOHADA complet) est masquée du menu — jugée redondante avec
       // Budget & subventions / Dépenses pour l'usage courant — mais son code/ses pages restent
       // intacts et accessibles par URL directe si besoin (décision utilisateur, pas de suppression).

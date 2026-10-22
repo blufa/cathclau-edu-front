@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Upload } from "lucide-react";
+import { Printer, Search, Upload } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
 import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions";
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
@@ -20,10 +21,13 @@ import { Card, CardBody } from "@/components/ui/card";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { QuotaProgress } from "@/components/platform/quota-progress";
 import { QuickBadgeButton } from "@/components/biometric/quick-badge-button";
+import { FileUpload } from "@/components/ui/file-upload";
 import { StudentForm } from "./student-form";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
+import { printList } from "@/lib/print-list";
+import { searchStudentsSummary, updateStudentPhoto } from "@/lib/api/students";
 import { useDeleteStudentMutation, useStudentsSummaryQuery, useUpdateStudentMutation } from "../hooks/use-students";
 
 const PAGE_SIZE = 20;
@@ -46,6 +50,9 @@ export default function StudentsPage() {
   const [page, setPage] = useState(0);
 
   const [editing, setEditing] = useState<Student | null>(null);
+  // §11.3 cahier des charges : ajout/modification de la photo directement depuis la liste, sans
+  // ouvrir tout le formulaire d'édition.
+  const [editingPhotoFor, setEditingPhotoFor] = useState<Student | null>(null);
 
   // Libellés de classe (colonne « Classe » + filtre) — résolus depuis l'année scolaire courante.
   const currentYearQuery = useQuery(() => getCurrentAcademicYear(), []);
@@ -57,7 +64,7 @@ export default function StudentsPage() {
 
   // Résumé (élève + classe courante + parent principal) en un seul appel, déjà trié alphabétiquement
   // (nom, ascendant) côté serveur — voir searchStudentsSummary.
-  const { data, isLoading: loading, error } = useStudentsSummaryQuery({
+  const { data, isLoading: loading, error, refetch } = useStudentsSummaryQuery({
     search: search || undefined,
     gender: gender || undefined,
     enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
@@ -128,6 +135,53 @@ export default function StudentsPage() {
     setSearch(searchInput.trim());
   }
 
+  const [printing, setPrinting] = useState(false);
+
+  /** §10.1 cahier des charges : imprime TOUTE la liste filtrée (pas seulement la page affichée à
+   * l'écran) — même filtres que la recherche courante, un gros `size` suffit à tout récupérer en un
+   * seul appel (même pattern que listParents côté parents). */
+  async function handlePrint() {
+    setPrinting(true);
+    try {
+      const [profile, all] = await Promise.all([
+        getSchoolProfile().catch(() => null),
+        searchStudentsSummary({
+          search: search || undefined,
+          gender: gender || undefined,
+          enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
+          notEnrolled: status === "NOT_ENROLLED" || undefined,
+          classId: classFilter ? Number(classFilter) : undefined,
+          page: 0,
+          size: 5000,
+        }),
+      ]);
+      const filterParts = [
+        classFilter ? `Classe : ${classLabelById.get(Number(classFilter)) ?? `#${classFilter}`}` : null,
+        gender ? `Sexe : ${gender === "FEMALE" ? "Féminin" : "Masculin"}` : null,
+        status ? `Inscription : ${status === "NOT_ENROLLED" ? "Non inscrits" : status}` : null,
+        search ? `Recherche : "${search}"` : null,
+      ].filter((p): p is string => p != null);
+      printList({
+        profile,
+        title: "Liste des élèves",
+        subtitle: filterParts.length > 0 ? filterParts.join(" · ") : "Tous les élèves",
+        columns: ["Matricule", "Nom et prénoms", "Sexe", "Classe", "Parent principal", "Téléphone"],
+        rows: all.content.map((row) => [
+          row.student.studentNumber ?? "—",
+          `${row.student.firstName} ${row.student.lastName}`,
+          row.student.gender === "FEMALE" ? "F" : "M",
+          row.classId != null ? (classLabelById.get(row.classId) ?? `#${row.classId}`) : "—",
+          row.principalParentName ?? "—",
+          row.principalParentPhone ?? "—",
+        ]),
+      });
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   async function handleUpdate(input: CreateStudentInput) {
     if (!editing) return;
     await updateMutation.mutateAsync({ id: editing.id, input });
@@ -166,14 +220,27 @@ export default function StudentsPage() {
       accessor: (row) => `${row.student.firstName} ${row.student.lastName}`,
       render: (row) => (
         <Link href={`/students/detail?id=${row.student.id}`} className="group flex items-center gap-3">
-          {row.student.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={row.student.photo} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
-          ) : (
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
-              {initials(row.student)}
-            </span>
-          )}
+          <button
+            type="button"
+            title="Modifier la photo"
+            disabled={!canWrite}
+            onClick={(e) => {
+              if (!canWrite) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setEditingPhotoFor(row.student);
+            }}
+            className="shrink-0 disabled:cursor-default"
+          >
+            {row.student.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={row.student.photo} alt="" className="h-9 w-9 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
+                {initials(row.student)}
+              </span>
+            )}
+          </button>
           <span className="font-medium text-slate-900 group-hover:text-brand-700">
             {row.student.firstName} {row.student.lastName}
           </span>
@@ -263,8 +330,12 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Élèves</h1>
           <p className="text-sm text-slate-500">Gestion des élèves de l&apos;établissement</p>
         </div>
-        {canWrite && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" leftSection={<Printer className="h-4 w-4" />} onClick={handlePrint} loading={printing}>
+            Imprimer
+          </Button>
+          {canWrite && (
+            <>
             <Button component={Link} href="/students/import" variant="outline" leftSection={<Upload className="h-4 w-4" />}>
               Import CSV
             </Button>
@@ -274,8 +345,9 @@ export default function StudentsPage() {
             <Button component={Link} href="/enrollments" variant="secondary">
               Inscrire un élève
             </Button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </Reveal>
 
       {/* Quota gauge (key constraint of the module) */}
@@ -370,6 +442,48 @@ export default function StudentsPage() {
           />
         )}
       </Modal>
+
+      <Modal open={!!editingPhotoFor} onClose={() => setEditingPhotoFor(null)} title="Photo de l'élève">
+        {editingPhotoFor && (
+          <PhotoOnlyEditor
+            studentId={editingPhotoFor.id}
+            studentName={`${editingPhotoFor.firstName} ${editingPhotoFor.lastName}`}
+            photo={editingPhotoFor.photo}
+            onDone={() => { setEditingPhotoFor(null); refetch(); }}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/** Capture/téléverse puis enregistre immédiatement la nouvelle photo sur le profil élève — pas de
+ * bouton "Enregistrer" séparé : FileUpload a déjà uploadé le fichier et renvoyé son URL via
+ * onChange, il ne reste qu'à la lier au profil (§11.3 cahier des charges). */
+function PhotoOnlyEditor({ studentId, studentName, photo, onDone }: {
+  studentId: number; studentName: string; photo: string | null; onDone: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function save(url: string | null) {
+    if (!url) return;
+    setSaving(true);
+    try {
+      await updateStudentPhoto(studentId, url);
+      notifySuccess("Photo mise à jour");
+      onDone();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">{studentName}</p>
+      <FileUpload variant="image" folder="students/photos" value={photo} onChange={save} allowCapture />
+      {saving && <p className="text-xs text-slate-400">Enregistrement…</p>}
     </div>
   );
 }

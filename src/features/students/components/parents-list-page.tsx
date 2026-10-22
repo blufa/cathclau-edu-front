@@ -2,13 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CreditCard, Users } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { CreditCard, UserPlus, Users } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { getParentChildren, listParents, updateParent } from "@/lib/api/parents";
+import { createParent, getLinkedParentIds, getParentChildren, listParents, updateParent } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
 import { ApiError } from "@/lib/api/errors";
+import { phoneRule } from "@/lib/phone";
 import type { Parent } from "@/lib/types/student";
 import { Modal } from "@/components/ui/modal";
 import { Input, Field, Label } from "@/components/ui/input";
@@ -29,8 +33,13 @@ export default function ParentsListPage() {
   // `useCachedQuery` au lieu du hook maison sans cache : le filtrage est déjà 100% client (voir
   // `parents` ci-dessous), la liste complète tient donc en un seul appel mis en cache IndexedDB.
   const q = useCachedQuery("parents", listParents, []);
+  // Distingue un parent lié à au moins un élève d'un contact/prospect sans enfant (§7 cahier des
+  // charges) — un simple ensemble d'ids, pas de N+1 sur l'annuaire complet.
+  const linkedIdsQuery = useCachedQuery("parents-linked-ids", getLinkedParentIds, []);
+  const linkedIds = useMemo(() => new Set(linkedIdsQuery.data ?? []), [linkedIdsQuery.data]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Parent | null>(null);
+  const [creating, setCreating] = useState(false);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
@@ -46,8 +55,15 @@ export default function ParentsListPage() {
   return (
     <div className="space-y-6">
       <Reveal y={12}>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Parents</h1>
-        <p className="text-sm text-gray-500">Tous les parents de l&apos;école — cliquez sur un parent pour voir ses enfants</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Parents</h1>
+            <p className="text-sm text-gray-500">Tous les parents de l&apos;école — cliquez sur un parent pour voir ses enfants</p>
+          </div>
+          <Button size="sm" onClick={() => setCreating(true)} leftSection={<UserPlus className="h-4 w-4" />}>
+            Nouveau parent / prospect
+          </Button>
+        </div>
       </Reveal>
 
       <Input
@@ -62,11 +78,11 @@ export default function ParentsListPage() {
       ) : (
         <Table>
           <THead>
-            <tr><TH>Nom</TH><TH className="hidden sm:table-cell">Téléphone</TH><TH className="hidden sm:table-cell">Email</TH><TH className="hidden sm:table-cell">Profession</TH></tr>
+            <tr><TH>Nom</TH><TH className="hidden sm:table-cell">Téléphone</TH><TH className="hidden sm:table-cell">Email</TH><TH className="hidden sm:table-cell">Profession</TH><TH>Statut</TH></tr>
           </THead>
           <TBody>
             {pageParents.length === 0 && (
-              <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucun parent trouvé.</TD></TR>
+              <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun parent trouvé.</TD></TR>
             )}
             {pageParents.map((p) => (
               <TR key={p.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(p)}>
@@ -74,6 +90,11 @@ export default function ParentsListPage() {
                 <TD className="hidden text-gray-600 sm:table-cell">{p.phone ?? "—"}</TD>
                 <TD className="hidden text-gray-600 sm:table-cell">{p.email ?? "—"}</TD>
                 <TD className="hidden text-gray-600 sm:table-cell">{p.occupation ?? "—"}</TD>
+                <TD>
+                  {linkedIds.has(p.id)
+                    ? <Badge tone="green">Parent</Badge>
+                    : <Badge tone="gray">Prospect (sans enfant)</Badge>}
+                </TD>
               </TR>
             ))}
           </TBody>
@@ -93,7 +114,124 @@ export default function ParentsListPage() {
           />
         )}
       </Modal>
+
+      <Modal open={creating} onClose={() => setCreating(false)} title="Nouveau parent / prospect">
+        <CreateProspectForm
+          existingParents={q.data ?? []}
+          onCancel={() => setCreating(false)}
+          onCreated={() => { setCreating(false); notifySuccess("Parent/prospect enregistré."); q.refetch(); linkedIdsQuery.refetch(); }}
+        />
+      </Modal>
     </div>
+  );
+}
+
+const prospectSchema = z.object({
+  firstName: z.string().trim().min(1, "Requis"),
+  lastName: z.string().trim().min(1, "Requis"),
+  phone: z.string().trim().min(1, "Requis"),
+  email: z.string(),
+  occupation: z.string(),
+  address: z.string(),
+}).superRefine((v, ctx) => {
+  const phoneError = phoneRule(v.phone);
+  if (phoneError) ctx.addIssue({ code: "custom", path: ["phone"], message: phoneError });
+});
+type ProspectFormValues = z.infer<typeof prospectSchema>;
+
+/**
+ * Crée un contact/prospect (ex. un parent venu visiter l'école) SANS l'attacher à un élève — un vrai
+ * Parent existant dans l'annuaire, pas une fiche élève fictive (§7 cahier des charges). Un enfant pourra
+ * lui être rattaché plus tard normalement (fiche élève → Ajouter un parent → Parent existant).
+ * Détection de doublon par numéro : avertit sans jamais bloquer ni fusionner automatiquement — un même
+ * numéro peut légitimement correspondre à deux contacts distincts (ex. foyer partagé), la décision
+ * revient à l'utilisateur.
+ */
+function CreateProspectForm({ existingParents, onCancel, onCreated }: {
+  existingParents: Parent[]; onCancel: () => void; onCreated: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [confirmedDuplicate, setConfirmedDuplicate] = useState(false);
+  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<ProspectFormValues>({
+    resolver: zodResolver(prospectSchema),
+    defaultValues: { firstName: "", lastName: "", phone: "", email: "", occupation: "", address: "" },
+  });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+
+  const duplicate = useMemo(
+    () => (v.phone ? existingParents.find((p) => p.phone === v.phone) ?? null : null),
+    [v.phone, existingParents],
+  );
+
+  async function submit(values: ProspectFormValues) {
+    if (duplicate && !confirmedDuplicate) return; // le bouton "Créer malgré tout" doit être utilisé explicitement
+    setLoading(true);
+    try {
+      await createParent({
+        firstName: values.firstName, lastName: values.lastName,
+        phone: values.phone || null, email: values.email || null,
+        occupation: values.occupation || null, address: values.address || null,
+      });
+      onCreated();
+    } catch (err) {
+      notifyError(err instanceof ApiError ? err : new Error("Impossible de créer ce contact."));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <p className="text-xs text-gray-400">
+        Pour un parent/visiteur sans enfant encore inscrit — un enfant pourra être rattaché plus tard
+        depuis sa fiche.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field>
+          <Label>Prénom <span className="text-error-500">*</span></Label>
+          <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
+          {errors.firstName && <p className="text-xs text-error-600">{errors.firstName.message}</p>}
+        </Field>
+        <Field>
+          <Label>Nom <span className="text-error-500">*</span></Label>
+          <Input value={v.lastName} onChange={(e) => setValue("lastName", e.target.value)} aria-invalid={!!errors.lastName} />
+          {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>}
+          value={v.phone} onChange={(val) => { setValue("phone", val); setConfirmedDuplicate(false); }}
+          error={errors.phone?.message} />
+        <Field>
+          <Label>Email</Label>
+          <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} />
+        </Field>
+      </div>
+      <Field>
+        <Label>Profession</Label>
+        <Input value={v.occupation} onChange={(e) => setValue("occupation", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Adresse</Label>
+        <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
+      </Field>
+      {duplicate && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          Un contact existe déjà avec ce numéro : {duplicate.firstName} {duplicate.lastName}. Si c&apos;est
+          la même personne, annulez et rattachez-la plutôt depuis la fiche élève concernée. Sinon, vous
+          pouvez créer ce contact malgré tout.
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
+        {duplicate && !confirmedDuplicate ? (
+          <Button type="button" variant="danger" onClick={() => setConfirmedDuplicate(true)}>Créer malgré tout</Button>
+        ) : (
+          <Button type="submit" loading={loading}>Enregistrer</Button>
+        )}
+      </div>
+    </form>
   );
 }
 

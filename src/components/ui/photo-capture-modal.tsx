@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, RefreshCw, Video, VideoOff } from "lucide-react";
+import { Camera, Loader2, RefreshCw, Video, VideoOff } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { whitenPhotoBackground } from "@/lib/background-removal";
 
 interface PhotoCaptureModalProps {
   open: boolean;
@@ -26,6 +27,11 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
   const [deviceId, setDeviceId] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [snapshot, setSnapshot] = useState<string | null>(null);
+  // Fichier final (déjà traité fond blanc si le traitement a réussi) — c'est lui qu'on remonte au
+  // parent via onCapture, jamais un nouvel aller-retour base64 (voir §11.2 cahier des charges).
+  const [resultFile, setResultFile] = useState<File | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [backgroundRemoved, setBackgroundRemoved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
@@ -36,17 +42,29 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
 
   async function startCamera(id: string) {
     setError(null);
-    setSnapshot(null);
+    retake();
     stopCamera();
     if (!navigator.mediaDevices?.getUserMedia) {
       setError("Ce navigateur ne permet pas l'accès à la caméra.");
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: id ? { deviceId: { exact: id } } : true,
-        audio: false,
-      });
+      // §11.1 cahier des charges : caméra ARRIÈRE par défaut sur mobile (photo d'identité prise par
+      // quelqu'un d'autre, pas un selfie) — "environment" n'est qu'une préférence pour le navigateur,
+      // jamais une garantie sur tous les appareils (voir fallback ci-dessous). Un appareil choisi
+      // explicitement dans la liste (id fourni) prime toujours sur cette préférence.
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: id ? { deviceId: { exact: id } } : { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+      } catch {
+        // Certains navigateurs/appareils (webcam d'ordinateur sans "environment", contrainte refusée)
+        // échouent sur facingMode — on retente sans contrainte plutôt que de bloquer la capture.
+        if (id) throw new Error("device-failed");
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -71,7 +89,14 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
     void startCamera(id);
   }
 
-  function capture() {
+  function retake() {
+    if (snapshot) URL.revokeObjectURL(snapshot);
+    setSnapshot(null);
+    setResultFile(null);
+    setBackgroundRemoved(false);
+  }
+
+  async function capture() {
     const video = videoRef.current;
     if (!video || !streaming) return;
     const canvas = document.createElement("canvas");
@@ -80,23 +105,32 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setSnapshot(canvas.toDataURL("image/jpeg", 0.85));
+    const rawBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!rawBlob) return;
+    const rawFile = new File([rawBlob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
+    // §11.2 cahier des charges : traitement fond blanc automatique après la prise de vue, AVANT de
+    // montrer l'aperçu que l'utilisateur confirme/reprend — jamais après coup sur une photo déjà validée.
+    setProcessing(true);
+    try {
+      const { file, backgroundRemoved: removed } = await whitenPhotoBackground(rawFile);
+      setResultFile(file);
+      setBackgroundRemoved(removed);
+      setSnapshot(URL.createObjectURL(file));
+    } finally {
+      setProcessing(false);
+    }
   }
 
   function confirm() {
-    if (!snapshot) return;
-    const arr = snapshot.split(",");
-    const mime = /:(.*?);/.exec(arr[0])?.[1] ?? "image/jpeg";
-    const bin = atob(arr[1]);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    onCapture(new File([bytes], `photo-${Date.now()}.jpg`, { type: mime }));
+    if (!resultFile) return;
+    onCapture(resultFile);
     stopCamera();
     onClose();
   }
 
   function close() {
     stopCamera();
+    if (snapshot) URL.revokeObjectURL(snapshot);
     onClose();
   }
 
@@ -122,14 +156,26 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
           ) : (
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
           )}
-          {!streaming && !snapshot && (
+          {!streaming && !snapshot && !processing && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
               <VideoOff className="h-8 w-8" />
               <span className="text-sm">Caméra éteinte</span>
             </div>
           )}
+          {processing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900/70 text-white">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="text-sm">Traitement du fond en cours…</span>
+            </div>
+          )}
         </div>
         {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700">{error}</p>}
+        {snapshot && !backgroundRemoved && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Le fond blanc automatique n&apos;a pas pu être appliqué — photo originale conservée. Vous
+            pouvez reprendre la photo ou la valider telle quelle.
+          </p>
+        )}
         <p className="text-xs text-slate-400">
           Fonctionne avec la webcam de l&apos;ordinateur, la caméra du téléphone, ou un appareil photo externe branché sur la machine.
         </p>
@@ -137,11 +183,11 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
           <Button type="button" variant="secondary" onClick={close}>Annuler</Button>
           {snapshot ? (
             <>
-              <Button type="button" variant="secondary" leftSection={<RefreshCw className="h-4 w-4" />} onClick={() => setSnapshot(null)}>Reprendre</Button>
-              <Button type="button" onClick={confirm}>Utiliser cette photo</Button>
+              <Button type="button" variant="secondary" leftSection={<RefreshCw className="h-4 w-4" />} onClick={retake} disabled={processing}>Reprendre</Button>
+              <Button type="button" onClick={confirm} disabled={processing || !resultFile}>Utiliser cette photo</Button>
             </>
           ) : streaming ? (
-            <Button type="button" leftSection={<Camera className="h-4 w-4" />} onClick={capture}>Capturer</Button>
+            <Button type="button" leftSection={<Camera className="h-4 w-4" />} onClick={capture} loading={processing}>Capturer</Button>
           ) : (
             <Button type="button" leftSection={<Video className="h-4 w-4" />} onClick={() => void startCamera(deviceId)}>Démarrer la caméra</Button>
           )}

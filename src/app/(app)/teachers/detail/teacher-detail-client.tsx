@@ -38,6 +38,7 @@ import { TeacherAvailabilitySection } from "@/components/staff/teacher-availabil
 import { TeacherClassesSection } from "@/components/staff/teacher-classes";
 import { TeacherSubjectsSection } from "@/components/staff/teacher-subjects";
 import { TeacherLevelsSection } from "@/components/staff/teacher-levels";
+import { TeacherClassSubjectsAssignment } from "@/components/staff/teacher-class-subjects";
 
 const DAY_LABEL: Record<string, string> = {
   LUNDI: "Lundi",
@@ -342,6 +343,17 @@ export default function TeacherDetailPage() {
                 </CardBody>
               </Card>
             </div>
+
+            {canWrite && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Affecter à des classes et matières</CardTitle>
+                </CardHeader>
+                <CardBody>
+                  <TeacherClassSubjectsAssignment teacherId={id} />
+                </CardBody>
+              </Card>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>

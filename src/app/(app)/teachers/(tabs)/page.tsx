@@ -18,7 +18,9 @@ import {
   updateTeacher,
 } from "@/lib/api/staff";
 import { listCardTemplates } from "@/lib/api/student-card";
-import { getCurrentAcademicYear, listClasses, listLevels, listSubjects } from "@/lib/api/academics";
+import { getCurrentAcademicYear, getScheduleByTeacher, listClasses, listLevels, listSubjects } from "@/lib/api/academics";
+import { getSchoolProfile } from "@/lib/api/platform";
+import { printList } from "@/lib/print-list";
 import type { CreateTeacherInput, Teacher } from "@/lib/types/staff";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -154,6 +156,58 @@ export default function TeachersPage() {
       );
     });
   }, [q.data, search, activeFilter]);
+
+  const [printingList, setPrintingList] = useState(false);
+
+  /** Charge horaire hebdomadaire (§10.2 cahier des charges) : calculée depuis les créneaux RÉELS de
+   * l'emploi du temps de l'enseignant (jamais inventée) — dédupliquée par créneau EXACT (jour + heure
+   * de début + heure de fin) avant de sommer les durées, pour ne jamais compter deux fois le même
+   * créneau si l'emploi du temps contient une entrée en double (ex. erreur de saisie). L'emploi du
+   * temps étant hebdomadaire récurrent (pas de date), la seule période de référence sensée est "par
+   * semaine" — affichée explicitement avec le résultat.
+   */
+  function weeklyMinutes(slots: { day: string; startTime: string; endTime: string }[]): number {
+    const seen = new Set<string>();
+    let total = 0;
+    for (const s of slots) {
+      const key = `${s.day}|${s.startTime}|${s.endTime}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const [sh, sm] = s.startTime.split(":").map(Number);
+      const [eh, em] = s.endTime.split(":").map(Number);
+      total += (eh * 60 + em) - (sh * 60 + sm);
+    }
+    return Math.max(0, total);
+  }
+
+  /** §10.2 cahier des charges : liste imprimable avec charge horaire hebdomadaire — respecte les
+   * filtres déjà appliqués à l'écran (recherche, statut actif/inactif). */
+  async function handlePrintList() {
+    setPrintingList(true);
+    try {
+      const [profile, schedules] = await Promise.all([
+        getSchoolProfile().catch(() => null),
+        Promise.all(teachers.map((t) => getScheduleByTeacher(t.id).catch(() => []))),
+      ]);
+      printList({
+        profile,
+        title: "Liste des enseignants",
+        subtitle: "Charge horaire hebdomadaire calculée depuis l'emploi du temps",
+        columns: ["Matricule", "Nom et prénoms", "Spécialisation", "Statut", "Heures/semaine"],
+        rows: teachers.map((t, i) => [
+          t.staffNumber ?? "—",
+          `${t.firstName} ${t.lastName}`,
+          t.specialization ?? "—",
+          t.active ? "Actif" : "Inactif",
+          `${(weeklyMinutes(schedules[i]) / 60).toFixed(1)} h`,
+        ]),
+      });
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPrintingList(false);
+    }
+  }
 
   async function handleCreate(input: CreateTeacherInput): Promise<Teacher> {
     const teacher = await createTeacher(input);
@@ -294,10 +348,16 @@ export default function TeachersPage() {
         selectable
         onSelectionChange={setSelected}
         toolbar={
-          <Button size="sm" disabled={selected.length === 0} loading={buildingSheet}
-            leftSection={<Printer className="h-4 w-4" />} onClick={() => buildBadgeSheet(selected)}>
-            Imprimer planche {selected.length > 0 ? `(${selected.length})` : ""}
-          </Button>
+          <>
+            <Button size="sm" variant="outline" loading={printingList}
+              leftSection={<Printer className="h-4 w-4" />} onClick={handlePrintList}>
+              Imprimer la liste
+            </Button>
+            <Button size="sm" disabled={selected.length === 0} loading={buildingSheet}
+              leftSection={<Printer className="h-4 w-4" />} onClick={() => buildBadgeSheet(selected)}>
+              Imprimer planche {selected.length > 0 ? `(${selected.length})` : ""}
+            </Button>
+          </>
         }
       />
 

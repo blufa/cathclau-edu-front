@@ -173,7 +173,7 @@ function FeeGroup({ title, fees, classLabel, routeLabel, canUpdate, canDelete, o
         {title} <span className="font-normal text-gray-400">({fees.length})</span>
       </h2>
       <Table>
-        <THead><tr><TH>Libellé</TH><TH>Classe / Ligne</TH><TH>Montant</TH><TH>Année</TH><TH className="text-right">Actions</TH></tr></THead>
+        <THead><tr><TH>Libellé</TH><TH>Classe / Ligne</TH><TH>Montant</TH><TH>Année</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
         <TBody>
           {slice.map((f) => (
             <TR key={f.id}>
@@ -187,6 +187,11 @@ function FeeGroup({ title, fees, classLabel, routeLabel, canUpdate, canDelete, o
               </TD>
               <TD className="font-medium text-gray-900">{formatGNF(f.amount)}</TD>
               <TD>{f.academicYear ?? "—"}</TD>
+              <TD>
+                {f.mandatory
+                  ? <span className="text-xs text-gray-400">Obligatoire</span>
+                  : <span className="text-xs font-medium text-amber-600">Facultatif</span>}
+              </TD>
               <TD className="text-right">
                 <div className="flex justify-end gap-1">
                   <Button size="sm" variant="ghost" onClick={() => onInstallments(f)}>Échéances</Button>
@@ -215,6 +220,7 @@ const feeSchema = z.object({
   amount: z.number(),
   academicYear: z.string(),
   label: z.string(),
+  mandatory: z.boolean(),
 }).superRefine((v, ctx) => {
   if ((v.type === "OTHER" || v.type === "PLATFORM") && !v.label.trim()) {
     ctx.addIssue({ code: "custom", path: ["label"], message: "Nom du frais requis (ex. Tenue scolaire, Frais plateforme)" });
@@ -249,6 +255,7 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
       amount: initial ? Number(initial.amount) : 0,
       academicYear: initial?.academicYear ?? defaultYear,
       label: initial?.label ?? "",
+      mandatory: initial ? initial.mandatory : true,
     },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
@@ -375,6 +382,7 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
           classId: isTransport ? null : Number(values.classId),
           routeId: isTransport ? Number(values.routeId) : null,
           type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label,
+          mandatory: values.mandatory,
         });
         onSaved();
         return;
@@ -389,7 +397,7 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
         // du montant annuel à l'inscription) ; la facturation réelle reste au niveau de la tranche.
         const avgMonthly = totalMonths > 0 ? totalAmount / totalMonths : 0;
         const fees = await Promise.all(feeTargets.map((t) =>
-          createFee({ tenantId, classId: t.classId, routeId: t.routeId, type: values.type as FeeType, amount: avgMonthly, academicYear: values.academicYear, label })));
+          createFee({ tenantId, classId: t.classId, routeId: t.routeId, type: values.type as FeeType, amount: avgMonthly, academicYear: values.academicYear, label, mandatory: values.mandatory })));
 
         const trancheRecaps: TrancheRecap[] = [];
         for (const [i, t] of tranches.entries()) {
@@ -404,7 +412,7 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
       }
       // Un même frais (type + montant) appliqué à plusieurs classes, ou à une ligne de transport.
       await Promise.all(feeTargets.map((t) =>
-        createFee({ tenantId, classId: t.classId, routeId: t.routeId, type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label })));
+        createFee({ tenantId, classId: t.classId, routeId: t.routeId, type: values.type as FeeType, amount: values.amount, academicYear: values.academicYear, label, mandatory: values.mandatory })));
       onSaved();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -629,6 +637,19 @@ function FeeForm({ tenantId, initial, classes, levels, routes, defaultYear, onCa
       <Field>
         <Label>Année scolaire</Label>
         <Input value={v.academicYear} onChange={(e) => setValue("academicYear", e.target.value)} />
+      </Field>
+      <Field>
+        <Checkbox
+          label="Obligatoire (facturé automatiquement à l'inscription)"
+          checked={v.mandatory}
+          onChange={(e) => setValue("mandatory", e.target.checked)}
+        />
+        {!v.mandatory && (
+          <p className="mt-1 text-xs text-gray-400">
+            Facultatif : jamais facturé automatiquement — le comptable l&apos;ajoutera explicitement
+            sur la fiche de l&apos;élève concerné s&apos;il le souhaite (ex. un paquet de RAM).
+          </p>
+        )}
       </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>

@@ -116,11 +116,11 @@ export function SalaryAdvancePanel() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <p className="text-sm text-gray-500">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-w-0 text-sm text-gray-500">
             Avance déduite automatiquement de la prochaine fiche de paie du salarié, jusqu&apos;à épuisement du solde
           </p>
-          <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Accorder une avance</Button>
+          <Button onClick={openCreate} className="shrink-0 sm:ml-3"><Plus className="mr-1.5 h-4 w-4" /> Accorder une avance</Button>
         </div>
         {q.loading ? (
           <div className="flex justify-center py-12"><Spinner /></div>

@@ -24,6 +24,8 @@ import type {
   StaffChildBenefitPolicyInput,
   StaffCoverage,
   StudentCoverage,
+  StudentCredit,
+  StudentCreditUsage,
 } from "@/lib/types/billing";
 
 // ── School fees ──────────────────────────────────────────────────────────
@@ -205,6 +207,20 @@ export function listClassTransferRefunds(studentId: number): Promise<ClassTransf
 }
 export function markClassTransferRefundRefunded(id: number): Promise<ClassTransferRefund> {
   return api.patch<ClassTransferRefund>(`/billing/class-transfer-refunds/${id}/rembourse`);
+}
+
+// ── Crédit disponible de l'élève (§4 cahier des charges, trop-perçu) ────────────────────────
+export function getStudentCreditBalance(studentId: number): Promise<{ availableBalance: string }> {
+  return api.get<{ availableBalance: string }>(`/billing/student-credits/student/${studentId}/balance`);
+}
+export function listStudentCredits(studentId: number): Promise<StudentCredit[]> {
+  return api.get<StudentCredit[]>(`/billing/student-credits/student/${studentId}`);
+}
+export function listStudentCreditUsages(studentId: number): Promise<StudentCreditUsage[]> {
+  return api.get<StudentCreditUsage[]>(`/billing/student-credits/student/${studentId}/usages`);
+}
+export function applyStudentCreditToInvoice(studentId: number, invoiceId: number, amount: number): Promise<{ appliedAmount: string }> {
+  return api.post<{ appliedAmount: string }>(`/billing/student-credits/student/${studentId}/apply`, { invoiceId, amount });
 }
 
 // ── Types d'exonération pré-configurés (catalogue réutilisable) ──────────────
