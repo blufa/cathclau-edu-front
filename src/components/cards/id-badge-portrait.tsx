@@ -83,13 +83,12 @@ export function IdBadgePortrait({
     <div className="space-y-3">
       <div ref={badgeRef}>
         <div
-          className={`badge-printable relative mx-auto flex flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-xl print:rounded-[3mm] print:border print:shadow-none ${CARD_SCREEN_CLASS}`}
+          className={`badge-printable relative mx-auto flex flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-xl print:rounded-[3mm] print:border print:shadow-none print:pt-[2mm] ${CARD_SCREEN_CLASS}`}
         >
-          {/* Répartit l'espace restant (carte à hauteur fixe, contenu plus court qu'elle) à parts
-              égales entre le haut et le bas (même poids flex-1 que le second espaceur avant le pied
-              de carte, ci-dessous) — une seule marge concentrée juste avant le pied de carte donnait
-              l'impression d'une grande marge basse vide alors que le haut restait collé au bord. */}
-          <div className="flex-1" />
+          {/* Marge haute FIXE (pas un espaceur flex-1) — un espaceur flex-1 ne donnait qu'un restant
+              d'espace quasi nul une fois le contenu réel posé (budget déjà très serré), donc restait
+              visuellement collé au bord malgré le partage avec l'espaceur bas ci-dessous. Cette marge
+              est prélevée directement sur le budget de 85,6mm, garantie quel que soit le contenu. */}
 
           {/* En-tête coloré : fente de dragonne, logo, nom d'établissement + année scolaire. Le padding
               bas (pb-16) est la seule zone colorée que la photo est autorisée à chevaucher (sa marge
@@ -133,10 +132,10 @@ export function IdBadgePortrait({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={photoUrl} alt="photo"
-                className="h-[160px] w-[128px] rounded-2xl border-4 border-white bg-slate-100 object-cover shadow-lg print:h-[24mm] print:w-[19mm] print:rounded-[2.8mm] print:border-[0.6mm]"
+                className="h-[160px] w-[128px] rounded-2xl border-4 border-white bg-slate-100 object-cover shadow-lg print:h-[22mm] print:w-[17.5mm] print:rounded-[2.8mm] print:border-[0.6mm]"
               />
             ) : (
-              <div className="flex h-[160px] w-[128px] items-center justify-center rounded-2xl border-4 border-white bg-slate-100 text-3xl font-semibold text-slate-400 shadow-lg print:h-[24mm] print:w-[19mm] print:rounded-[2.8mm] print:border-[0.6mm] print:text-[5mm]">
+              <div className="flex h-[160px] w-[128px] items-center justify-center rounded-2xl border-4 border-white bg-slate-100 text-3xl font-semibold text-slate-400 shadow-lg print:h-[22mm] print:w-[17.5mm] print:rounded-[2.8mm] print:border-[0.6mm] print:text-[5mm]">
                 {initials}
               </div>
             )}
