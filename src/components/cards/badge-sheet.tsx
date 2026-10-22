@@ -57,7 +57,7 @@ export function BadgeSheet({ badges, onPrinted }: { badges: IdBadgeProps[]; onPr
                 sur une A4 ne survit pas à cette réservation si cette légende reste imprimée aussi.
                 Reste visible à l'écran (utile pendant la préparation). */}
             <p className="mb-3 text-center text-[10px] uppercase tracking-wide text-slate-400 print:hidden">
-              {pageBadges.length} badge{pageBadges.length > 1 ? "s" : ""} · 57 × 85,6 mm · Planche {pageIndex + 1}/{pages.length}
+              {pageBadges.length} badge{pageBadges.length > 1 ? "s" : ""} · 58 × 85,6 mm · Planche {pageIndex + 1}/{pages.length}
               {" · "}Imprimer à 100 % · sans marge · coins arrondis r = 3 mm
             </p>
             {/* Marges/espacements volontairement serrés en impression (voir printBadgeSheet, page sans
@@ -65,8 +65,10 @@ export function BadgeSheet({ badges, onPrinted }: { badges: IdBadgeProps[]; onPr
                 IdBadgePortrait) tiennent très largement sur une page A4 complète. Aucune ligne de
                 coupure à l'impression (print:border-transparent, demande explicite de l'école — papier
                 photo/bristol prédécoupé) : le pointillé visible ci-dessous ne sert qu'à l'écran, pendant
-                la préparation. */}
-            <div className="grid grid-cols-3 gap-[4mm] print:gap-[1.5mm]">
+                la préparation. Aucun espace entre les cartes à l'impression (print:gap-0, demande
+                explicite de l'école) : cet espace est entièrement repris par la largeur de chaque carte
+                (voir CARD_SCREEN_CLASS dans IdBadgePortrait, 57→58mm). */}
+            <div className="grid grid-cols-3 gap-[4mm] print:gap-0">
               {pageBadges.map((props, i) => (
                 <div key={i} className="rounded-[4mm] border border-dashed border-slate-300 p-[2mm] print:rounded-none print:border-transparent print:p-0">
                   <IdBadgePortrait {...props} printable={false} />
