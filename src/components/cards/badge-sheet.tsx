@@ -18,11 +18,13 @@ function chunk<T>(items: T[], size: number): T[][] {
 /**
  * Planche de badges (57 × 85,6 mm, portrait — légèrement élargi par rapport au CR80 strict de
  * 53,98mm pour mieux occuper la pochette plastique réelle de l'école, §17 cahier des charges) prête
- * pour impression sur papier bristol — 9 par
- * feuille A4 en grille 3×3 avec repères de découpe en pointillés, comme "Badges scolaires
- * professionnels.pdf" fourni par l'école. Au-delà de 9 badges, plusieurs feuilles sont générées (saut
- * de page entre chacune). Toujours en portrait, quelle que soit l'orientation du modèle de chaque type
- * de badge — une planche à découper mélangeant les orientations n'aurait pas de sens physiquement.
+ * pour impression sur papier photo/bristol — 9 par feuille A4 en grille 3×3, SANS marge de page ni
+ * ligne de coupure à l'impression (demande explicite de l'école : le papier photo/bristol est
+ * prédécoupé ou découpé à la main, un repère imprimé ne sert à rien et mange de la place) — repère en
+ * pointillés visible seulement à l'écran, pendant la préparation. Au-delà de 9 badges, plusieurs
+ * feuilles sont générées (saut de page entre chacune). Toujours en portrait, quelle que soit
+ * l'orientation du modèle de chaque type de badge — une planche à découper mélangeant les orientations
+ * n'aurait pas de sens physiquement.
  */
 export function BadgeSheet({ badges, onPrinted }: { badges: IdBadgeProps[]; onPrinted?: () => void }) {
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -56,17 +58,17 @@ export function BadgeSheet({ badges, onPrinted }: { badges: IdBadgeProps[]; onPr
                 Reste visible à l'écran (utile pendant la préparation). */}
             <p className="mb-3 text-center text-[10px] uppercase tracking-wide text-slate-400 print:hidden">
               {pageBadges.length} badge{pageBadges.length > 1 ? "s" : ""} · 57 × 85,6 mm · Planche {pageIndex + 1}/{pages.length}
-              {" · "}Imprimer à 100 % · couper sur les traits · coins arrondis r = 3 mm
+              {" · "}Imprimer à 100 % · sans marge · coins arrondis r = 3 mm
             </p>
-            {/* Marges/espacements volontairement serrés en impression (voir printBadgeSheet, marge de
-                page à 5mm — valeur physique sûre, pas poussée plus bas) — 3 rangées de cartes CR80
-                (85,6mm chacune, un peu plus si un champ déborde sur 2 lignes) tiennent sur une page A4 ;
-                tout padding superflu ici fait déborder la 3e rangée sur une deuxième page. Si ça déborde
-                encore malgré ça, décoche "En-têtes et pieds de page" dans la boîte de dialogue
-                d'impression (voir printBadgeSheet). */}
+            {/* Marges/espacements volontairement serrés en impression (voir printBadgeSheet, page sans
+                marge désormais) — 3 rangées de cartes CR80 à hauteur RÉELLEMENT fixée à 85,6mm (voir
+                IdBadgePortrait) tiennent très largement sur une page A4 complète. Aucune ligne de
+                coupure à l'impression (print:border-transparent, demande explicite de l'école — papier
+                photo/bristol prédécoupé) : le pointillé visible ci-dessous ne sert qu'à l'écran, pendant
+                la préparation. */}
             <div className="grid grid-cols-3 gap-[4mm] print:gap-[1.5mm]">
               {pageBadges.map((props, i) => (
-                <div key={i} className="rounded-[4mm] border border-dashed border-slate-300 p-[2mm] print:rounded-[3mm] print:border-slate-400 print:p-[0.3mm]">
+                <div key={i} className="rounded-[4mm] border border-dashed border-slate-300 p-[2mm] print:rounded-none print:border-transparent print:p-0">
                   <IdBadgePortrait {...props} printable={false} />
                 </div>
               ))}

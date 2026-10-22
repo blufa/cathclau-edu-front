@@ -59,7 +59,10 @@ export interface IdBadgeProps {
  * Reproduit la maquette fournie par l'école (logo + nom + slogan en en-tête, photo + informations au
  * centre, QR + hiérarchie administrative en pied de carte), avec une identité colorée par type de
  * badge. */
-const CARD_SCREEN_CLASS = "w-[380px] min-h-[240px] print:w-[85.6mm] print:min-h-[57mm]";
+/* `print:min-h-0` neutralise le `min-h-[240px]` (écran, ~63,5mm) qui sinon reste actif à l'impression
+ * et plancherait la hauteur réelle au-dessus des 57mm visés (même bug que `IdBadgePortrait`, voir son
+ * commentaire). `print:h-[57mm]` (hauteur fixe, pas min) + `print:overflow-hidden` évite tout dépassement. */
+const CARD_SCREEN_CLASS = "w-[380px] min-h-[240px] print:w-[85.6mm] print:h-[57mm] print:min-h-0 print:overflow-hidden";
 
 /** Ajoute une transparence (alpha en hexadécimal 2 chiffres) à une couleur hex #RRGGBB — pour des
  * teintes de fond douces dérivées de la couleur d'accent, sans dépendance à une lib de couleurs. */
