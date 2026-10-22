@@ -85,6 +85,12 @@ export function IdBadgePortrait({
         <div
           className={`badge-printable relative mx-auto flex flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-xl print:rounded-[3mm] print:border print:shadow-none ${CARD_SCREEN_CLASS}`}
         >
+          {/* Répartit l'espace restant (carte à hauteur fixe, contenu plus court qu'elle) à parts
+              égales entre le haut et le bas (même poids flex-1 que le second espaceur avant le pied
+              de carte, ci-dessous) — une seule marge concentrée juste avant le pied de carte donnait
+              l'impression d'une grande marge basse vide alors que le haut restait collé au bord. */}
+          <div className="flex-1" />
+
           {/* En-tête coloré : fente de dragonne, logo, nom d'établissement + année scolaire. Le padding
               bas (pb-16) est la seule zone colorée que la photo est autorisée à chevaucher (sa marge
               négative ci-dessous est calée sur cette même valeur) — jamais la ligne logo/nom, pour ne
