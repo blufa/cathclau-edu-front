@@ -265,3 +265,19 @@ export function listSchoolEventTouchedTeachers(id: number): Promise<SchoolEventT
 export function setSchoolEventCreditedTeachers(id: number, teacherIds: number[]): Promise<void> {
   return api.put<void>(`/academics/school-events/${id}/enseignants-credites`, { teacherIds });
 }
+
+// ── Grille horaire du Primaire/Maternelle (§3.2) — configurable, 08h-18h/60min si non réglée ────
+export interface PrimaryTimetableSettings {
+  id: number | null; tenantId: number;
+  gridStartTime: string; gridEndTime: string; bandMinutes: number;
+}
+export function getPrimaryTimetableSettings(): Promise<PrimaryTimetableSettings> {
+  return api.get<PrimaryTimetableSettings>("/academics/primary-timetable-settings");
+}
+export function updatePrimaryTimetableSettings(
+  gridStartTime: string, gridEndTime: string, bandMinutes: number,
+): Promise<PrimaryTimetableSettings> {
+  return api.put<PrimaryTimetableSettings>("/academics/primary-timetable-settings", {
+    gridStartTime, gridEndTime, bandMinutes,
+  });
+}

@@ -49,6 +49,25 @@ export function formatMinutes(minutes: number | null | undefined): string {
 }
 
 /**
+ * Durée de la dernière session en minutes, dérivée de lastLoginAt/lastActivityAt (§14 cahier des
+ * charges) — lastActivityAt est throttlé à la minute et ne bouge plus une fois la session terminée
+ * (fermeture de l'onglet, jamais de /auth/logout explicite dans la plupart des cas), donc l'écart
+ * entre les deux approxime la durée réellement utilisée. Retourne null (jamais une valeur inventée)
+ * si l'une des deux dates manque ou si lastActivityAt précède lastLoginAt (ex. reconnexion juste
+ * avant que le filtre d'activité n'ait eu le temps de mettre à jour l'ancienne session).
+ */
+export function sessionDurationMinutes(
+  lastLoginAt: string | null | undefined,
+  lastActivityAt: string | null | undefined,
+): number | null {
+  if (!lastLoginAt || !lastActivityAt) return null;
+  const login = new Date(lastLoginAt).getTime();
+  const activity = new Date(lastActivityAt).getTime();
+  if (Number.isNaN(login) || Number.isNaN(activity) || activity <= login) return null;
+  return Math.round((activity - login) / 60000);
+}
+
+/**
  * Affiche une classe saisie au format guinéen : un nombre seul devient « Nᵉᵐᵉ » (ème en exposant),
  * « 1 » devient « 1ʳᵉ ». Toute autre saisie (CM2, Terminale…) est laissée telle quelle.
  */

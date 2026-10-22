@@ -26,14 +26,18 @@ const DESK_CHANNELS: { value: PaymentChannel; label: string }[] = [
 /**
  * Collect a payment ("encaisser") against an invoice at the desk — cash, Orange Money or bank
  * transfer, all recorded immediately with a receipt. Online payment by the parent from home goes
- * through the Djomy portal elsewhere (not offered here). Caps the amount at the remaining balance,
- * so partial payments are supported. Reused by the invoices page and the enrollment fee-collection modal.
+ * through the Djomy portal elsewhere (not offered here). Le montant n'est plus plafonné au solde dû
+ * (§4 cahier des charges, trop-perçu) : un montant saisi au-delà du solde est accepté — le surplus
+ * est automatiquement conservé comme crédit disponible de l'élève côté backend
+ * (InvoiceService#applyPayment), réutilisable sur une facture future. Reused by the invoices page and
+ * the enrollment fee-collection modal.
  */
 export function PayInvoiceForm({ invoice, tenantId, onDone }: { invoice: Invoice; tenantId: number; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
   const remaining = Number(invoice.remainingBalance ?? invoice.totalAmount);
   const [channel, setChannel] = useState<PaymentChannel>("CASH");
   const [amount, setAmount] = useState(remaining);
+  const surplus = Math.max(0, amount - remaining);
   // Tous les canaux proposés ici sont guichet (voir DESK_CHANNELS) : jamais de paiement en ligne sur
   // ce formulaire, la barrière caisse s'applique donc sans condition de canal.
   const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
@@ -72,8 +76,14 @@ export function PayInvoiceForm({ invoice, tenantId, onDone }: { invoice: Invoice
       </Field>
       <Field>
         <Label>Montant</Label>
-        <MoneyInput value={amount} onValueChange={(n) => setAmount(Math.min(n, remaining))} />
+        <MoneyInput value={amount} onValueChange={setAmount} />
       </Field>
+      {surplus > 0 && (
+        <p className="rounded-md bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800">
+          Facture soldée à {formatGNF(remaining)} — le surplus de {formatGNF(surplus)} sera conservé
+          comme crédit disponible sur le compte de l&apos;élève, réutilisable sur une prochaine facture.
+        </p>
+      )}
       {!sessionLoading && !sessionOpen ? (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
           Caisse fermée : ouvrez votre caisse (menu « Session de caisse ») avant d&apos;encaisser.

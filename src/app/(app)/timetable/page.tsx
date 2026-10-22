@@ -25,6 +25,8 @@ import {
   listSubjects,
   moveScheduleForWeek,
   proposeTimetable,
+  getPrimaryTimetableSettings,
+  updatePrimaryTimetableSettings,
   type TimetableProposal,
 } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
@@ -33,6 +35,7 @@ import { EVENT_TYPE_LABEL, type AcademicEvent } from "@/lib/types/calendar";
 import { SCHOOL_CYCLE_LABEL, type CreateScheduleInput, type EffectiveScheduleSlot, type EmploiDuTemps, type JourSemaine, type MoveScheduleForWeekInput, type SchoolCycle } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Field, Input, Label } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Modal } from "@/components/ui/modal";
@@ -58,6 +61,10 @@ const DAYS: { key: JourSemaine; label: string }[] = [
 ];
 
 const hhmm = (t: string) => t?.slice(0, 5) ?? "";
+const timeToMinutes = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
 
 /** Petit sélecteur à deux options (remplace Mantine SegmentedControl). */
 function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
@@ -103,6 +110,15 @@ export default function TimetablePage() {
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
   const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
+  // Grille primaire personnalisable (§3.2) : 08h-18h/60min si l'école n'a rien configuré — le
+  // secondaire garde sa cadence fixe de 2h, hors périmètre de ce réglage.
+  const primaryGridQuery = useCachedQuery(
+    tenantId ? `primary-timetable-settings:${tenantId}` : null, getPrimaryTimetableSettings, [tenantId],
+  );
+  const primaryGridStart = primaryGridQuery.data?.gridStartTime?.slice(0, 5) ?? "08:00";
+  const primaryGridEnd = primaryGridQuery.data?.gridEndTime?.slice(0, 5) ?? "18:00";
+  const primaryBandMinutes = primaryGridQuery.data?.bandMinutes ?? 60;
+  const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
 
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
@@ -261,7 +277,10 @@ export default function TimetablePage() {
       const singleRoom = allRoomIds.size === 1 ? roomLabel.get([...allRoomIds][0]) ?? null : null;
       page = {
         heading, kicker: "EMPLOI DU TEMPS", badgeLabel: "SALLE", badgeValue: singleRoom ?? "—",
-        slotsByDayLabel, bandMinutes: isSecondaryCycle(effectiveClassCycle) ? 120 : 60,
+        slotsByDayLabel, bandMinutes: isSecondaryCycle(effectiveClassCycle) ? 120 : primaryBandMinutes,
+        ...(isSecondaryCycle(effectiveClassCycle)
+          ? {}
+          : { gridStartMinutes: timeToMinutes(primaryGridStart), gridEndMinutes: timeToMinutes(primaryGridEnd) }),
       };
     } else {
       const heading = effectiveTeacherId ? (teacherName.get(effectiveTeacherId) ?? `#${effectiveTeacherId}`) : "";
@@ -303,7 +322,10 @@ export default function TimetablePage() {
         const singleRoom = roomIds.size === 1 ? roomLabel.get([...roomIds][0]) ?? null : null;
         return {
           heading: c.label, kicker: "EMPLOI DU TEMPS", badgeLabel: "SALLE", badgeValue: singleRoom ?? "—",
-          slotsByDayLabel, bandMinutes: isSecondaryCycle(cycle) ? 120 : 60,
+          slotsByDayLabel, bandMinutes: isSecondaryCycle(cycle) ? 120 : primaryBandMinutes,
+          ...(isSecondaryCycle(cycle)
+            ? {}
+            : { gridStartMinutes: timeToMinutes(primaryGridStart), gridEndMinutes: timeToMinutes(primaryGridEnd) }),
         };
       }));
       const html = buildTimetableDocumentHtml(profileQuery.data, pages, yearLabel);
@@ -349,14 +371,46 @@ export default function TimetablePage() {
     refetchSchedules();
   }
 
+  // Grille primaire personnalisable (§3.2) : formulaire local initialisé depuis les valeurs
+  // résolues (réglées ou par défaut) à l'ouverture de la modale, pas à chaque rendu.
+  const [gridForm, setGridForm] = useState<{ start: string; end: string; band: number } | null>(null);
+  const [savingGrid, setSavingGrid] = useState(false);
+  function openGridSettings() {
+    setGridForm({ start: primaryGridStart, end: primaryGridEnd, band: primaryBandMinutes });
+    setGridSettingsOpen(true);
+  }
+  async function saveGridSettings() {
+    if (!gridForm) return;
+    if (gridForm.start >= gridForm.end) {
+      notifyError(new Error("L'heure de début doit être antérieure à l'heure de fin."));
+      return;
+    }
+    setSavingGrid(true);
+    try {
+      await updatePrimaryTimetableSettings(gridForm.start, gridForm.end, gridForm.band);
+      notifySuccess("Grille horaire du Primaire/Maternelle enregistrée.");
+      primaryGridQuery.refetch();
+      setGridSettingsOpen(false);
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSavingGrid(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Emploi du temps</h1>
           <p className="text-sm text-gray-500">Planning hebdomadaire (détection de conflits)</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {canWrite && (
+            <Button variant="outline" onClick={openGridSettings}>
+              Grille Primaire/Maternelle
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={printTimetable}
@@ -479,7 +533,9 @@ export default function TimetablePage() {
           classSubjects={classSubjects}
           subjects={subjects}
           teacherName={teacherName}
-          slotBandMinutes={isSecondaryCycle(effectiveClassCycle) ? 120 : 60}
+          slotBandMinutes={isSecondaryCycle(effectiveClassCycle) ? 120 : primaryBandMinutes}
+          gridStartTime={isSecondaryCycle(effectiveClassCycle) ? undefined : primaryGridStart}
+          gridEndTime={isSecondaryCycle(effectiveClassCycle) ? undefined : primaryGridEnd}
           canWrite={canWrite}
           onChanged={() => slotsQuery.refetch()}
         />
@@ -622,6 +678,40 @@ export default function TimetablePage() {
           onClose={() => setGenOpen(false)}
           onApplied={() => { setGenOpen(false); refetchSchedules(); }}
         />
+      </Modal>
+
+      <Modal open={gridSettingsOpen} onClose={() => setGridSettingsOpen(false)} title="Grille horaire du Primaire/Maternelle">
+        {gridForm && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              Plage et durée des créneaux affichés sur la grille et à l&apos;impression pour les classes
+              du Primaire/Maternelle (le Secondaire garde sa grille fixe par bandes de 2h, hors de ce
+              réglage). Les emplois du temps déjà saisis sont conservés tels quels.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field>
+                <Label>Heure de début</Label>
+                <Input type="time" value={gridForm.start} onChange={(e) => setGridForm({ ...gridForm, start: e.target.value })} />
+              </Field>
+              <Field>
+                <Label>Heure de fin</Label>
+                <Input type="time" value={gridForm.end} onChange={(e) => setGridForm({ ...gridForm, end: e.target.value })} />
+              </Field>
+            </div>
+            <Field>
+              <Label>Durée d&apos;un créneau (minutes)</Label>
+              <Input
+                type="number" min={15} max={240} step={5}
+                value={gridForm.band}
+                onChange={(e) => setGridForm({ ...gridForm, band: Number(e.target.value) || 60 })}
+              />
+            </Field>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={() => setGridSettingsOpen(false)}>Annuler</Button>
+              <Button onClick={saveGridSettings} loading={savingGrid}>Enregistrer</Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

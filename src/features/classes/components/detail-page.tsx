@@ -119,12 +119,19 @@ export default function ClassDetailPage() {
               {capacity != null && <span className="text-base text-gray-400"> / {capacity}</span>}
             </p>
             {capacity != null && (
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className={ratio >= 100 ? "h-full bg-error-500" : "h-full bg-brand-500"}
-                  style={{ width: `${ratio}%` }}
-                />
-              </div>
+              <>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className={ratio >= 100 ? "h-full bg-error-500" : ratio >= 90 ? "h-full bg-amber-500" : "h-full bg-brand-500"}
+                    style={{ width: `${ratio}%` }}
+                  />
+                </div>
+                {ratio >= 100 ? (
+                  <p className="mt-1 text-xs font-medium text-error-600">Capacité atteinte — tout dépassement devra être forcé explicitement.</p>
+                ) : ratio >= 90 ? (
+                  <p className="mt-1 text-xs font-medium text-amber-600">Capacité presque atteinte.</p>
+                ) : null}
+              </>
             )}
           </CardBody>
         </Card>

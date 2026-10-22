@@ -53,12 +53,16 @@ export interface IdBadgeProps {
   orientation?: CardOrientation | null;
 }
 
-/** Taille réelle d'une carte CR80 tenue en PAYSAGE (horizontal) — 85,6 × 53,98 mm, appliquée aussi bien
- * à l'écran qu'à l'impression pour que l'aperçu corresponde exactement au badge imprimé/plastifié.
+/** Taille imprimée en PAYSAGE (horizontal) — hauteur élargie par rapport au CR80 strict (53,98mm) à
+ * la demande de l'école, pour mieux occuper la largeur de sa pochette plastique réelle (§17 cahier
+ * des charges) ; longueur inchangée (85,6mm). Valeur unique ici : à réajuster ici seulement si besoin.
  * Reproduit la maquette fournie par l'école (logo + nom + slogan en en-tête, photo + informations au
  * centre, QR + hiérarchie administrative en pied de carte), avec une identité colorée par type de
  * badge. */
-const CARD_SCREEN_CLASS = "w-[380px] min-h-[240px] print:w-[85.6mm] print:min-h-[53.98mm]";
+/* `print:min-h-0` neutralise le `min-h-[240px]` (écran, ~63,5mm) qui sinon reste actif à l'impression
+ * et plancherait la hauteur réelle au-dessus des 57mm visés (même bug que `IdBadgePortrait`, voir son
+ * commentaire). `print:h-[57mm]` (hauteur fixe, pas min) + `print:overflow-hidden` évite tout dépassement. */
+const CARD_SCREEN_CLASS = "w-[380px] min-h-[240px] print:w-[85.6mm] print:h-[57mm] print:min-h-0 print:overflow-hidden";
 
 /** Ajoute une transparence (alpha en hexadécimal 2 chiffres) à une couleur hex #RRGGBB — pour des
  * teintes de fond douces dérivées de la couleur d'accent, sans dépendance à une lib de couleurs. */
@@ -72,8 +76,8 @@ function withAlpha(hex: string, alpha: string): string | undefined {
  * « DPE/DCE ». */
 function FieldRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight print:text-[8.5px]">
-      <span className="w-16 shrink-0 text-slate-400 print:w-11">{label}</span>
+    <div className="flex items-baseline gap-1.5 text-[11.5px] leading-tight print:text-[9.5px]">
+      <span className="w-16 shrink-0 text-slate-600 print:w-11">{label}</span>
       <span className={mono ? "truncate font-mono font-medium text-slate-700" : "truncate font-medium text-slate-700"}>{value}</span>
     </div>
   );
@@ -143,7 +147,7 @@ function IdBadgeLandscape({
                     {branding?.schoolName ?? "Établissement"}
                   </p>
                   {branding?.slogan && (
-                    <p className="truncate text-[8.5px] italic leading-tight text-slate-400 print:text-[6px]">{branding.slogan}</p>
+                    <p className="truncate text-[8.5px] italic leading-tight text-slate-600 print:text-[7px]">{branding.slogan}</p>
                   )}
                   <span
                     className="mt-1 inline-block rounded-full px-2 py-[1px] text-[9px] font-medium text-white print:mt-0.5 print:px-1 print:text-[6.5px]"
@@ -173,7 +177,7 @@ function IdBadgeLandscape({
                     </div>
                   )}
                   {idNumber && (
-                    <p className="max-w-[80px] truncate text-center font-mono text-[9px] text-slate-400 print:max-w-14 print:text-[6px]">{idNumber}</p>
+                    <p className="max-w-[80px] truncate text-center font-mono text-[9px] text-slate-600 print:max-w-14 print:text-[7px]">{idNumber}</p>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1 pt-0.5 print:space-y-0.5">
@@ -214,7 +218,7 @@ function IdBadgeLandscape({
               {branding?.ire && <FieldRow label="IRE" value={branding.ire} />}
               {branding?.dpeLabel && <FieldRow label="DPE/DCE" value={branding.dpeLabel} />}
               {footerNote && (
-                <p className="mt-0.5 truncate text-[7.5px] font-medium italic text-slate-400 print:text-[5.5px]">{footerNote}</p>
+                <p className="mt-0.5 truncate text-[7.5px] font-medium italic text-slate-600 print:text-[7px]">{footerNote}</p>
               )}
             </div>
             <div

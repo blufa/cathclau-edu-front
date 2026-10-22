@@ -47,11 +47,23 @@ export function isExemptFromCashierGate(user: AuthUser | null): boolean {
 /** Single source of truth for "can this user see/reach this nav item or route?" — used by the
  * sidebar (useNavGating), the direct-URL guard and post-login redirect (role-access.ts), the
  * command palette (global-search.tsx) and the tab bar (route-tabs.tsx), so a role's visibility is
- * consistent everywhere rather than re-implemented per component. SUPER_ADMIN always passes. */
+ * consistent everywhere rather than re-implemented per component. SUPER_ADMIN always passes.
+ *
+ * Quand `permissions` est précisé, c'est LUI qui fait foi — `roles` n'est alors qu'une étiquette
+ * indicative (« ce rôle a normalement cette permission »), jamais un moyen de la court-circuiter.
+ * Avant ce correctif, un rôle listé suffisait à lui seul (OR), ce qui rendait inopérant l'écran
+ * "Privilèges" (révocation d'une permission précise à un admin d'école précis, ex. le fondateur sur
+ * Inscriptions/Rentrée) : la permission était bien retirée du token côté backend
+ * (voir PermissionJpaRepository#findByUserId, qui exclut déjà les révocations), mais le frontend
+ * laissait quand même passer via le simple match de rôle SCHOOL_ADMIN. Les éléments qui ne déclarent
+ * QUE `roles` (sans `permissions`) restent inchangés — c'est le cas de repli ci-dessous — tout comme
+ * le mécanisme d'octroi direct d'une permission à un rôle qui ne l'a pas par défaut (ex. secrétaire
+ * ponctuellement autorisée à encaisser) : il reste pris en compte puisque la permission effective du
+ * token l'inclut déjà. */
 export function isNavItemAllowed(user: AuthUser | null, gate: RoleGate): boolean {
   if (isSuperAdmin(user)) return true;
   if (gate.excludeRoles && hasRole(user, ...gate.excludeRoles)) return false;
   if (!gate.roles && !gate.permissions) return true;
-  return (!!gate.roles && hasRole(user, ...gate.roles))
-      || (!!gate.permissions && hasAnyPermission(user, gate.permissions));
+  if (gate.permissions) return hasAnyPermission(user, gate.permissions);
+  return !!gate.roles && hasRole(user, ...gate.roles);
 }

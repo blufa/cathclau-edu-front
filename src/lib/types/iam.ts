@@ -10,6 +10,10 @@ export interface User {
   photo: string | null;
   active: boolean;
   lastLoginAt: string | null;
+  /** Dernière requête authentifiée reçue (§14 cahier des charges) — throttlée à la minute, jamais une
+   * heure de déconnexion explicite. Permet de dériver une durée de session approximative avec
+   * lastLoginAt (voir sessionDuration dans lib/format.ts), sans jamais en inventer une. */
+  lastActivityAt: string | null;
   createdAt: string | null;
 }
 

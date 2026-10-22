@@ -132,14 +132,15 @@ export function printNode(node: HTMLElement) {
  * sont les repères de découpe), contrairement à une carte imprimée seule puis découpée à la main.
  */
 export function printBadgeSheet(node: HTMLElement) {
-  // Marge à 5mm — valeur physique sûre, la plupart des imprimantes ne garantissent rien en dessous
-  // même si certaines l'acceptent (on ne descend plus à 2,5mm juste pour gagner de la place). 3 rangées
-  // de cartes CR80 portrait (85,6mm chacune) tiennent sur une page A4 avec cette marge, voir le détail
-  // du calcul dans badge-sheet.tsx. Au-delà de cette marge CSS, la plupart des navigateurs réservent
-  // AUSSI 10-25mm en haut/bas pour leurs propres en-tête/pied de page (titre, date, numéro) — invisible
-  // depuis le CSS : si la planche déborde encore sur une 2e page malgré tout, décocher "En-têtes et
-  // pieds de page" dans la boîte de dialogue d'impression règle le problème.
-  printInMainDocument(node.outerHTML, "@page { size: A4; margin: 5mm; }");
+  // Marge à 0 (demande explicite de l'école, impression sur papier photo/bristol prédécoupé/à
+  // découpe manuelle, sans ligne de coupure visuelle à conserver — voir badge-sheet.tsx) — avec la
+  // hauteur de carte désormais réellement fixée à 85,6mm (voir IdBadgePortrait), 3 rangées (257,4mm +
+  // 2 inter-rangs de 1,5mm = 260,4mm) tiennent très largement sur les 297mm d'une page A4 complète. Au
+  // -delà de cette marge CSS, la plupart des navigateurs réservent AUSSI 10-25mm en haut/bas pour leurs
+  // propres en-tête/pied de page (titre, date, numéro) — invisible depuis le CSS : si la planche
+  // déborde encore sur une 2e page malgré tout, décocher "En-têtes et pieds de page" dans la boîte de
+  // dialogue d'impression règle le problème.
+  printInMainDocument(node.outerHTML, "@page { size: A4; margin: 0; }");
 }
 
 /**

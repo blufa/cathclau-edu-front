@@ -25,6 +25,7 @@ import {
   updateUser,
 } from "@/lib/api/iam";
 import { ApiError } from "@/lib/api/errors";
+import { formatDateTime, formatMinutes, sessionDurationMinutes } from "@/lib/format";
 import type { CreateUserInput, Role, User } from "@/lib/types/iam";
 import { PermissionMatrix } from "@/components/iam/permission-matrix";
 import { Button } from "@/components/ui/button";
@@ -131,8 +132,20 @@ export default function UsersPage() {
     {
       key: "lastLoginAt",
       header: "Dernière connexion",
-      accessor: (u) => u.lastLoginAt?.slice(0, 10) ?? "",
-      render: (u) => <span className="text-gray-500">{u.lastLoginAt?.slice(0, 10) ?? "—"}</span>,
+      accessor: (u) => u.lastLoginAt ?? "",
+      render: (u) => {
+        const duration = sessionDurationMinutes(u.lastLoginAt, u.lastActivityAt);
+        return (
+          <span className="text-gray-500">
+            {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "—"}
+            {u.lastLoginAt && (
+              <span className="ml-1 text-xs text-gray-400">
+                ({duration != null ? formatMinutes(duration) : "durée inconnue"})
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: "actions",

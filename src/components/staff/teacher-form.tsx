@@ -178,7 +178,7 @@ export function TeacherForm({ initial, submitLabel, onSubmit, onCancel, onFinish
           {initial?.id != null && (
             <Field>
               <Label>Photo (badge enseignant)</Label>
-              <FileUpload variant="image" folder="staff/photos" value={photo} onChange={onPhotoChange} />
+              <FileUpload variant="image" folder="staff/photos" value={photo} onChange={onPhotoChange} allowCapture />
             </Field>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
