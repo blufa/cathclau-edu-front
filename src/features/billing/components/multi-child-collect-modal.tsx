@@ -143,12 +143,20 @@ export function MultiChildCollectModal({
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
 
+  // Jamais plafonné au solde dû (§4 cahier des charges, trop-perçu) : un montant saisi au-delà est
+  // accepté tel quel — le surplus est automatiquement conservé comme crédit disponible de l'élève côté
+  // serveur (InvoiceService#applyPayment), exactement comme sur l'encaissement par facture unique
+  // (pay-invoice-form.tsx). Plafonner ici revenait à refuser silencieusement tout trop-perçu saisi
+  // depuis cette fiche d'encaissement groupée (bug réel signalé).
   function amountFor(row: ChildRow): number {
     const custom = customAmounts[row.invoice.id];
-    return custom != null ? Math.min(Math.max(custom, 0), remainingOf(row.invoice)) : remainingOf(row.invoice);
+    return custom != null ? Math.max(custom, 0) : remainingOf(row.invoice);
   }
   function setAmount(row: ChildRow, value: number) {
-    setCustomAmounts((prev) => ({ ...prev, [row.invoice.id]: Math.min(Math.max(value, 0), remainingOf(row.invoice)) }));
+    setCustomAmounts((prev) => ({ ...prev, [row.invoice.id]: Math.max(value, 0) }));
+  }
+  function surplusFor(row: ChildRow): number {
+    return Math.max(0, amountFor(row) - remainingOf(row.invoice));
   }
   function toggleMonth(row: ChildRow, month: string) {
     const current = monthSelections[row.invoice.id] ?? row.coveredMonths;
@@ -273,6 +281,7 @@ export function MultiChildCollectModal({
                         const isChecked = selected.includes(row.invoice.id);
                         const checkedSubMonths = monthSelections[row.invoice.id] ?? row.coveredMonths;
                         const partial = isChecked && amountFor(row) < remainingOf(row.invoice);
+                        const surplus = isChecked ? surplusFor(row) : 0;
                         return (
                           <div key={row.invoice.id} className="rounded-lg px-2 py-1.5 hover:bg-white">
                             <label className="flex cursor-pointer items-center justify-between gap-2">
@@ -285,6 +294,11 @@ export function MultiChildCollectModal({
                                     {row.invoice.discountAmount != null && Number(row.invoice.discountAmount) > 0 && (
                                       <span className="ml-1.5 text-xs font-medium text-success-600">
                                         (remise −{formatGNF(row.invoice.discountAmount)}{row.invoice.discountReason && ` · ${row.invoice.discountReason}`})
+                                      </span>
+                                    )}
+                                    {row.invoice.creditedAmount != null && Number(row.invoice.creditedAmount) > 0 && (
+                                      <span className="ml-1.5 text-xs font-medium text-brand-600">
+                                        ({formatGNF(row.invoice.creditedAmount)} déjà réglés — ancienne classe{row.invoice.creditReason && `, ${row.invoice.creditReason.toLowerCase()}`})
                                       </span>
                                     )}
                                   </span>
@@ -317,6 +331,11 @@ export function MultiChildCollectModal({
                             {partial && (
                               <p className="pl-6 text-xs text-warning-600">
                                 Paiement partiel — reste {formatGNF(remainingOf(row.invoice) - amountFor(row))} sur cette facture.
+                              </p>
+                            )}
+                            {surplus > 0 && (
+                              <p className="pl-6 text-xs font-medium text-teal-700">
+                                {`Facture soldée à ${formatGNF(remainingOf(row.invoice))} — le surplus de ${formatGNF(surplus)} sera conservé comme crédit disponible sur le compte de l'élève.`}
                               </p>
                             )}
                           </div>

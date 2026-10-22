@@ -855,13 +855,20 @@ function InvoiceCollect({
       - monthlyIds.reduce((s, id) => s + remainingOf(effectiveInvoices.find((i) => i.id === id)!), 0)
     : 0;
 
-  /** Montant retenu pour cette facture : personnalisé si saisi, sinon le solde restant en entier. */
+  /** Montant retenu pour cette facture : personnalisé si saisi, sinon le solde restant en entier —
+   * jamais plafonné à ce solde (§4 cahier des charges, trop-perçu) : un montant au-delà est accepté
+   * tel quel, le surplus est conservé comme crédit disponible de l'élève côté serveur
+   * (InvoiceService#applyPayment), comme sur l'encaissement par facture unique (pay-invoice-form.tsx).
+   * Plafonner ici refusait silencieusement tout trop-perçu saisi depuis cette fiche (bug réel signalé). */
   function amountFor(m: Invoice): number {
     const custom = customAmounts[m.id];
-    return custom != null ? Math.min(Math.max(custom, 0), remainingOf(m)) : remainingOf(m);
+    return custom != null ? Math.max(custom, 0) : remainingOf(m);
   }
   function setAmount(m: Invoice, value: number) {
-    setCustomAmounts((prev) => ({ ...prev, [m.id]: Math.min(Math.max(value, 0), remainingOf(m)) }));
+    setCustomAmounts((prev) => ({ ...prev, [m.id]: Math.max(value, 0) }));
+  }
+  function surplusFor(m: Invoice): number {
+    return Math.max(0, amountFor(m) - remainingOf(m));
   }
   /** Coche/décoche un mois d'une tranche multi-mois : recalcule le montant proportionnellement. */
   function toggleMonth(m: Invoice, allMonths: string[], month: string) {
@@ -1013,6 +1020,7 @@ function InvoiceCollect({
           const isChecked = selected.includes(m.id);
           const checkedSubMonths = monthSelections[m.id] ?? coveredMonths;
           const partial = isChecked && amountFor(m) < remainingOf(m);
+          const surplus = isChecked ? surplusFor(m) : 0;
           return (
             <div key={m.id} className="rounded-lg px-2 py-1.5 hover:bg-white">
               <label className="flex cursor-pointer items-center justify-between gap-2">
@@ -1072,6 +1080,11 @@ function InvoiceCollect({
               {partial && (
                 <p className="pl-6 text-xs text-warning-600">
                   Paiement partiel — reste {formatGNF(remainingOf(m) - amountFor(m))} sur cette facture.
+                </p>
+              )}
+              {surplus > 0 && (
+                <p className="pl-6 text-xs font-medium text-teal-700">
+                  {`Facture soldée à ${formatGNF(remainingOf(m))} — le surplus de ${formatGNF(surplus)} sera conservé comme crédit disponible sur le compte de l'élève.`}
                 </p>
               )}
             </div>
