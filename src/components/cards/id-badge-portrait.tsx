@@ -89,9 +89,9 @@ export function IdBadgePortrait({
               bas (pb-16) est la seule zone colorée que la photo est autorisée à chevaucher (sa marge
               négative ci-dessous est calée sur cette même valeur) — jamais la ligne logo/nom, pour ne
               pas la masquer. */}
-          <div className="relative shrink-0 pb-16 pt-2 print:pb-[8.5mm] print:pt-[2mm]" style={gradientStyle}>
+          <div className="relative shrink-0 pb-16 pt-2 print:pb-[8.5mm] print:pt-[1mm]" style={gradientStyle}>
             <div className="mx-auto h-[10px] w-[64px] rounded-full bg-white/90 print:h-[1.4mm] print:w-[11mm]" />
-            <div className="mt-3 flex items-center gap-2.5 px-4 print:mt-[1mm] print:gap-[0.9mm] print:px-[2.8mm]">
+            <div className="mt-3 flex items-center gap-2.5 px-4 print:mt-[0.6mm] print:gap-[0.9mm] print:px-[2.8mm]">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm print:h-[9mm] print:w-[9mm] print:rounded-[1.8mm]">
                 {branding?.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
