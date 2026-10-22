@@ -34,8 +34,10 @@ export default function CashDepositsPage() {
   const canCreate = hasAnyPermission(user, ["depot:create"]);
   const canValidate = hasAnyPermission(user, ["depot:valider"]);
   const canRead = hasAnyPermission(user, ["depot:read"]);
-  // La direction/le fondateur voit les dépôts de tous les comptables ; un comptable ne voit que les siens.
-  const canSeeAll = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  // Circuit strictement comptable → fondateur (§5) : le fondateur voit les dépôts de tous les
+  // comptables, un comptable ne voit que les siens — DIRECTOR n'a plus accès à cet écran du tout
+  // (depot:read retiré, voir V225), ce module reste volontairement fermé sans intermédiaire.
+  const canSeeAll = hasRole(user, "SCHOOL_ADMIN");
 
   const [statusFilter, setStatusFilter] = useState<CashDepositStatus | "">("");
   const [methodFilter, setMethodFilter] = useState<CashDepositMethod | "">("");
