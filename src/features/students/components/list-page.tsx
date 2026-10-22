@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Upload } from "lucide-react";
+import { Printer, Search, Upload } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
 import { hasAnyPermission, hasPermission, hasRole } from "@/lib/auth/permissions";
 import type { CreateStudentInput, EnrollmentStatus, Gender, Student, StudentSummary } from "@/lib/types/student";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
+import { getSchoolProfile } from "@/lib/api/platform";
 import { getStaffChildCoverageBatch, getUncoveredStaffChildIds, listExemptions } from "@/lib/api/billing";
 import type { Exemption } from "@/lib/types/billing";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ import { StudentForm } from "./student-form";
 import { Reveal } from "@/components/public/reveal";
 import { Meteors } from "@/components/ui/aceternity";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { updateStudentPhoto } from "@/lib/api/students";
+import { printList } from "@/lib/print-list";
+import { searchStudentsSummary, updateStudentPhoto } from "@/lib/api/students";
 import { useDeleteStudentMutation, useStudentsSummaryQuery, useUpdateStudentMutation } from "../hooks/use-students";
 
 const PAGE_SIZE = 20;
@@ -131,6 +133,53 @@ export default function StudentsPage() {
     e.preventDefault();
     setPage(0);
     setSearch(searchInput.trim());
+  }
+
+  const [printing, setPrinting] = useState(false);
+
+  /** §10.1 cahier des charges : imprime TOUTE la liste filtrée (pas seulement la page affichée à
+   * l'écran) — même filtres que la recherche courante, un gros `size` suffit à tout récupérer en un
+   * seul appel (même pattern que listParents côté parents). */
+  async function handlePrint() {
+    setPrinting(true);
+    try {
+      const [profile, all] = await Promise.all([
+        getSchoolProfile().catch(() => null),
+        searchStudentsSummary({
+          search: search || undefined,
+          gender: gender || undefined,
+          enrollmentStatus: status && status !== "NOT_ENROLLED" ? status : undefined,
+          notEnrolled: status === "NOT_ENROLLED" || undefined,
+          classId: classFilter ? Number(classFilter) : undefined,
+          page: 0,
+          size: 5000,
+        }),
+      ]);
+      const filterParts = [
+        classFilter ? `Classe : ${classLabelById.get(Number(classFilter)) ?? `#${classFilter}`}` : null,
+        gender ? `Sexe : ${gender === "FEMALE" ? "Féminin" : "Masculin"}` : null,
+        status ? `Inscription : ${status === "NOT_ENROLLED" ? "Non inscrits" : status}` : null,
+        search ? `Recherche : "${search}"` : null,
+      ].filter((p): p is string => p != null);
+      printList({
+        profile,
+        title: "Liste des élèves",
+        subtitle: filterParts.length > 0 ? filterParts.join(" · ") : "Tous les élèves",
+        columns: ["Matricule", "Nom et prénoms", "Sexe", "Classe", "Parent principal", "Téléphone"],
+        rows: all.content.map((row) => [
+          row.student.studentNumber ?? "—",
+          `${row.student.firstName} ${row.student.lastName}`,
+          row.student.gender === "FEMALE" ? "F" : "M",
+          row.classId != null ? (classLabelById.get(row.classId) ?? `#${row.classId}`) : "—",
+          row.principalParentName ?? "—",
+          row.principalParentPhone ?? "—",
+        ]),
+      });
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPrinting(false);
+    }
   }
 
   async function handleUpdate(input: CreateStudentInput) {
@@ -281,8 +330,12 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Élèves</h1>
           <p className="text-sm text-slate-500">Gestion des élèves de l&apos;établissement</p>
         </div>
-        {canWrite && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" leftSection={<Printer className="h-4 w-4" />} onClick={handlePrint} loading={printing}>
+            Imprimer
+          </Button>
+          {canWrite && (
+            <>
             <Button component={Link} href="/students/import" variant="outline" leftSection={<Upload className="h-4 w-4" />}>
               Import CSV
             </Button>
@@ -292,8 +345,9 @@ export default function StudentsPage() {
             <Button component={Link} href="/enrollments" variant="secondary">
               Inscrire un élève
             </Button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </Reveal>
 
       {/* Quota gauge (key constraint of the module) */}

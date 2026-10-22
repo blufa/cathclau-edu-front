@@ -16,7 +16,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 /**
- * Planche de badges CR80 (54 × 85,6 mm, portrait) prête pour impression sur papier bristol — 9 par
+ * Planche de badges (57 × 85,6 mm, portrait — légèrement élargi par rapport au CR80 strict de
+ * 53,98mm pour mieux occuper la pochette plastique réelle de l'école, §17 cahier des charges) prête
+ * pour impression sur papier bristol — 9 par
  * feuille A4 en grille 3×3 avec repères de découpe en pointillés, comme "Badges scolaires
  * professionnels.pdf" fourni par l'école. Au-delà de 9 badges, plusieurs feuilles sont générées (saut
  * de page entre chacune). Toujours en portrait, quelle que soit l'orientation du modèle de chaque type
@@ -53,7 +55,7 @@ export function BadgeSheet({ badges, onPrinted }: { badges: IdBadgeProps[]; onPr
                 sur une A4 ne survit pas à cette réservation si cette légende reste imprimée aussi.
                 Reste visible à l'écran (utile pendant la préparation). */}
             <p className="mb-3 text-center text-[10px] uppercase tracking-wide text-slate-400 print:hidden">
-              {pageBadges.length} badge{pageBadges.length > 1 ? "s" : ""} · CR80 54 × 85,6 mm · Planche {pageIndex + 1}/{pages.length}
+              {pageBadges.length} badge{pageBadges.length > 1 ? "s" : ""} · 57 × 85,6 mm · Planche {pageIndex + 1}/{pages.length}
               {" · "}Imprimer à 100 % · couper sur les traits · coins arrondis r = 3 mm
             </p>
             {/* Marges/espacements volontairement serrés en impression (voir printBadgeSheet, marge de

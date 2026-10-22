@@ -53,12 +53,13 @@ export interface IdBadgeProps {
   orientation?: CardOrientation | null;
 }
 
-/** Taille réelle d'une carte CR80 tenue en PAYSAGE (horizontal) — 85,6 × 53,98 mm, appliquée aussi bien
- * à l'écran qu'à l'impression pour que l'aperçu corresponde exactement au badge imprimé/plastifié.
+/** Taille imprimée en PAYSAGE (horizontal) — hauteur élargie par rapport au CR80 strict (53,98mm) à
+ * la demande de l'école, pour mieux occuper la largeur de sa pochette plastique réelle (§17 cahier
+ * des charges) ; longueur inchangée (85,6mm). Valeur unique ici : à réajuster ici seulement si besoin.
  * Reproduit la maquette fournie par l'école (logo + nom + slogan en en-tête, photo + informations au
  * centre, QR + hiérarchie administrative en pied de carte), avec une identité colorée par type de
  * badge. */
-const CARD_SCREEN_CLASS = "w-[380px] min-h-[240px] print:w-[85.6mm] print:min-h-[53.98mm]";
+const CARD_SCREEN_CLASS = "w-[380px] min-h-[240px] print:w-[85.6mm] print:min-h-[57mm]";
 
 /** Ajoute une transparence (alpha en hexadécimal 2 chiffres) à une couleur hex #RRGGBB — pour des
  * teintes de fond douces dérivées de la couleur d'accent, sans dépendance à une lib de couleurs. */

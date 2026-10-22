@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { printNode } from "@/lib/print-node";
 import type { IdBadgeProps } from "./id-badge";
 
-/** Taille réelle CR80 tenue en PORTRAIT (vertical) — 53,98 × 85,6 mm, cohérente avec la maquette
- * fournie par l'école (en-tête coloré arrondi, photo portrait, bandeau de type en pied de carte). */
-const CARD_SCREEN_CLASS = "w-[300px] min-h-[476px] print:w-[54mm] print:min-h-[85.6mm]";
+/** Taille imprimée en PORTRAIT (vertical) — largeur élargie par rapport au CR80 strict (53,98mm) à
+ * la demande de l'école, pour mieux occuper la largeur de sa pochette plastique réelle (§17 cahier
+ * des charges) ; hauteur inchangée (85,6mm). Valeur unique ici : à réajuster ici seulement si besoin. */
+const CARD_SCREEN_CLASS = "w-[300px] min-h-[476px] print:w-[57mm] print:min-h-[85.6mm]";
 
 /** Libellé court du type de badge pour le bandeau de pied de carte (« Badge élève » → « ELEVE », sans
  * accent — certaines imprimantes/polices de badge rendent mal les majuscules accentuées). */
