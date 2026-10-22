@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
-import { Field, Input, Label, Textarea } from "@/components/ui/input";
+import { Field, Input, Label, MoneyInput, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
@@ -34,8 +34,10 @@ export default function CashDepositsPage() {
   const canCreate = hasAnyPermission(user, ["depot:create"]);
   const canValidate = hasAnyPermission(user, ["depot:valider"]);
   const canRead = hasAnyPermission(user, ["depot:read"]);
-  // La direction/le fondateur voit les dépôts de tous les comptables ; un comptable ne voit que les siens.
-  const canSeeAll = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  // Circuit strictement comptable → fondateur (§5) : le fondateur voit les dépôts de tous les
+  // comptables, un comptable ne voit que les siens — DIRECTOR n'a plus accès à cet écran du tout
+  // (depot:read retiré, voir V225), ce module reste volontairement fermé sans intermédiaire.
+  const canSeeAll = hasRole(user, "SCHOOL_ADMIN");
 
   const [statusFilter, setStatusFilter] = useState<CashDepositStatus | "">("");
   const [methodFilter, setMethodFilter] = useState<CashDepositMethod | "">("");
@@ -183,7 +185,7 @@ export default function CashDepositsPage() {
 }
 
 function CreateDepositForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(0);
   const [method, setMethod] = useState<CashDepositMethod>("CASH");
   const [transactionReference, setTransactionReference] = useState("");
   const [destinationAccount, setDestinationAccount] = useState("");
@@ -194,11 +196,11 @@ function CreateDepositForm({ onCancel, onDone }: { onCancel: () => void; onDone:
   const [idempotencyKey] = useState(genIdempotencyKey);
 
   async function submit() {
-    if (!amount || Number(amount) <= 0) { notifyError("Indiquez un montant valide."); return; }
+    if (!amount || amount <= 0) { notifyError("Indiquez un montant valide."); return; }
     setLoading(true);
     try {
       await createCashDeposit({
-        amount: Number(amount), method,
+        amount, method,
         transactionReference: transactionReference || null,
         destinationAccount: destinationAccount || null,
         comment: comment || null,
@@ -213,7 +215,7 @@ function CreateDepositForm({ onCancel, onDone }: { onCancel: () => void; onDone:
     <div className="space-y-4">
       <Field>
         <Label>Montant (GNF) <span className="text-error-500">*</span></Label>
-        <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+        <MoneyInput value={amount} onValueChange={setAmount} autoFocus />
       </Field>
       <Field>
         <Label>Moyen <span className="text-error-500">*</span></Label>

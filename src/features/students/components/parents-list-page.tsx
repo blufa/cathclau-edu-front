@@ -23,6 +23,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Pagination } from "@/components/ui/pagination";
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
@@ -40,17 +41,21 @@ export default function ParentsListPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Parent | null>(null);
   const [creating, setCreating] = useState(false);
-  const [page, setPage] = useState(0);
+  // Deux onglets distincts plutôt qu'une liste mélangée avec un badge de statut (§7 cahier des
+  // charges) : un prospect sans enfant et un parent qui a réellement des enfants inscrits sont deux
+  // usages différents, à ne jamais confondre dans la même liste — pagination propre à chaque onglet.
+  const [realPage, setRealPage] = useState(0);
+  const [prospectPage, setProspectPage] = useState(0);
   const PAGE_SIZE = 20;
 
-  const parents = useMemo(() => {
+  const filtered = useMemo(() => {
     const list = q.data ?? [];
     const term = search.trim().toLowerCase();
     if (!term) return list;
     return list.filter((p) => `${p.firstName} ${p.lastName} ${p.phone ?? ""} ${p.email ?? ""}`.toLowerCase().includes(term));
   }, [q.data, search]);
-  const totalPages = Math.ceil(parents.length / PAGE_SIZE);
-  const pageParents = parents.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const realParents = useMemo(() => filtered.filter((p) => linkedIds.has(p.id)), [filtered, linkedIds]);
+  const prospectParents = useMemo(() => filtered.filter((p) => !linkedIds.has(p.id)), [filtered, linkedIds]);
 
   return (
     <div className="space-y-6">
@@ -58,7 +63,6 @@ export default function ParentsListPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">Parents</h1>
-            <p className="text-sm text-gray-500">Tous les parents de l&apos;école — cliquez sur un parent pour voir ses enfants</p>
           </div>
           <Button size="sm" onClick={() => setCreating(true)} leftSection={<UserPlus className="h-4 w-4" />}>
             Nouveau parent / prospect
@@ -70,39 +74,34 @@ export default function ParentsListPage() {
         className="max-w-sm"
         placeholder="Rechercher (nom, téléphone, email)…"
         value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+        onChange={(e) => { setSearch(e.target.value); setRealPage(0); setProspectPage(0); }}
       />
 
       {q.loading ? (
         <div className="flex justify-center py-16"><Spinner className="h-8 w-8" /></div>
       ) : (
-        <Table>
-          <THead>
-            <tr><TH>Nom</TH><TH className="hidden sm:table-cell">Téléphone</TH><TH className="hidden sm:table-cell">Email</TH><TH className="hidden sm:table-cell">Profession</TH><TH>Statut</TH></tr>
-          </THead>
-          <TBody>
-            {pageParents.length === 0 && (
-              <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun parent trouvé.</TD></TR>
-            )}
-            {pageParents.map((p) => (
-              <TR key={p.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelected(p)}>
-                <TD className="font-medium text-gray-900">{p.firstName} {p.lastName}</TD>
-                <TD className="hidden text-gray-600 sm:table-cell">{p.phone ?? "—"}</TD>
-                <TD className="hidden text-gray-600 sm:table-cell">{p.email ?? "—"}</TD>
-                <TD className="hidden text-gray-600 sm:table-cell">{p.occupation ?? "—"}</TD>
-                <TD>
-                  {linkedIds.has(p.id)
-                    ? <Badge tone="green">Parent</Badge>
-                    : <Badge tone="gray">Prospect (sans enfant)</Badge>}
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      )}
-
-      {totalPages > 1 && (
-        <Pagination page={page} totalPages={totalPages} totalElements={parents.length} onPageChange={setPage} />
+        <Tabs defaultValue="parents">
+          <TabsList>
+            <TabsTrigger value="parents">Parents ({realParents.length})</TabsTrigger>
+            <TabsTrigger value="prospects">Prospects sans enfant ({prospectParents.length})</TabsTrigger>
+          </TabsList>
+          <TabsPanel value="parents">
+            <ParentsTable
+              parents={realParents} page={realPage} pageSize={PAGE_SIZE} onPageChange={setRealPage}
+              onSelect={setSelected} emptyLabel="Aucun parent trouvé."
+            />
+          </TabsPanel>
+          <TabsPanel value="prospects">
+            <p className="mb-3 text-sm text-gray-500">
+              Contacts enregistrés sans enfant encore rattaché — un enfant pourra leur être relié plus
+              tard depuis sa fiche.
+            </p>
+            <ParentsTable
+              parents={prospectParents} page={prospectPage} pageSize={PAGE_SIZE} onPageChange={setProspectPage}
+              onSelect={setSelected} emptyLabel="Aucun prospect trouvé."
+            />
+          </TabsPanel>
+        </Tabs>
       )}
 
       <Modal open={!!selected} onClose={() => setSelected(null)} title={selected ? `${selected.firstName} ${selected.lastName}` : ""}>
@@ -123,6 +122,42 @@ export default function ParentsListPage() {
         />
       </Modal>
     </div>
+  );
+}
+
+/** Table paginée réutilisée pour les deux onglets (parents réels / prospects) — jamais les deux
+ * catégories mélangées dans une même instance (§7 cahier des charges). */
+function ParentsTable({ parents, page, pageSize, onPageChange, onSelect, emptyLabel }: {
+  parents: Parent[]; page: number; pageSize: number; onPageChange: (p: number) => void;
+  onSelect: (p: Parent) => void; emptyLabel: string;
+}) {
+  const totalPages = Math.ceil(parents.length / pageSize);
+  const pageParents = parents.slice(page * pageSize, page * pageSize + pageSize);
+
+  return (
+    <>
+      <Table>
+        <THead>
+          <tr><TH>Nom</TH><TH className="hidden sm:table-cell">Téléphone</TH><TH className="hidden sm:table-cell">Email</TH><TH className="hidden sm:table-cell">Profession</TH></tr>
+        </THead>
+        <TBody>
+          {pageParents.length === 0 && (
+            <TR><TD colSpan={4} className="py-10 text-center text-gray-400">{emptyLabel}</TD></TR>
+          )}
+          {pageParents.map((p) => (
+            <TR key={p.id} className="cursor-pointer hover:bg-gray-50" onClick={() => onSelect(p)}>
+              <TD className="font-medium text-gray-900">{p.firstName} {p.lastName}</TD>
+              <TD className="hidden text-gray-600 sm:table-cell">{p.phone ?? "—"}</TD>
+              <TD className="hidden text-gray-600 sm:table-cell">{p.email ?? "—"}</TD>
+              <TD className="hidden text-gray-600 sm:table-cell">{p.occupation ?? "—"}</TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} totalElements={parents.length} onPageChange={onPageChange} />
+      )}
+    </>
   );
 }
 

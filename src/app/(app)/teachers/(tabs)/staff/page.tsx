@@ -13,6 +13,7 @@ import {
   listEmployees,
   setEmployeeActive,
   updateEmployee,
+  updateEmployeePhoto,
   type Employee,
   type EmployeeCategory,
   type EmployeeInput,
@@ -26,6 +27,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { FileUpload } from "@/components/ui/file-upload";
 import { EMPLOYEE_CATEGORY_LABEL, EmployeeForm } from "@/components/staff/employee-form";
 import { TeacherForm } from "@/components/staff/teacher-form";
 import { IdBadge, type IdBadgeProps } from "@/components/cards/id-badge";
@@ -53,6 +55,7 @@ export default function PersonnelPage() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
+  const [editingPhotoFor, setEditingPhotoFor] = useState<Employee | null>(null);
   const [badgeFor, setBadgeFor] = useState<Employee | null>(null);
   // Personnel administratif/direction/soutien pouvant aussi enseigner des heures dans une classe :
   // "Devenir enseignant" pré-remplit la création de fiche enseignant avec l'identité déjà saisie ici,
@@ -152,9 +155,34 @@ export default function PersonnelPage() {
   const columns: Column<Employee>[] = [
     {
       key: "name",
-      header: "Nom",
+      header: "Personnel",
       accessor: (e) => `${e.firstName ?? ""} ${e.lastName ?? ""}`,
-      render: (e) => <span className="font-medium text-gray-900">{e.firstName} {e.lastName}</span>,
+      render: (e) => (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            title="Modifier la photo"
+            disabled={!canWrite}
+            onClick={(ev) => {
+              if (!canWrite) return;
+              ev.preventDefault();
+              ev.stopPropagation();
+              setEditingPhotoFor(e);
+            }}
+            className="shrink-0 disabled:cursor-default"
+          >
+            {e.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={e.photo} alt="" className="h-9 w-9 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
+                {`${e.firstName?.[0] ?? ""}${e.lastName?.[0] ?? ""}`.toUpperCase() || "?"}
+              </span>
+            )}
+          </button>
+          <span className="font-medium text-gray-900">{e.firstName} {e.lastName}</span>
+        </div>
+      ),
     },
     {
       key: "category",
@@ -267,6 +295,47 @@ export default function PersonnelPage() {
       <Modal open={!!sheetBadges} onClose={() => setSheetBadges(null)} title="Planche de badges" className="max-w-4xl">
         {sheetBadges && <BadgeSheet badges={sheetBadges} />}
       </Modal>
+
+      <Modal open={!!editingPhotoFor} onClose={() => setEditingPhotoFor(null)} title="Photo du membre du personnel">
+        {editingPhotoFor && (
+          <EmployeePhotoOnlyEditor
+            employeeId={editingPhotoFor.id}
+            employeeName={`${editingPhotoFor.firstName ?? ""} ${editingPhotoFor.lastName ?? ""}`}
+            photo={editingPhotoFor.photo}
+            onDone={() => { setEditingPhotoFor(null); q.refetch(); }}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/** Capture/téléverse puis enregistre immédiatement la nouvelle photo sur le profil personnel — même
+ * pattern que PhotoOnlyEditor côté élèves (§11.3 cahier des charges). */
+function EmployeePhotoOnlyEditor({ employeeId, employeeName, photo, onDone }: {
+  employeeId: number; employeeName: string; photo: string | null; onDone: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function save(url: string | null) {
+    if (!url) return;
+    setSaving(true);
+    try {
+      await updateEmployeePhoto(employeeId, url);
+      notifySuccess("Photo mise à jour");
+      onDone();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">{employeeName}</p>
+      <FileUpload variant="image" folder="employees/photos" value={photo} onChange={save} allowCapture />
+      {saving && <p className="text-xs text-slate-400">Enregistrement…</p>}
     </div>
   );
 }
