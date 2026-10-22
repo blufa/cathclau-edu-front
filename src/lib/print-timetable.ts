@@ -59,6 +59,11 @@ export interface TimetablePrintPage {
    * côté appelant) — par page plutôt que globale au document : "Imprimer toutes les classes" mélange
    * des classes de cycles différents dans un même document multi-pages. */
   bandMinutes: number;
+  /** Heure de début/fin par défaut de la grille imprimée, en minutes depuis minuit (480/1080 = 08h-18h
+   * si non précisé) — grille primaire personnalisable, §3.2 : réutilise le même réglage que l'affichage
+   * écran (`TimetableGrid`) pour que l'impression corresponde toujours à ce que l'école a configuré. */
+  gridStartMinutes?: number;
+  gridEndMinutes?: number;
 }
 
 const DAY_LABELS = ["LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI"];
@@ -69,8 +74,10 @@ function buildRowsHtml(page: TimetablePrintPage): string {
   if (allSlots.length === 0) {
     return `<div style="padding:8mm;text-align:center;color:#8A7A55;font-size:9pt">Aucune séance programmée.</div>`;
   }
-  let rangeStart = Math.min(480, ...allSlots.map((s) => timeToMinutes(s.startTime)));
-  let rangeEnd = Math.max(1080, ...allSlots.map((s) => timeToMinutes(s.endTime)));
+  const defaultStart = page.gridStartMinutes ?? 480;
+  const defaultEnd = page.gridEndMinutes ?? 1080;
+  let rangeStart = Math.min(defaultStart, ...allSlots.map((s) => timeToMinutes(s.startTime)));
+  let rangeEnd = Math.max(defaultEnd, ...allSlots.map((s) => timeToMinutes(s.endTime)));
   rangeStart = Math.floor(rangeStart / bandMinutes) * bandMinutes;
   rangeEnd = Math.ceil(rangeEnd / bandMinutes) * bandMinutes;
 
