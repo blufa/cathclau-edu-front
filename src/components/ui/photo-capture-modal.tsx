@@ -96,15 +96,40 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
     setBackgroundRemoved(false);
   }
 
+  // Cadre portrait de la photo du badge (voir IdBadgePortrait, print:h-[22mm] print:w-[17.5mm]) —
+  // recadrer ET redimensionner DÈS la capture (pas après coup) sert deux objectifs à la fois : la
+  // photo est déjà cadrée comme une photo de carte d'identité, ET surtout sa taille — quelques
+  // centaines de milliers de pixels au lieu des 12+ mégapixels natifs d'une caméra de téléphone — est
+  // ce qui rend le détourage fond blanc rapide (le temps de traitement dépend directement du nombre
+  // de pixels à analyser) ; capturer à pleine résolution puis réduire après le détourage aurait laissé
+  // le modèle tourner inutilement longtemps sur une image bien plus grande que nécessaire.
+  const BADGE_PHOTO_WIDTH = 480;
+  const BADGE_PHOTO_HEIGHT = 600;
+
   async function capture() {
     const video = videoRef.current;
     if (!video || !streaming) return;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const targetRatio = BADGE_PHOTO_WIDTH / BADGE_PHOTO_HEIGHT;
+    const sourceRatio = vw / vh;
+    // Recadrage centré à la bonne proportion (portrait), avant réduction — même logique que
+    // `object-cover` déjà utilisé pour l'aperçu vidéo ci-dessous : ce que l'utilisateur voit cadré à
+    // l'écran est ce qui est effectivement capturé.
+    let sx = 0, sy = 0, sw = vw, sh = vh;
+    if (sourceRatio > targetRatio) {
+      sw = vh * targetRatio;
+      sx = (vw - sw) / 2;
+    } else {
+      sh = vw / targetRatio;
+      sy = (vh - sh) / 2;
+    }
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    canvas.width = BADGE_PHOTO_WIDTH;
+    canvas.height = BADGE_PHOTO_HEIGHT;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BADGE_PHOTO_WIDTH, BADGE_PHOTO_HEIGHT);
     const rawBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
     if (!rawBlob) return;
     const rawFile = new File([rawBlob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
@@ -149,12 +174,32 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
             ))}
           </Select>
         )}
-        <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-900">
+        {/* Même proportion portrait (4:5) que le cadrage réellement capturé ci-dessous
+            (BADGE_PHOTO_WIDTH/HEIGHT) — ce que l'utilisateur voit cadré ici doit être exactement ce
+            qui est capturé, pas un format d'aperçu différent du résultat final. */}
+        <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-slate-900">
           {snapshot ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={snapshot} alt="Capture" className="h-full w-full object-cover" />
           ) : (
             <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
+          )}
+          {streaming && !snapshot && (
+            // Guide de cadrage visuel — demande explicite : même une personne qui ne sait pas
+            // prendre de photo doit pouvoir respecter les dimensions juste en centrant le sujet dans
+            // ce repère, sans réflexion. Le cadre vidéo lui-même est DÉJÀ exactement la zone capturée
+            // (aspect-[4/5] ci-dessus) ; cet ovale aide seulement à centrer le visage à l'intérieur,
+            // comme un viseur d'appareil photo d'identité classique.
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="h-[62%] w-[72%] rounded-[50%] shadow-[0_0_0_9999px_rgba(15,23,42,0.45)]" />
+              <span className="absolute left-3 top-3 h-6 w-6 rounded-tl-md border-l-2 border-t-2 border-white/80" />
+              <span className="absolute right-3 top-3 h-6 w-6 rounded-tr-md border-r-2 border-t-2 border-white/80" />
+              <span className="absolute bottom-3 left-3 h-6 w-6 rounded-bl-md border-b-2 border-l-2 border-white/80" />
+              <span className="absolute bottom-3 right-3 h-6 w-6 rounded-br-md border-b-2 border-r-2 border-white/80" />
+              <p className="absolute bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900/70 px-3 py-1 text-xs font-medium text-white">
+                Centrez le visage dans le cadre
+              </p>
+            </div>
           )}
           {!streaming && !snapshot && !processing && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">

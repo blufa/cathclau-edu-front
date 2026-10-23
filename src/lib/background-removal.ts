@@ -11,13 +11,19 @@ import { removeBackground } from "@imgly/background-removal";
  * uni (exigence littérale du cahier des charges) puis on reconvertit en JPEG (plus léger, pas besoin
  * de transparence pour une photo d'identité — "optimiser taille et qualité du fichier").
  *
+ * `model: "isnet_quint8"` — variante QUANTIFIÉE (8 bits) du modèle, nettement plus légère à
+ * télécharger et plus rapide à exécuter sur un processeur mobile (Samsung/Tecno d'entrée de gamme
+ * visés par le cahier des charges) que le modèle par défaut en pleine précision — différence de
+ * qualité imperceptible pour un simple détourage de silhouette. Attendre plusieurs dizaines de
+ * secondes sur un appareil mobile (retour direct de test) était inacceptable à ce poste.
+ *
  * Ne lève jamais : si le traitement échoue (WASM indisponible, mémoire insuffisante...), renvoie le
  * fichier ORIGINAL inchangé — jamais de photo dégradée/corrompue silencieusement, et l'appelant
  * reste libre de proposer quand même l'aperçu pour validation/reprise (§11.2).
  */
 export async function whitenPhotoBackground(file: File): Promise<{ file: File; backgroundRemoved: boolean }> {
   try {
-    const transparentBlob = await removeBackground(file);
+    const transparentBlob = await removeBackground(file, { model: "isnet_quint8" });
     const image = await blobToImage(transparentBlob);
     const canvas = document.createElement("canvas");
     canvas.width = image.naturalWidth;
