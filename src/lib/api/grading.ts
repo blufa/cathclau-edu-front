@@ -235,9 +235,10 @@ export function simulateGrades(classId: number, periodId: number): Promise<Simul
   return api.get<SimulationReport>("/grading/simulation", { query: { classId, periodId } });
 }
 
-/** Palmarès / tableau d'honneur d'une classe (PDF, élèves classés par rang) — object URL local. */
-export function getClassHonorRollPdfObjectUrl(classId: number, periodId: number): Promise<string> {
-  return api.blobUrl(`/grading/report-cards/class/${classId}/period/${periodId}/palmares/download`);
+/** Palmarès / tableau d'honneur de l'établissement (PDF) : meilleurs élèves toutes classes confondues
+ * pour une période, pas une classe isolée — object URL local. */
+export function getHonorRollPdfObjectUrl(periodId: number): Promise<string> {
+  return api.blobUrl(`/grading/report-cards/period/${periodId}/palmares/download`);
 }
 
 /** Relevé de notes d'une matière (classe + période) : chaque évaluation + moyenne calculée. */

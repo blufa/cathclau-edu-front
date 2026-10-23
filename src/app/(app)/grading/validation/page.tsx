@@ -13,7 +13,7 @@ import {
   getValidationWorkflowHistory,
   rejectValidationWorkflow,
   simulateGrades,
-  getClassHonorRollPdfObjectUrl,
+  getHonorRollPdfObjectUrl,
 } from "@/lib/api/grading";
 import {
   WORKFLOW_STAGE_LABEL,
@@ -72,10 +72,10 @@ export default function ValidationPage() {
   const [loadingPalmares, setLoadingPalmares] = useState(false);
 
   async function openPalmares() {
-    if (!classId || !periodId) return;
+    if (!periodId) return;
     setLoadingPalmares(true);
     try {
-      setPalmares(await getClassHonorRollPdfObjectUrl(classId, periodId));
+      setPalmares(await getHonorRollPdfObjectUrl(periodId));
     } catch (err) {
       notifyError(err);
     } finally {
@@ -115,8 +115,8 @@ export default function ValidationPage() {
           </Select>
         </div>
         <div className="ml-auto">
-          <Button variant="secondary" disabled={!classId || !periodId} loading={loadingPalmares} onClick={openPalmares} leftSection={<Award className="h-4 w-4" />}>
-            Palmarès (PDF)
+          <Button variant="secondary" disabled={!periodId} loading={loadingPalmares} onClick={openPalmares} leftSection={<Award className="h-4 w-4" />}>
+            Palmarès de l'école (PDF)
           </Button>
         </div>
       </div>
@@ -132,7 +132,7 @@ export default function ValidationPage() {
         </div>
       )}
 
-      <FilePreview url={palmares} title="Palmarès de la classe" open={palmares != null} onClose={() => setPalmares(null)} autoPrint />
+      <FilePreview url={palmares} title="Palmarès de l'école" open={palmares != null} onClose={() => setPalmares(null)} autoPrint />
     </div>
   );
 }
