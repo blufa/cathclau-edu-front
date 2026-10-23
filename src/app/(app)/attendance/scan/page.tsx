@@ -215,9 +215,18 @@ export default function AttendanceScanPage() {
   const handleRaw = useCallback((raw: string) => {
     const now = Date.now();
     // Débounce par carte + sens choisi : re-sélectionner l'autre sens et rescanner la même carte
-    // doit repartir immédiatement, pas rester bloqué par le dernier scan.
+    // doit repartir immédiatement, pas rester bloqué par le dernier scan. 8s (pas 3s) : DOIT rester
+    // strictement supérieur à la fenêtre de course anti-double-scan du serveur (RACE_WINDOW_SECONDS =
+    // 5s côté Student/Teacher/EmployeeAttendanceService, §16) — sinon un badge simplement laissé
+    // quelques secondes devant la caméra (très courant en mobile, le badge/téléphone est tenu à la
+    // main) redéclenche un 2e appel réseau qui retombe DANS la fenêtre de course serveur : celle-ci le
+    // traite comme une retentative réseau du même tap et renvoie un succès silencieux (pointage déjà
+    // enregistré, comportement voulu pour une vraie coupure réseau) au lieu de le rejeter — l'écran
+    // affiche alors un 2e "scan réussi" pour la même carte, donnant l'impression que le garde-fou
+    // anti-double-scan n'existe pas alors qu'aucune 2e ligne n'est réellement créée en base (retour
+    // direct : "j'ai la possibilité de scanner un badge plusieurs fois en mobile").
     const debounceKey = `${raw}:${direction}`;
-    if (debounceKey === lastRef.current.key && now - lastRef.current.at < 3000) return;
+    if (debounceKey === lastRef.current.key && now - lastRef.current.at < 8000) return;
     const parsed = parseScan(raw);
     if (!parsed) return;
     lastRef.current = { key: debounceKey, at: now };
