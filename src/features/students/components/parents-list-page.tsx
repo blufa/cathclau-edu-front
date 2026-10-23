@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CreditCard, UserPlus, Users } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { createParent, getLinkedParentIds, getParentChildren, listParents, updateParent } from "@/lib/api/parents";
+import { createParent, deleteParent, getLinkedParentIds, getParentChildren, listParents, updateParent } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
@@ -25,7 +25,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Pagination } from "@/components/ui/pagination";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Reveal } from "@/components/public/reveal";
-import { notifyError, notifySuccess } from "@/lib/feedback";
+import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
 
 /** Liste de tous les parents du tenant — cliquer sur un parent affiche tous ses enfants rattachés. */
@@ -106,6 +106,7 @@ export default function ParentsListPage() {
             parent={selected}
             onLinked={() => q.refetch()}
             onUpdated={(updated) => { setSelected(updated); q.refetch(); }}
+            onDeleted={() => { setSelected(null); q.refetch(); linkedIdsQuery.refetch(); }}
           />
         )}
       </Modal>
@@ -266,12 +267,44 @@ function CreateProspectForm({ existingParents, onCancel, onCreated }: {
   );
 }
 
-function ParentChildren({ parent, onLinked, onUpdated }: { parent: Parent; onLinked: () => void; onUpdated: (p: Parent) => void }) {
+function ParentChildren({ parent, onLinked, onUpdated, onDeleted }: {
+  parent: Parent; onLinked: () => void; onUpdated: (p: Parent) => void; onDeleted: () => void;
+}) {
   const childrenQuery = useCachedQuery(`parent-children:${parent.id}`, () => getParentChildren(parent.id), [parent.id]);
   const children = childrenQuery.data ?? [];
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [collectStudents, setCollectStudents] = useState<{ id: number; name: string; classId: number | null; className: string | null }[] | null>(null);
   const [resolvingCollect, setResolvingCollect] = useState(false);
+
+  // Suppression définitive (ex. doublon créé par une coupure réseau pendant l'inscription d'un
+  // enfant, §retour comptable) — purge aussi tous les liens de parenté côté serveur, jamais les
+  // fiches élève elles-mêmes. Message de confirmation adapté selon qu'il y a des enfants rattachés
+  // ou non, pour que la conséquence (liens perdus) soit explicite avant une action irréversible.
+  function remove() {
+    const childrenWarning = children.length > 0
+      ? ` Ses ${children.length} enfant${children.length > 1 ? "s" : ""} rattaché${children.length > 1 ? "s" : ""} ` +
+        `(${children.map((c) => `${c.firstName} ${c.lastName}`).join(", ")}) seront détachés — leurs fiches élève ne seront pas supprimées.`
+      : "";
+    confirmAction({
+      title: "Supprimer ce parent",
+      message: `Supprimer définitivement ${parent.firstName} ${parent.lastName} ?${childrenWarning} Cette action est irréversible.`,
+      confirmLabel: "Supprimer",
+      danger: true,
+      onConfirm: async () => {
+        setDeleting(true);
+        try {
+          await deleteParent(parent.id);
+          notifySuccess("Parent supprimé.");
+          onDeleted();
+        } catch (err) {
+          notifyError(err instanceof ApiError ? err : new Error("Impossible de supprimer ce parent."));
+        } finally {
+          setDeleting(false);
+        }
+      },
+    });
+  }
 
   /**
    * "Encaisser tous les enfants" depuis la fiche parent (§retour comptable : un parent revenu un
@@ -320,7 +353,8 @@ function ParentChildren({ parent, onLinked, onUpdated }: { parent: Parent; onLin
             <div><dt className="text-gray-400">Profession</dt><dd className="text-gray-900">{parent.occupation ?? "—"}</dd></div>
             <div><dt className="text-gray-400">Adresse</dt><dd className="text-gray-900">{parent.address ?? "—"}</dd></div>
           </dl>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" className="text-error-600" loading={deleting} onClick={remove}>Supprimer</Button>
             <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>Modifier</Button>
           </div>
         </div>
