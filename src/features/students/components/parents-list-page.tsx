@@ -92,10 +92,6 @@ export default function ParentsListPage() {
             />
           </TabsPanel>
           <TabsPanel value="prospects">
-            <p className="mb-3 text-sm text-gray-500">
-              Contacts enregistrés sans enfant encore rattaché — un enfant pourra leur être relié plus
-              tard depuis sa fiche.
-            </p>
             <ParentsTable
               parents={prospectParents} page={prospectPage} pageSize={PAGE_SIZE} onPageChange={setProspectPage}
               onSelect={setSelected} emptyLabel="Aucun prospect trouvé."

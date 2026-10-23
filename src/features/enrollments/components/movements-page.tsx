@@ -67,7 +67,6 @@ export default function EnrollmentMovementsPage() {
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Mouvements & liste d&apos;attente</h1>
-          <p className="text-sm text-slate-500">Suivi des arrivées, départs et des élèves en attente de place.</p>
         </div>
         <Select className="max-w-[220px]" value={effectiveYear} onChange={(e) => setYearId(e.target.value)}>
           {years.map((y) => <option key={y.id} value={y.id}>{y.label}{y.current ? " (courante)" : ""}</option>)}

@@ -69,12 +69,7 @@ export function SchoolEventsPanel({ canWrite }: { canWrite: boolean }) {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <p className="text-sm text-gray-500">
-            Kermesse, match, entraînement… : les élèves ne suivent pas cours. Choisissez ensuite (icône <Users className="inline h-3.5 w-3.5" />)
-            quels enseignants touchés sont payés sur ces heures — un jour férié reste toujours payé automatiquement,
-            sans passer par ici.
-          </p>
+        <div className="flex items-center justify-end border-b border-gray-100 px-4 py-3">
           {canWrite && <Button onClick={openCreate}><Plus className="mr-1.5 h-4 w-4" /> Nouvel événement</Button>}
         </div>
         {q.loading ? (

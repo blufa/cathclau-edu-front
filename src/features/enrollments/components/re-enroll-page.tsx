@@ -139,7 +139,6 @@ export default function ReEnrollmentPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Réinscription & passage en masse</h1>
-        <p className="text-sm text-slate-500">Promouvez une classe entière vers l&apos;année suivante en un clic (classe suivante proposée automatiquement).</p>
       </Reveal>
 
       {/* Inputs: years + source class */}

@@ -39,7 +39,7 @@ import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { PieBreakdownChart } from "@/components/charts/pie-breakdown-chart";
 import { PersonPayrollCard } from "./person-payroll-card";
 import { Reveal } from "@/components/public/reveal";
-import { formatGNF, formatMinutes } from "@/lib/format";
+import { formatGNF } from "@/lib/format";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 const pct = (v: string | number | null | undefined) => `${Number(v ?? 0).toFixed(2)} %`;
@@ -164,13 +164,6 @@ export default function FounderDashboard() {
   );
   const abandonedStudents = abandonedQuery.data ?? [];
 
-  // Coût des retards/départs anticipés des enseignants : écart entre la masse salariale théorique
-  // (projetée depuis l'emploi du temps) et la masse salariale réelle (heures effectivement
-  // réalisées, cahier de textes) — positif = économisé sur des heures non réalisées.
-  const teacherPayrollGap = founder
-    ? Number(founder.payroll.teacherMonthlyPayroll) - Number(founder.realPayroll.teacherMonthlyPayroll)
-    : 0;
-
   const periodTrend = (founder?.recovery.byPeriod ?? []).map((p) => ({
     name: p.periodLabel,
     Facturé: Math.round(Number(p.invoiced)),
@@ -187,7 +180,6 @@ export default function FounderDashboard() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Vision Fondateur</h1>
-        <p className="text-sm text-gray-500">Recettes de l&apos;école, recouvrement, masse salariale et élèves pris en charge</p>
       </Reveal>
 
       {loading ? (
@@ -345,7 +337,7 @@ export default function FounderDashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-3">
             <StatCard title="Masse salariale théorique" value={formatGNF(founder?.payroll.totalMonthlyPayroll)} icon={Wallet} accent="rose"
-              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s) (${formatGNF(founder?.payroll.teacherMonthlyPayroll)}) + ${founder?.payroll.staffCount ?? 0} personnel (${formatGNF(founder?.payroll.staffMonthlyPayroll)}) — estimation, pas forcément déjà versée`} />
+              hint={`${founder?.payroll.teacherCount ?? 0} enseignant(s) (${formatGNF(founder?.payroll.teacherMonthlyPayroll)}) + ${founder?.payroll.staffCount ?? 0} personnel (${formatGNF(founder?.payroll.staffMonthlyPayroll)})`} />
             <StatCard title="Enseignants payés ce mois" value={`${teachersPaidCount} / ${teacherIds.size}`} icon={Award}
               accent={teachersUnpaidCount === 0 ? "emerald" : "amber"}
               hint={teachersUnpaidCount > 0 ? `${teachersUnpaidCount} pas encore payé(s)` : "Tous payés"} />
@@ -359,11 +351,6 @@ export default function FounderDashboard() {
       {/* ── Salaire par enseignant ────────────────────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Salaire par enseignant</h2>
-        <p className="-mt-2 text-sm text-gray-500">
-          Estimation théorique (emploi du temps/tarif horaire, ou salaire fixe) du mois et projection
-          cumulée jusqu&apos;à la fin de l&apos;année scolaire — pas forcément le montant déjà versé,
-          voir la fiche de paie réelle de l&apos;enseignant pour ce qui a été effectivement payé.
-        </p>
         {founderQuery.loading ? <CardSkeleton lines={5} /> : (
           <PersonGridSection
             items={founder?.teacherSalaries ?? []}
@@ -389,7 +376,6 @@ export default function FounderDashboard() {
       {/* ── Personnel administratif ──────────────────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Personnel administratif</h2>
-        <p className="-mt-2 text-sm text-gray-500">Salaire fixe mensuel, par membre du personnel non-enseignant.</p>
         {employeesQuery.loading ? <CardSkeleton lines={5} /> : (
           <PersonGridSection
             items={(employeesQuery.data ?? []).filter((e) => e.active)}
@@ -423,11 +409,6 @@ export default function FounderDashboard() {
       <>
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Estimation de la masse salariale sur l&apos;année scolaire</h2>
-        <p className="-mt-2 text-sm text-gray-500">
-          Enseignants (heures théoriques selon l&apos;emploi du temps et le calendrier, jours fériés exclus,
-          ou salaire fixe) + personnel non-enseignant, mois par mois — vue agrégée dans le temps,
-          distincte du détail par enseignant ci-dessus.
-        </p>
         {founderQuery.loading ? <CardSkeleton lines={5} /> : (
           <Card>
             <CardHeader><CardTitle>Évolution mensuelle</CardTitle></CardHeader>
@@ -477,12 +458,6 @@ export default function FounderDashboard() {
       {/* ── Heures enseignants (cahier de textes) ────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Heures réalisées vs heures dues du mois</h2>
-        <p className="-mt-2 text-sm text-gray-500">
-          Masse salariale sur heures réellement réalisées (cahier de textes) : {formatGNF(founder?.realPayroll.teacherMonthlyPayroll)}
-          {" "}sur {formatMinutes(founder?.realPayroll.totalRealizedMinutes)} — écart de {formatGNF(teacherPayrollGap)} avec
-          {" "}l&apos;estimation théorique ci-dessus, principalement dû aux séances non réalisées (annulées ou non
-          {" "}encore consignées), pas aux simples retards/départs anticipés (informatifs, jamais déduits du salaire).
-        </p>
         {founderQuery.loading ? <CardSkeleton lines={4} /> : (
           <Card>
             <CardBody className="space-y-3">
