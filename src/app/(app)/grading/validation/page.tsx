@@ -116,7 +116,7 @@ export default function ValidationPage() {
         </div>
         <div className="ml-auto">
           <Button variant="secondary" disabled={!periodId} loading={loadingPalmares} onClick={openPalmares} leftSection={<Award className="h-4 w-4" />}>
-            Palmarès de l'école (PDF)
+            Palmarès de l&apos;école (PDF)
           </Button>
         </div>
       </div>
