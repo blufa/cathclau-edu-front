@@ -103,7 +103,6 @@ export default function AttendanceScanPage() {
   const rafRef = useRef<number | null>(null);
   // Boucle de détection native (voir startCamera) : mise à false pour l'arrêter proprement.
   const nativeDetectorActiveRef = useRef(false);
-  const lastRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
   // Sujets dont un pointage est en cours : évite deux envois simultanés pour la même personne.
   const inFlightRef = useRef<Set<string>>(new Set());
 
@@ -213,23 +212,16 @@ export default function AttendanceScanPage() {
   }, [pushFeed]);
 
   const handleRaw = useCallback((raw: string) => {
-    const now = Date.now();
-    // Débounce par carte + sens choisi : re-sélectionner l'autre sens et rescanner la même carte
-    // doit repartir immédiatement, pas rester bloqué par le dernier scan. 8s (pas 3s) : DOIT rester
-    // strictement supérieur à la fenêtre de course anti-double-scan du serveur (RACE_WINDOW_SECONDS =
-    // 5s côté Student/Teacher/EmployeeAttendanceService, §16) — sinon un badge simplement laissé
-    // quelques secondes devant la caméra (très courant en mobile, le badge/téléphone est tenu à la
-    // main) redéclenche un 2e appel réseau qui retombe DANS la fenêtre de course serveur : celle-ci le
-    // traite comme une retentative réseau du même tap et renvoie un succès silencieux (pointage déjà
-    // enregistré, comportement voulu pour une vraie coupure réseau) au lieu de le rejeter — l'écran
-    // affiche alors un 2e "scan réussi" pour la même carte, donnant l'impression que le garde-fou
-    // anti-double-scan n'existe pas alors qu'aucune 2e ligne n'est réellement créée en base (retour
-    // direct : "j'ai la possibilité de scanner un badge plusieurs fois en mobile").
-    const debounceKey = `${raw}:${direction}`;
-    if (debounceKey === lastRef.current.key && now - lastRef.current.at < 8000) return;
+    // Aucun délai artificiel (§retour fondateur — un badge laissé devant la caméra ne doit jamais être
+    // "silencieusement ignoré" pendant X secondes) : la seule protection contre les doublons de la
+    // boucle caméra (qui relit le même badge à chaque frame tant qu'il reste visible) est inFlightRef
+    // dans submit(), qui empêche deux requêtes SIMULTANÉES pour le même sujet+sens — relâché dès que la
+    // réponse serveur arrive. L'état réel (déjà entré aujourd'hui ? déjà sorti aujourd'hui ?) est
+    // tranché UNE SEULE FOIS, côté serveur (voir StudentAttendanceService#recordEntry) : un badge qui
+    // reste visible après un scan réussi déclenchera un refus explicite et immédiat au frame suivant,
+    // jamais un faux succès silencieux.
     const parsed = parseScan(raw);
     if (!parsed) return;
-    lastRef.current = { key: debounceKey, at: now };
     if ("matricule" in parsed) {
       const mat = parsed.matricule.toLowerCase();
       // Type connu (badge réimprimé avec ce correctif) : on ne cherche QUE dans la bonne liste — plus
