@@ -34,7 +34,9 @@ import {
   createExam,
   deleteAssessment,
   deleteExam,
+  listExamAssessments,
   listExamSupervisions,
+  getExamGradeEntryAssessment,
   removeExamSupervision,
   generateReportCardsBulk,
   getAssessmentGrades,
@@ -80,6 +82,7 @@ import { printHtmlDocument } from "@/lib/print-node";
 import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
 import { getSchoolProfile } from "@/lib/api/platform";
 import { openPdfInApp } from "@/lib/open-pdf";
+import { formatDate } from "@/lib/format";
 
 export default function GradingPage() {
   const { user } = useAuth();
@@ -144,7 +147,7 @@ export default function GradingPage() {
         <Tabs defaultValue="evaluations">
           <TabsList>
             <TabsTrigger value="evaluations" icon={BookOpen}>Évaluations</TabsTrigger>
-            <TabsTrigger value="exams" icon={GraduationCap}>Examens</TabsTrigger>
+            <TabsTrigger value="exams" icon={GraduationCap}>Compositions</TabsTrigger>
             <TabsTrigger value="reports" icon={FileText}>Bulletins</TabsTrigger>
           </TabsList>
           <TabsPanel value="evaluations">
@@ -152,7 +155,7 @@ export default function GradingPage() {
               yearId={effectiveYearId} canWrite={canWrite} canEditExisting={canEditExisting} />
           </TabsPanel>
           <TabsPanel value="exams">
-            <ExamsTab classId={classId} yearId={effectiveYearId} canManage={canManage} />
+            <CompositionsTab classId={classId} yearId={effectiveYearId} canManage={canManage} canWrite={canWrite} canEditExisting={canEditExisting} />
           </TabsPanel>
           <TabsPanel value="reports">
             <ReportCardsTab classId={classId} yearId={effectiveYearId} canManage={canManage} />
@@ -239,14 +242,42 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
     }
   }
 
+  // PDF du relevé des compositions — même générateur que le relevé du mois, sans le filtre `month`
+  // (une composition n'est jamais datée "du mois", elle couvre la période).
+  const [compositionPdfUrl, setCompositionPdfUrl] = useState<string | null>(null);
+  const [compositionPdfLoadingKey, setCompositionPdfLoadingKey] = useState<string | null>(null);
+  async function openCompositionPdf(group: { subjectId: number; periodId: number; evals: Assessment[] }) {
+    const key = `${group.subjectId}|${group.periodId}`;
+    setCompositionPdfLoadingKey(key);
+    try {
+      setCompositionPdfUrl(await getSubjectGradeReportPdfObjectUrl(classId, group.subjectId, group.periodId));
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setCompositionPdfLoadingKey(null);
+    }
+  }
+
   const distinctSubjects = useMemo(
     () => [...new Set((assessmentsQuery.data ?? []).map((a) => a.subjectId))],
     [assessmentsQuery.data]);
 
-  // Évaluations groupées par (matière, mois) — 2 évals/mois/matière sans créer de lignes séparées à l'œil.
+  // Recherche par matière et par date sur les listes Évaluations/Compositions ci-dessous (la classe
+  // est déjà le sélecteur de la page, au-dessus des onglets — pas un 3e filtre ici).
+  const [searchSubject, setSearchSubject] = useState<string>("");
+  const [searchDate, setSearchDate] = useState<string>("");
+  const filteredAssessments = useMemo(
+    () => (assessmentsQuery.data ?? []).filter((a) =>
+      (!searchSubject || String(a.subjectId) === searchSubject) && (!searchDate || a.date === searchDate)),
+    [assessmentsQuery.data, searchSubject, searchDate]);
+
+  // Évaluations (interrogations/devoirs) groupées par (matière, mois) — jamais les compositions, qui
+  // ont leur propre liste ci-dessous (compositionGroups) : plus mélangées dans le même tableau/relevé
+  // (§retour utilisateur, "il doit avoir les évaluations à part, et une liste des compositions").
   const groups = useMemo(() => {
     const map = new Map<string, { subjectId: number; monthKey: string; evals: Assessment[] }>();
-    for (const a of assessmentsQuery.data ?? []) {
+    for (const a of filteredAssessments) {
+      if (a.type === "EXAM") continue;
       const key = `${a.subjectId}|${monthKeyOf(a)}`;
       if (!map.has(key)) map.set(key, { subjectId: a.subjectId, monthKey: monthKeyOf(a), evals: [] });
       map.get(key)!.evals.push(a);
@@ -256,7 +287,22 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
         (subjectLabel.get(x.subjectId) ?? "").localeCompare(subjectLabel.get(y.subjectId) ?? "") ||
         y.monthKey.localeCompare(x.monthKey),
     );
-  }, [assessmentsQuery.data, subjectLabel]);
+  }, [filteredAssessments, subjectLabel]);
+
+  // Compositions groupées par (matière, période) — pas de notion de mois (une composition par
+  // période, pas une par mois comme les évaluations).
+  const periodLabel = useMemo(() => new Map((periodsQuery.data ?? []).map((p) => [p.id, p.label])), [periodsQuery.data]);
+  const compositionGroups = useMemo(() => {
+    const map = new Map<string, { subjectId: number; periodId: number; evals: Assessment[] }>();
+    for (const a of filteredAssessments) {
+      if (a.type !== "EXAM") continue;
+      const key = `${a.subjectId}|${a.periodId}`;
+      if (!map.has(key)) map.set(key, { subjectId: a.subjectId, periodId: a.periodId, evals: [] });
+      map.get(key)!.evals.push(a);
+    }
+    return [...map.values()].sort(
+      (x, y) => (subjectLabel.get(x.subjectId) ?? "").localeCompare(subjectLabel.get(y.subjectId) ?? ""));
+  }, [filteredAssessments, subjectLabel]);
 
   // Relevé mensuel : Éval 1 / Éval 2 / … + Moyenne du mois (pondérée par coefficient, ramenée sur 20).
   async function printMonthly(group: { subjectId: number; monthKey: string; evals: Assessment[] }) {
@@ -346,9 +392,26 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
           <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle évaluation</Button>
         )}
       </div>
+      {distinctSubjects.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <Field>
+            <Label>Rechercher — matière</Label>
+            <SearchableSelect value={searchSubject} options={subjectFilterOptions} onChange={setSearchSubject} triggerClassName="w-[200px] justify-between px-3" noResultsLabel="Aucune matière" />
+          </Field>
+          <Field>
+            <Label>Rechercher — date</Label>
+            <DatePicker value={searchDate} onChange={setSearchDate} clearable />
+          </Field>
+          {(searchSubject || searchDate) && (
+            <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchDate(""); }}>Réinitialiser</Button>
+          )}
+        </div>
+      )}
       {assessmentsQuery.loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
+        <>
+        <h3 className="text-sm font-semibold text-gray-700">Évaluations</h3>
         <Table>
           <THead>
             <tr>
@@ -396,7 +459,7 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
                     <TD><Badge tone="indigo">{ASSESSMENT_TYPE_LABEL[a.type]}</Badge></TD>
                     <TD className="hidden sm:table-cell">/ {a.maxScore}</TD>
                     <TD className="hidden sm:table-cell">{a.coefficient}</TD>
-                    <TD className="hidden sm:table-cell">{a.date ?? "—"}</TD>
+                    <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
@@ -411,6 +474,68 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
             ))}
           </TBody>
         </Table>
+
+        {/* Jamais mélangées aux évaluations ci-dessus (§retour utilisateur) : les compositions ont
+            leur propre liste, groupée par période (pas par mois — une composition par période). */}
+        <h3 className="mt-6 text-sm font-semibold text-gray-700">Compositions</h3>
+        <Table>
+          <THead>
+            <tr>
+              <TH>Évaluation</TH>
+              <TH className="hidden sm:table-cell">Matière</TH>
+              <TH className="hidden sm:table-cell">Enseignant</TH>
+              <TH>Type</TH>
+              <TH className="hidden sm:table-cell">Barème</TH>
+              <TH className="hidden sm:table-cell">Coef.</TH>
+              <TH className="hidden sm:table-cell">Date</TH>
+              <TH className="text-right">Actions</TH>
+            </tr>
+          </THead>
+          <TBody>
+            {compositionGroups.length === 0 && (
+              <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune composition.</TD></TR>
+            )}
+            {compositionGroups.map((g) => (
+              <Fragment key={`compo|${g.subjectId}|${g.periodId}`}>
+                <TR>
+                  <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`} · {periodLabel.get(g.periodId) ?? `#${g.periodId}`}
+                        <span className="ml-2 font-normal text-gray-400">
+                          {g.evals.length} composition{g.evals.length > 1 ? "s" : ""}
+                        </span>
+                      </span>
+                      <Button size="sm" variant="secondary"
+                        loading={compositionPdfLoadingKey === `${g.subjectId}|${g.periodId}`}
+                        onClick={() => openCompositionPdf(g)}>Relevé (PDF)</Button>
+                    </div>
+                  </TD>
+                </TR>
+                {g.evals.map((a) => (
+                  <TR key={a.id}>
+                    <TD className="pl-6 font-medium text-gray-900">{a.label}</TD>
+                    <TD className="hidden sm:table-cell">{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
+                    <TD className="hidden sm:table-cell">{a.teacherId ? (teacherLabel.get(a.teacherId) ?? `#${a.teacherId}`) : "—"}</TD>
+                    <TD><Badge tone="indigo">{ASSESSMENT_TYPE_LABEL[a.type]}</Badge></TD>
+                    <TD className="hidden sm:table-cell">/ {a.maxScore}</TD>
+                    <TD className="hidden sm:table-cell">{a.coefficient}</TD>
+                    <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
+                    <TD className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
+                        {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
+                        {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
+                      </div>
+                    </TD>
+                  </TR>
+                ))}
+              </Fragment>
+            ))}
+          </TBody>
+        </Table>
+        </>
       )}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle évaluation">
@@ -429,11 +554,13 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
       <FilePreview url={releveUrl} title="Relevé de notes" open={releveUrl != null} onClose={() => setReleveUrl(null)} autoPrint />
       <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} autoPrint />
       <FilePreview url={monthlyPdfUrl} title="Relevé du mois" open={monthlyPdfUrl != null} onClose={() => setMonthlyPdfUrl(null)} autoPrint />
+      <FilePreview url={compositionPdfUrl} title="Relevé des compositions" open={compositionPdfUrl != null} onClose={() => setCompositionPdfUrl(null)} autoPrint />
     </div>
   );
 }
 
-// ── Examens tab ──────────────────────────────────────────────────────────────
+// ── Compositions tab (domaine "Exam" — type ExamType conservé : Blanc/Semestriel/Annuel/National
+// restent des sous-types valides d'une composition) ───────────────────────────
 const examSchema = z.object({
   periodId: z.string().min(1, "Requis"),
   type: z.string(),
@@ -442,9 +569,16 @@ const examSchema = z.object({
 });
 type ExamFormValues = z.infer<typeof examSchema>;
 
-function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: number | null; canManage: boolean }) {
+function CompositionsTab({ classId, yearId, canManage, canWrite, canEditExisting }: {
+  classId: number; yearId: number | null; canManage: boolean; canWrite: boolean; canEditExisting: boolean;
+}) {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? null;
   const examsQuery = useCachedQuery(`exams-class:${classId}`, () => listExamsByClass(classId), [classId]);
   const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
+  const classSubjectsQuery = useCachedQuery(`class-subjects:${classId}`, () => listClassSubjects(classId), [classId]);
+  const allSubjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
+  const subjectName = useMemo(() => new Map((allSubjectsQuery.data ?? []).map((s) => [s.id, s.label])), [allSubjectsQuery.data]);
   const [creating, setCreating] = useState(false);
   const [supervisingFor, setSupervisingFor] = useState<Exam | null>(null);
 
@@ -462,8 +596,8 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
   }
   function handleDelete(e: Exam) {
     confirmAction({
-      title: "Supprimer l'examen", message: `Supprimer « ${e.label} » ?`, confirmLabel: "Supprimer", danger: true,
-      onConfirm: async () => { try { await deleteExam(e.id); notifySuccess("Examen supprimé"); examsQuery.refetch(); } catch (err) { notifyError(err); } },
+      title: "Supprimer la composition", message: `Supprimer « ${e.label} » ?`, confirmLabel: "Supprimer", danger: true,
+      onConfirm: async () => { try { await deleteExam(e.id); notifySuccess("Composition supprimée"); examsQuery.refetch(); } catch (err) { notifyError(err); } },
     });
   }
 
@@ -473,37 +607,89 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
+
+  // Matières couvertes par la composition — toutes les matières de la classe cochées par défaut
+  // (§retour utilisateur : "programmer les compositions pour toutes les matières de la classe en
+  // une seule fois, comme pour les évaluations") ; décochables au cas par cas. Une évaluation (type
+  // EXAM) est créée pour chaque matière cochée, prête pour la saisie des notes sans repasser par
+  // "Saisir les notes" matière par matière.
+  const [subjectIds, setSubjectIds] = useState<string[]>([]);
+  const [subjectError, setSubjectError] = useState<string | null>(null);
+  function toggleSubject(sid: string) {
+    setSubjectIds((prev) => (prev.includes(sid) ? prev.filter((s) => s !== sid) : [...prev, sid]));
+    setSubjectError(null);
+  }
+  function openCreate() {
+    setSubjectIds((classSubjectsQuery.data ?? []).map((cm) => String(cm.subjectId)));
+    setCreating(true);
+  }
+
   async function submit(values: ExamFormValues) {
+    if (subjectIds.length === 0) { setSubjectError("Choisissez au moins une matière"); return; }
     try {
-      await createExam({ classId, periodId: Number(values.periodId), type: values.type as ExamType, label: values.label, scheduledDate: values.scheduledDate || null });
-      setCreating(false); reset(); notifySuccess("Examen planifié"); examsQuery.refetch();
+      const exam = await createExam({ classId, periodId: Number(values.periodId), type: values.type as ExamType, label: values.label, scheduledDate: values.scheduledDate || null });
+      // Sans date, l'évaluation de chaque matière ne peut pas encore être créée (voir
+      // gradeEntryAssessment côté backend) — la composition reste planifiable, les matières seront
+      // prêtes dès qu'une date sera renseignée (via "Saisir les notes").
+      if (values.scheduledDate) {
+        for (const sid of subjectIds) {
+          try { await getExamGradeEntryAssessment(exam.id, Number(sid)); }
+          catch (err) { notifyError(err); }
+        }
+      }
+      setCreating(false); reset(); notifySuccess("Composition planifiée"); examsQuery.refetch();
     } catch (err) { notifyError(err); }
+  }
+
+  // Saisie des notes par matière (§retour utilisateur : la composition se crée ET se note ici,
+  // jamais via "Nouvelle évaluation") — on choisit la matière au moment de saisir les notes, la
+  // grille réutilisée est exactement celle des évaluations normales (GradeGrid).
+  const [pickingSubjectFor, setPickingSubjectFor] = useState<Exam | null>(null);
+  const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
+  const [gradedSubjectIds, setGradedSubjectIds] = useState<Set<number>>(new Set());
+  const [subjectPickLoading, setSubjectPickLoading] = useState<number | null>(null);
+
+  async function openSubjectPicker(e: Exam) {
+    setPickingSubjectFor(e);
+    try {
+      const already = await listExamAssessments(e.id);
+      setGradedSubjectIds(new Set(already.map((a) => a.subjectId)));
+    } catch (err) { notifyError(err); }
+  }
+  async function pickSubject(e: Exam, subjectId: number) {
+    setSubjectPickLoading(subjectId);
+    try {
+      const assessment = await getExamGradeEntryAssessment(e.id, subjectId);
+      setPickingSubjectFor(null);
+      setGradingFor(assessment);
+    } catch (err) { notifyError(err); } finally { setSubjectPickLoading(null); }
   }
 
   return (
     <div className="space-y-4">
       {canManage && (
         <div className="flex justify-end">
-          <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Planifier un examen</Button>
+          <Button onClick={openCreate} leftSection={<Plus className="h-4 w-4" />}>Planifier une composition</Button>
         </div>
       )}
       {examsQuery.loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
         <Table>
-          <THead><tr><TH>Examen</TH><TH>Type</TH><TH>Date</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
+          <THead><tr><TH>Composition</TH><TH>Type</TH><TH>Date</TH><TH>Statut</TH><TH className="text-right">Actions</TH></tr></THead>
           <TBody>
             {(examsQuery.data ?? []).length === 0 && (
-              <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucun examen.</TD></TR>
+              <TR><TD colSpan={5} className="py-10 text-center text-gray-400">Aucune composition.</TD></TR>
             )}
             {(examsQuery.data ?? []).map((e) => (
               <TR key={e.id}>
                 <TD className="font-medium text-gray-900">{e.label}</TD>
                 <TD>{EXAM_TYPE_LABEL[e.type]}</TD>
-                <TD>{e.scheduledDate ?? "—"}</TD>
+                <TD>{formatDate(e.scheduledDate)}</TD>
                 <TD><Badge tone={e.status === "COMPLETED" ? "green" : e.status === "ONGOING" ? "amber" : "gray"}>{EXAM_STATUS_LABEL[e.status]}</Badge></TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
+                    {canWrite && <Button size="sm" onClick={() => openSubjectPicker(e)}>Saisir les notes</Button>}
                     <Button size="sm" variant="ghost" onClick={() => convocation(e)}>Convocation</Button>
                     {canManage && <Button size="sm" variant="ghost" onClick={() => setSupervisingFor(e)}>Surveillance</Button>}
                     {canManage && e.status === "PLANNED" && <Button size="sm" variant="ghost" onClick={() => changeStatus(e, "start")}>Démarrer</Button>}
@@ -517,8 +703,30 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
         </Table>
       )}
 
-      <Modal open={creating} onClose={() => setCreating(false)} title="Planifier un examen">
+      <Modal open={creating} onClose={() => setCreating(false)} title="Planifier une composition">
         <form onSubmit={handleSubmit(submit)} className="space-y-4">
+          <Field>
+            <div className="flex items-center justify-between">
+              <Label>Matières <span className="text-error-500">*</span></Label>
+              <div className="flex gap-2 text-xs">
+                <button type="button" className="text-brand-600 hover:underline"
+                  onClick={() => setSubjectIds((classSubjectsQuery.data ?? []).map((cm) => String(cm.subjectId)))}>Tout cocher</button>
+                <button type="button" className="text-gray-400 hover:underline" onClick={() => setSubjectIds([])}>Tout décocher</button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">Toutes les matières de la classe sont cochées par défaut — décochez celles à exclure.</p>
+            <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+              {(classSubjectsQuery.data ?? []).map((cm) => (
+                <label key={cm.subjectId} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input type="checkbox" checked={subjectIds.includes(String(cm.subjectId))}
+                    onChange={() => toggleSubject(String(cm.subjectId))}
+                    className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+                  {subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}
+                </label>
+              ))}
+            </div>
+            {subjectError && <p className="text-xs text-error-600">{subjectError}</p>}
+          </Field>
           <Field>
             <Label>Période <span className="text-error-500">*</span></Label>
             <Select value={v.periodId} onChange={(e) => setValue("periodId", e.target.value)}>
@@ -541,12 +749,32 @@ function ExamsTab({ classId, yearId, canManage }: { classId: number; yearId: num
           <Field>
             <Label>Date</Label>
             <DatePicker value={v.scheduledDate} onChange={(val) => setValue("scheduledDate", val)} clearable />
+            <p className="text-xs text-gray-400">Requise avant de pouvoir saisir les notes.</p>
           </Field>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={() => setCreating(false)}>Annuler</Button>
             <Button type="submit">Planifier</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!pickingSubjectFor} onClose={() => setPickingSubjectFor(null)} title={`Saisir les notes — ${pickingSubjectFor?.label ?? ""}`}>
+        <div className="max-h-72 space-y-1 overflow-y-auto">
+          {(classSubjectsQuery.data ?? []).length === 0 && (
+            <p className="py-6 text-center text-sm text-gray-400">Aucune matière affectée à cette classe.</p>
+          )}
+          {(classSubjectsQuery.data ?? []).map((cm) => (
+            <Button key={cm.subjectId} variant="secondary" className="w-full justify-between"
+              loading={subjectPickLoading === cm.subjectId}
+              onClick={() => pickingSubjectFor && pickSubject(pickingSubjectFor, cm.subjectId)}>
+              <span>{subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}</span>
+              {gradedSubjectIds.has(cm.subjectId) && <span className="text-xs text-success-600">✓ déjà saisi</span>}
+            </Button>
+          ))}
+        </div>
+      </Modal>
+      <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""} · ${gradingFor ? subjectName.get(gradingFor.subjectId) ?? "" : ""}`}>
+        {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
       </Modal>
 
       {supervisingFor && (
@@ -803,7 +1031,11 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
     resolver: zodResolver(schema),
     defaultValues: {
       periodId: initial ? String(initial.periodId) : "",
-      type: initial ? initial.type : "HOMEWORK",
+      // Nouvelle création : toujours Interrogation, seul type encore proposé (§retour utilisateur,
+      // "il faut juste laisser le type Interrogation") — le libellé libre (ex. "Évaluation Écrite")
+      // suffit à distinguer les évaluations, le type n'est plus un choix. Une évaluation existante
+      // d'un autre type (HOMEWORK/EXAM/FINAL, créée avant ce changement) garde son type en édition.
+      type: initial ? initial.type : "QUIZ",
       label: initial?.label ?? "",
       date: initial?.date ?? "",
       coefficient: initial ? Number(initial.coefficient) : 1,
@@ -925,8 +1157,11 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
       </Field>
       <Field>
         <Label>Type</Label>
-        <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
-          {(Object.keys(ASSESSMENT_TYPE_LABEL) as AssessmentType[]).map((t) => (<option key={t} value={t}>{ASSESSMENT_TYPE_LABEL[t]}</option>))}
+        {/* Toujours Interrogation à la création — seul type restant (§retour utilisateur) ; les
+            compositions se créent et se notent désormais depuis l'onglet Compositions, jamais ici.
+            En édition, le type d'origine est affiché mais ne se change pas (comme la matière). */}
+        <Select disabled value={v.type}>
+          <option value={v.type}>{ASSESSMENT_TYPE_LABEL[v.type as AssessmentType]}</option>
         </Select>
       </Field>
       <Field>

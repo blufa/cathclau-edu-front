@@ -128,6 +128,13 @@ export function deleteParentLink(linkId: number): Promise<void> {
   return api.delete<void>(`/parents/links/${linkId}`);
 }
 
+/** Supprime DÉFINITIVEMENT une fiche parent (ex. doublon créé par une coupure réseau pendant
+ * l'inscription d'un enfant) — purge aussi tous ses liens de parenté côté serveur, jamais les fiches
+ * élève elles-mêmes. Irréversible : à utiliser avec confirmation (voir confirmAction). */
+export function deleteParent(id: number): Promise<void> {
+  return api.delete<void>(`/parents/${id}`);
+}
+
 /** Le parent connecté met à jour ses propres coordonnées (jamais son nom). */
 export function updateMyParentProfile(input: {
   phone?: string | null;
