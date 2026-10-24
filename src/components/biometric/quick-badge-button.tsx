@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { IdCard } from "lucide-react";
-import { getStudentCard, issueStudentCard, listCardTemplates } from "@/lib/api/student-card";
+import { getOrRefreshStudentCard, listCardTemplates } from "@/lib/api/student-card";
 import type { StudentCard } from "@/lib/types/student-card";
 import { StudentCardPreview } from "@/features/students/components/student-card-preview";
 import { Button } from "@/components/ui/button";
@@ -30,8 +30,10 @@ export function QuickBadgeButton({ studentId, studentName, studentNumber, photoU
   async function openBadge() {
     setLoading(true);
     try {
-      const existing = await getStudentCard(studentId).catch(() => null);
-      const c = existing ?? await issueStudentCard(studentId, { studentNumber, photoUrl, classId });
+      // getOrRefreshStudentCard régénère automatiquement si le matricule/la photo/la classe a changé
+      // depuis l'émission (§retour utilisateur, production : un ancien GET-puis-POST-si-absent gardait
+      // silencieusement un matricule modifié depuis, le badge affichant toujours l'ancien).
+      const c = await getOrRefreshStudentCard(studentId, { studentNumber, photoUrl, classId });
       setCard(c);
       setOpen(true);
     } catch (e) { notifyError(e); } finally { setLoading(false); }
