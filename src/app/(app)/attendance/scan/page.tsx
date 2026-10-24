@@ -174,6 +174,11 @@ export default function AttendanceScanPage() {
         return;
       }
       const res = attempt.result;
+      // Retour silencieux d'un scan déjà traité (badge resté visible plusieurs frames à la caméra,
+      // retentative réseau) : jamais un nouveau pointage — aucune notification, sinon un seul scan
+      // physique produit plusieurs entrées dans le fil et plusieurs vibrations (§retour terrain,
+      // "comme si il scan 8 fois"). La première réponse a déjà produit l'unique notification due.
+      if (res.duplicate) return;
       pushFeed({
         id: `${Date.now()}`, name: res.name ?? `#${res.subjectId}`, kind: res.direction,
         outcome: res.outcome, lateMinutes: res.lateMinutes, checkOutTime: res.checkOutTime,

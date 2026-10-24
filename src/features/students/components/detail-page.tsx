@@ -66,6 +66,10 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 export default function StudentDetailPage() {
   const searchParams = useSearchParams();
   const id = Number(searchParams.get("id"));
+  // Reporté dans le lien « Retour à la liste » (ci-dessous) — pour que le filtre classe de la liste
+  // survive l'aller-retour (§retour terrain), voir list-page.tsx.
+  const classFilter = searchParams.get("classFilter");
+  const backToListHref = classFilter ? `/students?classFilter=${classFilter}` : "/students";
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
   const canEnroll = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["inscription:create"]);
@@ -215,7 +219,7 @@ export default function StudentDetailPage() {
   if (error || !data) {
     return (
       <div className="space-y-4">
-        <Link href="/students" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
+        <Link href={backToListHref} className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
           <ArrowLeft className="h-4 w-4" /> Retour à la liste
         </Link>
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Élève introuvable.</p>
@@ -227,7 +231,7 @@ export default function StudentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/students" className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
+      <Link href={backToListHref} className="inline-flex items-center gap-1 text-sm text-brand-700 hover:underline">
         <ArrowLeft className="h-4 w-4" /> Retour à la liste
       </Link>
 

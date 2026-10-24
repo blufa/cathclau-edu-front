@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Printer, Search, Upload } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useSubscription } from "@/providers/subscription-provider";
@@ -42,11 +43,26 @@ export default function StudentsPage() {
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "SECRETARY", "DIRECTOR") || hasAnyPermission(user, ["eleve:create", "eleve:update"]);
   const canDelete = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasPermission(user, "eleve:delete");
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState<Gender | "">("");
   const [status, setStatus] = useState<EnrollmentStatus | "NOT_ENROLLED" | "">("");
-  const [classFilter, setClassFilter] = useState<string>("");
+  // Persisté dans l'URL (?classFilter=...), pas un simple useState : la prise de photo (caméra du
+  // navigateur) peut faire basculer l'onglet en arrière-plan sur mobile, et le navigateur recharge
+  // alors la page entière au retour — perdant tout état React local, mais jamais l'URL (§retour
+  // terrain : "il doit rester sur le filtre de la classe"). Même logique pour un retour depuis la
+  // fiche détail d'un élève (lien transporté, voir detail-page.tsx).
+  const [classFilter, setClassFilterState] = useState<string>(() => searchParams.get("classFilter") ?? "");
+  const setClassFilter = useCallback((value: string) => {
+    setClassFilterState(value);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set("classFilter", value); else params.delete("classFilter");
+    router.replace(params.size > 0 ? `/students?${params.toString()}` : "/students", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
   const [page, setPage] = useState(0);
 
   const [editing, setEditing] = useState<Student | null>(null);
@@ -219,7 +235,10 @@ export default function StudentsPage() {
       header: "Élève",
       accessor: (row) => `${row.student.firstName} ${row.student.lastName}`,
       render: (row) => (
-        <Link href={`/students/detail?id=${row.student.id}`} className="group flex items-center gap-3">
+        <Link
+          href={`/students/detail?id=${row.student.id}${classFilter ? `&classFilter=${classFilter}` : ""}`}
+          className="group flex items-center gap-3"
+        >
           <button
             type="button"
             title="Modifier la photo"
