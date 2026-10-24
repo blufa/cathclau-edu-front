@@ -74,6 +74,17 @@ export function deleteExam(id: number): Promise<void> {
   return api.delete<void>(`/grading/exams/${id}`);
 }
 
+/** Évaluations (une par matière déjà notée) liées à cette composition. */
+export function listExamAssessments(examId: number): Promise<Assessment[]> {
+  return api.get<Assessment[]>(`/grading/exams/${examId}/assessments`);
+}
+
+/** Retrouve (ou crée) l'évaluation de cette matière pour cette composition, prête pour la saisie des
+ * notes (même grille que pour une évaluation normale, voir GradeGrid). */
+export function getExamGradeEntryAssessment(examId: number, subjectId: number): Promise<Assessment> {
+  return api.post<Assessment>(`/grading/exams/${examId}/subjects/${subjectId}/grade-entry`);
+}
+
 // ── Surveillance des examens (composition : surveillants par salle) ─────────────
 export interface ExamSupervision {
   id: number; tenantId: number; examId: number; roomId: number; teacherId: number;
@@ -235,9 +246,10 @@ export function simulateGrades(classId: number, periodId: number): Promise<Simul
   return api.get<SimulationReport>("/grading/simulation", { query: { classId, periodId } });
 }
 
-/** Palmarès / tableau d'honneur d'une classe (PDF, élèves classés par rang) — object URL local. */
-export function getClassHonorRollPdfObjectUrl(classId: number, periodId: number): Promise<string> {
-  return api.blobUrl(`/grading/report-cards/class/${classId}/period/${periodId}/palmares/download`);
+/** Palmarès / tableau d'honneur de l'établissement (PDF) : meilleurs élèves toutes classes confondues
+ * pour une période, pas une classe isolée — object URL local. */
+export function getHonorRollPdfObjectUrl(periodId: number): Promise<string> {
+  return api.blobUrl(`/grading/report-cards/period/${periodId}/palmares/download`);
 }
 
 /** Relevé de notes d'une matière (classe + période) : chaque évaluation + moyenne calculée. */
@@ -256,6 +268,11 @@ export interface ReleveRow {
   notes: Record<string, string | null>;
   average: string | null;
 }
+/** Une section du relevé (Évaluations OU Compositions) — jamais mélangées dans le même tableau. */
+export interface ReleveSection {
+  assessments: ReleveAssessment[];
+  rows: ReleveRow[];
+}
 export interface SubjectGradeReport {
   tenantId: number | null;
   classId: number;
@@ -265,8 +282,10 @@ export interface SubjectGradeReport {
   subjectName: string | null;
   periodLabel: string | null;
   schoolYear: string | null;
-  assessments: ReleveAssessment[];
-  rows: ReleveRow[];
+  /** Coefficient de la matière (Classes → Matières) — une seule valeur, jamais par évaluation. */
+  subjectCoefficient: string | null;
+  evaluations: ReleveSection;
+  compositions: ReleveSection;
 }
 
 export function getSubjectGradeReport(classId: number, subjectId: number, periodId: number): Promise<SubjectGradeReport> {

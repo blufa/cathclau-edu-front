@@ -86,14 +86,9 @@ export default function CashDepositsPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
-              <Banknote className="h-6 w-6 text-brand-600" /> Dépôts de fonds
-            </h1>
-            <p className="text-sm text-gray-500">
-              Argent remis par le comptable au fondateur — en attente jusqu&apos;à sa validation dans la plateforme.
-            </p>
-          </div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
+            <Banknote className="h-6 w-6 text-brand-600" /> Dépôts de fonds
+          </h1>
           {canCreate && <Button onClick={() => setCreating(true)}>Nouveau dépôt</Button>}
         </div>
       </Reveal>

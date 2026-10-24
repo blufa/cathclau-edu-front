@@ -47,7 +47,6 @@ export default function CalendarPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Calendrier</h1>
-        <p className="text-sm text-gray-500">Jours fériés, vacances, compositions, réunions, échéances et événements école</p>
       </Reveal>
 
       <Tabs defaultValue="academic">

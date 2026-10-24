@@ -104,10 +104,7 @@ export default function LessonsPage() {
   return (
     <div className="space-y-6">
       <Reveal y={12} className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Cahier de textes</h1>
-          <p className="text-sm text-gray-500">Séances, contenu des cours et devoirs donnés — suivi de progression</p>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Cahier de textes</h1>
         {canWrite && <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle séance</Button>}
       </Reveal>
 

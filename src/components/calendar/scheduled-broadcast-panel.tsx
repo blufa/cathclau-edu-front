@@ -78,11 +78,7 @@ export function ScheduledBroadcastPanel({ events }: { events: LinkableEvent[] })
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <p className="text-sm text-gray-500">
-            Programmer l&apos;envoi d&apos;un SMS/e-mail à une date et heure précises — utile pour annoncer un
-            événement à l&apos;avance sans avoir à cliquer « Envoyer » le jour J.
-          </p>
+        <div className="flex items-center justify-end border-b border-gray-100 px-4 py-3">
           <Button onClick={() => setOpen(true)}><Plus className="mr-1.5 h-4 w-4" /> Programmer une diffusion</Button>
         </div>
         {q.loading ? (

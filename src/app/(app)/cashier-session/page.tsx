@@ -115,9 +115,6 @@ export default function CashierSessionPage() {
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
           <Wallet className="h-6 w-6 text-brand-600" /> Session de caisse
         </h1>
-        <p className="text-sm text-gray-500">
-          Rapprochement des encaissements en espèces : comparez le comptant physique au total enregistré.
-        </p>
       </Reveal>
 
       {currentQuery.loading ? (

@@ -2,12 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Banknote, Clock, Megaphone, Plus, Settings as SettingsIcon, HandCoins, Wallet } from "lucide-react";
-import { FeeDeductionPanel } from "@/components/payroll/fee-deduction-panel";
+import { ArrowLeft, Banknote, Clock, Megaphone, Plus, Wallet } from "lucide-react";
 import { SalaryAdvancePanel } from "@/components/payroll/salary-advance-panel";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
@@ -18,19 +14,14 @@ import { getCurrentAcademicYear, listClasses, listLevels } from "@/lib/api/acade
 import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
 import { sendDiffusion } from "@/lib/api/communication";
 import {
-  addRule,
   addPayslipLine,
   removePayslipLine,
   approvePayslip,
-  createStructure,
   deletePayslip,
-  deleteRule,
-  deleteStructure,
   generatePayslip,
   getPayslipLines,
   getPayslipPdfObjectUrl,
   listPayslips,
-  listRules,
   listStructures,
   payPayslip,
   getCompensation,
@@ -50,12 +41,10 @@ import {
   type TeacherVacationPayMonth,
 } from "@/lib/api/payroll";
 import {
-  COMPUTATION_LABEL,
   LINE_TYPE_LABEL,
   PAYSLIP_STATUS_LABEL,
   type Payslip,
   type PayslipLineType,
-  type RuleComputation,
   type SalaryStructure,
 } from "@/lib/types/payroll";
 import { Button } from "@/components/ui/button";
@@ -103,29 +92,23 @@ export default function PayrollPage() {
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") && !hasAnyPermission(user, ["paie:manage"])) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration / comptabilité.</div>;
   }
-  // Grille des salaires (taux horaire/fixe) et structures salariales : relèvent de la direction, pas
-  // de la comptabilité — le comptable garde fiches de paie/déductions/avances, mais plus ces deux
-  // onglets (demande utilisateur). hasRole() fait déjà passer SUPER_ADMIN pour tout rôle demandé,
-  // donc pas de cas particulier à ajouter ici pour lui.
+  // Grille des salaires (taux horaire/fixe) : relève de la direction, pas de la comptabilité — le
+  // comptable garde fiches de paie/avances. hasRole() fait déjà passer SUPER_ADMIN pour tout rôle
+  // demandé, donc pas de cas particulier à ajouter ici pour lui.
   const isDirectionOnly = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
   return (
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Paie</h1>
-        <p className="text-sm text-gray-500">Fiches de paie des enseignants et structures salariales</p>
       </Reveal>
       <Tabs defaultValue="payslips">
         <TabsList>
           <TabsTrigger value="payslips" icon={Banknote}>Fiches de paie</TabsTrigger>
           {isDirectionOnly && <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>}
-          {isDirectionOnly && <TabsTrigger value="structures" icon={SettingsIcon}>Structures salariales</TabsTrigger>}
-          <TabsTrigger value="deductions" icon={HandCoins}>Déductions scolarité</TabsTrigger>
           <TabsTrigger value="advances" icon={Wallet}>Avances sur salaire</TabsTrigger>
         </TabsList>
         <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
         {isDirectionOnly && <TabsPanel value="compensation"><CompensationTab /></TabsPanel>}
-        {isDirectionOnly && <TabsPanel value="structures"><StructuresTab /></TabsPanel>}
-        <TabsPanel value="deductions"><FeeDeductionPanel canWrite={hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") || hasAnyPermission(user, ["paie:manage"])} /></TabsPanel>
         <TabsPanel value="advances"><SalaryAdvancePanel /></TabsPanel>
       </Tabs>
     </div>
@@ -573,195 +556,6 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button onClick={submit} loading={loading}>Générer les fiches</Button>
       </div>
-    </div>
-  );
-}
-
-function StructuresTab() {
-  const q = useQuery(listStructures, []);
-  const [creating, setCreating] = useState(false);
-  const [rulesFor, setRulesFor] = useState<SalaryStructure | null>(null);
-
-  function remove(s: SalaryStructure) {
-    confirmAction({ title: "Supprimer la structure", message: s.name, confirmLabel: "Supprimer", danger: true,
-      onConfirm: async () => { try { await deleteStructure(s.id); notifySuccess("Supprimée"); q.refetch(); } catch (e) { notifyError(e); } } });
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button leftSection={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>Nouvelle structure</Button>
-      </div>
-      {q.loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
-        <Table>
-          <THead><tr><TH>Nom</TH><TH>Code</TH><TH>Active</TH><TH className="text-right">Actions</TH></tr></THead>
-          <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-10 text-center text-gray-400">Aucune structure. Créez-en une (ex. « Enseignant permanent »).</TD></TR>}
-            {(q.data ?? []).map((s) => (
-              <TR key={s.id}>
-                <TD className="font-medium text-gray-900">{s.name}</TD>
-                <TD>{s.code ?? "—"}</TD>
-                <TD>{s.active ? <Badge tone="green">Oui</Badge> : <Badge tone="gray">Non</Badge>}</TD>
-                <TD className="text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setRulesFor(s)}>Règles</Button>
-                    <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(s)}>Suppr.</Button>
-                  </div>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      )}
-
-      <Modal open={creating} onClose={() => setCreating(false)} title="Nouvelle structure salariale">
-        <StructureForm onCancel={() => setCreating(false)} onDone={() => { setCreating(false); notifySuccess("Créée"); q.refetch(); }} />
-      </Modal>
-
-      <Modal open={!!rulesFor} onClose={() => setRulesFor(null)} title={rulesFor ? `Règles — ${rulesFor.name}` : ""}>
-        {rulesFor && <RulesPanel structure={rulesFor} />}
-      </Modal>
-    </div>
-  );
-}
-
-const structureSchema = z.object({ name: z.string().trim().min(1, "Requis"), code: z.string() });
-type StructureFormValues = z.infer<typeof structureSchema>;
-
-function StructureForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
-  const [loading, setLoading] = useState(false);
-  const { handleSubmit, watch, setValue, formState: { errors } } = useForm<StructureFormValues>({
-    resolver: zodResolver(structureSchema),
-    defaultValues: { name: "", code: "" },
-  });
-  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
-  const v = watch();
-  async function submit(values: StructureFormValues) {
-    setLoading(true);
-    try { await createStructure({ name: values.name, code: values.code || null }); onDone(); }
-    catch (err) { notifyError(err); } finally { setLoading(false); }
-  }
-  return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <Field>
-        <Label>Nom <span className="text-error-500">*</span></Label>
-        <Input placeholder="Ex. Enseignant permanent" value={v.name} onChange={(e) => setValue("name", e.target.value)} aria-invalid={!!errors.name} />
-        {errors.name && <p className="text-xs text-error-600">{errors.name.message}</p>}
-      </Field>
-      <Field>
-        <Label>Code</Label>
-        <Input placeholder="Ex. PERM" value={v.code} onChange={(e) => setValue("code", e.target.value)} />
-      </Field>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
-        <Button type="submit" loading={loading}>Créer</Button>
-      </div>
-    </form>
-  );
-}
-
-const ruleSchema = z.object({
-  label: z.string().trim().min(1, "Requis"),
-  code: z.string(),
-  category: z.string(),
-  lineType: z.string(),
-  computation: z.string(),
-  value: z.union([z.number(), z.literal("")]),
-  sequence: z.union([z.number(), z.literal("")]),
-});
-type RuleFormValues = z.infer<typeof ruleSchema>;
-
-function RulesPanel({ structure }: { structure: SalaryStructure }) {
-  const q = useQuery(() => listRules(structure.id), [structure.id]);
-  const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<RuleFormValues>({
-    resolver: zodResolver(ruleSchema),
-    defaultValues: { label: "", code: "", category: "", lineType: "EARNING", computation: "FIXED", value: 0, sequence: 10 },
-  });
-  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
-  const v = watch();
-  const [adding, setAdding] = useState(false);
-
-  async function add(values: RuleFormValues) {
-    setAdding(true);
-    try {
-      await addRule(structure.id, {
-        label: values.label, code: values.code || null, category: values.category || null,
-        lineType: values.lineType as PayslipLineType, computation: values.computation as RuleComputation,
-        value: Number(values.value) || 0, sequence: Number(values.sequence) || 10,
-      });
-      reset();
-      q.refetch();
-    } catch (err) { notifyError(err); } finally { setAdding(false); }
-  }
-
-  return (
-    <div className="space-y-4">
-      {q.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
-        <Table>
-          <THead><tr><TH>Libellé</TH><TH>Type</TH><TH>Calcul</TH><TH>Valeur</TH><TH /></tr></THead>
-          <TBody>
-            {(q.data ?? []).length === 0 && <TR><TD colSpan={5} className="py-6 text-center text-gray-400">Aucune règle.</TD></TR>}
-            {(q.data ?? []).map((r) => (
-              <TR key={r.id}>
-                <TD className="font-medium">{r.label}{r.code ? <span className="ml-1 text-xs text-gray-400">({r.code})</span> : null}</TD>
-                <TD><Badge tone={r.lineType === "EARNING" ? "green" : "amber"}>{LINE_TYPE_LABEL[r.lineType]}</Badge></TD>
-                <TD className="text-xs text-gray-600">{COMPUTATION_LABEL[r.computation]}</TD>
-                <TD>{r.computation === "FIXED" ? formatGNF(r.value) : `${r.value} %`}</TD>
-                <TD className="text-right"><Button size="sm" variant="ghost" className="text-error-600" onClick={() => deleteRule(r.id).then(() => q.refetch()).catch(notifyError)}>Suppr.</Button></TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
-      )}
-
-      <form onSubmit={handleSubmit(add)} className="rounded-xl border border-gray-200 p-3">
-        <p className="mb-2 text-sm font-semibold text-gray-700">Ajouter une règle</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Field>
-              <Label>Libellé <span className="text-error-500">*</span></Label>
-              <Input placeholder="Ex. Prime de logement" value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
-              {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
-            </Field>
-            <Field>
-              <Label>Code</Label>
-              <Input placeholder="HRA" value={v.code} onChange={(e) => setValue("code", e.target.value)} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Field>
-              <Label>Type</Label>
-              <Select value={v.lineType} onChange={(e) => setValue("lineType", e.target.value)}>
-                <option value="EARNING">Gain</option>
-                <option value="DEDUCTION">Retenue</option>
-              </Select>
-            </Field>
-            <Field>
-              <Label>Catégorie</Label>
-              <Input placeholder="Allowance / Deduction" value={v.category} onChange={(e) => setValue("category", e.target.value)} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Field>
-              <Label>Calcul</Label>
-              <Select value={v.computation} onChange={(e) => setValue("computation", e.target.value)}>
-                {(Object.keys(COMPUTATION_LABEL) as RuleComputation[]).map((c) => (<option key={c} value={c}>{COMPUTATION_LABEL[c]}</option>))}
-              </Select>
-            </Field>
-            <Field>
-              <Label>Valeur</Label>
-              <Input type="number" min={0} value={v.value} onChange={(e) => setValue("value", e.target.value === "" ? "" : Number(e.target.value))} />
-            </Field>
-            <Field>
-              <Label>Ordre</Label>
-              <Input type="number" min={0} value={v.sequence} onChange={(e) => setValue("sequence", e.target.value === "" ? "" : Number(e.target.value))} />
-            </Field>
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" size="sm" loading={adding}>Ajouter la règle</Button>
-          </div>
-        </div>
-      </form>
     </div>
   );
 }

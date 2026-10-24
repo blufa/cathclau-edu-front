@@ -67,7 +67,6 @@ export default function StudentCardsPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Cartes scolaires</h1>
-        <p className="text-sm text-gray-500">Émission des cartes élèves avec QR code signé</p>
       </Reveal>
       <Tabs defaultValue="cards">
         <TabsList>

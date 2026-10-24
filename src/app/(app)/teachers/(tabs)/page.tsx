@@ -342,7 +342,6 @@ export default function TeachersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Enseignants</h1>
-          <p className="text-sm text-gray-500">Personnel enseignant de l&apos;établissement</p>
         </div>
         {canWrite && <Button onClick={() => setCreating(true)}>Nouvel enseignant</Button>}
       </div>

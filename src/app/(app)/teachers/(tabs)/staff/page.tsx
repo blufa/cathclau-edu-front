@@ -226,10 +226,6 @@ export default function PersonnelPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Personnel</h1>
-          <p className="text-sm text-gray-500">
-            Personnel non enseignant : administration, direction et soutien. Un membre qui donne
-            aussi des heures de cours peut recevoir une fiche enseignant (« Devenir enseignant »).
-          </p>
         </div>
         {canWrite && <Button onClick={() => setCreating(true)}>Nouveau membre</Button>}
       </div>
