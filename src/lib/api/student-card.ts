@@ -35,6 +35,15 @@ export function issueStudentCard(studentId: number, input: {
 }): Promise<StudentCard> {
   return api.post<StudentCard>(`/eleves/${studentId}/carte`, input);
 }
+/** Émet si aucune carte active n'existe, la régénère automatiquement si le matricule/la photo/la
+ * classe soumis diffère de la carte active (ex. matricule modifié depuis l'émission), sinon renvoie
+ * celle-ci inchangée — toujours à jour, contrairement à un simple GET suivi d'un POST conditionnel. */
+export function getOrRefreshStudentCard(studentId: number, input: {
+  cardTemplateId?: number | null; academicYearId?: number | null; classId?: number | null;
+  studentNumber?: string | null; photoUrl?: string | null; expirationDate?: string | null;
+}): Promise<StudentCard> {
+  return api.post<StudentCard>(`/eleves/${studentId}/carte/actuelle`, input);
+}
 export function replaceCard(id: number): Promise<StudentCard> {
   return api.patch<StudentCard>(`/cartes/${id}/remplacer`);
 }
