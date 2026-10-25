@@ -117,6 +117,10 @@ export interface ScanResult {
    * ou de justifier le retard directement depuis le fil de scan. */
   studentAttendanceId: number | null;
   date: string;
+  /** `true` quand ce succès est un simple retour silencieux d'un scan déjà traité (badge resté
+   * visible plusieurs frames à la caméra, retentative réseau) — jamais un nouveau pointage. Le
+   * frontend ne doit rien afficher/vibrer dans ce cas (une seule notification par scan physique). */
+  duplicate: boolean;
 }
 export function scanAttendance(input: { subjectType: ScanSubjectType; subjectId: number; direction: ScanDirection }): Promise<ScanResult> {
   return api.post<ScanResult>("/attendance/scan", input);
