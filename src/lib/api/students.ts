@@ -1,9 +1,11 @@
 import { api } from "@/lib/api/client";
 import type { Page } from "@/lib/api/types";
+import type { Relationship } from "@/lib/api/parents";
 import type {
   CreateStudentInput,
   EnrollmentStatus,
   Gender,
+  Parent,
   Student,
   StudentDetail,
   StudentDocument,
@@ -32,6 +34,15 @@ export function updateMyStudentProfile(input: { phone?: string | null; email?: s
 
 export function updateMyStudentPhoto(photoUrl: string): Promise<Student> {
   return api.patch<Student>("/students/me/photo", undefined, { query: { photoUrl } });
+}
+
+/** L'élève connecté crée un parent prospect (sans compte) et le lie à SA PROPRE fiche — soumis à la
+ * permission `parent:create_own`, que l'établissement active lui-même via Rôles & permissions. */
+export function addMyParent(input: {
+  firstName: string; lastName: string; phone?: string | null; email?: string | null;
+  occupation?: string | null; address?: string | null; relationship?: Relationship | null;
+}): Promise<Parent> {
+  return api.post<Parent>("/students/me/parents", input);
 }
 
 export function searchStudents(params: StudentSearchParams): Promise<Page<Student>> {
