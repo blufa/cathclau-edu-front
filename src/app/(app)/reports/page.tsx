@@ -1,40 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { GraduationCap, TrendingUp, Wallet, AlertTriangle, Award, Users, HelpCircle } from "lucide-react";
+import { useState } from "react";
+import { GraduationCap, Award, Users, HelpCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { getCurrentAcademicYear, listPeriods } from "@/lib/api/academics";
-import {
-  getAcademicDashboard,
-  getFinanceDashboard,
-  getCashflowProjection,
-  getTeacherPerformance,
-} from "@/lib/api/reporting";
+import { getAcademicDashboard, getTeacherPerformance } from "@/lib/api/reporting";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
-import { StatCardSkeleton, CardSkeleton } from "@/components/ui/skeleton";
+import { StatCardSkeleton } from "@/components/ui/skeleton";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
-import { BarTrendChart } from "@/components/charts/bar-trend-chart";
-import { PlatformFeeSettlementCard } from "@/components/platform/platform-fee-settlement-card";
-import { formatGNF } from "@/lib/format";
 
 const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
 const pct = (v: string | number | null | undefined) => `${Number(v ?? 0).toFixed(2)} %`;
 const avg = (v: string | number | null | undefined) => Number(v ?? 0).toFixed(2);
-
-const TREND_LABEL: Record<"HAUSSE" | "BAISSE" | "STABLE", string> = {
-  HAUSSE: "Encaissements en hausse",
-  BAISSE: "Encaissements en baisse",
-  STABLE: "Encaissements stables",
-};
-const TREND_TONE: Record<"HAUSSE" | "BAISSE" | "STABLE", "green" | "red" | "gray"> = {
-  HAUSSE: "green",
-  BAISSE: "red",
-  STABLE: "gray",
-};
 
 export default function ReportsPage() {
   const now = new Date();
@@ -54,19 +35,7 @@ export default function ReportsPage() {
     () => (resolvedPeriodId ? getAcademicDashboard(Number(resolvedPeriodId)) : Promise.resolve(null)),
     [resolvedPeriodId],
   );
-  const finance = useQuery(() => getFinanceDashboard(), []);
-  const projection = useQuery(() => getCashflowProjection(6), []);
   const performance = useQuery(() => getTeacherPerformance(year, month), [year, month]);
-
-  const projectionData = useMemo(
-    () =>
-      (projection.data?.months ?? []).map((m) => ({
-        name: `${MONTHS[m.month - 1]} ${String(m.year).slice(2)}`,
-        Encaissements: Math.round(Number(m.expectedInflow)),
-        "Masse salariale": Math.round(Number(m.expectedOutflow)),
-      })),
-    [projection.data],
-  );
 
   return (
     <div className="space-y-8">
@@ -141,54 +110,6 @@ export default function ReportsPage() {
             </CardBody>
           </Card>
         </div>
-      </section>
-
-      {/* ── Financier ──────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-800">Financier</h2>
-        {finance.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /></div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Facturé" value={formatGNF(finance.data?.invoiced)} icon={Wallet} accent="indigo" />
-            <StatCard title="Encaissé" value={formatGNF(finance.data?.collected)} icon={TrendingUp} accent="emerald" />
-            <StatCard title="Impayés" value={formatGNF(finance.data?.outstanding)} icon={AlertTriangle} accent="rose"
-              hint={`${finance.data?.unpaidInvoices ?? 0} facture(s)`} />
-            <StatCard title="Taux de recouvrement" value={pct(finance.data?.recoveryRate)} icon={Award} accent="teal" />
-          </div>
-        )}
-        <PlatformFeeSettlementCard />
-        <Card>
-          <CardHeader className="flex items-center justify-between gap-4">
-            <CardTitle>Prévisionnel de trésorerie (6 mois)</CardTitle>
-            {!projection.loading && projection.data && (
-              <Badge tone={TREND_TONE[projection.data.collectionTrend]}>
-                {TREND_LABEL[projection.data.collectionTrend]}
-              </Badge>
-            )}
-          </CardHeader>
-          <CardBody>
-            {projection.loading ? (
-              <CardSkeleton />
-            ) : (
-              <>
-                <BarTrendChart
-                  data={projectionData}
-                  series={[
-                    { key: "Encaissements", name: "Encaissements attendus", color: "#10b981" },
-                    { key: "Masse salariale", name: "Masse salariale", color: "#f43f5e" },
-                  ]}
-                  valueFormatter={(v) => formatGNF(v)}
-                />
-                <p className="mt-3 text-xs text-gray-500">
-                  Encaissement moyen mensuel estimé : {formatGNF(projection.data?.avgMonthlyCollection)} ·
-                  Masse salariale récurrente : {formatGNF(projection.data?.recurringPayroll)} ·
-                  Reste à recouvrer : {formatGNF(projection.data?.outstandingReceivables)}
-                </p>
-              </>
-            )}
-          </CardBody>
-        </Card>
       </section>
 
       {/* ── RH : performance enseignant ────────────────────────── */}

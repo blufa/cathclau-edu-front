@@ -25,6 +25,7 @@ import {
   listStructures,
   payPayslip,
   getCompensation,
+  listCompensations,
   setCompensation,
   listVacationPayMonths,
   addVacationPayMonth,
@@ -34,6 +35,8 @@ import {
   generatePayslipFromHours,
   generatePayslipFromTimetable,
   generateCombinedPayslip,
+  getTeacherCycles,
+  TEACHER_CYCLE_LABEL,
   type PayMode,
   type MonthlyPay,
   type TheoreticalMonthlyPay,
@@ -92,24 +95,26 @@ export default function PayrollPage() {
   if (!hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT") && !hasAnyPermission(user, ["paie:manage"])) {
     return <div className="rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-800">Réservé à l&apos;administration / comptabilité.</div>;
   }
-  // Grille des salaires (taux horaire/fixe) : relève de la direction, pas de la comptabilité — le
-  // comptable garde fiches de paie/avances. hasRole() fait déjà passer SUPER_ADMIN pour tout rôle
-  // demandé, donc pas de cas particulier à ajouter ici pour lui.
-  const isDirectionOnly = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  // Grille des salaires (taux horaire/fixe) : même garde que les endpoints backend
+  // (TeacherCompensationController, hasAuthority('paie:manage')) et que l'entrée de menu "Paie" —
+  // un comptable avec la permission paie:manage doit voir cet onglet, pas seulement SCHOOL_ADMIN/
+  // DIRECTOR (retour utilisateur : "j'ai donné toute la permission finances, il ne voit toujours
+  // pas cet onglet" — l'ancienne garde hasRole() seul l'excluait malgré sa permission réelle).
+  const canManageCompensation = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["paie:manage"]);
   return (
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Paie</h1>
       </Reveal>
-      <Tabs defaultValue="payslips">
+      <Tabs defaultValue={canManageCompensation ? "compensation" : "advances"}>
         <TabsList>
-          <TabsTrigger value="payslips" icon={Banknote}>Fiches de paie</TabsTrigger>
-          {isDirectionOnly && <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>}
+          {canManageCompensation && <TabsTrigger value="compensation" icon={Clock}>Rémunération & heures</TabsTrigger>}
           <TabsTrigger value="advances" icon={Wallet}>Avances sur salaire</TabsTrigger>
+          <TabsTrigger value="payslips" icon={Banknote}>Fiches de paie</TabsTrigger>
         </TabsList>
-        <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
-        {isDirectionOnly && <TabsPanel value="compensation"><CompensationTab /></TabsPanel>}
+        {canManageCompensation && <TabsPanel value="compensation"><CompensationTab /></TabsPanel>}
         <TabsPanel value="advances"><SalaryAdvancePanel /></TabsPanel>
+        <TabsPanel value="payslips"><PayslipsTab /></TabsPanel>
       </Tabs>
     </div>
   );
@@ -270,7 +275,7 @@ function PayslipsTab() {
       )}
 
       <Modal open={batchOpen} onClose={() => setBatchOpen(false)} title="Générer les fiches de paie en lot">
-        <GenerateBatchForm teachers={teachers} structures={structuresQuery.data ?? []}
+        <GenerateBatchForm teachers={teachers}
           onCancel={() => setBatchOpen(false)}
           onDone={(n) => { setBatchOpen(false); notifySuccess(`${n} fiche(s) générée(s)`); q.refetch(); }} />
       </Modal>
@@ -462,15 +467,14 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
  * le système connaît déjà ses heures réalisées du mois et son tarif, donc ce qu'il doit être payé
  * (même calcul que l'onglet Rémunération, un enseignant à la fois — voir generatePayslipFromHours).
  */
-function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
+function GenerateBatchForm({ teachers, onCancel, onDone }: {
   teachers: { id: number; firstName: string; lastName: string; phone?: string | null; bankAccount?: string | null;
     remunerationType?: string | null; remunerationRate?: string | number | null }[];
-  structures: SalaryStructure[]; onCancel: () => void; onDone: (count: number) => void;
+  onCancel: () => void; onDone: (count: number) => void;
 }) {
   const now = new Date();
   const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [y, m] = period.split("-").map(Number);
-  const [structureId, setStructureId] = useState<string>("");
   const [included, setIncluded] = useState<Set<number>>(() => new Set(teachers.map((t) => t.id)));
   const [loading, setLoading] = useState(false);
 
@@ -480,6 +484,24 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
     [teacherIds.join(","), period],
   );
   const payByTeacher = payQuery.data ?? new Map<number, MonthlyPay>();
+  // Cycle de chaque enseignant — permet de générer les fiches "par niveau" (retour utilisateur :
+  // "pouvoir payer les gens par niveau... générer les fiches des enseignants du primaire à part, et
+  // ceux du secondaire, parce qu'il n'effectue pas la paie le même jour"), via le filtre "Cycle"
+  // ci-dessous (remplace la structure salariale, devenue secondaire pour cet écran).
+  const cyclesQuery = useQuery(() => getTeacherCycles(teacherIds), [teacherIds.join(",")]);
+  const cycleOf = (id: number) => cyclesQuery.data?.[id] ?? null;
+  const [cycleFilter, setCycleFilter] = useState<"" | "MATERNELLE" | "PRIMAIRE" | "SECONDAIRE">("");
+  const visibleTeachers = useMemo(
+    () => (cycleFilter ? teachers.filter((t) => cycleOf(t.id) === cycleFilter) : teachers),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cycleOf dépend de cyclesQuery.data, pas d'identité stable
+    [teachers, cycleFilter, cyclesQuery.data],
+  );
+  function handleCycleFilterChange(v: string) {
+    const cycle = v as "" | "MATERNELLE" | "PRIMAIRE" | "SECONDAIRE";
+    setCycleFilter(cycle);
+    const matching = cycle ? teachers.filter((t) => cycleOf(t.id) === cycle) : teachers;
+    setIncluded(new Set(matching.map((t) => t.id)));
+  }
 
   function toggle(id: number) {
     setIncluded((prev) => {
@@ -498,7 +520,7 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
         const t = teachers.find((x) => x.id === id);
         await ensureTeacherCompensation(id, t);
         return generatePayslipFromHours(id, y, m, t ? `${t.firstName} ${t.lastName}` : null,
-          structureId ? Number(structureId) : null, t?.phone ?? null, t?.bankAccount ?? null);
+          null, t?.phone ?? null, t?.bankAccount ?? null);
       }));
       onDone(results.length);
     } catch (err) { notifyError(err); } finally { setLoading(false); }
@@ -515,33 +537,42 @@ function GenerateBatchForm({ teachers, structures, onCancel, onDone }: {
           <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
         </Field>
         <Field>
-          <Label>Structure salariale (optionnel)</Label>
-          <Select value={structureId} onChange={(e) => setStructureId(e.target.value)}>
-            <option value="">Aucune</option>
-            {structures.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-          </Select>
+          <Label>Cycle</Label>
+          <SearchableSelect
+            triggerClassName="justify-between px-3"
+            value={cycleFilter}
+            onChange={handleCycleFilterChange}
+            options={[
+              { value: "", trigger: "Tous les cycles", label: "Tous les cycles", searchText: "" },
+              { value: "MATERNELLE", trigger: "Maternelle", label: "Maternelle", searchText: "Maternelle" },
+              { value: "PRIMAIRE", trigger: "Primaire", label: "Primaire", searchText: "Primaire" },
+              { value: "SECONDAIRE", trigger: "Secondaire", label: "Secondaire", searchText: "Secondaire" },
+            ]}
+          />
         </Field>
       </div>
 
       <div>
         <div className="mb-1 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">Enseignants ({selectedCount} sélectionné(s))</p>
-          <div className="flex gap-2 text-xs">
-            <button type="button" className="text-brand-700 hover:underline" onClick={() => setIncluded(new Set(teacherIds))}>Tout cocher</button>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <button type="button" className="text-brand-700 hover:underline" onClick={() => setIncluded(new Set(visibleTeachers.map((t) => t.id)))}>Tout cocher</button>
             <button type="button" className="text-gray-500 hover:underline" onClick={() => setIncluded(new Set())}>Tout décocher</button>
           </div>
         </div>
         <div className="max-h-72 overflow-auto rounded-xl border border-gray-200">
           <Table>
-            <THead><tr><TH /><TH>Enseignant</TH><TH className="text-right">Heures réalisées</TH><TH className="text-right">À payer</TH></tr></THead>
+            <THead><tr><TH /><TH>Enseignant</TH><TH>Cycle</TH><TH className="text-right">Heures réalisées</TH><TH className="text-right">À payer</TH></tr></THead>
             <TBody>
-              {teachers.length === 0 && <TR><TD colSpan={4} className="py-6 text-center text-gray-400">Aucun enseignant.</TD></TR>}
-              {teachers.map((t) => {
+              {visibleTeachers.length === 0 && <TR><TD colSpan={5} className="py-6 text-center text-gray-400">Aucun enseignant.</TD></TR>}
+              {visibleTeachers.map((t) => {
                 const p = payByTeacher.get(t.id);
+                const cycle = cycleOf(t.id);
                 return (
                   <TR key={t.id}>
                     <TD><Checkbox checked={included.has(t.id)} onChange={() => toggle(t.id)} /></TD>
                     <TD className="font-medium text-gray-900">{t.firstName} {t.lastName}</TD>
+                    <TD className="text-xs text-gray-500">{cycle ? TEACHER_CYCLE_LABEL[cycle] : "—"}</TD>
                     <TD className="text-right text-sm text-gray-600">{p ? fmtH(p.realizedMinutes) : "…"}</TD>
                     <TD className="text-right font-semibold text-gray-900">{p ? formatGNF(p.grossPay) : "…"}</TD>
                   </TR>
@@ -611,16 +642,46 @@ function CompensationTab() {
     return map;
   }, [teachers, assignedClassesQuery.data, classLevelById]);
 
+  // Salaire de chaque enseignant — colonne « Salaire » (retour utilisateur : "pas la colonne cycle,
+  // mais plutôt une colonne salaire, pour qu'on voie directement le salaire de l'enseignant") : montant
+  // fixe tel que configuré, ou tarif horaire normal sinon (pas de notion de "salaire" unique et stable
+  // pour un enseignant payé à l'heure, qui varie selon les heures réalisées du mois).
+  const compensationsQuery = useCachedQuery(tenantId ? `payroll-compensations:${tenantId}` : null, listCompensations, [tenantId]);
+  const compensationByTeacher = useMemo(
+    () => new Map((compensationsQuery.data ?? []).map((c) => [c.teacherId, c])),
+    [compensationsQuery.data],
+  );
+  const salaryLabel = useMemo(() => (teacherId: number): string => {
+    const c = compensationByTeacher.get(teacherId);
+    if (!c) return "—";
+    return c.payMode === "FIXED" ? formatGNF(c.fixedSalary) : `${formatGNF(c.hourlyRateNormal)}/h`;
+  }, [compensationByTeacher]);
+
+  // Montant réellement à payer CE mois (heures réalisées pour un enseignant à l'heure, salaire fixe
+  // sinon) — distinct de « Salaire » (tarif/montant configuré, toujours le même) : retour utilisateur,
+  // colonne "À payer" qui renvoie le salaire du mois.
+  const now = new Date();
+  const teacherIds = useMemo(() => teachers.map((t) => t.id), [teachers]);
+  const monthlyPayQuery = useQuery(
+    () => Promise.all(teacherIds.map((id) => getMonthlyPay(id, now.getFullYear(), now.getMonth() + 1).then((p) => [id, p] as const)))
+      .then((entries) => new Map(entries)),
+    [teacherIds.join(",")],
+  );
+
   const [selected, setSelected] = useState<CompPerson | null>(null);
   const [levelFilter, setLevelFilter] = useState("");
 
-  type TeacherRow = { id: number; name: string; classesLabel: string };
+  type TeacherRow = { id: number; name: string; classesLabel: string; salaryLabel: string; toPayLabel: string };
   const teacherRows: TeacherRow[] = useMemo(() => {
     return teachers
-      .map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}`, classesLabel: classesLabelByTeacher.get(t.id) || "—" }))
+      .map((t) => ({
+        id: t.id, name: `${t.firstName} ${t.lastName}`, classesLabel: classesLabelByTeacher.get(t.id) || "—",
+        salaryLabel: salaryLabel(t.id),
+        toPayLabel: monthlyPayQuery.data?.get(t.id) ? formatGNF(monthlyPayQuery.data.get(t.id)!.grossPay) : "—",
+      }))
       .filter((r) => !levelFilter || levelIdsByTeacher.get(r.id)?.has(Number(levelFilter)))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [teachers, classesLabelByTeacher, levelFilter, levelIdsByTeacher]);
+  }, [teachers, classesLabelByTeacher, levelFilter, levelIdsByTeacher, salaryLabel, monthlyPayQuery.data]);
 
   type PersonnelRow = { id: number; name: string; poste: string };
   const personnelRows: PersonnelRow[] = useMemo(() => {
@@ -643,6 +704,8 @@ function CompensationTab() {
       ),
     },
     { key: "classes", header: "Classe(s)", accessor: (r) => r.classesLabel, sortable: true, render: (r) => r.classesLabel },
+    { key: "salary", header: "Salaire", accessor: (r) => r.salaryLabel, sortable: true, render: (r) => <span className="font-medium text-gray-900">{r.salaryLabel}</span> },
+    { key: "toPay", header: "À payer", accessor: (r) => r.toPayLabel, sortable: true, render: (r) => <span className="font-semibold text-gray-900">{r.toPayLabel}</span> },
   ];
   const personnelColumns: Column<PersonnelRow>[] = [
     {

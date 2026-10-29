@@ -284,7 +284,6 @@ function ClassDocumentsPanel() {
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const [academicYearId, setAcademicYearId] = useState<number | null>(null);
   const [classId, setClassId] = useState<number | null>(null);
-  const [periodId, setPeriodId] = useState<number | null>(null);
   const [subjectId, setSubjectId] = useState<number | null>(null);
   const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -294,7 +293,6 @@ function ClassDocumentsPanel() {
   const effectiveYearId = academicYearId ?? years[0]?.id ?? null;
 
   const classesQuery = useQuery(() => (effectiveYearId ? listClasses(effectiveYearId) : Promise.resolve([])), [effectiveYearId]);
-  const periodsQuery = useQuery(() => (effectiveYearId ? listPeriods(effectiveYearId) : Promise.resolve([])), [effectiveYearId]);
   const subjectsQuery = useQuery(() => (classId ? listClassSubjects(classId) : Promise.resolve([])), [classId]);
   const allSubjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, listSubjects, [tenantId]);
   const subjectLabel = useMemo(() => new Map((allSubjectsQuery.data ?? []).map((s) => [s.id, s.label])), [allSubjectsQuery.data]);
@@ -308,8 +306,8 @@ function ClassDocumentsPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Select value={effectiveYearId ?? ""} onChange={(e) => { setAcademicYearId(Number(e.target.value)); setClassId(null); setPeriodId(null); }}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Select value={effectiveYearId ?? ""} onChange={(e) => { setAcademicYearId(Number(e.target.value)); setClassId(null); }}>
           {years.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
         </Select>
         <SearchableSelect
@@ -321,10 +319,6 @@ function ClassDocumentsPanel() {
             ...(classesQuery.data ?? []).map((c): SearchableOption => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
           ]}
         />
-        <Select value={periodId ?? ""} onChange={(e) => setPeriodId(e.target.value ? Number(e.target.value) : null)}>
-          <option value="">— Période —</option>
-          {(periodsQuery.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </Select>
         <SearchableSelect
           value={subjectId != null ? String(subjectId) : ""}
           onChange={(v) => setSubjectId(v ? Number(v) : null)}
@@ -342,10 +336,10 @@ function ClassDocumentsPanel() {
       <div className="flex flex-wrap gap-2">
         <Button
           variant="secondary"
-          disabled={!classId || !periodId}
+          disabled={!classId || !effectiveYearId}
           loading={busy === "centralisateur"}
-          onClick={() => classId && periodId && download("centralisateur",
-            () => getClassCentralizerPdfObjectUrl(classId, periodId), "Centralisateur de classe")}
+          onClick={() => classId && effectiveYearId && download("centralisateur",
+            () => getClassCentralizerPdfObjectUrl(classId, effectiveYearId), "Centralisateur de classe")}
         >
           Centralisateur (PDF)
         </Button>

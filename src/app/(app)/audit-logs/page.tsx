@@ -1,23 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { History } from "lucide-react";
+import { History, Printer } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { searchAuditLogs } from "@/lib/api/audit";
 import { listUsers } from "@/lib/api/iam";
+import { getStudent } from "@/lib/api/students";
+import { getSchoolProfile } from "@/lib/api/platform";
 import {
   AUDIT_ACTION_LABEL, AUDIT_FRAUD_ACTIONS, AUDIT_RESOURCE_LABEL, formatAuditDetails,
   type AuditLogEntry,
 } from "@/lib/types/audit";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { Reveal } from "@/components/public/reveal";
 import { formatDateTime } from "@/lib/format";
+import { printHtmlDocument } from "@/lib/print-node";
+import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
 
 const PAGE_SIZE = 20;
 
@@ -51,6 +55,76 @@ export default function AuditLogsPage() {
     (usersQuery.data?.content ?? []).forEach((u) => map.set(u.id, `${u.firstName} ${u.lastName}`));
     return (id: number | null) => (id == null ? "Système" : map.get(id) ?? `Utilisateur #${id}`);
   }, [usersQuery.data]);
+
+  // Noms des élèves référencés comme ressource sur la page courante (retour comptable : "Élève #102"
+  // n'est pas assez pour repérer un élève, il faut son nom) — résolus par lot sur les seuls ids
+  // affichés, jamais la liste complète (potentiellement des milliers d'élèves).
+  const studentResourceIds = useMemo(() => {
+    const ids = new Set<number>();
+    (data?.content ?? []).forEach((l) => { if (l.ressource === "Student" && l.ressourceId != null) ids.add(l.ressourceId); });
+    return [...ids].sort((a, b) => a - b);
+  }, [data]);
+  const studentNamesQuery = useQuery(
+    () => Promise.all(studentResourceIds.map((id) => getStudent(id).catch(() => null))),
+    [studentResourceIds.join(",")],
+  );
+  const studentName = useMemo(() => {
+    const map = new Map<number, string>();
+    (studentNamesQuery.data ?? []).forEach((d) => { if (d) map.set(d.student.id, `${d.student.firstName} ${d.student.lastName}`); });
+    return (id: number) => map.get(id) ?? `Élève #${id}`;
+  }, [studentNamesQuery.data]);
+
+  function resourceLabel(l: AuditLogEntry): string {
+    if (l.ressourceId == null) return AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource;
+    if (l.ressource === "User") return userName(l.ressourceId);
+    if (l.ressource === "Student") return studentName(l.ressourceId);
+    return `${AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource} #${l.ressourceId}`;
+  }
+
+  const profileQuery = useQuery(() => getSchoolProfile(), []);
+
+  /** Imprime la page courante du journal (celle affichée à l'écran, avec les mêmes filtres) — passe
+   * par le dialogue d'impression du navigateur, "Enregistrer en PDF" fait le reste (retour
+   * utilisateur : "je dois pouvoir les imprimer sur un pdf aussi"). */
+  function printAuditLog() {
+    const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
+    const filterParts = [
+      action ? `Action : ${AUDIT_ACTION_LABEL[action] ?? action}` : null,
+      utilisateurId ? `Utilisateur : ${userName(Number(utilisateurId))}` : null,
+      from ? `Depuis le ${from}` : null,
+      to ? `Jusqu'au ${to}` : null,
+    ].filter((p): p is string => !!p);
+    const rows = data?.content ?? [];
+    printHtmlDocument(`<!doctype html><html><head><title>Journal d'audit</title>
+      <style>
+        body{font-family:sans-serif;padding:24px;color:#111}${PRINT_HEADER_CSS}
+        h1{font-size:15px;margin:0 0 4px}
+        .sub{font-size:11px;color:#64748b;margin-bottom:14px}
+        table{width:100%;border-collapse:collapse;font-size:10.5px}
+        th,td{border-bottom:1px solid #e2e8f0;padding:5px 6px;text-align:left;vertical-align:top}
+        th{color:#475569;font-weight:600}
+      </style></head>
+      <body>
+        ${officialPrintHeaderHtml(profileQuery.data)}
+        <h1>Journal d&apos;audit</h1>
+        <p class="sub">
+          ${filterParts.length > 0 ? esc(filterParts.join(" · ")) + " · " : ""}
+          Page ${page + 1} · ${rows.length} entrée(s) · imprimé le ${new Date().toLocaleString("fr-FR")}
+        </p>
+        <table>
+          <thead><tr><th>Date</th><th>Action</th><th>Utilisateur</th><th>Ressource</th><th>Détails</th></tr></thead>
+          <tbody>
+            ${rows.map((l) => `<tr>
+              <td>${esc(formatDateTime(l.createdAt))}</td>
+              <td>${esc(AUDIT_ACTION_LABEL[l.action] ?? l.action)}</td>
+              <td>${esc(userName(l.utilisateurId))}</td>
+              <td>${esc(resourceLabel(l))}</td>
+              <td>${esc(formatAuditDetails(l.details))}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </body></html>`);
+  }
 
   if (!canView) {
     return (
@@ -86,8 +160,8 @@ export default function AuditLogsPage() {
     {
       key: "ressource",
       header: "Ressource",
-      accessor: (l) => `${AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource} #${l.ressourceId ?? ""}`,
-      render: (l) => `${AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource}${l.ressourceId != null ? ` #${l.ressourceId}` : ""}`,
+      accessor: resourceLabel,
+      render: resourceLabel,
     },
     {
       key: "details",
@@ -110,12 +184,17 @@ export default function AuditLogsPage() {
       </Reveal>
 
       <div className="flex flex-wrap items-end gap-3">
-        <Select className="max-w-[260px]" value={action} onChange={(e) => { setPage(0); setAction(e.target.value); }}>
-          <option value="">Toutes les actions</option>
-          {Object.entries(AUDIT_ACTION_LABEL).map(([code, label]) => (
-            <option key={code} value={code}>{label}</option>
-          ))}
-        </Select>
+        <SearchableSelect
+          triggerClassName="max-w-[260px] justify-between px-3"
+          value={action}
+          onChange={(v) => { setPage(0); setAction(v); }}
+          options={[
+            { value: "", trigger: "Toutes les actions", label: "Toutes les actions", searchText: "" },
+            ...Object.entries(AUDIT_ACTION_LABEL).map(([code, label]): SearchableOption => (
+              { value: code, trigger: label, label, searchText: label }
+            )),
+          ]}
+        />
         <SearchableSelect
           triggerClassName="max-w-[220px] justify-between px-3"
           value={utilisateurId}
@@ -133,6 +212,9 @@ export default function AuditLogsPage() {
           <span className="text-sm text-gray-400">→</span>
           <DatePicker value={to} onChange={(v) => { setPage(0); setTo(v); }} placeholder="Jusqu'au…" clearable />
         </div>
+        <Button variant="secondary" leftSection={<Printer className="h-4 w-4" />} onClick={printAuditLog} disabled={!data || data.content.length === 0}>
+          Imprimer / PDF
+        </Button>
       </div>
 
       <DataTable

@@ -1,19 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CalendarCheck, GraduationCap, Percent, Receipt, Wallet, TrendingUp } from "lucide-react";
+import { AlertTriangle, GraduationCap, HandCoins, Landmark, Receipt, Wallet, TrendingUp } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
 import { useSubscription } from "@/providers/subscription-provider";
 import { INVOICE_STATUS_LABEL, type Invoice, type InvoiceStatus } from "@/lib/types/billing";
-import { EVENT_TYPE_LABEL, EVENT_TYPE_TONE } from "@/lib/types/calendar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { CardSkeleton, StatCardSkeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
-import { BarTrendChart } from "@/components/charts/bar-trend-chart";
 import { BarBreakdownChart, type BreakdownItem } from "@/components/charts/bar-breakdown-chart";
 import { PieBreakdownChart } from "@/components/charts/pie-breakdown-chart";
 import { PendingSubscriptionBanner } from "@/components/platform/pending-subscription-banner";
@@ -21,40 +16,15 @@ import { Reveal } from "@/components/public/reveal";
 import { formatDate, formatGNF } from "@/lib/format";
 import { GettingStarted } from "./getting-started";
 import {
-  useAcademicDashboardQuery,
-  useAverageDistributionQuery,
-  useCurrentPeriodQuery,
+  useAttendanceHistoryQuery,
+  useMonthlyFinancialSummaryQuery,
   useRecentInvoicesQuery,
   useStudentsCountQuery,
-  useTodayAttendanceQuery,
-  useUpcomingEventsQuery,
-  useUpcomingInstallmentsQuery,
 } from "../hooks/use-dashboard";
 
-const MONTHS = ["Janv", "Févr", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"];
-
 const STATUS_COLOR: Record<string, string> = { PAID: "#10b981", PARTIAL: "#f59e0b", UNPAID: "#f43f5e", CANCELLED: "#cbd5e1" };
-const STATUS_TONE: Record<InvoiceStatus, "green" | "amber" | "red" | "gray"> = { PAID: "green", PARTIAL: "amber", UNPAID: "red", CANCELLED: "gray" };
 
 const num = (v: string | number | null | undefined) => Number(v ?? 0);
-
-/** 6 derniers mois : frais émis vs encaissés, d'après la date d'émission des factures élèves. */
-function billingByMonth(invoices: Invoice[]) {
-  const map = new Map<string, { emis: number; encaisse: number }>();
-  for (const i of invoices) {
-    const key = (i.issueDate ?? "").slice(0, 7);
-    if (!key) continue;
-    const cur = map.get(key) ?? { emis: 0, encaisse: 0 };
-    cur.emis += num(i.totalAmount);
-    cur.encaisse += num(i.paidAmount);
-    map.set(key, cur);
-  }
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6).map(([key, v]) => ({
-    name: MONTHS[Number(key.slice(5, 7)) - 1] ?? key,
-    Émis: Math.round(v.emis),
-    Encaissé: Math.round(v.encaisse),
-  }));
-}
 
 function statusBreakdown(invoices: Invoice[]): BreakdownItem[] {
   const counts = new Map<string, number>();
@@ -73,14 +43,8 @@ export default function DashboardPage() {
 
   const studentsQuery = useStudentsCountQuery(tenantScoped);
   const invoicesQuery = useRecentInvoicesQuery(tenantId, tenantScoped);
-  const periodQuery = useCurrentPeriodQuery(tenantScoped);
-  const currentPeriod = periodQuery.data ?? null;
-  const academicQuery = useAcademicDashboardQuery(currentPeriod?.id ?? null, tenantScoped);
-  const academicClassIds = (academicQuery.data?.classes ?? []).map((c) => c.classId);
-  const distributionQuery = useAverageDistributionQuery(academicClassIds, currentPeriod?.id ?? null, tenantScoped && !!academicQuery.data);
-  const attendanceQuery = useTodayAttendanceQuery(tenantScoped);
-  const upcomingInstallmentsQuery = useUpcomingInstallmentsQuery(tenantScoped);
-  const upcomingEventsQuery = useUpcomingEventsQuery(tenantScoped);
+  const attendanceHistoryQuery = useAttendanceHistoryQuery(tenantScoped);
+  const financialSummaryQuery = useMonthlyFinancialSummaryQuery(tenantScoped);
   // Guide « Premiers pas » : contenu 100% configuration (classes, enseignants, logo, modèles...) et
   // appels à des endpoints réservés à l'admin (profil école, modèles de message) — ne doit se
   // déclencher que pour les rôles qui font réellement cette configuration, pas pour tout le monde
@@ -100,8 +64,23 @@ export default function DashboardPage() {
   // (retour comptable : écart observé avec "Impayés" du rapport, qui comptait déjà les deux).
   const unpaidCount = invoices.filter((i) => i.status === "UNPAID" || i.status === "PARTIAL").length;
   const excludedCount = invoices.filter((i) => i.recoveryStage === "EXCLUDED").length;
-  const monthly = billingByMonth(invoices);
   const breakdown = statusBreakdown(invoices);
+  const attendanceHistory = attendanceHistoryQuery.data ?? [];
+  const attendanceTotals = attendanceHistory.reduce(
+    (acc, d) => ({
+      present: acc.present + d.presentCount,
+      absent: acc.absent + d.absentCount,
+      late: acc.late + d.lateCount,
+    }),
+    { present: 0, absent: 0, late: 0 },
+  );
+  const financialSummary = financialSummaryQuery.data ?? null;
+  // Affiché explicitement sur la carte : l'état financier est recalculé chaque mois, jamais figé
+  // (retour fondateur : "État financier du mois c'est chaque mois ça change").
+  const currentMonthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date());
+  // Ce que l'école garde réellement après la sortie de TOUTE la masse salariale + avances du mois
+  // (retour fondateur : "Encaissé" seul donnait une fausse impression de trésorerie disponible).
+  const netCollected = financialSummary ? totalPaid - num(financialSummary.total) : null;
   const quotaNearLimit = plan?.studentLimit != null && consumed >= plan.studentLimit * 0.9;
   // École qui a déjà des données réelles → on affiche le tableau financier ; sinon (école neuve) on
   // laisse le guide « Premiers pas » être le centre de la page, sans widgets vides qui l'encombrent.
@@ -198,116 +177,46 @@ export default function DashboardPage() {
           </Reveal>
           )}
 
-          {/* Activité pédagogique — présences du jour, moyenne générale, réussite, messages récents,
-              prochaines échéances, répartition des moyennes élèves (période scolaire actuellement
-              ouverte). */}
-          {(attendanceQuery.data || (academicQuery.data && Number(academicQuery.data.studentCount) > 0)) && (
+          {/* Carte à part (pas dans la grille 4 colonnes ci-dessus) : dérivée de DEUX sources
+              (facturation + paie), mise en avant plutôt que noyée/orpheline dans une grille prévue
+              pour 4 cartes. */}
+          {netCollected != null && (
           <Reveal y={12}>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {attendanceQuery.data && (
-                <StatCard title="Présences aujourd'hui"
-                  value={attendanceQuery.data.expectedCount > 0 ? `${attendanceQuery.data.presentPercentage}%` : "—"}
-                  icon={CalendarCheck} accent="teal"
-                  hint={attendanceQuery.data.expectedCount > 0
-                    ? `${attendanceQuery.data.presentCount}/${attendanceQuery.data.expectedCount} élèves présents`
-                    : "Aucun élève inscrit"} />
-              )}
-              {academicQuery.data && Number(academicQuery.data.studentCount) > 0 && (
-                <>
-                  <StatCard title="Moyenne générale" value={`${academicQuery.data.overallAverage}/20`} icon={GraduationCap} accent="amber"
-                    hint={currentPeriod?.label ?? undefined} />
-                  <StatCard title="Taux de réussite" value={`${academicQuery.data.passRate}%`} icon={Percent} accent="emerald"
-                    trend={{ value: `${academicQuery.data.passRate}%`, positive: Number(academicQuery.data.passRate) >= 70 }} />
-                </>
-              )}
+            <div className={`flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 shadow-sm ${
+              netCollected >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"
+            }`}>
+              <div className="flex items-center gap-3">
+                <span className={`flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-white shadow-sm ${
+                  netCollected >= 0 ? "text-emerald-600" : "text-rose-600"
+                }`}>
+                  <Landmark className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Encaissé net (après paie)</p>
+                  <p className="text-xs text-gray-500">Encaissé moins masse salariale et avances du mois</p>
+                </div>
+              </div>
+              <p className={`text-2xl font-bold ${netCollected >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {formatGNF(netCollected)}
+              </p>
             </div>
           </Reveal>
           )}
 
-          {(distributionQuery.data || upcomingInstallmentsQuery.data || upcomingEventsQuery.data) && (
+          {(attendanceHistory.length > 0 || hasData) && (
           <Reveal y={12}>
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 lg:grid-cols-2">
               <Card>
-                <CardHeader><CardTitle>Prochaines échéances</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Présences, absences, retards — 14 derniers jours</CardTitle></CardHeader>
                 <CardBody>
-                  {!upcomingInstallmentsQuery.data || upcomingInstallmentsQuery.data.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-gray-400">Aucune échéance de frais à venir.</p>
-                  ) : (
-                    <ul className="divide-y divide-gray-100">
-                      {upcomingInstallmentsQuery.data.map((i) => (
-                        <li key={i.installmentId} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                          <div className="flex items-center gap-2 text-gray-900">
-                            <CalendarClock className="h-3.5 w-3.5 shrink-0 text-brand-500" />
-                            {i.label}
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium text-gray-900">{formatGNF(i.amount)}</p>
-                            <p className="text-xs text-gray-400">{formatDate(i.dueDate)}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardBody>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>Prochains événements</CardTitle></CardHeader>
-                <CardBody>
-                  {!upcomingEventsQuery.data || upcomingEventsQuery.data.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-gray-400">Aucun événement à venir.</p>
-                  ) : (
-                    <ul className="divide-y divide-gray-100">
-                      {upcomingEventsQuery.data.map((e) => (
-                        <li key={e.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-gray-900">{e.title}</p>
-                            <Badge tone={EVENT_TYPE_TONE[e.eventType]}>{EVENT_TYPE_LABEL[e.eventType]}</Badge>
-                          </div>
-                          <span className="shrink-0 text-xs text-gray-400">{formatDate(e.startDate)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="pt-3"><Button component={Link} href="/calendar" size="sm" variant="ghost">Tout le calendrier →</Button></div>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>Résumé des performances</CardTitle></CardHeader>
-                <CardBody>
-                  {distributionQuery.error ? (
-                    <p className="py-10 text-center text-sm text-gray-400">Aucune donnée disponible.</p>
-                  ) : !distributionQuery.data ? (
-                    <div className="flex justify-center py-10"><Spinner /></div>
-                  ) : (
-                    <PieBreakdownChart
-                      centerLabel="élèves notés"
-                      data={[
-                        { name: "Excellents (16-20)", value: distributionQuery.data.excellent, color: "#10b981" },
-                        { name: "Bien (14-16)", value: distributionQuery.data.bien, color: "#6366f1" },
-                        { name: "Assez bien (10-14)", value: distributionQuery.data.assezBien, color: "#f59e0b" },
-                        { name: "À améliorer (<10)", value: distributionQuery.data.aAmeliorer, color: "#f43f5e" },
-                      ]}
-                    />
-                  )}
-                </CardBody>
-              </Card>
-            </div>
-          </Reveal>
-          )}
-
-          {/* Charts — frais élèves */}
-          {hasData && (
-          <Reveal y={12}>
-            <div className="grid gap-4 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
-                <CardHeader><CardTitle>Frais scolaires — 6 derniers mois</CardTitle></CardHeader>
-                <CardBody>
-                  {monthly.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-gray-400">Pas encore de factures de frais émises.</p>
-                  ) : (
-                    <BarTrendChart data={monthly} valueFormatter={(v) => formatGNF(v)}
-                      series={[{ key: "Émis", name: "Émis", color: "#6366f1" }, { key: "Encaissé", name: "Encaissé", color: "#14b8a6" }]} />
-                  )}
+                  <PieBreakdownChart
+                    centerLabel="Total 14 jours"
+                    data={[
+                      { name: "Présences", value: attendanceTotals.present, color: "#10b981" },
+                      { name: "Absences", value: attendanceTotals.absent, color: "#f43f5e" },
+                      { name: "Retards", value: attendanceTotals.late, color: "#f59e0b" },
+                    ]}
+                  />
                 </CardBody>
               </Card>
               <Card>
@@ -321,31 +230,56 @@ export default function DashboardPage() {
           </Reveal>
           )}
 
-          {/* Dernières factures élèves */}
-          {hasData && (
-          <Card>
-            <CardHeader><CardTitle>Dernières factures élèves</CardTitle></CardHeader>
-            <CardBody>
-              {invoicesQuery.isLoading ? (
-                <div className="flex justify-center py-6"><Spinner /></div>
-              ) : invoices.length === 0 ? (
-                <p className="text-sm text-gray-400">Aucune facture de frais émise pour le moment.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {[...invoices].sort((a, b) => (b.issueDate ?? "").localeCompare(a.issueDate ?? "")).slice(0, 6).map((inv) => (
-                    <li key={inv.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                      <span className="font-mono text-xs text-gray-600">{inv.reference}</span>
-                      <span className="flex-1 truncate text-gray-500">{inv.periodLabel ?? "Frais"}</span>
-                      <span className="text-gray-700">{formatGNF(inv.totalAmount)}</span>
-                      <Badge tone={STATUS_TONE[inv.status]}>{INVOICE_STATUS_LABEL[inv.status]}</Badge>
-                      <span className="text-gray-500">{formatDate(inv.issueDate)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="pt-3"><Button component={Link} href="/invoices" size="sm" variant="ghost">Toutes les factures →</Button></div>
-            </CardBody>
-          </Card>
+          {/* État financier du mois — masse salariale (Maternelle/Primaire/Secondaire/Personnel) +
+              avances sur salaire accordées ce mois (§retour fondateur) — recalculé chaque mois, le
+              libellé affiche explicitement de quel mois il s'agit. */}
+          {financialSummary && (
+          <Reveal y={12}>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardHeader><CardTitle>État financier — {currentMonthLabel}</CardTitle></CardHeader>
+                <CardBody>
+                  <PieBreakdownChart
+                    centerLabel={`Total ${currentMonthLabel}`}
+                    valueFormatter={(v) => formatGNF(v)}
+                    data={[
+                      { name: "Enseignants Maternelle", value: num(financialSummary.maternelleTeacherPayroll), color: "#ec4899" },
+                      { name: "Enseignants Primaire", value: num(financialSummary.primaryTeacherPayroll), color: "#6366f1" },
+                      { name: "Enseignants Secondaire", value: num(financialSummary.secondaryTeacherPayroll), color: "#f59e0b" },
+                      { name: "Personnel", value: num(financialSummary.staffPayroll), color: "#14b8a6" },
+                      { name: "Avances sur salaire", value: num(financialSummary.salaryAdvancesTotal), color: "#f43f5e" },
+                    ]}
+                  />
+                </CardBody>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle>Avances sur salaire du mois</CardTitle></CardHeader>
+                <CardBody>
+                  {financialSummary.advances.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-gray-400">Aucune avance accordée ce mois.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {financialSummary.advances.map((a, idx) => (
+                        <li key={idx} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 text-gray-900">
+                              <HandCoins className="h-3.5 w-3.5 shrink-0 text-brand-500" />
+                              <span className="truncate font-medium">{a.employeeName}</span>
+                            </div>
+                            <p className="text-xs text-gray-400">{a.className ?? "—"}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-gray-900">{formatGNF(a.amount)}</p>
+                            <p className="text-xs text-gray-400">{formatDate(a.grantedAt)}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardBody>
+              </Card>
+            </div>
+          </Reveal>
           )}
         </>
       )}
