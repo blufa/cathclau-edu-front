@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, RefreshCw, Video, VideoOff } from "lucide-react";
+import { Camera, Loader2, RefreshCw, Video, VideoOff } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { whitenPhotoBackground } from "@/lib/background-removal";
 
 interface PhotoCaptureModalProps {
   open: boolean;
@@ -26,9 +27,11 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
   const [deviceId, setDeviceId] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [snapshot, setSnapshot] = useState<string | null>(null);
-  // Fichier final (déjà cadré/redimensionné au format badge) — c'est lui qu'on remonte au parent via
-  // onCapture, jamais un nouvel aller-retour base64.
+  // Fichier final (déjà traité fond blanc si le traitement a réussi) — c'est lui qu'on remonte au
+  // parent via onCapture, jamais un nouvel aller-retour base64 (voir §11.2 cahier des charges).
   const [resultFile, setResultFile] = useState<File | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [backgroundRemoved, setBackgroundRemoved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stopCamera = useCallback(() => {
@@ -90,6 +93,7 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
     if (snapshot) URL.revokeObjectURL(snapshot);
     setSnapshot(null);
     setResultFile(null);
+    setBackgroundRemoved(false);
   }
 
   // Cadre portrait de la photo du badge (voir IdBadgePortrait, print:h-[22mm] print:w-[17.5mm]) —
@@ -126,14 +130,20 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BADGE_PHOTO_WIDTH, BADGE_PHOTO_HEIGHT);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
-    if (!blob) return;
-    // Plus de détourage/fond blanc automatique par IA ici (retiré : trop lent sur mobile) — l'école
-    // positionne désormais elle-même l'élève devant un fond blanc physique avant la prise de vue, le
-    // cadrage au format badge (ci-dessus) suffit.
-    const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
-    setResultFile(file);
-    setSnapshot(URL.createObjectURL(file));
+    const rawBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!rawBlob) return;
+    const rawFile = new File([rawBlob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
+    // §11.2 cahier des charges : traitement fond blanc automatique après la prise de vue, AVANT de
+    // montrer l'aperçu que l'utilisateur confirme/reprend — jamais après coup sur une photo déjà validée.
+    setProcessing(true);
+    try {
+      const { file, backgroundRemoved: removed } = await whitenPhotoBackground(rawFile);
+      setResultFile(file);
+      setBackgroundRemoved(removed);
+      setSnapshot(URL.createObjectURL(file));
+    } finally {
+      setProcessing(false);
+    }
   }
 
   function confirm() {
@@ -191,14 +201,26 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
               </p>
             </div>
           )}
-          {!streaming && !snapshot && (
+          {!streaming && !snapshot && !processing && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
               <VideoOff className="h-8 w-8" />
               <span className="text-sm">Caméra éteinte</span>
             </div>
           )}
+          {processing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900/70 text-white">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="text-sm">Traitement du fond en cours…</span>
+            </div>
+          )}
         </div>
         {error && <p className="rounded-lg bg-error-50 px-3 py-2 text-sm text-error-700">{error}</p>}
+        {snapshot && !backgroundRemoved && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Le fond blanc automatique n&apos;a pas pu être appliqué — photo originale conservée. Vous
+            pouvez reprendre la photo ou la valider telle quelle.
+          </p>
+        )}
         <p className="text-xs text-slate-400">
           Fonctionne avec la webcam de l&apos;ordinateur, la caméra du téléphone, ou un appareil photo externe branché sur la machine.
         </p>
@@ -206,11 +228,11 @@ export function PhotoCaptureModal({ open, onClose, onCapture }: PhotoCaptureModa
           <Button type="button" variant="secondary" onClick={close}>Annuler</Button>
           {snapshot ? (
             <>
-              <Button type="button" variant="secondary" leftSection={<RefreshCw className="h-4 w-4" />} onClick={retake}>Reprendre</Button>
-              <Button type="button" onClick={confirm} disabled={!resultFile}>Utiliser cette photo</Button>
+              <Button type="button" variant="secondary" leftSection={<RefreshCw className="h-4 w-4" />} onClick={retake} disabled={processing}>Reprendre</Button>
+              <Button type="button" onClick={confirm} disabled={processing || !resultFile}>Utiliser cette photo</Button>
             </>
           ) : streaming ? (
-            <Button type="button" leftSection={<Camera className="h-4 w-4" />} onClick={capture}>Capturer</Button>
+            <Button type="button" leftSection={<Camera className="h-4 w-4" />} onClick={capture} loading={processing}>Capturer</Button>
           ) : (
             <Button type="button" leftSection={<Video className="h-4 w-4" />} onClick={() => void startCamera(deviceId)}>Démarrer la caméra</Button>
           )}

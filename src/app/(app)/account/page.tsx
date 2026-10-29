@@ -4,20 +4,24 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Check, Pencil, ShieldCheck, X } from "lucide-react";
+import { Check, Pencil, ShieldCheck, UserPlus, X } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { changePassword } from "@/lib/auth/auth-service";
-import { getMyParent, updateMyParentProfile, updateMyParentPhoto } from "@/lib/api/parents";
-import { getMyStudent, updateMyStudentProfile, updateMyStudentPhoto } from "@/lib/api/students";
+import { getMyParent, updateMyParentProfile, updateMyParentPhoto, RELATIONSHIP_LABEL, SELECTABLE_RELATIONSHIPS, type Relationship } from "@/lib/api/parents";
+import { addMyParent, getMyStudent, updateMyStudentProfile, updateMyStudentPhoto } from "@/lib/api/students";
 import { updateMyTeacherProfile, updateMyTeacherPhoto } from "@/lib/api/staff";
 import { updateMyUserProfile, updateMyUserPhoto } from "@/lib/api/iam";
 import { roleLabel } from "@/lib/auth/role-labels";
+import { hasPermission } from "@/lib/auth/permissions";
+import { phoneRule } from "@/lib/phone";
 import { ApiError } from "@/lib/api/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, Input, Label } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { Select } from "@/components/ui/select";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Reveal } from "@/components/public/reveal";
 import { InstallAppCard } from "@/components/pwa/install-app-card";
@@ -70,6 +74,7 @@ export default function AccountPage() {
   const isParent = roles.includes("PARENT");
   const isStudent = roles.includes("STUDENT");
   const isTeacher = roles.includes("TEACHER");
+  const canAddOwnParent = isStudent && hasPermission(user, "parent:create_own");
   // Champs éditables selon le rôle : téléphone partout, adresse pour parent/élève, profession pour parent uniquement.
   const showAddress = isParent || isStudent;
   const showOccupation = isParent;
@@ -317,11 +322,121 @@ export default function AccountPage() {
             </Card>
           </Reveal>
 
+          {canAddOwnParent && (
+            <Reveal y={12} delay={0.12}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <span className="inline-flex items-center gap-2">
+                      <UserPlus className="h-4 w-4 text-brand-600" /> Ajouter un parent
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardBody>
+                  <AddMyParentForm />
+                </CardBody>
+              </Card>
+            </Reveal>
+          )}
+
           <Reveal y={12} delay={0.15}>
             <InstallAppCard />
           </Reveal>
         </div>
       </div>
     </div>
+  );
+}
+
+const addMyParentSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "Requis"),
+    lastName: z.string().trim().min(1, "Requis"),
+    phone: z.string().trim().min(1, "Requis"),
+    email: z.string(),
+    occupation: z.string(),
+    address: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    const phoneError = phoneRule(v.phone);
+    if (phoneError) ctx.addIssue({ code: "custom", path: ["phone"], message: phoneError });
+  });
+type AddMyParentFormValues = z.infer<typeof addMyParentSchema>;
+
+/** Formulaire self-service élève : crée un parent prospect (sans compte) lié UNIQUEMENT à l'élève
+ * connecté, via POST /students/me/parents (gardé derrière la permission activable `parent:create_own`,
+ * voir conditions d'affichage dans AccountPage). Pas de recherche de parent existant ni d'option
+ * « créer un accès » ici — contrairement à AddParentForm (admin) — l'endpoint self-service ne les
+ * supporte pas, pour éviter qu'un élève puisse se rattacher au compte d'un parent d'un autre enfant. */
+function AddMyParentForm() {
+  const [relationship, setRelationship] = useState<Relationship>("GUARDIAN");
+  const [loading, setLoading] = useState(false);
+  const { handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<AddMyParentFormValues>({
+    resolver: zodResolver(addMyParentSchema),
+    defaultValues: { firstName: "", lastName: "", phone: "", email: "", occupation: "", address: "" },
+  });
+  // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
+  const v = watch();
+
+  async function submit(values: AddMyParentFormValues) {
+    setLoading(true);
+    try {
+      await addMyParent({
+        firstName: values.firstName, lastName: values.lastName,
+        phone: values.phone || null, email: values.email || null,
+        occupation: values.occupation || null, address: values.address || null,
+        relationship,
+      });
+      notifySuccess("Parent ajouté");
+      reset();
+      setRelationship("GUARDIAN");
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <Field>
+        <Label>Lien de parenté</Label>
+        <Select value={relationship} onChange={(e) => setRelationship(e.target.value as Relationship)}>
+          {SELECTABLE_RELATIONSHIPS.map((r) => (
+            <option key={r} value={r}>{RELATIONSHIP_LABEL[r]}</option>
+          ))}
+        </Select>
+      </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field>
+          <Label>Prénom <span className="text-error-500">*</span></Label>
+          <Input value={v.firstName} onChange={(e) => setValue("firstName", e.target.value)} aria-invalid={!!errors.firstName} />
+          {errors.firstName && <p className="text-xs text-error-600">{errors.firstName.message}</p>}
+        </Field>
+        <Field>
+          <Label>Nom <span className="text-error-500">*</span></Label>
+          <Input value={v.lastName} onChange={(e) => setValue("lastName", e.target.value)} aria-invalid={!!errors.lastName} />
+          {errors.lastName && <p className="text-xs text-error-600">{errors.lastName.message}</p>}
+        </Field>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <PhoneInput label={<>Téléphone <span className="text-error-500">*</span></>} value={v.phone} onChange={(val) => setValue("phone", val)} error={errors.phone?.message} />
+        <Field>
+          <Label>Email</Label>
+          <Input value={v.email} onChange={(e) => setValue("email", e.target.value)} />
+        </Field>
+      </div>
+      <Field>
+        <Label>Profession</Label>
+        <Input value={v.occupation} onChange={(e) => setValue("occupation", e.target.value)} />
+      </Field>
+      <Field>
+        <Label>Adresse</Label>
+        <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
+      </Field>
+      <Button type="submit" loading={loading} fullWidth leftSection={<UserPlus className="h-4 w-4" />}>
+        Ajouter mon parent
+      </Button>
+    </form>
   );
 }

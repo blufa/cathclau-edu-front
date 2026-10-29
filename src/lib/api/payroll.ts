@@ -150,6 +150,23 @@ export interface TheoreticalMonthlyPay {
   hourlyRateNormal: string; hourlyRateExam: string; fixedSalary: string;
   teachingPay: string; grossPay: string;
 }
+export const TEACHER_CYCLE_LABEL: Record<"MATERNELLE" | "PRIMAIRE" | "SECONDAIRE", string> = {
+  MATERNELLE: "Maternelle", PRIMAIRE: "Primaire", SECONDAIRE: "Secondaire",
+};
+/** Cycle (MATERNELLE/PRIMAIRE/SECONDAIRE) de chaque enseignant demandé, déduit de ses classes
+ * assignées — pour la colonne "Cycle" (Rémunération & heures) et la sélection rapide par niveau
+ * (Générer en lot). */
+export function getTeacherCycles(teacherIds: number[]): Promise<Record<number, "MATERNELLE" | "PRIMAIRE" | "SECONDAIRE">> {
+  if (teacherIds.length === 0) return Promise.resolve({});
+  return api.get("/payroll/teachers-cycle", { query: { teacherIds: teacherIds.join(",") } });
+}
+
+/** Toutes les rémunérations paramétrées du tenant — pour afficher le salaire de chaque enseignant
+ * directement dans un tableau, sans ouvrir sa fiche (colonne "Salaire", Rémunération & heures). */
+export function listCompensations(): Promise<TeacherCompensation[]> {
+  return api.get<TeacherCompensation[]>("/payroll/compensation");
+}
+
 export function getCompensation(teacherId: number): Promise<TeacherCompensation | null> {
   return api.get<TeacherCompensation>(`/payroll/compensation/${teacherId}`).catch(() => null);
 }

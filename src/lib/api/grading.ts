@@ -195,9 +195,10 @@ export function getReportCardByStudentPeriod(studentId: number, periodId: number
   return api.get<ReportCard>(`/grading/report-cards/student/${studentId}/period/${periodId}`);
 }
 
-/** Centralisateur de classe (PDF) : une ligne par élève, colonnes Cours/Composition par matière. */
-export function getClassCentralizerPdfObjectUrl(classId: number, periodId: number): Promise<string> {
-  return api.blobUrl(`/grading/report-cards/class/${classId}/period/${periodId}/centralisateur/download`);
+/** Centralisateur de classe (PDF) : une ligne par élève, moyennes générales mensuelles par semestre
+ * puis bilan annuel (moyenne, rang, mention, décision) — portée = année scolaire entière. */
+export function getClassCentralizerPdfObjectUrl(classId: number, academicYearId: number): Promise<string> {
+  return api.blobUrl(`/grading/report-cards/class/${classId}/year/${academicYearId}/centralisateur/download`);
 }
 
 /** Fiche de notes vierge (PDF) à imprimer et donner à l'enseignant : liste des élèves de la classe. */

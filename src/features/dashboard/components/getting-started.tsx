@@ -39,9 +39,7 @@ import {
 import { listEmployees, listTeachers } from "@/lib/api/staff";
 import { searchStudents } from "@/lib/api/students";
 import { listParents } from "@/lib/api/parents";
-import { listFeesByTenant } from "@/lib/api/billing";
 import { getSchoolProfile } from "@/lib/api/platform";
-import { listTemplates } from "@/lib/api/communication";
 
 interface Step {
   title: string;
@@ -97,6 +95,8 @@ const EXTRA_GROUPS: ExtraGroup[] = [
     title: "Finances avancées",
     theme: "emerald",
     items: [
+      { title: "Frais scolaires", help: "Bouton « Nouveau frais », puis « + Ajouter une échéance » pour étaler le paiement.", href: "/invoices/fees", icon: FileText },
+      { title: "Numéro marchand de reversement", help: "Bas de la section « Informations de l'établissement » → champ « Numéro marchand » (Mobile Money).", href: "/settings", icon: Banknote },
       { title: "Factures élèves", help: "Bouton « Nouvelle facture », ou « Générer en masse » pour toute une classe.", href: "/invoices", icon: FileText },
       { title: "Règles de facturation", help: "Onglets Exonérations, Remises fratrie, Enfants du personnel pour les cas particuliers.", href: "/invoices/rules", icon: FileText },
       { title: "Comptabilité générale", help: "Onglets Plan comptable, Journaux, Écritures ; boutons « Nouveau compte », « Nouvelle écriture »…", href: "/accounting", icon: Calculator },
@@ -114,6 +114,7 @@ const EXTRA_GROUPS: ExtraGroup[] = [
       { title: "Messages", help: "Bouton « Nouveau message » pour un SMS, un email ou un WhatsApp ciblé.", href: "/communications", icon: MessagesSquare },
       { title: "Annonces", help: "Bouton « Nouvelle annonce » pour informer toute l'école, une classe ou un élève.", href: "/communications/announcements", icon: Megaphone },
       { title: "Documents & modèles", help: "Bouton « Nouveau modèle » (ou « Modèles par défaut ») pour vos certificats, reçus, attestations.", href: "/documents", icon: FileText },
+      { title: "Modèles de messages", help: "Bouton « Nouveau modèle » pour standardiser vos SMS/emails automatiques.", href: "/communications/templates", icon: MessagesSquare },
     ],
   },
   {
@@ -164,14 +165,12 @@ export function GettingStarted({ compact = false, forceShow = false }: { compact
   const employeesQ = useQuery(() => (off ? Promise.resolve([]) : listEmployees()), [off]);
   const studentsQ = useQuery(() => (off ? Promise.resolve(null) : searchStudents({ size: 1 })), [off]);
   const parentsQ = useQuery(() => (off ? Promise.resolve([]) : listParents(undefined, 1)), [off]);
-  const feesQ = useQuery(() => (off || !tenantId ? Promise.resolve([]) : listFeesByTenant(tenantId)), [off, tenantId]);
   const profileQ = useQuery(() => (off ? Promise.resolve(null) : getSchoolProfile()), [off]);
-  const templatesQ = useQuery(() => (off || !tenantId ? Promise.resolve([]) : listTemplates(tenantId)), [off, tenantId]);
 
   const loading =
     yearsQ.loading || periodsQ.loading || levelsQ.loading || roomsQ.loading || classesQ.loading ||
     subjectsQ.loading || schedulesQ.loading || teachersQ.loading || employeesQ.loading || studentsQ.loading ||
-    parentsQ.loading || feesQ.loading || profileQ.loading || templatesQ.loading;
+    parentsQ.loading || profileQ.loading;
 
   if (off) return null;
   if (loading) return null;
@@ -206,17 +205,9 @@ export function GettingStarted({ compact = false, forceShow = false }: { compact
       ],
     },
     {
-      title: "4. Finances",
-      steps: [
-        { title: "Frais scolaires", help: "Bouton « Nouveau frais », puis « + Ajouter une échéance » pour étaler le paiement.", href: "/invoices/fees", done: has(feesQ.data) },
-        { title: "Numéro marchand de reversement", help: "Bas de la section « Informations de l'établissement » → champ « Numéro marchand » (Mobile Money).", href: "/settings", done: !!profile?.payoutMerchantNumber },
-      ],
-    },
-    {
-      title: "5. Personnalisation & communication",
+      title: "4. Personnalisation",
       steps: [
         { title: "Logo & couleurs de l'école", help: "Section « Apparence » → bouton d'import « Logo de l'établissement » et palette de couleurs.", href: "/settings", done: !!profile?.logo },
-        { title: "Modèles de messages", help: "Bouton « Nouveau modèle » pour standardiser vos SMS/emails automatiques.", href: "/communications/templates", done: has(templatesQ.data) },
       ],
     },
   ];

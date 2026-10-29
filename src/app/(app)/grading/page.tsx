@@ -17,7 +17,7 @@ import { isNetworkError } from "@/lib/api/errors";
 import { isDesktop } from "@/lib/offline/desktop-runtime";
 import { queueOfflineAssessment } from "@/lib/offline/desktop-assessments";
 import {
-  getClassStudents,
+  assignClassSubject,
   listAcademicYears,
   listClasses,
   listClassSubjects,
@@ -39,8 +39,8 @@ import {
   getExamGradeEntryAssessment,
   removeExamSupervision,
   generateReportCardsBulk,
-  getAssessmentGrades,
   getAssessmentGradeSheetPdfObjectUrl,
+  getGradeSheet,
   getExamConvocationObjectUrl,
   getSubjectGradeReportPdfObjectUrl,
   getReportCardLines,
@@ -78,9 +78,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { printHtmlDocument } from "@/lib/print-node";
-import { officialPrintHeaderHtml, PRINT_HEADER_CSS } from "@/lib/print-header";
-import { getSchoolProfile } from "@/lib/api/platform";
 import { openPdfInApp } from "@/lib/open-pdf";
 import { formatDate } from "@/lib/format";
 
@@ -151,7 +148,7 @@ export default function GradingPage() {
             <TabsTrigger value="reports" icon={FileText}>Bulletins</TabsTrigger>
           </TabsList>
           <TabsPanel value="evaluations">
-            <EvaluationsTab classId={classId} className={classes.find((c) => c.id === classId)?.label ?? ""}
+            <EvaluationsTab classId={classId}
               yearId={effectiveYearId} canWrite={canWrite} canEditExisting={canEditExisting} />
           </TabsPanel>
           <TabsPanel value="exams">
@@ -179,10 +176,9 @@ function monthLabelOf(key: string): string {
 }
 
 // ── Évaluations tab ──────────────────────────────────────────────────────────
-function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting }: { classId: number; className: string; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
+function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classId: number; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
-  const profileQuery = useCachedQuery(tenantId ? `school-profile:${tenantId}` : null, getSchoolProfile, [tenantId]);
   const assessmentsQuery = useCachedQuery(`assessments-class:${classId}`, () => listAssessmentsByClass(classId), [classId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
@@ -304,53 +300,6 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
       (x, y) => (subjectLabel.get(x.subjectId) ?? "").localeCompare(subjectLabel.get(y.subjectId) ?? ""));
   }, [filteredAssessments, subjectLabel]);
 
-  // Relevé mensuel : Éval 1 / Éval 2 / … + Moyenne du mois (pondérée par coefficient, ramenée sur 20).
-  async function printMonthly(group: { subjectId: number; monthKey: string; evals: Assessment[] }) {
-    try {
-      const evals = [...group.evals].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
-      const [students, ...gradesLists] = await Promise.all([
-        getClassStudents(classId),
-        ...evals.map((e) => getAssessmentGrades(e.id)),
-      ]);
-      const gradeMaps = gradesLists.map((gl) => new Map(gl.map((g) => [g.studentId, g.value])));
-      const evalCols = evals
-        .map((e) => `<th style="text-align:center">${e.label}<br><span style="font-weight:400;font-size:11px">/${e.maxScore}${Number(e.coefficient) !== 1 ? ` · coef ${e.coefficient}` : ""}</span></th>`)
-        .join("");
-      const rows = students
-        .map((s, i) => {
-          let wsum = 0, csum = 0;
-          const cells = evals
-            .map((e, ei) => {
-              const raw = gradeMaps[ei].get(s.id);
-              if (raw != null && raw !== "") {
-                const v = Number(raw);
-                wsum += (v / Number(e.maxScore)) * 20 * Number(e.coefficient || 1);
-                csum += Number(e.coefficient || 1);
-                return `<td style="text-align:center">${v} / ${e.maxScore}</td>`;
-              }
-              return `<td style="text-align:center">—</td>`;
-            })
-            .join("");
-          const moy = csum > 0 ? (wsum / csum).toFixed(2) : "—";
-          return `<tr><td>${i + 1}</td><td>${s.studentNumber ?? ""}</td><td>${s.lastName ?? ""} ${s.firstName ?? ""}</td>${cells}<td style="text-align:center;font-weight:700">${moy}</td></tr>`;
-        })
-        .join("");
-      const subject = subjectLabel.get(group.subjectId) ?? `#${group.subjectId}`;
-      printHtmlDocument(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Relevé mensuel — ${subject}</title>`
-        + `<style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}${PRINT_HEADER_CSS}`
-        + `h1{font-size:20px;text-align:center;margin:0 0 4px}.sub{text-align:center;color:#475569;font-size:13px;margin-bottom:16px}`
-        + `table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #cbd5e1;padding:6px 8px}`
-        + `th{background:#f1f5f9;text-align:left}@media print{body{padding:0}}</style></head><body>`
-        + `${officialPrintHeaderHtml(profileQuery.data)}`
-        + `<h1>RELEVÉ MENSUEL DE NOTES</h1><div class="sub">${subject} — ${monthLabelOf(group.monthKey)} — ${className || ""}</div>`
-        + `<table><thead><tr><th>N°</th><th>Matricule</th><th>Nom & prénom</th>${evalCols}<th style="text-align:center">Moyenne /20</th></tr></thead>`
-        + `<tbody>${rows}</tbody></table>`
-        + `</body></html>`,
-      );
-    } catch (err) { notifyError(err); }
-  }
-
   function handleDelete(a: Assessment) {
     confirmAction({
       title: "Supprimer l'évaluation", message: `Supprimer « ${a.label} » et ses notes ?`,
@@ -444,7 +393,6 @@ function EvaluationsTab({ classId, className, yearId, canWrite, canEditExisting 
                           {g.evals.length} évaluation{g.evals.length > 1 ? "s" : ""}
                         </span>
                       </span>
-                      <Button size="sm" variant="secondary" onClick={() => printMonthly(g)}>Relevé du mois</Button>
                       <Button size="sm" variant="secondary"
                         loading={monthlyPdfLoadingKey === `${g.subjectId}|${g.monthKey}`}
                         onClick={() => openMonthlyPdf(g)}>Relevé du mois (PDF)</Button>
@@ -615,18 +563,46 @@ function CompositionsTab({ classId, yearId, canManage, canWrite, canEditExisting
   // "Saisir les notes" matière par matière.
   const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [subjectError, setSubjectError] = useState<string | null>(null);
+  // Coefficient par matière — une composition n'a pas de coefficient propre (toujours neutre côté
+  // serveur, voir ExamService.gradeEntryAssessment) : c'est le coefficient de la MATIÈRE pour cette
+  // classe qui pondère sa moyenne. Réglable ici directement (§retour utilisateur : "meme chose pour la
+  // partie composition"), persisté sur la matière de la classe (ClasseMatiere), pas sur la composition.
+  const [coefficients, setCoefficients] = useState<Record<string, string>>({});
+  function coefFor(sid: string): number {
+    const cm = (classSubjectsQuery.data ?? []).find((c) => String(c.subjectId) === sid);
+    if (cm?.coefficient != null && !Number.isNaN(Number(cm.coefficient))) return Number(cm.coefficient);
+    const subj = (allSubjectsQuery.data ?? []).find((s) => String(s.id) === sid);
+    if (subj?.coefficient != null && !Number.isNaN(Number(subj.coefficient))) return Number(subj.coefficient);
+    return 1;
+  }
   function toggleSubject(sid: string) {
-    setSubjectIds((prev) => (prev.includes(sid) ? prev.filter((s) => s !== sid) : [...prev, sid]));
+    const checking = !subjectIds.includes(sid);
+    setSubjectIds((prev) => (checking ? [...prev, sid] : prev.filter((s) => s !== sid)));
     setSubjectError(null);
+    if (checking && coefficients[sid] == null) {
+      setCoefficients((prev) => ({ ...prev, [sid]: String(coefFor(sid)) }));
+    }
   }
   function openCreate() {
-    setSubjectIds((classSubjectsQuery.data ?? []).map((cm) => String(cm.subjectId)));
+    const ids = (classSubjectsQuery.data ?? []).map((cm) => String(cm.subjectId));
+    setSubjectIds(ids);
+    setCoefficients(Object.fromEntries(ids.map((sid) => [sid, String(coefFor(sid))])));
     setCreating(true);
   }
 
   async function submit(values: ExamFormValues) {
     if (subjectIds.length === 0) { setSubjectError("Choisissez au moins une matière"); return; }
     try {
+      // Persiste le coefficient par matière AVANT de créer la composition — c'est lui qui pondère la
+      // moyenne, pas un coefficient de la composition elle-même.
+      for (const sid of subjectIds) {
+        const cm = (classSubjectsQuery.data ?? []).find((c) => String(c.subjectId) === sid);
+        const wanted = Number(coefficients[sid]);
+        if (cm && wanted > 0 && Number(cm.coefficient) !== wanted) {
+          try { await assignClassSubject(classId, Number(sid), cm.teacherId ?? undefined, wanted, cm.code ?? undefined, cm.specialty); }
+          catch (err) { notifyError(err); }
+        }
+      }
       const exam = await createExam({ classId, periodId: Number(values.periodId), type: values.type as ExamType, label: values.label, scheduledDate: values.scheduledDate || null });
       // Sans date, l'évaluation de chaque matière ne peut pas encore être créée (voir
       // gradeEntryAssessment côté backend) — la composition reste planifiable, les matières seront
@@ -637,7 +613,7 @@ function CompositionsTab({ classId, yearId, canManage, canWrite, canEditExisting
           catch (err) { notifyError(err); }
         }
       }
-      setCreating(false); reset(); notifySuccess("Composition planifiée"); examsQuery.refetch();
+      setCreating(false); reset(); notifySuccess("Composition planifiée"); examsQuery.refetch(); classSubjectsQuery.refetch();
     } catch (err) { notifyError(err); }
   }
 
@@ -714,16 +690,33 @@ function CompositionsTab({ classId, yearId, canManage, canWrite, canEditExisting
                 <button type="button" className="text-gray-400 hover:underline" onClick={() => setSubjectIds([])}>Tout décocher</button>
               </div>
             </div>
-            <p className="text-xs text-gray-400">Toutes les matières de la classe sont cochées par défaut — décochez celles à exclure.</p>
-            <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
-              {(classSubjectsQuery.data ?? []).map((cm) => (
-                <label key={cm.subjectId} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input type="checkbox" checked={subjectIds.includes(String(cm.subjectId))}
-                    onChange={() => toggleSubject(String(cm.subjectId))}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
-                  {subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}
-                </label>
-              ))}
+            <p className="text-xs text-gray-400">
+              Toutes les matières de la classe sont cochées par défaut — décochez celles à exclure. Le
+              coefficient affiché est celui de la matière pour cette classe (c&apos;est lui qui pondère
+              la moyenne d&apos;une composition) — modifiable ici directement.
+            </p>
+            <div className="mt-1.5 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+              {(classSubjectsQuery.data ?? []).map((cm) => {
+                const sid = String(cm.subjectId);
+                return (
+                  <div key={cm.subjectId} className="flex items-center justify-between gap-2 text-sm">
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input type="checkbox" checked={subjectIds.includes(sid)}
+                        onChange={() => toggleSubject(sid)}
+                        className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
+                      {subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}
+                    </label>
+                    {subjectIds.includes(sid) && (
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        Coef.
+                        <Input type="number" min={0} step={0.5} className="h-7 w-16 px-1.5 text-right"
+                          value={coefficients[sid] ?? String(coefFor(sid))}
+                          onChange={(e) => setCoefficients((prev) => ({ ...prev, [sid]: e.target.value }))} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {subjectError && <p className="text-xs text-error-600">{subjectError}</p>}
           </Field>
@@ -1016,6 +1009,11 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
 
   const [subjectIds, setSubjectIds] = useState<string[]>(initial ? [String(initial.subjectId)] : []);
   const [subjectError, setSubjectError] = useState<string | null>(null);
+  // Coefficient par matière, modifiable par l'utilisateur quand plusieurs matières sont choisies
+  // (§retour utilisateur : "il ne donne pas la possibilité d'ajouter le coefficient de la matière"
+  // quand toutes les matières sont cochées) — initialisé à la valeur automatique (classe puis matière)
+  // mais reste éditable, par matière, avant de créer les évaluations.
+  const [coefficients, setCoefficients] = useState<Record<string, string>>({});
 
   const schema = z.object({
     periodId: z.string().min(1, "Requis"),
@@ -1055,12 +1053,16 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
   }
 
   function toggleSubject(sid: string) {
-    const next = subjectIds.includes(sid) ? subjectIds.filter((s) => s !== sid) : [...subjectIds, sid];
+    const checking = !subjectIds.includes(sid);
+    const next = checking ? [...subjectIds, sid] : subjectIds.filter((s) => s !== sid);
     setSubjectIds(next);
     setSubjectError(null);
     if (next.length === 1) {
       const c = coefFor(next[0]);
       if (c > 0) setValue("coefficient", c);
+    }
+    if (checking && coefficients[sid] == null) {
+      setCoefficients((prev) => ({ ...prev, [sid]: String(coefFor(sid)) }));
     }
   }
 
@@ -1076,7 +1078,7 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
           periodId: Number(values.periodId), type: values.type as AssessmentType,
           label: values.label,
           date: values.date || null,
-          coefficient: multi ? coefFor(sid) : Number(values.coefficient),
+          coefficient: multi ? (Number(coefficients[sid]) || coefFor(sid)) : Number(values.coefficient),
           maxScore: Number(values.maxScore),
         };
       };
@@ -1128,15 +1130,24 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
       </Field>
       {subjectIds.length > 0 && (
         <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
-          <p className="mb-1 text-xs font-medium text-gray-500">Enseignant(s) — affecté(s) à cette classe</p>
+          <p className="mb-1 text-xs font-medium text-gray-500">
+            Enseignant(s) — affecté(s) à cette classe{subjectIds.length > 1 ? " · coefficient par matière" : ""}
+          </p>
           {subjectIds.map((sid) => {
             const cm = classSubjects.find((c) => String(c.subjectId) === sid);
             return (
-              <div key={sid} className="flex justify-between py-0.5">
+              <div key={sid} className="flex items-center justify-between gap-2 py-0.5">
                 <span className="text-gray-700">{subjectName.get(Number(sid)) ?? `#${sid}`}</span>
-                <span className={cm?.teacherId ? "text-gray-600" : "text-warning-600"}>
-                  {cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : "aucun enseignant affecté"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={cm?.teacherId ? "text-gray-600" : "text-warning-600"}>
+                    {cm?.teacherId ? (teacherName.get(cm.teacherId) ?? `#${cm.teacherId}`) : "aucun enseignant affecté"}
+                  </span>
+                  {subjectIds.length > 1 && (
+                    <Input type="number" min={0} step={0.5} className="h-7 w-16 px-1.5 text-right"
+                      value={coefficients[sid] ?? String(coefFor(sid))}
+                      onChange={(e) => setCoefficients((prev) => ({ ...prev, [sid]: e.target.value }))} />
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1179,7 +1190,7 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
           <Input type="number" min={1} value={v.maxScore} onChange={(e) => setValue("maxScore", Number(e.target.value))} />
         </Field>
         {subjectIds.length > 1 ? (
-          <div className="flex items-end pb-2 text-xs text-gray-500">Coefficient : automatique par matière (selon la classe).</div>
+          <div className="flex items-end pb-2 text-xs text-gray-500">Coefficient : réglable par matière ci-dessus.</div>
         ) : (
           <Field>
             <Label>Coefficient</Label>
@@ -1197,14 +1208,18 @@ function AssessmentForm({ classId, yearId, initial, onCancel, onCreated }: {
 
 // ── Bulk grade grid ──────────────────────────────────────────────────────────
 function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessment: Assessment; canWrite: boolean; canEditExisting: boolean; onDone: () => void }) {
-  const studentsQuery = useCachedQuery(`class-students:${assessment.classId}`, () => getClassStudents(assessment.classId), [assessment.classId]);
-  const gradesQuery = useCachedQuery(`assessment-grades:${assessment.id}`, () => getAssessmentGrades(assessment.id), [assessment.id]);
+  // Feuille de notes du module grading (élève + note existante en un seul appel) — pas
+  // /academics/classes/{id}/students, qui ne liste que les inscriptions VALIDÉES et faisait
+  // disparaître toute la classe dès qu'un élève avait une inscription encore PENDING (retour
+  // enseignant : "je ne vois pas la liste des élèves" après avoir créé une composition).
+  const sheetQuery = useCachedQuery(`grade-sheet:${assessment.id}`, () => getGradeSheet(assessment.id), [assessment.id]);
   const [values, setValues] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const max = Number(assessment.maxScore);
 
-  const existing = useMemo(() => new Map((gradesQuery.data ?? []).map((g) => [g.studentId, g])), [gradesQuery.data]);
-  const locked = (gradesQuery.data ?? []).some((g) => g.validated);
+  const rows = useMemo(() => sheetQuery.data ?? [], [sheetQuery.data]);
+  const existing = useMemo(() => new Map(rows.map((r) => [r.studentId, r])), [rows]);
+  const locked = rows.some((r) => r.validated);
   // Sauvegarde hors-ligne pas encore synchronisée pour CETTE évaluation (voir sync-engine.ts) — sert de
   // base d'affichage prioritaire sur `existing` : c'est le dernier état saisi par l'enseignant, même si
   // le serveur ne le connaît pas encore.
@@ -1224,14 +1239,14 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
   async function save() {
     setSaving(true);
     try {
-      const entries = (studentsQuery.data ?? [])
-        .map((s) => ({ studentId: s.id, raw: valueOf(s.id) }))
+      const entries = rows
+        .map((s) => ({ studentId: s.studentId, raw: valueOf(s.studentId) }))
         .filter((e) => e.raw !== "" && !invalid(e.raw))
         .map((e) => ({ studentId: e.studentId, value: Number(e.raw) }));
       const attempt = await submitGradesOfflineAware(assessment.id, entries);
       if (attempt.outcome === "online") {
         notifySuccess("Notes enregistrées");
-        gradesQuery.refetch();
+        sheetQuery.refetch();
       } else {
         notifySuccess("Notes enregistrées hors-ligne — seront synchronisées à la reconnexion");
       }
@@ -1242,15 +1257,15 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
     catch (err) { notifyError(err); }
   }
   async function unlockAll() {
-    const validated = (gradesQuery.data ?? []).filter((g) => g.validated);
+    const validated = rows.filter((r) => r.validated && r.gradeId != null).map((r) => r.gradeId as number);
     try {
-      await Promise.all(validated.map((g) => unlockGrade(g.id)));
+      await Promise.all(validated.map((id) => unlockGrade(id)));
       notifySuccess("Notes déverrouillées — correction possible");
-      gradesQuery.refetch();
+      sheetQuery.refetch();
     } catch (err) { notifyError(err); }
   }
 
-  if (studentsQuery.loading || gradesQuery.loading) return <div className="flex justify-center py-8"><Spinner /></div>;
+  if (sheetQuery.loading) return <div className="flex justify-center py-8"><Spinner /></div>;
 
   return (
     <div className="space-y-4">
@@ -1279,18 +1294,18 @@ function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessme
         <Table>
           <THead><tr><TH>Élève</TH><TH>Note / {max}</TH></tr></THead>
           <TBody>
-            {(studentsQuery.data ?? []).map((s) => {
-              const v = valueOf(s.id);
+            {rows.map((s) => {
+              const v = valueOf(s.studentId);
               const bad = invalid(v);
               // A grade already entered for this student is read-only unless the user may edit existing grades.
-              const alreadyEntered = existing.get(s.id)?.value != null && existing.get(s.id)?.value !== "";
+              const alreadyEntered = existing.get(s.studentId)?.value != null && existing.get(s.studentId)?.value !== "";
               const readOnly = locked || !canWrite || (alreadyEntered && !canEditExisting);
               return (
-                <TR key={s.id}>
-                  <TD className="font-medium text-gray-900">{s.firstName} {s.lastName}</TD>
+                <TR key={s.studentId}>
+                  <TD className="font-medium text-gray-900">{s.fullName}</TD>
                   <TD>
                     <input type="number" min={0} max={max} disabled={readOnly} value={v}
-                      onChange={(e) => setValues((p) => ({ ...p, [s.id]: e.target.value }))}
+                      onChange={(e) => setValues((p) => ({ ...p, [s.studentId]: e.target.value }))}
                       className={`h-9 w-24 rounded-lg border px-2 text-sm outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${bad ? "border-error-400 bg-error-50 text-error-700" : "border-gray-300 focus:border-brand-400"}`} />
                     {alreadyEntered && !canEditExisting && !locked && <span className="ml-2 text-[10px] text-gray-400">saisie verrouillée</span>}
                   </TD>
