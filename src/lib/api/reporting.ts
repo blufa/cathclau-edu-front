@@ -46,6 +46,20 @@ export function getTodayAttendanceStats(): Promise<TodayAttendanceStats> {
   return api.get<TodayAttendanceStats>("/dashboard/attendance/today");
 }
 
+/** Un jour de l'historique de présence école entière — toujours une entrée par jour de la plage,
+ * même 0/0/0 sans aucun enregistrement ce jour-là (pas de trou dans le graphique). */
+export interface DailyAttendanceStats {
+  date: string;
+  presentCount: number;
+  absentCount: number;
+  lateCount: number;
+}
+/** Historique présences/absences/retards école entière des `days` derniers jours (tableau de bord
+ * principal). */
+export function getAttendanceHistory(days = 14): Promise<DailyAttendanceStats[]> {
+  return api.get<DailyAttendanceStats[]>("/dashboard/attendance/history", { query: { days } });
+}
+
 // ── 10.2 Financier ─────────────────────────────────────────────────────────
 export interface FinanceDashboard {
   invoiced: string;
@@ -207,6 +221,29 @@ export interface TeacherHoursProgress {
   teacherName: string;
   dueMinutes: number;
   realizedMinutes: number;
+}
+
+/** Une avance sur salaire accordée ce mois — className null si personnel non-enseignant ou si
+ * l'enseignant n'a aucune classe résolue (juste pour affichage, pas une vérité exhaustive). */
+export interface SalaryAdvanceDetail {
+  employeeName: string;
+  className: string | null;
+  grantedAt: string;
+  amount: string;
+}
+/** État financier du mois (tableau de bord principal) : masse salariale enseignants Maternelle/
+ * Primaire/Secondaire + personnel + avances sur salaire accordées ce mois (montant réellement sorti). */
+export interface MonthlyFinancialSummary {
+  maternelleTeacherPayroll: string;
+  primaryTeacherPayroll: string;
+  secondaryTeacherPayroll: string;
+  staffPayroll: string;
+  salaryAdvancesTotal: string;
+  total: string;
+  advances: SalaryAdvanceDetail[];
+}
+export function getMonthlyFinancialSummary(year?: number, month?: number): Promise<MonthlyFinancialSummary> {
+  return api.get<MonthlyFinancialSummary>("/dashboard/finance/payroll-summary", { query: { year, month } });
 }
 /** Estimation du salaire dû pour un mois donné, dans la projection sur l'année scolaire. */
 export interface MonthProjection {

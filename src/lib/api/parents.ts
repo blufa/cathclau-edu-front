@@ -86,8 +86,9 @@ export function getLinkedParentIds(): Promise<number[]> {
 export function updateParent(
   id: number, input: ParentInput, userId: number | null = null,
   staffType: "TEACHER" | "EMPLOYEE" | null = null, staffId: number | null = null,
+  excludeFromAutoDeduction = false,
 ): Promise<Parent> {
-  return api.put<Parent>(`/parents/${id}`, { ...input, userId, staffType, staffId });
+  return api.put<Parent>(`/parents/${id}`, { ...input, userId, staffType, staffId, excludeFromAutoDeduction });
 }
 
 export function getStudentParents(studentId: number): Promise<Parent[]> {

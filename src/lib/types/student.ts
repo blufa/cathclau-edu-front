@@ -82,6 +82,9 @@ export interface Parent {
    * veut/ne peut pas en avoir un (ex. pas de smartphone Android). */
   linkedStaffType?: "TEACHER" | "EMPLOYEE" | null;
   linkedStaffId?: number | null;
+  /** Réglage comptable : ce parent, s'il est membre du personnel, prend en charge lui-même les frais
+   * de ses enfants — aucune retenue automatique sur son salaire. Sans effet sur un parent non-personnel. */
+  excludeFromAutoDeduction?: boolean;
 }
 
 export interface StudentDocument {

@@ -166,6 +166,7 @@ const editSchema = z.object({
   email: z.string(),
   occupation: z.string(),
   address: z.string(),
+  excludeFromAutoDeduction: z.boolean(),
 }).superRefine((v, ctx) => {
   const phoneError = phoneRule(v.phone);
   if (phoneError) ctx.addIssue({ code: "custom", path: ["phone"], message: phoneError });
@@ -180,6 +181,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
       firstName: parent.firstName ?? "", lastName: parent.lastName ?? "",
       phone: parent.phone ?? "", email: parent.email ?? "",
       occupation: parent.occupation ?? "", address: parent.address ?? "",
+      excludeFromAutoDeduction: parent.excludeFromAutoDeduction ?? false,
     },
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
@@ -192,7 +194,7 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
         firstName: values.firstName, lastName: values.lastName,
         phone: values.phone || null, email: values.email || null,
         occupation: values.occupation || null, address: values.address || null,
-      });
+      }, undefined, undefined, undefined, values.excludeFromAutoDeduction);
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -226,6 +228,18 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
         <Label>Adresse</Label>
         <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
       </Field>
+      <div className="rounded-xl border border-slate-200 p-3">
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={v.excludeFromAutoDeduction}
+            onChange={(checked) => setValue("excludeFromAutoDeduction", checked)}
+            ariaLabel="Ce parent paie lui-même les frais de ses enfants"
+          />
+          <span className="text-sm text-gray-700">
+            Ce parent (s&apos;il est membre du personnel) paie lui-même les frais de ses enfants — aucune retenue automatique sur son salaire
+          </span>
+        </div>
+      </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Annuler</Button>
         <Button type="submit" loading={loading}>Enregistrer</Button>
