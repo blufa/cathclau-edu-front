@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { applyEarlyPaymentDiscount, applyStudentCreditToInvoice, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, getStudentCreditBalance, listClassTransferRefunds, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, markClassTransferRefundRefunded, removeEarlyPaymentDiscount, subscribeAnnexFee } from "@/lib/api/billing";
+import { applyEarlyPaymentDiscount, applyStudentCreditToInvoice, deleteInvoice, generateMonthlyInvoices, generateSelectedInstallments, getInvoicePdfObjectUrl, getStaffChildDeductionStatus, getStudentCreditBalance, listClassTransferRefunds, listFeesByClass, listFeesByRoute, listFeesByTenant, listInstallments, listInvoicesByStudent, markClassTransferRefundRefunded, removeEarlyPaymentDiscount, setStaffChildDeductionExcluded, subscribeAnnexFee } from "@/lib/api/billing";
 import { confirmSchoolPaymentViaDjomy, getPaymentReceiptPdf, getReceiptPdfObjectUrl, listPaymentsByStudent } from "@/lib/api/payment";
 import { listRoutes, listStops, listSubscriptions, subscribe } from "@/lib/api/transport";
 import { isNetworkError } from "@/lib/api/errors";
-import { FEE_TYPE_LABEL, type ExemptedPeriod, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
+import { FEE_TYPE_LABEL, isLockedByStaffDeduction, type ExemptedPeriod, type FeeType, type Installment, type Invoice, type SchoolFee } from "@/lib/types/billing";
 import { PAYMENT_CHANNEL_LABEL, type PaymentChannel } from "@/lib/types/payment";
 import { DIRECTION_LABEL, type TransportDirection } from "@/lib/types/transport";
 import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
@@ -904,11 +904,38 @@ function InvoiceCollect({
   // Barrière caisse (comme côté backend, PaymentService) : ne concerne que les canaux guichet.
   const { sessionOpen, loading: sessionLoading } = useCashierSessionGate();
   const cashBlocked = !online && !sessionLoading && !sessionOpen;
-  const toggle = (id: number) =>
+  // Facture d'un enfant de personnel encore sous retenue sur salaire (§payroll ↔ billing, retour
+  // comptable : "dès que l'enfant est inscrit avec retenue de salaire, griser les cases à cocher...
+  // tant qu'on n'a pas choisi que la retenue n'est plus automatique") — jamais encaissable au guichet
+  // tant que c'est le cas, sous peine de double paiement (une fois par la paie, une fois ici). Une
+  // facture retirée au cas par cas (modal "Détail de la retenue", fiche de paie) redevient normale.
+  const lockedIds = new Set(effectiveInvoices.filter(isLockedByStaffDeduction).map((inv) => inv.id));
+  const selectableIds = allIds.filter((id) => !lockedIds.has(id));
+
+  // Bouton "Retirer/Réintégrer cet enfant de la retenue" directement depuis sa fiche de factures —
+  // §retour comptable : retirer l'enfant doit rendre ses factures encaissables ici même, pas seulement
+  // depuis le détail de la fiche de paie du parent.
+  const deductionStatusQuery = useQuery(() => getStaffChildDeductionStatus(studentId), [studentId]);
+  const [togglingChildDeduction, setTogglingChildDeduction] = useState(false);
+  async function toggleChildDeduction() {
+    const nextExcluded = !deductionStatusQuery.data?.excluded;
+    setTogglingChildDeduction(true);
+    try {
+      await setStaffChildDeductionExcluded(studentId, nextExcluded);
+      await deductionStatusQuery.refetch();
+      onDone();
+    } catch (err) { notifyError(err); } finally { setTogglingChildDeduction(false); }
+  }
+
+  const toggle = (id: number) => {
+    if (lockedIds.has(id)) return;
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const toggleMonthlyFees = () =>
-    setSelected((s) => (wholeYear ? s.filter((id) => !monthlyIds.includes(id)) : [...new Set([...s, ...monthlyIds])]));
-  const toggleAll = () => setSelected((s) => (s.length === allIds.length ? [] : allIds));
+  };
+  const toggleMonthlyFees = () => {
+    const selectableMonthlyIds = monthlyIds.filter((id) => !lockedIds.has(id));
+    setSelected((s) => (wholeYear ? s.filter((id) => !monthlyIds.includes(id)) : [...new Set([...s, ...selectableMonthlyIds])]));
+  };
+  const toggleAll = () => setSelected((s) => (s.length === selectableIds.length ? [] : selectableIds));
 
   // Polling Djomy après redirection : confirme/répartit automatiquement dès que le paiement est réussi.
   useEffect(() => {
@@ -1003,13 +1030,19 @@ function InvoiceCollect({
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-700">Factures à régler</p>
         <div className="flex gap-3 text-xs">
+          {deductionStatusQuery.data?.staffChild && (
+            <button type="button" onClick={toggleChildDeduction} disabled={togglingChildDeduction}
+              className={deductionStatusQuery.data.excluded ? "text-success-600 hover:underline" : "text-error-600 hover:underline"}>
+              {deductionStatusQuery.data.excluded ? "Réintégrer à la retenue" : "Retirer de la retenue"}
+            </button>
+          )}
           {monthlyIds.length > 0 && (
             <button type="button" onClick={toggleMonthlyFees} className="text-brand-700 hover:underline">
               {wholeYear ? "Décocher la scolarité" : "Toute la scolarité"}
             </button>
           )}
           <button type="button" onClick={toggleAll} className="text-slate-500 hover:underline">
-            {selected.length === allIds.length ? "Tout décocher" : "Tout sélectionner"}
+            {selected.length === selectableIds.length ? "Tout décocher" : "Tout sélectionner"}
           </button>
         </div>
       </div>
@@ -1021,11 +1054,13 @@ function InvoiceCollect({
           const checkedSubMonths = monthSelections[m.id] ?? coveredMonths;
           const partial = isChecked && amountFor(m) < remainingOf(m);
           const surplus = isChecked ? surplusFor(m) : 0;
+          const locked = lockedIds.has(m.id);
           return (
             <div key={m.id} className="rounded-lg px-2 py-1.5 hover:bg-white">
-              <label className="flex cursor-pointer items-center justify-between gap-2">
+              <label className={`flex items-center justify-between gap-2 ${locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
                 <Checkbox
                   checked={isChecked}
+                  disabled={locked}
                   onChange={() => toggle(m.id)}
                   label={(
                     <span className="text-sm text-slate-700">

@@ -1,6 +1,6 @@
 /** Payment contracts mirrored from the backend payments module. */
 
-export type PaymentChannel = "ORANGE_MONEY" | "MTN_MONEY" | "WAVE" | "BANK_CARD" | "DJOMY" | "CASH";
+export type PaymentChannel = "ORANGE_MONEY" | "MTN_MONEY" | "WAVE" | "BANK_CARD" | "DJOMY" | "CASH" | "PAYROLL_DEDUCTION";
 export type PaymentType = "PARTIAL" | "COMPLETE";
 export type PaymentStatus = "INITIATED" | "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED";
 
@@ -11,6 +11,9 @@ export const PAYMENT_CHANNEL_LABEL: Record<PaymentChannel, string> = {
   WAVE: "Wave",
   BANK_CARD: "Carte bancaire",
   DJOMY: "Djomy",
+  /** Retenue sur salaire (§payroll ↔ billing) — jamais un encaissement guichet, voir backend
+   * PaymentChannel. */
+  PAYROLL_DEDUCTION: "Retenue sur salaire",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {

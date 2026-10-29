@@ -6,9 +6,9 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { getSchoolProfile } from "@/lib/api/platform";
 import { searchEnrollments } from "@/lib/api/enrollments";
-import { getInvoicePdfObjectUrl, listFeesByClass, listInstallments, listInvoicesByStudent } from "@/lib/api/billing";
+import { getInvoicePdfObjectUrl, getStaffChildDeductionStatus, listFeesByClass, listInstallments, listInvoicesByStudent, setStaffChildDeductionExcluded } from "@/lib/api/billing";
 import { isNetworkError } from "@/lib/api/errors";
-import { FEE_TYPE_LABEL, type FeeType, type Invoice } from "@/lib/types/billing";
+import { FEE_TYPE_LABEL, isLockedByStaffDeduction, type FeeType, type Invoice } from "@/lib/types/billing";
 import { type PaymentChannel } from "@/lib/types/payment";
 import { submitGroupPaymentOfflineAware } from "@/lib/offline/submit-group-payment";
 import { useSyncQueueStore } from "@/lib/offline/sync-queue-store";
@@ -174,9 +174,34 @@ export function MultiChildCollectModal({
     const monthsLabel = [...checked].sort().map(monthShortLabel).join(", ");
     return monthsLabel ? `${row.label} — ${monthsLabel} réglé(s)` : row.label;
   }
-  const toggle = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  // §retour comptable : jamais encaissable au guichet tant que la retenue sur salaire reste active
+  // (même raisonnement que student-invoices-panel.tsx — évite un double paiement paie + guichet).
+  const lockedIds = new Set(rows.filter((r) => isLockedByStaffDeduction(r.invoice)).map((r) => r.invoice.id));
+  const toggle = (id: number) => {
+    if (lockedIds.has(id)) return;
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  };
   const allIds = rows.map((r) => r.invoice.id);
-  const toggleAll = () => setSelected((s) => (s.length === allIds.length ? [] : allIds));
+  const selectableIds = allIds.filter((id) => !lockedIds.has(id));
+  const toggleAll = () => setSelected((s) => (s.length === selectableIds.length ? [] : selectableIds));
+
+  // Bouton "Retirer/Réintégrer cet enfant de la retenue" par enfant, directement dans ce modal
+  // d'encaissement groupé — §retour comptable : retirer l'enfant doit rendre ses factures encaissables
+  // ICI MÊME, sans devoir passer par le détail de la fiche de paie de son parent.
+  const deductionStatusesQuery = useQuery(async () => {
+    if (studentIds.length === 0) return new Map<number, { staffChild: boolean; excluded: boolean }>();
+    const entries = await Promise.all(studentIds.map(async (sid) => [sid, await getStaffChildDeductionStatus(sid)] as const));
+    return new Map(entries);
+  }, [studentIds.join(",")]);
+  const [togglingChildId, setTogglingChildId] = useState<number | null>(null);
+  async function toggleChildDeduction(sid: number) {
+    const current = deductionStatusesQuery.data?.get(sid);
+    setTogglingChildId(sid);
+    try {
+      await setStaffChildDeductionExcluded(sid, !current?.excluded);
+      await Promise.all([deductionStatusesQuery.refetch(), q.refetch()]);
+    } catch (err) { notifyError(err); } finally { setTogglingChildId(null); }
+  }
 
   const selectedRows = rows.filter((r) => selected.includes(r.invoice.id));
   const total = selectedRows.reduce((s, r) => s + amountFor(r), 0);
@@ -267,26 +292,37 @@ export function MultiChildCollectModal({
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-700">{studentIds.length} enfant(s) — factures à régler</p>
                 <button type="button" onClick={toggleAll} className="text-xs text-brand-700 hover:underline">
-                  {selected.length === allIds.length ? "Tout décocher" : "Tout sélectionner"}
+                  {selected.length === selectableIds.length ? "Tout décocher" : "Tout sélectionner"}
                 </button>
               </div>
 
               {studentIds.map((sid) => {
                 const childRows = rows.filter((r) => r.studentId === sid);
+                const deductionStatus = deductionStatusesQuery.data?.get(sid);
                 return (
                   <div key={sid} className="mb-3 last:mb-0">
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{childRows[0].studentName}</p>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{childRows[0].studentName}</p>
+                      {deductionStatus?.staffChild && (
+                        <button type="button" onClick={() => toggleChildDeduction(sid)} disabled={togglingChildId === sid}
+                          className={`text-xs ${deductionStatus.excluded ? "text-success-600" : "text-error-600"} hover:underline`}>
+                          {deductionStatus.excluded ? "Réintégrer à la retenue" : "Retirer de la retenue"}
+                        </button>
+                      )}
+                    </div>
                     <div className="space-y-1.5">
                       {childRows.map((row) => {
                         const isChecked = selected.includes(row.invoice.id);
                         const checkedSubMonths = monthSelections[row.invoice.id] ?? row.coveredMonths;
                         const partial = isChecked && amountFor(row) < remainingOf(row.invoice);
                         const surplus = isChecked ? surplusFor(row) : 0;
+                        const locked = lockedIds.has(row.invoice.id);
                         return (
                           <div key={row.invoice.id} className="rounded-lg px-2 py-1.5 hover:bg-white">
-                            <label className="flex cursor-pointer items-center justify-between gap-2">
+                            <label className={`flex items-center justify-between gap-2 ${locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
                               <Checkbox
                                 checked={isChecked}
+                                disabled={locked}
                                 onChange={() => toggle(row.invoice.id)}
                                 label={(
                                   <span className="text-sm text-slate-700">

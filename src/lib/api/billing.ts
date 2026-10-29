@@ -87,6 +87,32 @@ export function advanceRecovery(id: number): Promise<Invoice> {
   return api.patch<Invoice>(`/billing/invoices/${id}/recovery/advance`);
 }
 
+/** Inclut/exclut une facture précise (enfant de personnel) de la retenue automatique sur salaire — ex.
+ * un frais annexe facultatif (Maillots, T-shirts, Tenue scolaire) que le parent préfère régler
+ * lui-même (§payroll, modal "Détail de la retenue"). */
+export function setInvoiceExcludedFromStaffDeduction(id: number, excluded: boolean): Promise<Invoice> {
+  return api.patch<Invoice>(`/billing/invoices/${id}/staff-deduction`, undefined, { query: { excluded } });
+}
+
+/** Statut de retenue sur salaire de cet élève : {@code staffChild} (au moins un parent est personnel de
+ *  l'école, affiche ou non le bouton retirer/réintégrer) et {@code excluded} (actuellement exclu, par
+ *  enfant ou globalement). */
+export interface StaffChildDeductionStatus {
+  staffChild: boolean;
+  excluded: boolean;
+}
+export function getStaffChildDeductionStatus(studentId: number): Promise<StaffChildDeductionStatus> {
+  return api.get<StaffChildDeductionStatus>("/billing/invoices/staff-deduction/status", { query: { studentId } });
+}
+
+/** Exclut/réintègre CET ÉLÈVE de la retenue sur salaire (tous ses parents personnel) — depuis la fiche
+ *  élève ou le modal d'encaissement (§retour comptable : certains enfants du même salarié sont à charge
+ *  de l'avantage, d'autres payés directement par le parent). Rend immédiatement ses factures encore
+ *  dues (dé)verrouillables au guichet. */
+export function setStaffChildDeductionExcluded(studentId: number, excluded: boolean): Promise<void> {
+  return api.patch<void>("/billing/invoices/staff-deduction/student", undefined, { query: { studentId, excluded } });
+}
+
 /** Positionne directement l'étape de recouvrement. */
 export function setRecoveryStage(id: number, stage: import("@/lib/types/billing").RecoveryStage): Promise<Invoice> {
   return api.patch<Invoice>(`/billing/invoices/${id}/recovery`, undefined, { query: { stage } });

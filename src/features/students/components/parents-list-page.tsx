@@ -7,13 +7,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CreditCard, UserPlus, Users } from "lucide-react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { createParent, deleteParent, getLinkedParentIds, getParentChildren, listParents, updateParent } from "@/lib/api/parents";
+import { createParent, deleteParent, getLinkedParentIds, getParentChildren, getStaffChildren, listParents, updateParent } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
 import { getCurrentAcademicYear, listClasses } from "@/lib/api/academics";
 import { searchEnrollments } from "@/lib/api/enrollments";
+import { listTeachers, listEmployees } from "@/lib/api/staff";
 import { ApiError } from "@/lib/api/errors";
 import { phoneRule } from "@/lib/phone";
-import type { Parent } from "@/lib/types/student";
+import type { Parent, Student } from "@/lib/types/student";
 import { Modal } from "@/components/ui/modal";
 import { Input, Field, Label } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -28,6 +29,14 @@ import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { MultiChildInvoicesModal } from "@/features/billing/components/multi-child-invoices-modal";
 
+interface StaffEntry {
+  staffType: "TEACHER" | "EMPLOYEE";
+  staffId: number;
+  userId: number | null;
+  name: string;
+  role: string;
+}
+
 /** Liste de tous les parents du tenant — cliquer sur un parent affiche tous ses enfants rattachés. */
 export default function ParentsListPage() {
   // Aucune donnée "parents" n'était mise en cache hors-ligne (§retour comptable, guichet d'accueil) —
@@ -38,14 +47,32 @@ export default function ParentsListPage() {
   // charges) — un simple ensemble d'ids, pas de N+1 sur l'annuaire complet.
   const linkedIdsQuery = useCachedQuery("parents-linked-ids", getLinkedParentIds, []);
   const linkedIds = useMemo(() => new Set(linkedIdsQuery.data ?? []), [linkedIdsQuery.data]);
+  // Onglet "Personnel" (§retour comptable : "ajouter la liste /parents le personnel aussi... lorsqu'il
+  // recherche parent et qu'il trouve, on voit tous les enfants reliés") — même recherche/même modal
+  // "enfants rattachés" que pour un parent classique, mais depuis la fiche enseignant/employé.
+  const teachersQuery = useCachedQuery("teachers-all", listTeachers, []);
+  const employeesQuery = useCachedQuery("employees-all", () => listEmployees(), []);
+  const staffEntries = useMemo<StaffEntry[]>(() => {
+    const teachers = (teachersQuery.data ?? []).map((t) => ({
+      staffType: "TEACHER" as const, staffId: t.id, userId: t.userId,
+      name: `${t.firstName} ${t.lastName}`, role: "Enseignant",
+    }));
+    const employees = (employeesQuery.data ?? []).map((e) => ({
+      staffType: "EMPLOYEE" as const, staffId: e.id, userId: e.userId,
+      name: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim(), role: e.jobTitle || "Personnel",
+    }));
+    return [...teachers, ...employees];
+  }, [teachersQuery.data, employeesQuery.data]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Parent | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<StaffEntry | null>(null);
   const [creating, setCreating] = useState(false);
   // Deux onglets distincts plutôt qu'une liste mélangée avec un badge de statut (§7 cahier des
   // charges) : un prospect sans enfant et un parent qui a réellement des enfants inscrits sont deux
   // usages différents, à ne jamais confondre dans la même liste — pagination propre à chaque onglet.
   const [realPage, setRealPage] = useState(0);
   const [prospectPage, setProspectPage] = useState(0);
+  const [staffPage, setStaffPage] = useState(0);
   const PAGE_SIZE = 20;
 
   const filtered = useMemo(() => {
@@ -56,6 +83,11 @@ export default function ParentsListPage() {
   }, [q.data, search]);
   const realParents = useMemo(() => filtered.filter((p) => linkedIds.has(p.id)), [filtered, linkedIds]);
   const prospectParents = useMemo(() => filtered.filter((p) => !linkedIds.has(p.id)), [filtered, linkedIds]);
+  const filteredStaff = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return staffEntries;
+    return staffEntries.filter((s) => s.name.toLowerCase().includes(term));
+  }, [staffEntries, search]);
 
   return (
     <div className="space-y-6">
@@ -74,7 +106,7 @@ export default function ParentsListPage() {
         className="max-w-sm"
         placeholder="Rechercher (nom, téléphone, email)…"
         value={search}
-        onChange={(e) => { setSearch(e.target.value); setRealPage(0); setProspectPage(0); }}
+        onChange={(e) => { setSearch(e.target.value); setRealPage(0); setProspectPage(0); setStaffPage(0); }}
       />
 
       {q.loading ? (
@@ -84,6 +116,7 @@ export default function ParentsListPage() {
           <TabsList>
             <TabsTrigger value="parents">Parents ({realParents.length})</TabsTrigger>
             <TabsTrigger value="prospects">Prospects sans enfant ({prospectParents.length})</TabsTrigger>
+            <TabsTrigger value="staff">Personnel ({filteredStaff.length})</TabsTrigger>
           </TabsList>
           <TabsPanel value="parents">
             <ParentsTable
@@ -95,6 +128,12 @@ export default function ParentsListPage() {
             <ParentsTable
               parents={prospectParents} page={prospectPage} pageSize={PAGE_SIZE} onPageChange={setProspectPage}
               onSelect={setSelected} emptyLabel="Aucun prospect trouvé."
+            />
+          </TabsPanel>
+          <TabsPanel value="staff">
+            <StaffTable
+              staff={filteredStaff} page={staffPage} pageSize={PAGE_SIZE} onPageChange={setStaffPage}
+              onSelect={setSelectedStaff} loading={teachersQuery.loading || employeesQuery.loading}
             />
           </TabsPanel>
         </Tabs>
@@ -117,6 +156,10 @@ export default function ParentsListPage() {
           onCancel={() => setCreating(false)}
           onCreated={() => { setCreating(false); notifySuccess("Parent/prospect enregistré."); q.refetch(); linkedIdsQuery.refetch(); }}
         />
+      </Modal>
+
+      <Modal open={!!selectedStaff} onClose={() => setSelectedStaff(null)} title={selectedStaff ? `${selectedStaff.name} (${selectedStaff.role})` : ""}>
+        {selectedStaff && <StaffChildren staff={selectedStaff} />}
       </Modal>
     </div>
   );
@@ -155,6 +198,78 @@ function ParentsTable({ parents, page, pageSize, onPageChange, onSelect, emptyLa
         <Pagination page={page} totalPages={totalPages} totalElements={parents.length} onPageChange={onPageChange} />
       )}
     </>
+  );
+}
+
+/** Table paginée du personnel (enseignants + employés) — même usage que ParentsTable, mais pour
+ *  l'onglet "Personnel" (§retour comptable). */
+function StaffTable({ staff, page, pageSize, onPageChange, onSelect, loading }: {
+  staff: StaffEntry[]; page: number; pageSize: number; onPageChange: (p: number) => void;
+  onSelect: (s: StaffEntry) => void; loading: boolean;
+}) {
+  const totalPages = Math.ceil(staff.length / pageSize);
+  const pageStaff = staff.slice(page * pageSize, page * pageSize + pageSize);
+
+  if (loading) return <div className="flex justify-center py-10"><Spinner /></div>;
+
+  return (
+    <>
+      <Table>
+        <THead><tr><TH>Nom</TH><TH className="hidden sm:table-cell">Rôle</TH></tr></THead>
+        <TBody>
+          {pageStaff.length === 0 && (
+            <TR><TD colSpan={2} className="py-10 text-center text-gray-400">Aucun membre du personnel trouvé.</TD></TR>
+          )}
+          {pageStaff.map((s) => (
+            <TR key={`${s.staffType}-${s.staffId}`} className="cursor-pointer hover:bg-gray-50" onClick={() => onSelect(s)}>
+              <TD className="font-medium text-gray-900">{s.name}</TD>
+              <TD className="hidden text-gray-600 sm:table-cell">{s.role}</TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} totalElements={staff.length} onPageChange={onPageChange} />
+      )}
+    </>
+  );
+}
+
+/** Enfants rattachés à un membre du personnel — mirroir en lecture seule de ParentChildren (pas
+ *  d'édition de profil/suppression ici : ça reste réservé aux fiches Teacher/Employee dédiées). */
+function StaffChildren({ staff }: { staff: StaffEntry }) {
+  const childrenQuery = useCachedQuery(
+    `staff-children:${staff.staffType}:${staff.staffId}`,
+    () => getStaffChildren(staff.staffType, staff.staffId, staff.userId),
+    [staff.staffType, staff.staffId, staff.userId],
+  );
+  const children: Student[] = childrenQuery.data ?? [];
+
+  return (
+    <div className="space-y-2">
+      <p className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+        <Users className="h-4 w-4" /> Enfants ({children.length})
+      </p>
+      {childrenQuery.loading ? (
+        <div className="flex justify-center py-6"><Spinner /></div>
+      ) : children.length === 0 ? (
+        <p className="text-sm text-gray-400">Aucun enfant rattaché.</p>
+      ) : (
+        <ul className="space-y-2">
+          {children.map((c) => (
+            <li key={c.id} className="flex items-center justify-between rounded-xl border border-gray-200 px-3 py-2">
+              <div>
+                <Link href={`/students/detail?id=${c.id}`} className="text-sm font-medium text-brand-600 hover:underline">
+                  {c.firstName} {c.lastName}
+                </Link>
+                <p className="text-xs text-gray-400">{c.studentNumber}</p>
+              </div>
+              <Badge tone="gray">{c.gender === "MALE" ? "Garçon" : c.gender === "FEMALE" ? "Fille" : c.gender}</Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
