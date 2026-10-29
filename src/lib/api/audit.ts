@@ -30,3 +30,16 @@ export function searchAuditLogs(params: AuditLogSearchParams): Promise<Page<Audi
 export function listAccountantAnomalyAlerts(): Promise<AccountantAnomalyAlert[]> {
   return api.get<AccountantAnomalyAlert[]>("/accountant-anomaly-alerts");
 }
+
+export interface AuditLogActor {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+}
+
+/** Utilisateurs de l'école courante pour le filtre "par utilisateur" du journal d'audit — n'exige que
+ * `audit:read` (pas `user:read`, que certains rôles consultant le journal n'ont pas, ex. comptable). */
+export function listAuditLogActors(): Promise<AuditLogActor[]> {
+  return api.get<AuditLogActor[]>("/audit-logs/actors");
+}

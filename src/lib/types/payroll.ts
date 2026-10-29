@@ -92,6 +92,35 @@ export interface FeeDeduction {
   childrenCount: number;
 }
 
+/** Une facture "avantage personnel" du mois — détail du modal de la fiche de paie (§retour comptable).
+ * `excluded` : retirée au cas par cas de la retenue (ex. frais annexe facultatif comme Maillots/
+ * T-shirts/Tenue scolaire que le parent préfère régler lui-même) — son montant n'est alors PAS compté
+ * dans le total retenu, mais elle reste listée (barrée) pour pouvoir être réincluse. */
+export interface DeductedInvoiceLine {
+  invoiceId: number;
+  reference: string | null;
+  feeLabel: string | null;
+  amount: string;
+  periodLabel: string | null;
+  excluded: boolean;
+}
+
+/** Frais facultatif (ex. cantine en tranches) de la classe de l'enfant, pas encore facturé du tout —
+ * informatif seulement, aucune retenue tant que la facture n'existe pas. */
+export interface OptionalFeeNotice {
+  feeLabel: string | null;
+  amount: string;
+}
+
+/** Détail de la retenue "avantage personnel" d'un salarié, enfant par enfant. */
+export interface ChildDeductionDetail {
+  studentId: number;
+  studentName: string;
+  optedOut: boolean;
+  deductedInvoices: DeductedInvoiceLine[];
+  optionalFeesNotYetInvoiced: OptionalFeeNotice[];
+}
+
 // ── Avances sur salaire (§payroll) ───────────────────────────────────────────
 export type SalaryAdvanceStatus = "ACTIVE" | "REPAID" | "CANCELLED";
 

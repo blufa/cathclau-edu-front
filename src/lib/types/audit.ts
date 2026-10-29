@@ -4,9 +4,14 @@ export interface AuditLogEntry {
   id: number;
   tenantId: number | null;
   utilisateurId: number | null;
+  /** Nom de l'acteur déjà résolu côté serveur — null si inconnu (job planifié, utilisateur supprimé). */
+  utilisateurNom: string | null;
   action: string;
   ressource: string;
   ressourceId: number | null;
+  /** Nom lisible de la ressource déjà résolu côté serveur (ex. référence de facture, nom d'élève) —
+   * null si non résolu pour ce type de ressource. */
+  ressourceNom: string | null;
   details: string | null;
   createdAt: string;
 }
@@ -36,6 +41,10 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   SCHOOL_FEE_DELETED: "Frais scolaire supprimé",
   INSTALLMENT_CREATED: "Échéance créée",
   INSTALLMENT_DELETED: "Échéance supprimée",
+  CLASS_CAPACITY_OVERRIDDEN: "Capacité de classe dépassée (forcé)",
+  CASH_DEPOSIT_CREATED: "Dépôt de fonds enregistré",
+  CASH_DEPOSIT_VALIDATED: "Dépôt de fonds validé",
+  CASH_DEPOSIT_REJECTED: "Dépôt de fonds rejeté",
 };
 
 // Actions à mettre en évidence (§retour fondateurs, contrôle anti-fraude) : toujours le signal d'une
@@ -66,6 +75,8 @@ export const AUDIT_RESOURCE_LABEL: Record<string, string> = {
   AccountantAnomalyAlert: "Alerte comptable",
   SchoolFee: "Frais scolaire",
   Installment: "Échéance",
+  Classe: "Classe",
+  CashDeposit: "Dépôt de fonds",
 };
 
 /** Libellé de chaque clé pouvant apparaître dans `details` (format brut "clé=valeur;clé2=valeur2",

@@ -11,6 +11,7 @@ import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { getAssignedClasses, listEmployees, listTeachers, type Employee } from "@/lib/api/staff";
 import { getCurrentAcademicYear, listClasses, listLevels } from "@/lib/api/academics";
+import { setInvoiceExcludedFromStaffDeduction } from "@/lib/api/billing";
 import { EMPLOYEE_CATEGORY_LABEL } from "@/components/staff/employee-form";
 import { sendDiffusion } from "@/lib/api/communication";
 import {
@@ -36,6 +37,9 @@ import {
   generatePayslipFromTimetable,
   generateCombinedPayslip,
   getTeacherCycles,
+  getStaffBenefitDeductionDetail,
+  refreshStaffBenefitDeductionLine,
+  setChildStaffDeductionExcluded,
   TEACHER_CYCLE_LABEL,
   type PayMode,
   type MonthlyPay,
@@ -46,6 +50,8 @@ import {
 import {
   LINE_TYPE_LABEL,
   PAYSLIP_STATUS_LABEL,
+  type ChildDeductionDetail,
+  type DeductedInvoiceLine,
   type Payslip,
   type PayslipLineType,
   type SalaryStructure,
@@ -313,9 +319,14 @@ function StaffPayslipPanel({ structures, onGenerated }: { structures: SalaryStru
   async function generateFixed(emp: Employee) {
     setGeneratingId(emp.id);
     try {
+      // periodStart/periodEnd : 1er et dernier jour du mois choisi — sans eux la fiche n'a aucune
+      // période exploitable (retour utilisateur : "je ne vois pas period_start et period_end", et le
+      // modal "Détail de la retenue" ne peut pas déterminer le mois à interroger).
+      const periodStart = `${period}-01`;
+      const periodEnd = `${period}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
       await generatePayslip({
         employeeType: emp.category, teacherId: emp.id, teacherName: `${emp.firstName ?? ""} ${emp.lastName ?? ""}`.trim(),
-        periodLabel, baseSalary: Number(emp.baseSalary ?? 0),
+        periodLabel, periodStart, periodEnd, baseSalary: Number(emp.baseSalary ?? 0),
         structureId: structureId ? Number(structureId) : null,
         teacherPhone: emp.phone, bankAccount: emp.bankAccount,
       });
@@ -387,6 +398,7 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
   const [current, setCurrent] = useState<Payslip>(payslip);
   const linesQuery = useQuery(() => getPayslipLines(payslip.id), [payslip.id, current]);
   const editable = current.status === "DRAFT";
+  const [deductionDetailOpen, setDeductionDetailOpen] = useState(false);
 
   const [label, setLabel] = useState("");
   const [lineType, setLineType] = useState<PayslipLineType>("EARNING");
@@ -418,23 +430,24 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
         <div className="rounded-lg bg-success-50 p-2"><p className="text-xs text-gray-500">Net</p><p className="font-semibold text-success-700">{formatGNF(current.netSalary)}</p></div>
       </div>
 
-      {current.notes && (
-        <div className="rounded-lg border border-brand-100 bg-brand-50/50 p-3">
-          <p className="text-xs font-semibold text-brand-700">Détail du calcul (heures réalisées, retard, départ anticipé)</p>
-          <p className="mt-1 text-sm text-gray-700">{current.notes}</p>
-        </div>
-      )}
       {linesQuery.loading ? <div className="flex justify-center py-6"><Spinner /></div> : (
         <Table>
-          <THead><tr><TH>Libellé</TH><TH>Type</TH><TH className="text-right">Montant</TH>{editable && <TH />}</tr></THead>
+          <THead><tr><TH>Libellé</TH><TH>Type</TH><TH className="text-right">Montant</TH><TH /></tr></THead>
           <TBody>
-            {(linesQuery.data ?? []).length === 0 && <TR><TD colSpan={editable ? 4 : 3} className="py-6 text-center text-gray-400">Aucune ligne (base seule).</TD></TR>}
+            {(linesQuery.data ?? []).length === 0 && <TR><TD colSpan={4} className="py-6 text-center text-gray-400">Aucune ligne (base seule).</TD></TR>}
             {(linesQuery.data ?? []).map((l) => (
               <TR key={l.id}>
                 <TD>{l.label}</TD>
                 <TD><Badge tone={l.lineType === "EARNING" ? "green" : "amber"}>{LINE_TYPE_LABEL[l.lineType]}</Badge></TD>
                 <TD className="text-right">{l.lineType === "DEDUCTION" ? "−" : "+"} {formatGNF(l.amount)}</TD>
-                {editable && <TD className="text-right"><Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(l.id)}>Retirer</Button></TD>}
+                <TD className="text-right">
+                  <div className="flex justify-end gap-1">
+                    {l.label.startsWith("Reste avantage personnel") && (
+                      <Button size="sm" variant="ghost" onClick={() => setDeductionDetailOpen(true)}>Détails</Button>
+                    )}
+                    {editable && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(l.id)}>Retirer</Button>}
+                  </div>
+                </TD>
               </TR>
             ))}
           </TBody>
@@ -458,6 +471,161 @@ function LinesPanel({ payslip, onChanged }: { payslip: Payslip; onChanged: () =>
       ) : (
         <p className="text-xs text-gray-400">Le brut = base + gains ; le net = brut − retenues. Le détail est figé après validation.</p>
       )}
+
+      <Modal open={deductionDetailOpen} onClose={() => setDeductionDetailOpen(false)} title="Détail de la retenue — avantage personnel" className="max-w-2xl">
+        <StaffBenefitDeductionDetail payslip={current} onRefreshed={(updated) => { setCurrent(updated); onChanged(); }} />
+      </Modal>
+    </div>
+  );
+}
+
+/** Détail enfant par enfant de la retenue "avantage personnel" (§retour comptable : "détailler bien
+ * les retenues... afficher pour chaque enfant les factures sur lesquelles tu as retenu, mais aussi
+ * afficher les factures annexes facultatives qu'on pourrait retenir dans d'autres mois"). Le réglage
+ * "ce parent paie lui-même" se gère depuis la fiche élève (lien ci-dessous), pas ici — évite de
+ * dupliquer ce contrôle à deux endroits. */
+const PERIOD_LABEL_MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+  "août", "septembre", "octobre", "novembre", "décembre"];
+
+/** "Octobre 2026" → { year: 2026, month: 10 } — repli pour les fiches déjà générées AVANT le correctif
+ * qui envoyait periodStart/periodEnd (certaines fiches "Personnel (direction/admin.)" n'avaient que ce
+ * libellé, periodStart/periodEnd restaient null — retour utilisateur). */
+function parsePeriodLabel(label: string | null): { year: number; month: number } | null {
+  if (!label) return null;
+  const [monthWord, yearWord] = label.trim().split(/\s+/);
+  const month = PERIOD_LABEL_MONTHS_FR.indexOf((monthWord ?? "").toLowerCase()) + 1;
+  const year = Number(yearWord);
+  return month > 0 && Number.isFinite(year) && year > 0 ? { year, month } : null;
+}
+
+function StaffBenefitDeductionDetail({ payslip, onRefreshed }: { payslip: Payslip; onRefreshed: (updated: Payslip) => void }) {
+  const period = payslip.periodStart ? new Date(payslip.periodStart) : null;
+  const fallback = period ? null : parsePeriodLabel(payslip.periodLabel);
+  const year = period ? period.getUTCFullYear() : fallback?.year ?? null;
+  const month = period ? period.getUTCMonth() + 1 : fallback?.month ?? null;
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [togglingChildId, setTogglingChildId] = useState<number | null>(null);
+  const detailQuery = useQuery(
+    () => (year && month ? getStaffBenefitDeductionDetail(payslip.teacherId, payslip.employeeType, year, month) : Promise.resolve(null)),
+    [payslip.teacherId, payslip.employeeType, year, month, refreshKey],
+  );
+
+  // Le montant retenu posé sur la fiche (ligne "Reste avantage personnel") ne se met jamais à jour tout
+  // seul après une exclusion (facture ou enfant) — tant que la fiche n'est pas déjà PAYÉE, on le
+  // recalcule aussitôt pour que le net affiché reste exact (§retour comptable).
+  async function refreshIfModifiable() {
+    if (payslip.status !== "PAID") {
+      try { onRefreshed(await refreshStaffBenefitDeductionLine(payslip.id)); } catch { /* fiche déjà figée entre-temps, ignoré */ }
+    }
+  }
+
+  async function toggleExcluded(inv: DeductedInvoiceLine) {
+    setTogglingId(inv.invoiceId);
+    try {
+      await setInvoiceExcludedFromStaffDeduction(inv.invoiceId, !inv.excluded);
+      setRefreshKey((k) => k + 1);
+      await refreshIfModifiable();
+    } catch (err) { notifyError(err); } finally { setTogglingId(null); }
+  }
+
+  // Par enfant (pas par facture) : permanent d'un mois sur l'autre, contrairement à toggleExcluded —
+  // pour le cas où certains enfants du même salarié sont à charge de l'avantage personnel et d'autres
+  // payés directement par un parent (§retour comptable : "il y a des enfants qui sont ces enfants et
+  // d'autres ces [autres] enfants").
+  async function toggleChildExcluded(studentId: number, excluded: boolean) {
+    setTogglingChildId(studentId);
+    try {
+      await setChildStaffDeductionExcluded(payslip.teacherId, payslip.employeeType, studentId, excluded);
+      setRefreshKey((k) => k + 1);
+      await refreshIfModifiable();
+    } catch (err) { notifyError(err); } finally { setTogglingChildId(null); }
+  }
+
+  if (!year || !month) {
+    return <p className="py-6 text-center text-sm text-gray-400">Période de paie inconnue pour cette fiche.</p>;
+  }
+  if (detailQuery.loading) {
+    return <div className="flex justify-center py-8"><Spinner /></div>;
+  }
+  const children = detailQuery.data ?? [];
+  if (children.length === 0) {
+    return <p className="py-6 text-center text-sm text-gray-400">Aucun enfant scolarisé rattaché à ce salarié.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {payslip.status === "PAID" && (
+        <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          Fiche déjà payée — le montant retenu reste figé tel qu&apos;appliqué, même en retirant/incluant
+          une facture ici.
+        </p>
+      )}
+      {children.map((c: ChildDeductionDetail) => (
+        <div key={c.studentId} className="rounded-xl border border-gray-200 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Link href={`/students/detail?id=${c.studentId}`} className="font-semibold text-gray-900 hover:text-brand-600 hover:underline">
+              {c.studentName}
+            </Link>
+            <div className="flex items-center gap-2">
+              {c.optedOut && (
+                <Badge tone="gray">Ce parent paie lui-même — aucune retenue pour cet enfant</Badge>
+              )}
+              <Button size="sm" variant="ghost" loading={togglingChildId === c.studentId}
+                className={c.optedOut ? "text-success-600" : "text-error-600"}
+                onClick={() => toggleChildExcluded(c.studentId, !c.optedOut)}>
+                {c.optedOut ? "Réintégrer cet enfant" : "Retirer cet enfant de la retenue"}
+              </Button>
+            </div>
+          </div>
+
+          {!c.optedOut && (
+            <div className="mt-2">
+              <p className="text-xs font-medium text-gray-500">Factures retenues ce mois-ci</p>
+              {c.deductedInvoices.length === 0 ? (
+                <p className="text-xs text-gray-400">Aucune facture en attente de retenue.</p>
+              ) : (
+                <Table>
+                  <THead><tr><TH>Réf.</TH><TH>Frais</TH><TH>Période</TH><TH className="text-right">Montant</TH><TH /></tr></THead>
+                  <TBody>
+                    {c.deductedInvoices.map((inv) => (
+                      <TR key={inv.invoiceId} className={inv.excluded ? "opacity-50" : undefined}>
+                        <TD className={inv.excluded ? "line-through" : undefined}>{inv.reference ?? `#${inv.invoiceId}`}</TD>
+                        <TD className={inv.excluded ? "line-through" : undefined}>{inv.feeLabel}</TD>
+                        <TD className={inv.excluded ? "line-through" : undefined}>{inv.periodLabel ?? "—"}</TD>
+                        <TD className={`text-right ${inv.excluded ? "line-through" : ""}`}>{formatGNF(inv.amount)}</TD>
+                        <TD className="text-right">
+                          <Button size="sm" variant="ghost" loading={togglingId === inv.invoiceId}
+                            className={inv.excluded ? "text-success-600" : "text-error-600"}
+                            onClick={() => toggleExcluded(inv)}>
+                            {inv.excluded ? "Inclure" : "Retirer"}
+                          </Button>
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
+            </div>
+          )}
+
+          {c.optionalFeesNotYetInvoiced.length > 0 && (
+            <div className="mt-2 rounded-lg bg-amber-50 p-2">
+              <p className="text-xs font-medium text-amber-700">
+                Frais facultatifs pas encore facturés (entreront automatiquement en retenue s&apos;ils sont facturés plus tard)
+              </p>
+              <ul className="mt-1 space-y-0.5 text-xs text-amber-800">
+                {c.optionalFeesNotYetInvoiced.map((f, i) => (
+                  <li key={i} className="flex justify-between">
+                    <span>{f.feeLabel}</span>
+                    <span>{formatGNF(f.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
