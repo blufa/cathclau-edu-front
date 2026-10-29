@@ -1,5 +1,6 @@
 import { api, apiBlobUrl } from "@/lib/api/client";
 import type {
+  ChildDeductionDetail,
   FeeDeduction,
   Payslip,
   PayslipEmployeeType,
@@ -90,6 +91,12 @@ export function generateCombinedPayslip(input: {
 }
 export function removePayslipLine(id: number, lineId: number): Promise<Payslip> {
   return api.delete<Payslip>(`/payroll/payslips/${id}/lines/${lineId}`);
+}
+/** Recalcule la ligne "Reste avantage personnel" d'une fiche encore modifiable — à appeler après avoir
+ * retiré/réinclus une facture au cas par cas (modal "Détail de la retenue"), qui ne se répercute jamais
+ * tout seul sur le montant déjà posé sur la fiche. */
+export function refreshStaffBenefitDeductionLine(id: number): Promise<Payslip> {
+  return api.post<Payslip>(`/payroll/payslips/${id}/refresh-staff-deduction`);
 }
 export function approvePayslip(id: number): Promise<Payslip> {
   return api.patch<Payslip>(`/payroll/payslips/${id}/approve`);
@@ -226,6 +233,22 @@ export function deleteFeeDeductionRule(id: number): Promise<void> {
 }
 export function previewFeeDeduction(teacherId: number, employeeType: PayslipEmployeeType = "TEACHER"): Promise<FeeDeduction> {
   return api.get<FeeDeduction>("/payroll/fee-deduction-rules/preview", { query: { teacherId, employeeType } });
+}
+
+/** Détail de la retenue "avantage personnel", enfant par enfant (modal de détail de la fiche de paie). */
+export function getStaffBenefitDeductionDetail(
+  staffId: number, employeeType: PayslipEmployeeType, year: number, month: number,
+): Promise<ChildDeductionDetail[]> {
+  return api.get<ChildDeductionDetail[]>("/payroll/fee-deduction-rules/detail", { query: { staffId, employeeType, year, month } });
+}
+
+/** Exclut (ou réintègre) spécifiquement UN enfant de la retenue — par enfant, pour le cas où certains
+ *  enfants du même salarié bénéficient de l'avantage personnel et d'autres sont payés directement par
+ *  un parent (§retour comptable). */
+export function setChildStaffDeductionExcluded(
+  staffId: number, employeeType: PayslipEmployeeType, studentId: number, excluded: boolean,
+): Promise<void> {
+  return api.patch<void>("/payroll/fee-deduction-rules/child-exclusion", undefined, { query: { staffId, employeeType, studentId, excluded } });
 }
 
 // ── Avances sur salaire ───────────────────────────────────────────────────────

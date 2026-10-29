@@ -100,6 +100,13 @@ export function getParentChildren(parentId: number): Promise<Student[]> {
   return api.get<Student[]>(`/parents/${parentId}/students`);
 }
 
+/** Enfants rattachés à un membre du personnel (enseignant/employé) — onglet "Personnel" du répertoire
+ *  /parents (§retour comptable : même recherche que pour un parent classique, mais depuis la fiche
+ *  enseignant/employé). {@code userId} optionnel : déjà connu côté fiche Teacher/Employee. */
+export function getStaffChildren(staffType: "TEACHER" | "EMPLOYEE", staffId: number, userId?: number | null): Promise<Student[]> {
+  return api.get<Student[]>("/parents/staff-children", { query: { staffType, staffId, userId: userId ?? undefined } });
+}
+
 export interface ParentStaffLink {
   staffType: "TEACHER" | "EMPLOYEE";
   staffId: number;

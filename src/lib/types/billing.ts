@@ -140,6 +140,22 @@ export interface Invoice {
   creditedAmount?: string | null;
   /** Motif du crédit reporté (ex. "Crédit reporté de l'ancienne classe (transfert)"). */
   creditReason?: string | null;
+  /** "STAFF_BENEFIT" quand cette facture est celle d'un enfant de personnel sous retenue sur salaire
+   * (§payroll ↔ billing) — jamais à encaisser au guichet tant que la retenue reste active (voir
+   * {@link excludedFromStaffDeduction}), sous peine de double paiement. Autres valeurs (remise
+   * fratrie…) ou null sinon. */
+  discountSource?: string | null;
+  /** Cette facture précise a été retirée au cas par cas de la retenue sur salaire (§retour comptable,
+   * modal "Détail de la retenue" sur la fiche de paie) — redevient encaissable normalement au guichet.
+   * Sans effet si {@link discountSource} n'est pas "STAFF_BENEFIT". */
+  excludedFromStaffDeduction?: boolean | null;
+}
+
+/** Une facture "avantage personnel" (§payroll ↔ billing) dont la retenue sur salaire reste active —
+ * jamais encaissable au guichet tant que ce n'est pas le cas, sous peine de double paiement (une fois
+ * par la paie, une fois au guichet). */
+export function isLockedByStaffDeduction(inv: Invoice): boolean {
+  return inv.discountSource === "STAFF_BENEFIT" && !inv.excludedFromStaffDeduction;
 }
 
 export type RecoveryStage = "NONE" | "REMINDER_1" | "REMINDER_2" | "EXCLUDED";

@@ -60,6 +60,13 @@ type ParseResult =
   | { subjectType: ScanSubjectType; subjectId: number }
   | { matricule: string; subjectType?: ScanSubjectType };
 
+/** Texte exact renvoyé par le backend (élève/enseignant/personnel, même message) quand une entrée est
+ *  retentée sans avoir scanné de sortie — voir StudentAttendanceService/TeacherAttendanceService/
+ *  EmployeeAttendanceService. Gardé en constante pour éviter toute divergence silencieuse si le texte
+ *  change d'un côté sans l'autre. */
+const ALREADY_ENTERED_MESSAGE =
+  "Ce badge a déjà été scanné à l'entrée aujourd'hui. Scannez-le à la sortie avant un nouvel accès.";
+
 /**
  * Décode un QR scanné :
  *  - QR d'identité lisible avec type (« Élève\nNom\nMatricule : GSC-ELV-… ») → matricule cherché
@@ -105,6 +112,17 @@ export default function AttendanceScanPage() {
   const nativeDetectorActiveRef = useRef(false);
   // Sujets dont un pointage est en cours : évite deux envois simultanés pour la même personne.
   const inFlightRef = useRef<Set<string>>(new Set());
+  // Dernier scan traité par sujet+sens, avec horodatage : un badge tenu plusieurs secondes devant la
+  // caméra (ou un lecteur physique qui relit en boucle) redéclenche handleRaw à chaque frame — passé la
+  // fenêtre anti-doublon de 5s côté serveur (voir StudentAttendanceService#RACE_WINDOW_SECONDS), chaque
+  // frame suivante tombait sur une VRAIE erreur métier ("déjà scanné à l'entrée") plutôt qu'un simple
+  // retour "duplicate" silencieux, et déclenchait donc un toast + une vibration à CHAQUE frame tant que
+  // le badge restait visible (§retour terrain : "il envoie 8 fois la notification"). On bloque donc ici,
+  // côté client, tout nouvel appel pour le même sujet+sens pendant SCAN_COOLDOWN_MS après le précédent —
+  // qu'il ait réussi ou échoué — sans même repartir vers le serveur : un seul scan physique ne peut plus
+  // produire qu'un seul retour visible, quelle que soit la durée pendant laquelle le badge reste présenté.
+  const lastHandledRef = useRef<Map<string, number>>(new Map());
+  const SCAN_COOLDOWN_MS = 10_000;
 
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,8 +176,12 @@ export default function AttendanceScanPage() {
 
   const submit = useCallback(async (type: ScanSubjectType, subjectId: number, dir: ScanDirection) => {
     const key = `${type}:${subjectId}:${dir}`;
+    const now = Date.now();
+    const lastHandledAt = lastHandledRef.current.get(key);
+    if (lastHandledAt != null && now - lastHandledAt < SCAN_COOLDOWN_MS) return; // même badge encore présenté : scan physique déjà traité
     if (inFlightRef.current.has(key)) return; // un pointage est déjà en cours pour ce sujet
     inFlightRef.current.add(key);
+    lastHandledRef.current.set(key, now);
     try {
       const attempt = await submitScanOfflineAware(type, subjectId, dir);
       if (attempt.outcome === "queued") {
@@ -194,6 +216,11 @@ export default function AttendanceScanPage() {
       }
     } catch (err) {
       const errorMessage = err instanceof ApiError ? err.userMessage : "Pointage refusé.";
+      // "Déjà scanné à l'entrée, scannez la sortie d'abord" (élève/enseignant/personnel, même texte
+      // exact côté backend) n'apporte rien à l'opérateur : il sait déjà que la personne doit sortir
+      // avant de pouvoir rentrer — ce n'est pas une anomalie à signaler, juste l'état attendu. On
+      // n'affiche ni toast ni vibration ni ligne dans le fil pour ce cas précis (§retour terrain).
+      if (errorMessage === ALREADY_ENTERED_MESSAGE) return;
       pushFeed({
         id: `${Date.now()}`, name: resolveName(type, subjectId), kind: dir, ok: false,
         at: new Date().toLocaleTimeString(), errorMessage,

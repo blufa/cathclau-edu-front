@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { History, Printer } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
-import { searchAuditLogs } from "@/lib/api/audit";
-import { listUsers } from "@/lib/api/iam";
-import { getStudent } from "@/lib/api/students";
+import { listAuditLogActors, searchAuditLogs } from "@/lib/api/audit";
 import { getSchoolProfile } from "@/lib/api/platform";
 import {
   AUDIT_ACTION_LABEL, AUDIT_FRAUD_ACTIONS, AUDIT_RESOURCE_LABEL, formatAuditDetails,
@@ -49,35 +47,22 @@ export default function AuditLogsPage() {
     [canView, action, utilisateurId, from, to, page],
   );
 
-  const usersQuery = useQuery(() => (canView ? listUsers(0, 200) : Promise.resolve(null)), [canView]);
-  const userName = useMemo(() => {
-    const map = new Map<number, string>();
-    (usersQuery.data?.content ?? []).forEach((u) => map.set(u.id, `${u.firstName} ${u.lastName}`));
-    return (id: number | null) => (id == null ? "Système" : map.get(id) ?? `Utilisateur #${id}`);
-  }, [usersQuery.data]);
-
-  // Noms des élèves référencés comme ressource sur la page courante (retour comptable : "Élève #102"
-  // n'est pas assez pour repérer un élève, il faut son nom) — résolus par lot sur les seuls ids
-  // affichés, jamais la liste complète (potentiellement des milliers d'élèves).
-  const studentResourceIds = useMemo(() => {
-    const ids = new Set<number>();
-    (data?.content ?? []).forEach((l) => { if (l.ressource === "Student" && l.ressourceId != null) ids.add(l.ressourceId); });
-    return [...ids].sort((a, b) => a - b);
-  }, [data]);
-  const studentNamesQuery = useQuery(
-    () => Promise.all(studentResourceIds.map((id) => getStudent(id).catch(() => null))),
-    [studentResourceIds.join(",")],
-  );
-  const studentName = useMemo(() => {
-    const map = new Map<number, string>();
-    (studentNamesQuery.data ?? []).forEach((d) => { if (d) map.set(d.student.id, `${d.student.firstName} ${d.student.lastName}`); });
-    return (id: number) => map.get(id) ?? `Élève #${id}`;
-  }, [studentNamesQuery.data]);
+  // Noms d'acteur/ressource déjà résolus côté serveur (AuditResourceNameResolver) — n'exige plus
+  // user:read/eleve:read côté frontend (certains rôles consultant le journal, ex. comptable, ont
+  // audit:read sans ces autres permissions, ce qui rendait les filtres inutilisables silencieusement).
+  const actorsQuery = useQuery(() => (canView ? listAuditLogActors() : Promise.resolve(null)), [canView]);
+  function userName(l: AuditLogEntry): string {
+    if (l.utilisateurId == null) return "Système";
+    return l.utilisateurNom ?? `Utilisateur #${l.utilisateurId}`;
+  }
+  function actorNameById(id: number): string {
+    const actor = (actorsQuery.data ?? []).find((a) => a.id === id);
+    return actor ? `${actor.firstName} ${actor.lastName}` : `Utilisateur #${id}`;
+  }
 
   function resourceLabel(l: AuditLogEntry): string {
     if (l.ressourceId == null) return AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource;
-    if (l.ressource === "User") return userName(l.ressourceId);
-    if (l.ressource === "Student") return studentName(l.ressourceId);
+    if (l.ressourceNom) return l.ressourceNom;
     return `${AUDIT_RESOURCE_LABEL[l.ressource] ?? l.ressource} #${l.ressourceId}`;
   }
 
@@ -90,7 +75,7 @@ export default function AuditLogsPage() {
     const esc = (v: string) => v.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] ?? c));
     const filterParts = [
       action ? `Action : ${AUDIT_ACTION_LABEL[action] ?? action}` : null,
-      utilisateurId ? `Utilisateur : ${userName(Number(utilisateurId))}` : null,
+      utilisateurId ? `Utilisateur : ${actorNameById(Number(utilisateurId))}` : null,
       from ? `Depuis le ${from}` : null,
       to ? `Jusqu'au ${to}` : null,
     ].filter((p): p is string => !!p);
@@ -117,7 +102,7 @@ export default function AuditLogsPage() {
             ${rows.map((l) => `<tr>
               <td>${esc(formatDateTime(l.createdAt))}</td>
               <td>${esc(AUDIT_ACTION_LABEL[l.action] ?? l.action)}</td>
-              <td>${esc(userName(l.utilisateurId))}</td>
+              <td>${esc(userName(l))}</td>
               <td>${esc(resourceLabel(l))}</td>
               <td>${esc(formatAuditDetails(l.details))}</td>
             </tr>`).join("")}
@@ -154,8 +139,8 @@ export default function AuditLogsPage() {
     {
       key: "utilisateur",
       header: "Utilisateur",
-      accessor: (l) => userName(l.utilisateurId),
-      render: (l) => userName(l.utilisateurId),
+      accessor: (l) => userName(l),
+      render: (l) => userName(l),
     },
     {
       key: "ressource",
@@ -201,7 +186,7 @@ export default function AuditLogsPage() {
           onChange={(v) => { setPage(0); setUtilisateurId(v); }}
           options={[
             { value: "", trigger: "Tous les utilisateurs", label: "Tous les utilisateurs", searchText: "" },
-            ...(usersQuery.data?.content ?? []).map((u): SearchableOption => {
+            ...(actorsQuery.data ?? []).map((u): SearchableOption => {
               const label = `${u.firstName} ${u.lastName}`;
               return { value: String(u.id), trigger: label, label, searchText: label };
             }),
