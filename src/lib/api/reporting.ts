@@ -240,6 +240,9 @@ export interface MonthlyFinancialSummary {
   staffPayroll: string;
   salaryAdvancesTotal: string;
   total: string;
+  /** Cumul réel des salaires marqués payés ce mois (pas une masse théorique) — s'additionne à
+   * chaque "Marquer payée" sur une fiche de paie. */
+  actualPaidSalariesTotal: string;
   advances: SalaryAdvanceDetail[];
 }
 export function getMonthlyFinancialSummary(year?: number, month?: number): Promise<MonthlyFinancialSummary> {

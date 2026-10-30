@@ -101,7 +101,10 @@ export function refreshStaffBenefitDeductionLine(id: number): Promise<Payslip> {
 export function approvePayslip(id: number): Promise<Payslip> {
   return api.patch<Payslip>(`/payroll/payslips/${id}/approve`);
 }
-export function payPayslip(id: number, paymentMethod = "BANK_TRANSFER"): Promise<Payslip> {
+/** paymentMethod : "CASH" | "BANK_TRANSFER" | "MOBILE_MONEY" — jamais de valeur par défaut ici
+ * (§retour utilisateur : marquer payée imposait silencieusement "Virement bancaire" même pour un
+ * paiement en espèces) ; le comptable choisit explicitement dans le modal "Marquer comme payée". */
+export function payPayslip(id: number, paymentMethod: string): Promise<Payslip> {
   return api.patch<Payslip>(`/payroll/payslips/${id}/pay`, { paymentMethod });
 }
 export function deletePayslip(id: number): Promise<void> {
@@ -215,6 +218,20 @@ export function generatePayslipFromTimetable(
 ): Promise<Payslip> {
   return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip-timetable`,
     { teacherName: teacherName ?? null, teacherPhone: teacherPhone ?? null, bankAccount: bankAccount ?? null },
+    { query: { year, month } });
+}
+/** Génère la fiche du mois à partir d'heures réalisées saisies MANUELLEMENT par le comptable (§retour
+ * comptable) — pour le cas où le cahier de textes n'a aucune séance validée ce mois (ex. directeur des
+ * études n'a pas créé les séances), alors qu'une fiche doit quand même être générée pour appliquer les
+ * retenues du mois (avances sur salaire, enfants de personnel). Le tarif reste celui configuré pour
+ * l'enseignant, seules les heures sont saisies. normalMinutes/examMinutes en minutes (pas en heures). */
+export function generatePayslipFromManualHours(
+  teacherId: number, year: number, month: number, normalMinutes: number, examMinutes: number,
+  teacherName?: string | null, teacherPhone?: string | null, bankAccount?: string | null,
+): Promise<Payslip> {
+  return api.post<Payslip>(`/payroll/teachers/${teacherId}/payslip-manual-hours`,
+    { teacherName: teacherName ?? null, teacherPhone: teacherPhone ?? null, bankAccount: bankAccount ?? null,
+      normalMinutes, examMinutes },
     { query: { year, month } });
 }
 

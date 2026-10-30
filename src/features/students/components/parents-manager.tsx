@@ -19,6 +19,8 @@ import {
   type Relationship,
 } from "@/lib/api/parents";
 import { createUserWithRole } from "@/lib/api/iam";
+import { searchStaff, type StaffSearchResult } from "@/lib/api/staff";
+import { backfillStaffBenefitTagging } from "@/lib/api/billing";
 import { useNetworkStore } from "@/lib/offline/network-store";
 import { useParentQueueStore } from "@/lib/offline/parent-queue-store";
 import { submitExistingParentLinkOfflineAware, submitNewParentOfflineAware } from "@/lib/offline/submit-parent-link";
@@ -187,6 +189,19 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
 
+  // Lien DIRECT vers une fiche Teacher/Employee, SANS compte de connexion partagé (§retour comptable :
+  // un parent déjà créé séparément de son compte personnel — ex. comptable testant avec son propre
+  // compte — ne se retrouvait jamais lié, faute d'un endroit pour le faire après coup ; la retenue sur
+  // salaire/le grisage des factures ne se déclenchaient donc jamais pour ses propres enfants). Ne clear
+  // JAMAIS un lien existant si rien n'est sélectionné ici (voir ParentService#update, staffType/staffId
+  // null = ne touche pas au lien existant) — uniquement de quoi EN AJOUTER un.
+  const [staffSearch, setStaffSearch] = useState("");
+  const [selectedStaff, setSelectedStaff] = useState<StaffSearchResult | null>(null);
+  const staffSuggestionsQuery = useQuery(
+    () => (staffSearch.trim().length >= 2 ? searchStaff(staffSearch.trim()) : Promise.resolve([])),
+    [staffSearch],
+  );
+
   async function save(values: EditFormValues) {
     setLoading(true);
     try {
@@ -194,7 +209,21 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
         firstName: values.firstName, lastName: values.lastName,
         phone: values.phone || null, email: values.email || null,
         occupation: values.occupation || null, address: values.address || null,
-      }, undefined, undefined, undefined, values.excludeFromAutoDeduction);
+      }, undefined, selectedStaff?.staffType ?? undefined, selectedStaff?.staffId ?? undefined,
+      values.excludeFromAutoDeduction);
+      // Lien personnel ajouté à l'instant : retague automatiquement en "avantage personnel" les
+      // factures déjà émises (encore dues) de ses enfants — §retour comptable, pour que le comptable
+      // n'ait jamais à appeler une action séparée après avoir simplement lié le parent ici.
+      if (selectedStaff) {
+        try {
+          const r = await backfillStaffBenefitTagging();
+          notifySuccess(r.invoicesUpdated > 0
+            ? `Parent lié — ${r.invoicesUpdated} facture(s) encore due(s) grisée(s) pour retenue sur salaire.`
+            : "Parent lié — aucune facture encore due à mettre à jour.");
+        } catch {
+          notifySuccess("Parent lié — relancez le rattrapage des factures si besoin (réessai possible).");
+        }
+      }
       onDone();
     } catch (err) { notifyError(err); } finally { setLoading(false); }
   }
@@ -228,6 +257,44 @@ function EditParentForm({ parent, onCancel, onDone }: { parent: Parent; onCancel
         <Label>Adresse</Label>
         <Input value={v.address} onChange={(e) => setValue("address", e.target.value)} />
       </Field>
+      <div className="rounded-xl border border-slate-200 p-3">
+        <p className="text-sm font-medium text-gray-700">Lien avec un membre du personnel</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          {parent.linkedStaffType
+            ? `Déjà lié (${parent.linkedStaffType === "TEACHER" ? "enseignant" : "personnel"}) — recherchez ci-dessous pour changer.`
+            : "Si ce parent est aussi enseignant/personnel de l'école (ex. compte testé séparément de sa fiche personnel), liez-le ici pour que la retenue sur salaire/le grisage des factures de ses enfants fonctionnent."}
+        </p>
+        {selectedStaff ? (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-brand-200 bg-brand-50/40 px-3 py-2">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{selectedStaff.fullName}</p>
+              <p className="text-xs text-gray-400">{selectedStaff.staffType === "TEACHER" ? "Enseignant" : "Personnel"}</p>
+            </div>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedStaff(null)}>Changer</Button>
+          </div>
+        ) : (
+          <div className="mt-2">
+            <Input value={staffSearch} onChange={(e) => setStaffSearch(e.target.value)}
+              placeholder="Rechercher un enseignant/membre du personnel par nom…" />
+            {staffSearch.trim().length >= 2 && (
+              <div className="mt-1.5 max-h-40 space-y-1 overflow-auto">
+                {staffSuggestionsQuery.loading && <div className="flex justify-center py-2"><Spinner /></div>}
+                {(staffSuggestionsQuery.data ?? []).map((s) => (
+                  <button type="button" key={`${s.staffType}-${s.staffId}`}
+                    onClick={() => { setSelectedStaff(s); setStaffSearch(""); }}
+                    className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-1.5 text-left hover:bg-gray-50">
+                    <span className="text-sm text-gray-900">{s.fullName}</span>
+                    <span className="text-xs text-gray-400">{s.staffType === "TEACHER" ? "Enseignant" : "Personnel"}</span>
+                  </button>
+                ))}
+                {!staffSuggestionsQuery.loading && (staffSuggestionsQuery.data ?? []).length === 0 && (
+                  <p className="px-1 py-1 text-xs text-gray-400">Aucun résultat.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <div className="rounded-xl border border-slate-200 p-3">
         <div className="flex items-center gap-3">
           <Switch

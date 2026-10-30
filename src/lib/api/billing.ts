@@ -113,6 +113,19 @@ export function setStaffChildDeductionExcluded(studentId: number, excluded: bool
   return api.patch<void>("/billing/invoices/staff-deduction/student", undefined, { query: { studentId, excluded } });
 }
 
+/** Rattrapage ponctuel : retague "avantage personnel" toute facture encore due (inscription,
+ * réinscription, annexe, mensualité...) d'un enfant de personnel qui n'a actuellement aucune remise —
+ * pour les factures émises avant que le lien parent↔personnel soit établi. Appelé automatiquement après
+ * avoir lié une fiche Parent à un membre du personnel (voir EditParentForm) — jamais besoin d'un écran
+ * séparé pour ça. Sûr à relancer plusieurs fois (ne touche jamais une facture déjà remisée/payée). */
+export interface StaffBenefitBackfillResult {
+  invoicesUpdated: number;
+  invoiceIds: number[];
+}
+export function backfillStaffBenefitTagging(): Promise<StaffBenefitBackfillResult> {
+  return api.post<StaffBenefitBackfillResult>("/billing/invoices/staff-deduction/backfill");
+}
+
 /** Positionne directement l'étape de recouvrement. */
 export function setRecoveryStage(id: number, stage: import("@/lib/types/billing").RecoveryStage): Promise<Invoice> {
   return api.patch<Invoice>(`/billing/invoices/${id}/recovery`, undefined, { query: { stage } });
