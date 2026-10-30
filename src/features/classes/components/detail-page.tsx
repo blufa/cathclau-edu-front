@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery as useLegacyQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { getClassStudents, getEnrollmentCount, listLevels, listRooms, setClassRepresentative } from "@/lib/api/academics";
+import { getClassStudents, getEnrollmentCount, listLevels, listRooms, setClassHeadTeacher, setClassRepresentative } from "@/lib/api/academics";
 import { listTeachers } from "@/lib/api/staff";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
@@ -31,6 +32,13 @@ export default function ClassDetailPage() {
   const levelsQuery = useCachedQuery(tenantId ? `levels:${tenantId}` : null, listLevels, [tenantId]);
   const roomsQuery = useCachedQuery(tenantId ? `rooms:${tenantId}` : null, listRooms, [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
+  // Désignation directe du professeur principal (§retour utilisateur : un moniteur maternelle/primaire
+  // sans AUCUNE matière affectée — cas normal, voir LessonService#resolveHeadTeacherId — n'avait aucun
+  // moyen d'être désigné "professeur principal", puisque ce bouton n'existait que sur une ligne du
+  // tableau "Matières & enseignants" (donc jamais accessible sans matière). Sans professeur principal,
+  // la masse salariale du tableau de bord le classait par défaut en Secondaire, même pour un enseignant
+  // de primaire/maternelle à salaire déjà configuré).
+  const [savingHeadTeacher, setSavingHeadTeacher] = useState(false);
 
   if (classQuery.isLoading) {
     return (
@@ -95,6 +103,26 @@ export default function ClassDetailPage() {
     }),
   ];
 
+  const teacherOptions: SearchableOption[] = [
+    { value: "", trigger: "Non assigné", label: "Non assigné", searchText: "aucun non assigné" },
+    ...(teachersQuery.data ?? []).map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+  ];
+  async function designateHeadTeacher(value: string) {
+    setSavingHeadTeacher(true);
+    try {
+      await setClassHeadTeacher(id, value ? Number(value) : null);
+      notifySuccess(value ? "Professeur principal désigné" : "Professeur principal retiré");
+      classQuery.refetch();
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setSavingHeadTeacher(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Link href="/classes" className="text-sm text-brand-600 hover:underline">
@@ -150,8 +178,21 @@ export default function ClassDetailPage() {
             <CardTitle>Prof. principal</CardTitle>
           </CardHeader>
           <CardBody>
-            <p className="text-sm font-medium text-gray-700">{headTeacherLabel}</p>
-            <p className="mt-1 text-xs text-gray-400">Se désigne depuis le tableau des matières</p>
+            {canWrite ? (
+              <SearchableSelect
+                value={classe.headTeacherId != null ? String(classe.headTeacherId) : ""}
+                options={teacherOptions}
+                onChange={designateHeadTeacher}
+                disabled={savingHeadTeacher}
+                triggerClassName="w-full justify-between px-3"
+              />
+            ) : (
+              <p className="text-sm font-medium text-gray-700">{headTeacherLabel}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-400">
+              Aussi désignable depuis le tableau des matières — utile pour un enseignant unique sans
+              matière précise (moniteur maternelle/primaire).
+            </p>
           </CardBody>
         </Card>
       </div>
