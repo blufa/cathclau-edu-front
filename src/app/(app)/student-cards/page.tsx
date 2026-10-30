@@ -16,6 +16,7 @@ import {
   updateCardTemplate,
   declareCardLost,
   deleteCardTemplate,
+  deleteStudentCard,
   issueStudentCard,
   listCardTemplates,
   listCards,
@@ -190,6 +191,16 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
               <Button size="sm" variant="ghost" onClick={() => act(() => replaceCard(c.id), "Carte réémise")}>Réémettre</Button>
               <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({ title: "Déclarer perdue", message: `Carte ${c.cardNumber}`, confirmLabel: "Déclarer perdue", danger: true, onConfirm: () => act(() => declareCardLost(c.id), "Carte déclarée perdue") })}>Perdue</Button>
             </>
+          )}
+          {canEdit && (
+            <Button size="sm" variant="ghost" className="text-error-600" onClick={() => confirmAction({
+              title: "Supprimer cette carte", danger: true, confirmLabel: "Supprimer",
+              message: `Carte ${c.cardNumber} — à utiliser si le matricule/la photo a changé depuis l'émission : `
+                + `la prochaine émission pour cet élève repartira à neuf avec les données à jour.`,
+              onConfirm: () => act(() => deleteStudentCard(c.id), "Carte supprimée"),
+            })}>
+              Suppr.
+            </Button>
           )}
         </div>
       ),
