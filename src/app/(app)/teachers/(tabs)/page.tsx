@@ -100,7 +100,32 @@ export default function TeachersPage() {
   const subjectLabel = useMemo(() => new Map((subjectsQuery.data ?? []).map((s) => [s.id, s.label])), [subjectsQuery.data]);
   const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
   const levelCycle = useMemo(() => new Map((levelsQuery.data ?? []).map((l) => [l.id, l.cycle])), [levelsQuery.data]);
+  const levelLabelById = useMemo(() => new Map((levelsQuery.data ?? []).map((l) => [l.id, l.label])), [levelsQuery.data]);
+  const sortedLevels = useMemo(
+    () => (levelsQuery.data ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder),
+    [levelsQuery.data],
+  );
   const validUntil = currentYearQuery.data?.endDate ? formatDate(currentYearQuery.data.endDate) : null;
+
+  // Niveaux enseignés (§retour comptable : colonne "Niveau" + filtre sur la liste des enseignants) —
+  // même source que la checklist "Niveaux enseignés" de la fiche enseignant (getAssignedLevels), batché
+  // une fois pour tous les enseignants plutôt qu'au clic (contrairement à buildBadgeSheet, à la demande).
+  const teacherIds = useMemo(() => (q.data ?? []).map((t) => t.id), [q.data]);
+  const assignedLevelsQuery = useQuery(
+    () => Promise.all(teacherIds.map((id) => getAssignedLevels(id).then((ids) => [id, ids] as const)))
+      .then((entries) => new Map(entries)),
+    [teacherIds.join(",")],
+  );
+  const levelIdsByTeacher = useMemo(() => assignedLevelsQuery.data ?? new Map<number, number[]>(), [assignedLevelsQuery.data]);
+  const levelLabelsByTeacher = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const id of teacherIds) {
+      const ids = levelIdsByTeacher.get(id) ?? [];
+      map.set(id, ids.map((lid) => levelLabelById.get(lid)).filter((l): l is string => !!l).join(", "));
+    }
+    return map;
+  }, [teacherIds, levelIdsByTeacher, levelLabelById]);
+  const [levelFilter, setLevelFilter] = useState<number | "all">("all");
 
   /** Construit les données de badge de plusieurs enseignants à la fois (planche d'impression) — résout
    * niveaux/classes/matières affectés par enseignant (3 appels chacun, comme TeacherBadgeContent). */
@@ -151,6 +176,7 @@ export default function TeachersPage() {
     return (q.data ?? []).filter((t) => {
       if (activeFilter === "active" && !t.active) return false;
       if (activeFilter === "inactive" && t.active) return false;
+      if (levelFilter !== "all" && !(levelIdsByTeacher.get(t.id) ?? []).includes(levelFilter)) return false;
       if (!term) return true;
       return (
         `${t.firstName} ${t.lastName}`.toLowerCase().includes(term) ||
@@ -158,7 +184,7 @@ export default function TeachersPage() {
         (t.specialization ?? "").toLowerCase().includes(term)
       );
     });
-  }, [q.data, search, activeFilter]);
+  }, [q.data, search, activeFilter, levelFilter, levelIdsByTeacher]);
 
   const [printingList, setPrintingList] = useState(false);
 
@@ -314,6 +340,12 @@ export default function TeachersPage() {
       ),
     },
     { key: "specialization", header: "Spécialité", accessor: (t) => t.specialization ?? "", render: (t) => t.specialization ?? "—" },
+    {
+      key: "level",
+      header: "Niveau",
+      accessor: (t) => levelLabelsByTeacher.get(t.id) ?? "",
+      render: (t) => levelLabelsByTeacher.get(t.id) || "—",
+    },
     { key: "contact", header: "Contact", accessor: (t) => t.email ?? t.phone ?? "", render: (t) => t.email ?? t.phone ?? "—" },
     {
       key: "status",
@@ -357,6 +389,11 @@ export default function TeachersPage() {
           <option value="all">Tous</option>
           <option value="active">Actifs</option>
           <option value="inactive">Inactifs</option>
+        </Select>
+        <Select className="max-w-[180px]" value={levelFilter}
+          onChange={(e) => setLevelFilter(e.target.value === "all" ? "all" : Number(e.target.value))}>
+          <option value="all">Tous les niveaux</option>
+          {sortedLevels.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
         </Select>
       </div>
 
