@@ -207,7 +207,7 @@ export default function DashboardPage() {
           <Reveal y={12}>
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
-                <CardHeader><CardTitle>Présences, absences, retards — 14 derniers jours</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Présences, absences, retards des 14 derniers jours</CardTitle></CardHeader>
                 <CardBody>
                   <PieBreakdownChart
                     centerLabel="Total 14 jours"
@@ -237,7 +237,7 @@ export default function DashboardPage() {
           <Reveal y={12}>
             <div className="grid gap-4 lg:grid-cols-3">
               <Card className="lg:col-span-2">
-                <CardHeader><CardTitle>État financier — {currentMonthLabel}</CardTitle></CardHeader>
+                <CardHeader><CardTitle>État financier | {currentMonthLabel}</CardTitle></CardHeader>
                 <CardBody>
                   <PieBreakdownChart
                     centerLabel={`Total ${currentMonthLabel}`}
