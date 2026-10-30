@@ -52,17 +52,43 @@ export default function ParentsListPage() {
   // "enfants rattachés" que pour un parent classique, mais depuis la fiche enseignant/employé.
   const teachersQuery = useCachedQuery("teachers-all", listTeachers, []);
   const employeesQuery = useCachedQuery("employees-all", () => listEmployees(), []);
+  // Un parent AVEC enfant (déjà chargé ci-dessus, linkedIds) rattaché à ce salarié — par compte partagé
+  // (userId) OU lien direct (staffType/staffId) — indique qu'il a au moins un enfant (§retour comptable :
+  // "afficher seulement que le personnel qui ont des enfants"). Réutilise les données déjà chargées
+  // (q.data/linkedIds) plutôt qu'un appel réseau par membre du personnel.
+  const staffUserIdsWithChildren = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of q.data ?? []) {
+      if (p.userId != null && linkedIds.has(p.id)) ids.add(p.userId);
+    }
+    return ids;
+  }, [q.data, linkedIds]);
+  const staffDirectLinksWithChildren = useMemo(() => {
+    const keys = new Set<string>();
+    for (const p of q.data ?? []) {
+      if (p.linkedStaffType != null && p.linkedStaffId != null && linkedIds.has(p.id)) {
+        keys.add(`${p.linkedStaffType}:${p.linkedStaffId}`);
+      }
+    }
+    return keys;
+  }, [q.data, linkedIds]);
   const staffEntries = useMemo<StaffEntry[]>(() => {
-    const teachers = (teachersQuery.data ?? []).map((t) => ({
-      staffType: "TEACHER" as const, staffId: t.id, userId: t.userId,
-      name: `${t.firstName} ${t.lastName}`, role: "Enseignant",
-    }));
-    const employees = (employeesQuery.data ?? []).map((e) => ({
-      staffType: "EMPLOYEE" as const, staffId: e.id, userId: e.userId,
-      name: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim(), role: e.jobTitle || "Personnel",
-    }));
+    const hasChildren = (staffType: "TEACHER" | "EMPLOYEE", staffId: number, userId: number | null) =>
+      (userId != null && staffUserIdsWithChildren.has(userId)) || staffDirectLinksWithChildren.has(`${staffType}:${staffId}`);
+    const teachers = (teachersQuery.data ?? [])
+      .filter((t) => hasChildren("TEACHER", t.id, t.userId))
+      .map((t) => ({
+        staffType: "TEACHER" as const, staffId: t.id, userId: t.userId,
+        name: `${t.firstName} ${t.lastName}`, role: "Enseignant",
+      }));
+    const employees = (employeesQuery.data ?? [])
+      .filter((e) => hasChildren("EMPLOYEE", e.id, e.userId))
+      .map((e) => ({
+        staffType: "EMPLOYEE" as const, staffId: e.id, userId: e.userId,
+        name: `${e.firstName ?? ""} ${e.lastName ?? ""}`.trim(), role: e.jobTitle || "Personnel",
+      }));
     return [...teachers, ...employees];
-  }, [teachersQuery.data, employeesQuery.data]);
+  }, [teachersQuery.data, employeesQuery.data, staffUserIdsWithChildren, staffDirectLinksWithChildren]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Parent | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<StaffEntry | null>(null);
