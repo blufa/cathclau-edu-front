@@ -39,12 +39,13 @@ export function useAttendanceHistoryQuery(enabled: boolean) {
   });
 }
 
-/** État financier du mois courant : masse salariale enseignants Primaire/Secondaire + personnel +
- * avances sur salaire accordées ce mois (tableau de bord principal). */
-export function useMonthlyFinancialSummaryQuery(enabled: boolean) {
+/** État financier d'un mois donné (par défaut le mois courant) : masse salariale enseignants
+ * Primaire/Secondaire + personnel + avances sur salaire + cumul réel des salaires payés (tableau de
+ * bord principal) — year/month pilotent le filtre par mois choisi par le comptable. */
+export function useMonthlyFinancialSummaryQuery(enabled: boolean, year?: number, month?: number) {
   return useQuery<MonthlyFinancialSummary>({
-    queryKey: ["dashboard", "monthly-financial-summary"],
-    queryFn: () => getMonthlyFinancialSummary(),
+    queryKey: ["dashboard", "monthly-financial-summary", year, month],
+    queryFn: () => getMonthlyFinancialSummary(year, month),
     enabled,
   });
 }
