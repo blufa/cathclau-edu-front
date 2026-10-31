@@ -189,6 +189,7 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
   // Relevé de notes par matière (PDF backend, moyenne calculée selon le paramétrage de l'établissement).
   const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
+  const [releveOpen, setReleveOpen] = useState(false);
   const [releveSubject, setReleveSubject] = useState<string>("");
   const [relevePeriod, setRelevePeriod] = useState<string>("");
   const [releveUrl, setReleveUrl] = useState<string | null>(null);
@@ -198,6 +199,7 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
     setReleveLoading(true);
     try {
       setReleveUrl(await getSubjectGradeReportPdfObjectUrl(classId, Number(releveSubject), Number(relevePeriod)));
+      setReleveOpen(false);
     } catch (err) {
       notifyError(err);
     } finally {
@@ -322,40 +324,57 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        {distinctSubjects.length > 0 ? (
+        {distinctSubjects.length > 0 && (
           <div className="flex flex-wrap items-end gap-2">
             <Field>
-              <Label>Relevé de notes</Label>
-              <SearchableSelect value={releveSubject} options={subjectFilterOptions} onChange={setReleveSubject} triggerClassName="w-[200px] justify-between px-3" noResultsLabel="Aucune matière" />
+              <Label>Rechercher — matière</Label>
+              <SearchableSelect value={searchSubject} options={subjectFilterOptions} onChange={setSearchSubject} triggerClassName="w-[180px] justify-between px-3" noResultsLabel="Aucune matière" />
             </Field>
-            <Select className="max-w-[170px]" value={relevePeriod} onChange={(e) => setRelevePeriod(e.target.value)}>
-              <option value="">Période</option>
-              {(periodsQuery.data ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
-            </Select>
-            <Button variant="secondary" disabled={!releveSubject || !relevePeriod} loading={releveLoading} onClick={openReleve}>
+            <Field>
+              <Label>Rechercher — date</Label>
+              <DatePicker value={searchDate} onChange={setSearchDate} clearable />
+            </Field>
+            {(searchSubject || searchDate) && (
+              <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchDate(""); }}>Réinitialiser</Button>
+            )}
+          </div>
+        )}
+        <div className="ml-auto flex flex-wrap items-end gap-2">
+          {distinctSubjects.length > 0 && (
+            // Relevé PDF : une seule case à côté des champs de recherche au lieu d'une 2e barre de
+            // filtres entière (§retour utilisateur : "beaucoup de barres de recherche superposées qui
+            // devient moche", surtout en mobile) — les 2 champs nécessaires passent dans un petit modal.
+            <Button variant="secondary" size="sm" leftSection={<FileText className="h-4 w-4" />} onClick={() => setReleveOpen(true)}>
               Relevé (PDF)
             </Button>
-          </div>
-        ) : <span />}
-        {canWrite && (
-          <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle évaluation</Button>
-        )}
-      </div>
-      {distinctSubjects.length > 0 && (
-        <div className="flex flex-wrap items-end gap-2">
-          <Field>
-            <Label>Rechercher — matière</Label>
-            <SearchableSelect value={searchSubject} options={subjectFilterOptions} onChange={setSearchSubject} triggerClassName="w-[200px] justify-between px-3" noResultsLabel="Aucune matière" />
-          </Field>
-          <Field>
-            <Label>Rechercher — date</Label>
-            <DatePicker value={searchDate} onChange={setSearchDate} clearable />
-          </Field>
-          {(searchSubject || searchDate) && (
-            <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchDate(""); }}>Réinitialiser</Button>
+          )}
+          {canWrite && (
+            <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle évaluation</Button>
           )}
         </div>
-      )}
+      </div>
+
+      <Modal open={releveOpen} onClose={() => setReleveOpen(false)} title="Relevé de notes (PDF)">
+        <div className="space-y-4">
+          <Field>
+            <Label>Matière</Label>
+            <SearchableSelect value={releveSubject} options={subjectFilterOptions} onChange={setReleveSubject} triggerClassName="w-full justify-between px-3" noResultsLabel="Aucune matière" />
+          </Field>
+          <Field>
+            <Label>Période</Label>
+            <Select value={relevePeriod} onChange={(e) => setRelevePeriod(e.target.value)}>
+              <option value="">Choisir une période</option>
+              {(periodsQuery.data ?? []).map((p) => (<option key={p.id} value={p.id}>{p.label}</option>))}
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setReleveOpen(false)}>Annuler</Button>
+            <Button disabled={!releveSubject || !relevePeriod} loading={releveLoading} onClick={openReleve}>
+              Générer
+            </Button>
+          </div>
+        </div>
+      </Modal>
       {assessmentsQuery.loading ? (
         <div className="flex justify-center py-12"><Spinner /></div>
       ) : (

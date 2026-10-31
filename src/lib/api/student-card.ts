@@ -64,6 +64,16 @@ export function markCardsPrinted(ids: number[]): Promise<StudentCard[]> {
   return api.patch<StudentCard[]>("/cartes/marquer-imprimees", { ids });
 }
 
+/** Suppression multiple — même garanties que {@link deleteStudentCard}, pour la sélection depuis la
+ * liste. Jamais atomique : un id introuvable n'empêche pas de supprimer les autres. */
+export interface DeleteManyCardsResult {
+  deletedIds: number[];
+  failedIds: number[];
+}
+export function deleteManyStudentCards(ids: number[]): Promise<DeleteManyCardsResult> {
+  return api.post<DeleteManyCardsResult>("/cartes/supprimer", { ids });
+}
+
 /** Vérifie l'authenticité d'une carte scannée (payload + signature du QR code). */
 export function verifyCard(payload: string, signature: string): Promise<Record<string, unknown>> {
   return api.get<Record<string, unknown>>("/cartes/verifier", { query: { payload, signature } });

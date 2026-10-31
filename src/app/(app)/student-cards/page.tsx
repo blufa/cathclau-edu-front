@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { IdCard, Plus, Printer, Search, Tags } from "lucide-react";
+import { IdCard, Plus, Printer, Search, Tags, Trash2 } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -16,6 +16,7 @@ import {
   updateCardTemplate,
   declareCardLost,
   deleteCardTemplate,
+  deleteManyStudentCards,
   deleteStudentCard,
   issueStudentCard,
   listCardTemplates,
@@ -171,7 +172,41 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
     } catch (e) { notifyError(e); }
   }
 
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  async function deleteSelection() {
+    const ids = selected.map((c) => c.id);
+    confirmAction({
+      title: "Supprimer les cartes sélectionnées", danger: true, confirmLabel: "Supprimer",
+      message: `${ids.length} carte(s) — suppression définitive, non réversible depuis cet écran. `
+        + `À utiliser si le matricule/la photo a changé depuis l'émission.`,
+      onConfirm: async () => {
+        setBulkDeleting(true);
+        try {
+          const r = await deleteManyStudentCards(ids);
+          notifySuccess(r.failedIds.length > 0
+            ? `${r.deletedIds.length} carte(s) supprimée(s), ${r.failedIds.length} échec(s).`
+            : `${r.deletedIds.length} carte(s) supprimée(s).`);
+          setSelected([]);
+          q.refetch();
+        } catch (e) { notifyError(e); } finally { setBulkDeleting(false); }
+      },
+    });
+  }
+
   const columns: Column<StudentCard>[] = [
+    {
+      key: "photo", header: "Photo",
+      render: (c) => (
+        c.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={c.photoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+        ) : (
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
+            {studentName(c.studentId).split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+          </span>
+        )
+      ),
+    },
     { key: "cardNumber", header: "N° carte", render: (c) => <span className="font-mono text-xs text-gray-600">{c.cardNumber}</span> },
     { key: "student", header: "Élève", accessor: (c) => studentName(c.studentId), render: (c) => studentName(c.studentId) },
     { key: "studentNumber", header: "Matricule", render: (c) => c.studentNumber ?? "—" },
@@ -247,10 +282,18 @@ function CardsTab({ user }: { user: ReturnType<typeof useAuth>["user"] }) {
           selectable
           onSelectionChange={setSelected}
           toolbar={
-            <Button size="sm" disabled={selected.length === 0} loading={buildingSheet}
-              leftSection={<Printer className="h-4 w-4" />} onClick={() => buildBadgeSheet(selected)}>
-              Imprimer planche {selected.length > 0 ? `(${selected.length})` : ""}
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={selected.length === 0} loading={buildingSheet}
+                leftSection={<Printer className="h-4 w-4" />} onClick={() => buildBadgeSheet(selected)}>
+                Imprimer planche {selected.length > 0 ? `(${selected.length})` : ""}
+              </Button>
+              {canEdit && (
+                <Button size="sm" variant="secondary" className="text-error-600" disabled={selected.length === 0}
+                  loading={bulkDeleting} leftSection={<Trash2 className="h-4 w-4" />} onClick={deleteSelection}>
+                  Supprimer {selected.length > 0 ? `(${selected.length})` : ""}
+                </Button>
+              )}
+            </div>
           }
         />
       )}

@@ -226,6 +226,13 @@ export function getInvoiceByReference(reference: string): Promise<Invoice> {
   return api.get<Invoice>(`/billing/invoices/reference/${encodeURIComponent(reference)}`);
 }
 
+/** Factures "fantômes" à 0 GNF créées avant le correctif §billing/fondation (frais ponctuel
+ * entièrement exonéré qui générait quand même une facture). Lecture seule — supprimer via
+ * {@link deleteInvoice} après validation par le comptable. */
+export function listDanglingExemptedInvoices(): Promise<Invoice[]> {
+  return api.get<Invoice[]>("/billing/invoices/dangling-exempted");
+}
+
 // ── Exemptions (exonérations de frais) ───────────────────────────────────────
 export function listExemptions(): Promise<Exemption[]> {
   return api.get<Exemption[]>("/billing/exemptions");
