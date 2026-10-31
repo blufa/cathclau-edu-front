@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardList,
+  Copy,
   CreditCard,
   IdCard,
   FileText,
@@ -118,6 +119,9 @@ export const NAVIGATION: NavSection[] = [
       { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT", "TEACHER"], module: "STUDENTS" },
       { label: "Parents", href: "/parents", icon: Users, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["parent:manage"], excludeRoles: ["PARENT"], module: "STUDENTS" },
       { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
+      // §retour comptable : vérifier les élèves probablement en double dans une même classe (même
+      // prénom/nom), en comparant leur facturation réelle — jamais de suppression automatique.
+      { label: "Doublons élèves", href: "/duplicate-students", icon: Copy, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], module: "STUDENTS" },
       {
         label: "Personnel", icon: Briefcase, module: "STAFF",
         children: [
