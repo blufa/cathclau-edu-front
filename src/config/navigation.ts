@@ -135,7 +135,10 @@ export const NAVIGATION: NavSection[] = [
       // qui l'admin accorde classe:read voit maintenant bien cet item (avant : uniquement rôles fixes,
       // la permission seule ne suffisait pas).
       { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["classe:read"], excludeRoles: ["TEACHER"], module: "ACADEMICS" },
-      { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["emploi:read"], excludeRoles: ["STUDENT"], module: "ACADEMICS" },
+      // TEACHER retiré (§retour utilisateur) : la page admin laisse parcourir l'emploi du temps de
+      // N'IMPORTE QUELLE classe/enseignant — un enseignant ne doit voir QUE le sien, déjà affiché sur
+      // son propre tableau de bord (/dashboard/enseignant).
+      { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["emploi:read"], excludeRoles: ["STUDENT"], module: "ACADEMICS" },
       // Page dédiée aux événements du calendrier (pas de gestion d'année scolaire, contrairement à
       // « Année scolaire & calendrier ») — seul écran auquel le responsable pédagogique a accès pour
       // programmer réunions/sorties, sans les droits plus larges de gestion des années scolaires.
