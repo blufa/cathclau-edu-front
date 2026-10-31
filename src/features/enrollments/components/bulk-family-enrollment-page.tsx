@@ -448,18 +448,14 @@ export default function BulkFamilyEnrollmentPage() {
           updateChild(child.key, { parentLinked: true });
         }
 
-        if (!enrolled) {
-          await enroll({
-            studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
-            type: child.enrollmentType!, monthlyPaymentOptIn: child.monthlyPaymentOptIn, // non-null : voir validate()
-          });
-          enrolled = true;
-          updateChild(child.key, { enrolled: true });
-        }
-
-        // Exonération accordée AVANT la génération des factures (point 12/23) — pour qu'elle
-        // s'applique dès la première facture, jamais après coup. Choisie dans le catalogue
-        // pré-configuré (§retour comptable) : rien à ressaisir, juste le type sélectionné.
+        // Exonération accordée AVANT enroll() — pas seulement avant generateAllForEnrollment() plus
+        // bas (retour comptable, fondation : "il ne doit generer aucune facture"). enroll() déclenche
+        // de façon SYNCHRONE la création automatique de la facture d'inscription/réinscription
+        // (EnrollmentCreatedEvent -> EnrollmentInvoiceListener, côté serveur, dans la même requête) :
+        // si l'exonération n'existe pas encore à ce moment-là, cette facture précise échappe à la
+        // remise même si generateAllForEnrollment() applique ensuite correctement l'exonération aux
+        // autres frais (mensualité, cantine, examen...). Choisie dans le catalogue pré-configuré
+        // (§retour comptable) : rien à ressaisir, juste le type sélectionné.
         if (child.exemptionRuleId && !exemptionApplied) {
           const rule = activeExemptionRules.find((r) => String(r.id) === child.exemptionRuleId);
           if (rule) {
@@ -480,6 +476,15 @@ export default function BulkFamilyEnrollmentPage() {
               else notifyError(err);
             }
           }
+        }
+
+        if (!needsQueue && !enrolled) {
+          await enroll({
+            studentId, classId: Number(child.classId), academicYearId: effectiveYearId!,
+            type: child.enrollmentType!, monthlyPaymentOptIn: child.monthlyPaymentOptIn, // non-null : voir validate()
+          });
+          enrolled = true;
+          updateChild(child.key, { enrolled: true });
         }
 
         // Transport : retiré de l'inscription (§retour comptable) — l'abonnement se fait désormais
