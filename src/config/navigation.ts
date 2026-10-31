@@ -30,6 +30,7 @@ import {
   Briefcase,
   Bus,
   Receipt,
+  Trash2,
   TrendingUp,
   UserSearch,
   Users,
@@ -121,7 +122,13 @@ export const NAVIGATION: NavSection[] = [
       { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
       // §retour comptable : vérifier les élèves probablement en double dans une même classe (même
       // prénom/nom), en comparant leur facturation réelle — jamais de suppression automatique.
-      { label: "Doublons élèves", href: "/duplicate-students", icon: Copy, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], module: "STUDENTS" },
+      // Réservé au SUPER_ADMIN (§retour utilisateur) : suppression de fiche élève, risque trop
+      // sensible pour le laisser au personnel d'école — pas de `permissions` ici, qui court-
+      // circuiterait la restriction pour quiconque détient "eleve:read".
+      { label: "Doublons élèves", href: "/duplicate-students", icon: Copy, roles: ["SUPER_ADMIN"], module: "STUDENTS" },
+      // Nettoyage des factures à 0 GNF créées avant le correctif §billing/fondation — même restriction
+      // SUPER_ADMIN et même raison (suppression définitive de factures, action sensible).
+      { label: "Factures fantômes", href: "/invoices-cleanup", icon: Trash2, roles: ["SUPER_ADMIN"], module: "STUDENTS" },
       {
         label: "Personnel", icon: Briefcase, module: "STAFF",
         children: [

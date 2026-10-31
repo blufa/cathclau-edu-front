@@ -3,7 +3,7 @@
 import { Copy } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useAuth } from "@/providers/auth-provider";
-import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
+import { isSuperAdmin } from "@/lib/auth/permissions";
 import { deleteStudent, listDuplicateStudents, type DuplicateStudentCandidate } from "@/lib/api/students";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,9 @@ import { formatGNF } from "@/lib/format";
  */
 export default function DuplicateStudentsPage() {
   const { user } = useAuth();
-  const canView = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT") || hasAnyPermission(user, ["eleve:read"]);
+  // Réservé au SUPER_ADMIN (§retour utilisateur) : suppression de fiche élève, trop sensible pour le
+  // personnel d'école.
+  const canView = isSuperAdmin(user);
   const q = useQuery(() => (canView ? listDuplicateStudents() : Promise.resolve([])), [canView]);
 
   if (!canView) {
