@@ -310,7 +310,10 @@ export default function DashboardPage() {
                   {financialSummary.advances.length === 0 ? (
                     <p className="py-6 text-center text-sm text-gray-400">Aucune avance accordée ce mois.</p>
                   ) : (
-                    <ul className="divide-y divide-gray-100">
+                    // max-h + scroll (§retour utilisateur : "le card de avance sur salaire beaucoup, il
+                    // faut le limiter") — une carte de tableau de bord ne doit jamais grandir sans limite
+                    // avec le nombre d'avances du mois, le détail complet reste accessible en scrollant.
+                    <ul className="max-h-72 divide-y divide-gray-100 overflow-y-auto">
                       {financialSummary.advances.map((a, idx) => (
                         <li key={idx} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                           <div className="min-w-0 flex-1">
