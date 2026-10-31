@@ -56,9 +56,11 @@ export default function RentreeDashboardPage() {
 
   // Enrollment receipts: invoices linked to ENROLLMENT / RE_ENROLLMENT fees, summed over paid amounts.
   const enrollmentFeeIds = new Set((feesQuery.data ?? []).filter((f) => f.type === "ENROLLMENT" || f.type === "RE_ENROLLMENT").map((f) => f.id));
+  // Crédit reporté (transfert de classe) exclu — déjà compté comme encaissé sur l'ancienne facture,
+  // jamais un nouvel encaissement (même correctif que le tableau de bord).
   const receipts = (invoicesQuery.data ?? [])
     .filter((inv) => inv.feeId != null && enrollmentFeeIds.has(inv.feeId))
-    .reduce((s, inv) => s + Number(inv.paidAmount ?? 0), 0);
+    .reduce((s, inv) => s + Number(inv.paidAmount ?? 0) - Number(inv.creditedAmount ?? 0), 0);
 
   const loading = classesQuery.loading || enrollmentsQuery.loading;
 
