@@ -172,3 +172,26 @@ export interface StudentScheduleSlot {
 export function getStudentSchedule(studentId: number): Promise<StudentScheduleSlot[]> {
   return api.get<StudentScheduleSlot[]>(`/students/${studentId}/emploi-du-temps`);
 }
+
+/** Un élève candidat doublon (§retour comptable) — même classe, même prénom/nom qu'au moins un autre
+ * élève du groupe. {@code suspect} = nettement moins de mensualités facturées que les autres du
+ * groupe (signal financier, jamais le seul nom — une homonymie réelle comme des jumeaux n'est jamais
+ * marquée suspecte si chacun a son propre historique complet de factures). */
+export interface DuplicateStudentCandidate {
+  studentId: number;
+  firstName: string;
+  lastName: string;
+  photo: string | null;
+  totalInvoiced: number;
+  totalPaid: number;
+  monthlyInvoiceCount: number;
+  suspect: boolean;
+}
+export interface DuplicateStudentGroup {
+  classId: number;
+  className: string;
+  members: DuplicateStudentCandidate[];
+}
+export function listDuplicateStudents(): Promise<DuplicateStudentGroup[]> {
+  return api.get<DuplicateStudentGroup[]>("/students/duplicates");
+}
