@@ -70,7 +70,11 @@ export default function DashboardPage() {
   const invoices = invoicesQuery.data ?? [];
   const consumed = studentsQuery.data?.totalElements ?? 0;
   const totalBilled = invoices.reduce((s, i) => s + num(i.totalAmount), 0);
-  const totalPaid = invoices.reduce((s, i) => s + num(i.paidAmount), 0);
+  // §retour comptable, écart constaté en production (~5-6M GNF) : paidAmount inclut le crédit reporté
+  // d'un transfert de classe (creditedAmount) — déjà compté une fois comme encaissé sur l'ANCIENNE
+  // facture, jamais un nouvel encaissement. Sans la soustraction, "Encaissé" comptait cet argent deux
+  // fois (même correctif que SchoolBillingStatsProviderAdapter#computeStats côté backend).
+  const totalPaid = invoices.reduce((s, i) => s + num(i.paidAmount) - num(i.creditedAmount), 0);
   const due = invoices.reduce((s, i) => s + num(i.remainingBalance ?? num(i.totalAmount) - num(i.paidAmount)), 0);
   const recovery = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 0;
   // Les factures PARTIELLEMENT payées restent dues (donc comptées ici) — sans ça, ce compteur ne
