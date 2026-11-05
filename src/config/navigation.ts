@@ -188,6 +188,10 @@ export const NAVIGATION: NavSection[] = [
           { label: "Factures élèves", href: "/invoices", permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
           { label: "Frais scolaires", href: "/invoices/fees", permissions: ["frais_scolaire:read"], module: "BILLING" },
           { label: "Règles de facturation", href: "/invoices/rules", permissions: ["regle_facturation:read"], module: "BILLING" },
+          // §retour comptable, analyse de production : surplus laissé par un transfert vers une classe
+          // moins chère, jamais perdu mais jamais visible nulle part avant cet écran (10 élèves, 100 000
+          // GNF non régularisés trouvés dans un export).
+          { label: "Surplus de transfert", href: "/class-transfer-refunds", permissions: ["facture:update"], module: "BILLING" },
         ],
       },
       {

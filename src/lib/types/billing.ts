@@ -210,6 +210,20 @@ export interface ClassTransferRefund {
   refundedAt: string | null;
 }
 
+/** Même surplus que {@link ClassTransferRefund}, mais noms déjà résolus (élève/classes) — pour
+ * l'écran de régularisation (toute l'école, pas un élève précis), aucun identifiant brut à afficher. */
+export interface PendingClassTransferRefund {
+  id: number;
+  studentId: number;
+  studentName: string;
+  studentNumber: string | null;
+  oldClassName: string | null;
+  newClassName: string | null;
+  amount: string;
+  reason: string | null;
+  createdAt: string;
+}
+
 /** Un lot de trop-perçu de l'élève (§4 cahier des charges) — posé automatiquement quand un
  * encaissement dépasse le solde dû d'une facture. remainingAmount décroît à chaque application
  * jusqu'à épuisement (amount reste le montant d'origine, immuable, pour l'historique). */
