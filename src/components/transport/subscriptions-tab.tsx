@@ -4,14 +4,15 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus } from "lucide-react";
+import { Plus, Printer } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
-import { searchStudents } from "@/lib/api/students";
+import { searchStudents, searchStudentsSummary } from "@/lib/api/students";
+import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
   cancelSubscription, deleteSubscription, getTransportPaidForMonth, getTransportPaidMonthsCount,
-  listRoutes, listStops, listSubscriptions, subscribe,
+  listRoutes, listStops, listSubscriptions, printTransportSubscriptionList, subscribe,
 } from "@/lib/api/transport";
 import { DIRECTION_LABEL, SUB_STATUS_LABEL, type TransportDirection, type TransportRoute, type TransportSubscription } from "@/lib/types/transport";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import { Label, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { DataTable, type Column } from "@/components/ui/data-table";
+import { FilePreview } from "@/components/ui/file-preview";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
 const MONTH_FMT = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
@@ -51,6 +53,27 @@ export function SubscriptionsTab() {
   const studentsQuery = useCachedQuery(tenantId ? `students-all-v2:${tenantId}` : null, () => searchStudents({ size: 1000 }).then((p) => p.content), [tenantId]);
   const studentName = useMemo(() => new Map((studentsQuery.data ?? []).map((s) => [s.id, `${s.firstName} ${s.lastName}`])), [studentsQuery.data]);
   const routeName = useMemo(() => new Map((routesQuery.data ?? []).map((r) => [r.id, r.name])), [routesQuery.data]);
+
+  // Classe courante par élève (§retour comptable : "ajouter la classe des élèves" sur la liste
+  // transport) — même résolution que le guichet d'accueil (année courante + toutes les classes de
+  // cette année + le résumé élève, qui seul porte le classId ; `Student` simple n'en a pas).
+  const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
+  const currentYear = useMemo(() => (yearsQuery.data ?? []).find((y) => y.current) ?? (yearsQuery.data ?? [])[0], [yearsQuery.data]);
+  const classesQuery = useCachedQuery(
+    currentYear ? `classes:${currentYear.id}` : null,
+    () => listClasses(currentYear!.id),
+    [currentYear?.id],
+  );
+  const classLabel = useMemo(() => new Map((classesQuery.data ?? []).map((c) => [c.id, c.label])), [classesQuery.data]);
+  const studentsSummaryQuery = useCachedQuery(
+    tenantId ? `students-summary-all:${tenantId}` : null,
+    () => searchStudentsSummary({ size: 1000 }).then((p) => p.content),
+    [tenantId],
+  );
+  const studentClassLabel = useMemo(
+    () => new Map((studentsSummaryQuery.data ?? []).map((s) => [s.student.id, s.classId != null ? (classLabel.get(s.classId) ?? null) : null])),
+    [studentsSummaryQuery.data, classLabel],
+  );
   const [routeFilter, setRouteFilter] = useState<string>("");
   // Par défaut, le mois en cours (§retour comptable : "afficher par défaut ceux qui ont payé le mois
   // en cours") — "" = tous les mois, pas de filtre.
@@ -66,6 +89,22 @@ export function SubscriptionsTab() {
     .filter((s) => studentName.has(s.studentId))
     .filter((s) => !paidForMonthIds || paidForMonthIds.has(s.studentId));
   const [subscribing, setSubscribing] = useState(false);
+  const [selected, setSelected] = useState<TransportSubscription[]>([]);
+  const [printing, setPrinting] = useState(false);
+  const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
+
+  async function printList() {
+    if (selected.length === 0) return;
+    setPrinting(true);
+    try {
+      const url = await printTransportSubscriptionList(selected.map((s) => s.id));
+      setPreview({ url, title: `Liste transport — ${selected.length} élève(s)` });
+    } catch (err) {
+      notifyError(err);
+    } finally {
+      setPrinting(false);
+    }
+  }
 
   // Nombre de mois réellement réglés par élève (§retour comptable : "trier par transport", précisé
   // en "le nombre de mois payé") — colonne triable via DataTable, remplace la liste simple d'avant.
@@ -80,6 +119,11 @@ export function SubscriptionsTab() {
       key: "student", header: "Élève", sortable: true,
       accessor: (s) => studentName.get(s.studentId) ?? "",
       render: (s) => <span className="font-medium text-gray-900">{studentName.get(s.studentId)}</span>,
+    },
+    {
+      key: "class", header: "Classe", sortable: true,
+      accessor: (s) => studentClassLabel.get(s.studentId) ?? "",
+      render: (s) => <span className="text-gray-600">{studentClassLabel.get(s.studentId) ?? "—"}</span>,
     },
     {
       key: "route", header: "Ligne", sortable: true,
@@ -150,7 +194,16 @@ export function SubscriptionsTab() {
         emptyLabel="Aucun abonnement."
         searchable
         searchPlaceholder="Rechercher un élève (nom, prénom)…"
+        selectable
+        onSelectionChange={setSelected}
+        toolbar={
+          <Button size="sm" variant="secondary" disabled={selected.length === 0} loading={printing}
+            leftSection={<Printer className="h-4 w-4" />} onClick={() => void printList()}>
+            Imprimer {selected.length > 0 ? `(${selected.length})` : ""}
+          </Button>
+        }
       />
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
       <Modal open={subscribing} onClose={() => setSubscribing(false)} title="Abonner un élève au transport">
         <SubscribeForm routes={routesQuery.data ?? []} students={studentsQuery.data ?? []}
           onCancel={() => setSubscribing(false)} onDone={() => { setSubscribing(false); notifySuccess("Abonné"); q.refetch(); }} />
