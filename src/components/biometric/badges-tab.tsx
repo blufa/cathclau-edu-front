@@ -19,7 +19,9 @@ function qrUrl(data: string, size = 220) {
 
 /**
  * Génération de badges QR. La génération enrôle automatiquement la personne (élève ou enseignant) :
- * le QR « BADGE|tenant|type|id » est ensuite scannable au pointage (kiosk « Scanner les cartes »).
+ * le QR « BADGE2|<jeton opaque> » est ensuite scannable au pointage (kiosk « Scanner les cartes »).
+ * Régénérer le badge d'une personne révoque silencieusement tout ancien QR déjà imprimé pour elle
+ * (perte/vol : on régénère, l'ancien devient inutilisable).
  */
 export function BadgesTab() {
   const { teachers, students, employees } = useDirectory();

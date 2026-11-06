@@ -55,6 +55,12 @@ export function generateBadge(subjectType: BiometricSubjectType, subjectId: numb
   return api.post<BadgeResult>("/biometric/badges", { subjectType, subjectId });
 }
 
+/** Résout un jeton de badge scanné (QR « BADGE2|<jeton> », le jeton seul est passé ici) en la personne
+ * correspondante — jamais l'inverse (le jeton opaque ne permet de construire ni deviner aucun badge). */
+export function resolveBadgeToken(token: string): Promise<{ subjectType: BiometricSubjectType; subjectId: number }> {
+  return api.get("/biometric/badges/resolve", { query: { token } });
+}
+
 /** Enregistre un pointage (utilisé par le pointage caméra : téléphone/ordinateur). */
 export function recordPunch(deviceId: number, input: {
   externalUserId: string; punchTime?: string | null; direction: PunchDirection; temperature?: number | null; rawPayload?: string | null;
