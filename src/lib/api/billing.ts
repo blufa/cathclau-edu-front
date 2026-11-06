@@ -13,6 +13,7 @@ import type {
   FeeType,
   GenerateAllFeesInput,
   GeneratedFeeInvoices,
+  PendingClassTransferRefund,
   GenerateMonthlyResult,
   Installment,
   InstallmentInput,
@@ -253,6 +254,11 @@ export function listClassTransferRefunds(studentId: number): Promise<ClassTransf
 }
 export function markClassTransferRefundRefunded(id: number): Promise<ClassTransferRefund> {
   return api.patch<ClassTransferRefund>(`/billing/class-transfer-refunds/${id}/rembourse`);
+}
+/** Tous les surplus en attente de remboursement (toute l'école), noms déjà résolus — écran de
+ * régularisation dédié. */
+export function listPendingClassTransferRefunds(): Promise<PendingClassTransferRefund[]> {
+  return api.get<PendingClassTransferRefund[]>("/billing/class-transfer-refunds/en-attente");
 }
 
 // ── Crédit disponible de l'élève (§4 cahier des charges, trop-perçu) ────────────────────────

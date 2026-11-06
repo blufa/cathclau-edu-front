@@ -54,6 +54,7 @@ export interface PaymentReminderParentContact {
 export interface PaymentReminderCandidate {
   studentId: number;
   studentName: string;
+  studentNumber: string | null;
   classId: number | null;
   className: string | null;
   status: PaymentReminderStatus;

@@ -42,6 +42,8 @@ export interface BiometricEnrollment {
   externalUserId: string;
   status: EnrollmentStatus;
   enrolledAt: string | null;
+  badgeToken: string | null;
+  nfcUid: string | null;
 }
 
 export interface BiometricPunch {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import jsQR from "jsqr";
-import { ArrowLeft, CheckCircle2, LogIn, LogOut, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LogIn, LogOut, Nfc, ScanLine, UserX, Video, VideoOff, XCircle } from "lucide-react";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { useAuth } from "@/providers/auth-provider";
@@ -12,6 +12,7 @@ import { searchStudents } from "@/lib/api/students";
 import { listTeachers, listEmployees } from "@/lib/api/staff";
 import { getStudentParents } from "@/lib/api/parents";
 import { justifyAttendance, markEmployeeAbsent, markStudentAbsent, markTeacherAbsent, notifyParentNow, recordChildPickup, type ChildPickup, type ScanSubjectType } from "@/lib/api/attendance";
+import { resolveBadgeToken, resolveNfcUid } from "@/lib/api/biometric";
 import { ATTENDANCE_OUTCOME_LABEL, SCAN_DIRECTION_LABEL, type AttendanceOutcome, type ScanDirection } from "@/lib/types/attendance";
 import { submitScanOfflineAware } from "@/lib/offline/submit-attendance-offline-aware";
 import { useAttendanceQueueStore } from "@/lib/offline/attendance-queue-store";
@@ -36,6 +37,16 @@ interface BarcodeDetectorLike {
   detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]>;
 }
 
+/** API native Web NFC (Chrome Android uniquement) : lit l'UID matériel d'une carte NFC présentée au
+ * téléphone/tablette — contrairement au QR, ne peut pas démarrer automatiquement (exige un geste
+ * utilisateur), d'où le bouton dédié plutôt qu'une boucle continue comme la caméra. */
+interface NDEFReadingEventLike { serialNumber: string }
+interface NDEFReaderLike {
+  scan(): Promise<void>;
+  onreading: ((event: NDEFReadingEventLike) => void) | null;
+  onreadingerror: (() => void) | null;
+}
+
 interface ScanFeedItem {
   id: string;
   name: string;
@@ -58,7 +69,8 @@ interface ScanFeedItem {
 
 type ParseResult =
   | { subjectType: ScanSubjectType; subjectId: number }
-  | { matricule: string; subjectType?: ScanSubjectType };
+  | { matricule: string; subjectType?: ScanSubjectType }
+  | { badgeToken: string };
 
 /** Texte exact renvoyé par le backend (élève/enseignant/personnel, même message) quand une entrée est
  *  retentée sans avoir scanné de sortie — voir StudentAttendanceService/TeacherAttendanceService/
@@ -75,10 +87,17 @@ const ALREADY_ENTERED_MESSAGE =
  *    tour élève puis enseignant puis personnel (comportement historique, risque de collision de
  *    matricule entre types conservé uniquement pour ces badges déjà imprimés) ;
  *  - ancien format carte « LACA|tenant|studentId|… » (rétro-compat) → élève par id ;
- *  - badge biométrique « BADGE|tenant|TYPE|id » → élève, enseignant ou personnel par id.
+ *  - badge biométrique « BADGE2|<jeton opaque> » → résolu côté serveur (handleRaw), jamais décodé ici ;
+ *  - ancien badge biométrique « BADGE|tenant|TYPE|id » (rétro-compat badges déjà imprimés avant ce
+ *    correctif — §BADGES_QR_NFC.md : ce format était lisible et devinable, n'importe qui pouvait
+ *    construire un QR valide pour un id arbitraire ; conservé en lecture seule uniquement pour ne pas
+ *    invalider les badges physiques déjà distribués, à réimprimer progressivement).
  */
 function parseScan(raw: string): ParseResult | null {
   const parts = raw.split("|");
+  if (parts[0] === "BADGE2" && raw.length > 7) {
+    return { badgeToken: raw.slice(7) };
+  }
   if (parts[0] === "LACA" && parts.length >= 3) {
     const id = Number(parts[2]);
     return Number.isFinite(id) && id > 0 ? { subjectType: "STUDENT", subjectId: id } : null;
@@ -126,6 +145,8 @@ export default function AttendanceScanPage() {
 
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nfcListening, setNfcListening] = useState(false);
+  const nfcAvailable = typeof window !== "undefined" && "NDEFReader" in window;
   const queuedCount = useAttendanceQueueStore((s) => s.items.length);
   const [direction, setDirection] = useState<ScanDirection>("ENTRY");
   const [feed, setFeed] = useState<ScanFeedItem[]>([]);
@@ -232,6 +253,66 @@ export default function AttendanceScanPage() {
     }
   }, [pushFeed, resolveName]);
 
+  // Résout un badge QR opaque (« BADGE2|<jeton> ») en la personne correspondante avant de pointer —
+  // le jeton ne révèle rien côté client, impossible d'en déduire qui que ce soit sans appel serveur.
+  // Même anti-doublon que submit() (cooldown + inFlight), mais clé sur le jeton directement : un badge
+  // laissé devant la caméra ne doit pas déclencher un appel de résolution à chaque frame.
+  const resolveBadge = useCallback(async (token: string) => {
+    const key = `badge:${token}`;
+    const now = Date.now();
+    const lastHandledAt = lastHandledRef.current.get(key);
+    if (lastHandledAt != null && now - lastHandledAt < SCAN_COOLDOWN_MS) return;
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    lastHandledRef.current.set(key, now);
+    try {
+      const resolved = await resolveBadgeToken(token);
+      submit(resolved.subjectType, resolved.subjectId, direction);
+    } catch (err) {
+      notifyError(err);
+      vibrateError();
+    } finally {
+      inFlightRef.current.delete(key);
+    }
+  }, [direction, submit]);
+
+  // Même principe que resolveBadge, pour une carte NFC présentée — clé anti-doublon distincte (un même
+  // badge physique peut porter QR et NFC, les deux ne doivent jamais être confondus dans le cooldown).
+  const resolveNfc = useCallback(async (uid: string) => {
+    const key = `nfc:${uid}`;
+    const now = Date.now();
+    const lastHandledAt = lastHandledRef.current.get(key);
+    if (lastHandledAt != null && now - lastHandledAt < SCAN_COOLDOWN_MS) return;
+    if (inFlightRef.current.has(key)) return;
+    inFlightRef.current.add(key);
+    lastHandledRef.current.set(key, now);
+    try {
+      const resolved = await resolveNfcUid(uid);
+      submit(resolved.subjectType, resolved.subjectId, direction);
+    } catch (err) {
+      notifyError(err);
+      vibrateError();
+    } finally {
+      inFlightRef.current.delete(key);
+    }
+  }, [direction, submit]);
+
+  // Web NFC exige un geste utilisateur pour démarrer scan() (contrairement à la caméra, qui démarre
+  // automatiquement) — bouton dédié, boucle d'écoute continue tant que l'onglet reste actif.
+  const startNfcListening = useCallback(async () => {
+    const Ctor = (window as unknown as { NDEFReader?: new () => NDEFReaderLike }).NDEFReader;
+    if (!Ctor) return;
+    try {
+      const reader = new Ctor();
+      await reader.scan();
+      reader.onreading = (event) => resolveNfc(event.serialNumber);
+      reader.onreadingerror = () => notifyError("Lecture de la carte NFC impossible, réessayez.");
+      setNfcListening(true);
+    } catch {
+      setError("Lecture NFC inaccessible : autorisez l'accès (Chrome Android requis).");
+    }
+  }, [resolveNfc]);
+
   const markAbsent = useCallback(async (type: ScanSubjectType, subjectId: number, name: string) => {
     try {
       if (type === "STUDENT") await markStudentAbsent(subjectId);
@@ -254,6 +335,10 @@ export default function AttendanceScanPage() {
     // jamais un faux succès silencieux.
     const parsed = parseScan(raw);
     if (!parsed) return;
+    if ("badgeToken" in parsed) {
+      resolveBadge(parsed.badgeToken);
+      return;
+    }
     if ("matricule" in parsed) {
       const mat = parsed.matricule.toLowerCase();
       // Type connu (badge réimprimé avec ce correctif) : on ne cherche QUE dans la bonne liste — plus
@@ -297,7 +382,7 @@ export default function AttendanceScanPage() {
       return;
     }
     submit(parsed.subjectType, parsed.subjectId, direction);
-  }, [direction, submit, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
+  }, [direction, submit, resolveBadge, studentsQuery.data, teachersQuery.data, employeesQuery.data]);
 
   // La boucle de lecture caméra (tick, ci-dessous) est lancée UNE fois par startCamera() et se
   // rappelle elle-même en boucle via requestAnimationFrame — sa closure sur handleRaw reste donc
@@ -484,6 +569,17 @@ export default function AttendanceScanPage() {
                 <Button onClick={startCamera} leftSection={<Video className="h-4 w-4" />}>Démarrer le scan</Button>
               ) : (
                 <Button variant="ghost" className="text-error-600" leftSection={<VideoOff className="h-4 w-4" />} onClick={stopCamera}>Arrêter</Button>
+              )}
+              {nfcAvailable && (
+                nfcListening ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700">
+                    <Nfc className="h-4 w-4" /> Lecture NFC active — approchez une carte
+                  </span>
+                ) : (
+                  <Button variant="secondary" leftSection={<Nfc className="h-4 w-4" />} onClick={startNfcListening}>
+                    Activer la lecture NFC
+                  </Button>
+                )
               )}
             </div>
           </CardBody>

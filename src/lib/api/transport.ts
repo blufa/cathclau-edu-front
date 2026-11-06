@@ -55,3 +55,10 @@ export function cancelSubscription(id: number): Promise<TransportSubscription> {
 export function deleteSubscription(id: number): Promise<void> {
   return api.delete<void>(`/transport/subscriptions/${id}`);
 }
+
+/** PDF (même en-tête que les autres documents officiels) de la liste des abonnés transport
+ * sélectionnés, telle que filtrée à l'écran — §retour comptable : "ajouter la classe des élèves, et
+ * qu'il puisse l'imprimer". */
+export function printTransportSubscriptionList(subscriptionIds: number[]): Promise<string> {
+  return api.postBlobUrl("/transport/subscriptions/pdf", { subscriptionIds });
+}
