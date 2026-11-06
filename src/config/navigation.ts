@@ -188,6 +188,10 @@ export const NAVIGATION: NavSection[] = [
           { label: "Factures élèves", href: "/invoices", permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
           { label: "Frais scolaires", href: "/invoices/fees", permissions: ["frais_scolaire:read"], module: "BILLING" },
           { label: "Règles de facturation", href: "/invoices/rules", permissions: ["regle_facturation:read"], module: "BILLING" },
+          // §retour comptable, analyse de production : surplus laissé par un transfert vers une classe
+          // moins chère, jamais perdu mais jamais visible nulle part avant cet écran (10 élèves, 100 000
+          // GNF non régularisés trouvés dans un export).
+          { label: "Surplus de transfert", href: "/class-transfer-refunds", permissions: ["facture:update"], module: "BILLING" },
         ],
       },
       {
@@ -197,6 +201,7 @@ export const NAVIGATION: NavSection[] = [
           // Vue jour par jour, tous canaux confondus, pour le contrôle mensuel du fondateur
           // (§angles morts comptables) — indépendante du fait que les frais soient réglés par tranche.
           { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], module: "PAYMENTS" },
+          { label: "Journal du jour", href: "/payments/journal", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["dashboard:admin"], module: "PAYMENTS" },
           // "Reçus" (§retour comptable, point 26 ; onglet "Transactions fournisseur" retiré ensuite)
           // est masquée du menu — jugée redondante avec Paiements/Encaissements par jour pour l'usage
           // courant — mais la page reste intacte et accessible par URL directe si besoin (même
