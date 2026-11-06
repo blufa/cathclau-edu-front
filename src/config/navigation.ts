@@ -201,6 +201,7 @@ export const NAVIGATION: NavSection[] = [
           // Vue jour par jour, tous canaux confondus, pour le contrôle mensuel du fondateur
           // (§angles morts comptables) — indépendante du fait que les frais soient réglés par tranche.
           { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], module: "PAYMENTS" },
+          { label: "Journal du jour", href: "/payments/journal", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["dashboard:admin"], module: "PAYMENTS" },
           // "Reçus" (§retour comptable, point 26 ; onglet "Transactions fournisseur" retiré ensuite)
           // est masquée du menu — jugée redondante avec Paiements/Encaissements par jour pour l'usage
           // courant — mais la page reste intacte et accessible par URL directe si besoin (même
