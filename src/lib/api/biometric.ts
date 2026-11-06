@@ -61,6 +61,17 @@ export function resolveBadgeToken(token: string): Promise<{ subjectType: Biometr
   return api.get("/biometric/badges/resolve", { query: { token } });
 }
 
+/** Associe (ou retire, si uid vide) l'UID d'une carte NFC physique à un badge déjà généré — même
+ * personne que le QR, deuxième technologie de lecture (§BADGES_QR_NFC.md). */
+export function associateNfcUid(enrollmentId: number, nfcUid: string): Promise<BiometricEnrollment> {
+  return api.patch<BiometricEnrollment>(`/biometric/badges/${enrollmentId}/nfc`, { nfcUid });
+}
+
+/** Résout un UID de carte NFC lu en la personne correspondante. */
+export function resolveNfcUid(uid: string): Promise<{ subjectType: BiometricSubjectType; subjectId: number }> {
+  return api.get("/biometric/badges/resolve-nfc", { query: { uid } });
+}
+
 /** Enregistre un pointage (utilisé par le pointage caméra : téléphone/ordinateur). */
 export function recordPunch(deviceId: number, input: {
   externalUserId: string; punchTime?: string | null; direction: PunchDirection; temperature?: number | null; rawPayload?: string | null;

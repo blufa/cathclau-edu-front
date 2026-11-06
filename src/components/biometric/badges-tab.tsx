@@ -1,20 +1,31 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Printer } from "lucide-react";
-import { generateBadge, type BadgeResult } from "@/lib/api/biometric";
+import { Nfc, Printer } from "lucide-react";
+import { associateNfcUid, generateBadge, type BadgeResult } from "@/lib/api/biometric";
 import { getCurrentAcademicYear } from "@/lib/api/academics";
 import { SUBJECT_TYPE_LABEL, type BiometricSubjectType } from "@/lib/types/biometric";
 import { useDirectory } from "@/components/biometric/use-directory";
 import { useQuery } from "@/hooks/use-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { printHtmlDocument } from "@/lib/print-node";
 
 function qrUrl(data: string, size = 220) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
+}
+
+/** API native Web NFC (Chrome Android uniquement — absente des types DOM standards de TypeScript) :
+ * lit l'UID matériel d'une carte NFC présentée au téléphone/tablette. Ailleurs (desktop, iOS), on
+ * retombe sur la saisie manuelle de l'UID ci-dessous — même repli que le scan QR par caméra. */
+interface NDEFReadingEventLike { serialNumber: string }
+interface NDEFReaderLike {
+  scan(): Promise<void>;
+  onreading: ((event: NDEFReadingEventLike) => void) | null;
+  onreadingerror: (() => void) | null;
 }
 
 /**
@@ -31,6 +42,11 @@ export function BadgesTab() {
   const [subjectId, setSubjectId] = useState("");
   const [badge, setBadge] = useState<BadgeResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [nfcUidInput, setNfcUidInput] = useState("");
+  const [nfcScanning, setNfcScanning] = useState(false);
+  const [nfcAssociating, setNfcAssociating] = useState(false);
+  const [nfcAssociated, setNfcAssociated] = useState<string | null>(null);
+  const nfcAvailable = typeof window !== "undefined" && "NDEFReader" in window;
 
   const directory = useMemo(
     () => (subjectType === "STUDENT" ? students : subjectType === "TEACHER" ? teachers : employees),
@@ -55,8 +71,44 @@ export function BadgesTab() {
     try {
       const b = await generateBadge(subjectType, Number(subjectId));
       setBadge(b);
+      setNfcUidInput("");
+      setNfcAssociated(null);
       notifySuccess("Badge généré — la personne est enrôlée");
     } catch (e) { notifyError(e); } finally { setLoading(false); }
+  }
+
+  async function associateNfc(uid: string) {
+    if (!badge || !uid.trim()) return;
+    setNfcAssociating(true);
+    try {
+      await associateNfcUid(badge.enrollmentId, uid.trim());
+      setNfcAssociated(uid.trim());
+      notifySuccess("Carte NFC associée au badge.");
+    } catch (e) { notifyError(e); } finally { setNfcAssociating(false); }
+  }
+
+  // Lecture NFC native (Chrome Android) : l'utilisateur présente la carte, on en extrait l'UID matériel
+  // puis on l'associe directement — sans ressaisie manuelle quand le matériel le permet.
+  async function scanNfcCard() {
+    const Ctor = (window as unknown as { NDEFReader?: new () => NDEFReaderLike }).NDEFReader;
+    if (!Ctor) { notifyError("Lecture NFC non disponible sur cet appareil — saisissez l'UID manuellement."); return; }
+    setNfcScanning(true);
+    try {
+      const reader = new Ctor();
+      await reader.scan();
+      await new Promise<void>((resolve, reject) => {
+        reader.onreading = (event) => {
+          setNfcUidInput(event.serialNumber);
+          associateNfc(event.serialNumber);
+          resolve();
+        };
+        reader.onreadingerror = () => reject(new Error("Lecture de la carte impossible, réessayez."));
+      });
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setNfcScanning(false);
+    }
   }
 
   function printBadge() {
@@ -113,6 +165,31 @@ export function BadgesTab() {
               </div>
               <div className="flex justify-center">
                 <Button variant="secondary" leftSection={<Printer className="h-4 w-4" />} onClick={printBadge}>Imprimer le badge</Button>
+              </div>
+
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <h4 className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                  <Nfc className="h-3.5 w-3.5" /> Carte NFC (optionnel)
+                </h4>
+                {nfcAssociated ? (
+                  <p className="text-xs text-success-600">Carte NFC associée ({nfcAssociated}) — pointage possible par badge QR ou carte NFC.</p>
+                ) : (
+                  <p className="text-xs text-gray-400">Même badge, deuxième technologie : présentez la carte (Android) ou saisissez son UID.</p>
+                )}
+                {nfcAvailable && (
+                  <Button size="sm" variant="secondary" loading={nfcScanning}
+                    leftSection={<Nfc className="h-3.5 w-3.5" />} onClick={scanNfcCard}>
+                    Présenter la carte NFC
+                  </Button>
+                )}
+                <div className="flex gap-2">
+                  <Input value={nfcUidInput} onChange={(e) => setNfcUidInput(e.target.value)}
+                    placeholder="UID de la carte (saisie manuelle)" className="flex-1 text-sm" aria-label="UID de la carte NFC" />
+                  <Button size="sm" variant="secondary" loading={nfcAssociating} disabled={!nfcUidInput.trim()}
+                    onClick={() => associateNfc(nfcUidInput)}>
+                    Associer
+                  </Button>
+                </div>
               </div>
             </div>
           )}
