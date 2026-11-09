@@ -91,14 +91,16 @@ export default function MyClassesPage() {
                   <p className="text-sm text-slate-400">Aucun élève inscrit (validé) dans cette classe.</p>
                 ) : (
                   <Table>
-                    <THead><tr><TH>Élève</TH><TH>Matricule</TH><TH>Email</TH></tr></THead>
+                    {/* Pas de matricule ici (§retour utilisateur) : le matricule n'a sa place que sur la
+                        saisie anonyme des notes (GradeGrid, grading/page.tsx) — partout ailleurs, y
+                        compris cette liste de classe, l'enseignant identifie ses élèves par leur nom. */}
+                    <THead><tr><TH>Élève</TH><TH>Email</TH></tr></THead>
                     <TBody>
                       {b.students.map((s) => (
                         <TR key={s.id}>
                           <TD className="font-medium text-slate-900">
                             <Link href={`/students/detail?id=${s.id}`} className="hover:text-brand-700 hover:underline">{s.firstName} {s.lastName}</Link>
                           </TD>
-                          <TD className="font-mono text-xs text-slate-600">{s.studentNumber}</TD>
                           <TD className="text-slate-500">{s.email ?? "—"}</TD>
                         </TR>
                       ))}
