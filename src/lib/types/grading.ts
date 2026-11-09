@@ -48,7 +48,9 @@ export interface Grade {
 }
 
 // ── Exams ───────────────────────────────────────────────────────────────────
-export type ExamType = "MOCK" | "SEMESTER" | "ANNUAL" | "NATIONAL";
+/** MONTHLY ("Évaluation mensuelle", §censeur) : composition planifiée sur une Periode de type
+ * MENSUEL ou BIMENSUEL — la cadence est déjà portée par la Periode choisie, pas par ce type. */
+export type ExamType = "MOCK" | "SEMESTER" | "ANNUAL" | "NATIONAL" | "MONTHLY";
 export type ExamStatus = "PLANNED" | "ONGOING" | "COMPLETED";
 
 export const EXAM_TYPE_LABEL: Record<ExamType, string> = {
@@ -56,6 +58,7 @@ export const EXAM_TYPE_LABEL: Record<ExamType, string> = {
   SEMESTER: "Semestriel",
   ANNUAL: "Annuel",
   NATIONAL: "National",
+  MONTHLY: "Évaluation mensuelle",
 };
 export const EXAM_STATUS_LABEL: Record<ExamStatus, string> = {
   PLANNED: "Planifié",

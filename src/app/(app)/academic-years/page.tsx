@@ -18,14 +18,15 @@ import {
   setCurrentAcademicYear,
   updatePeriod,
 } from "@/lib/api/academics";
-import type {
-  AnneeScolaire,
-  CreateAcademicYearInput,
-  CreatePeriodInput,
-  Periode,
-  StatutAnneeScolaire,
-  TypePeriode,
-  SchoolCycle,
+import {
+  TYPE_PERIODE_LABEL,
+  type AnneeScolaire,
+  type CreateAcademicYearInput,
+  type CreatePeriodInput,
+  type Periode,
+  type StatutAnneeScolaire,
+  type TypePeriode,
+  type SchoolCycle,
 } from "@/lib/types/academics";
 import { createEvent, deleteEvent, listEvents } from "@/lib/api/calendar";
 import {
@@ -186,7 +187,13 @@ function PeriodForm({ initial, onSubmit, onCancel }: {
           <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
             <option value="TRIMESTRE">Trimestre</option>
             <option value="SEMESTRE">Semestre</option>
+            <option value="MENSUEL">Mensuel</option>
+            <option value="BIMENSUEL">Bimensuel</option>
           </Select>
+          <p className="text-xs text-gray-400">
+            Mensuel/Bimensuel : bulletin de contrôle en cours d&apos;année (niveau de l&apos;élève),
+            jamais inclus dans la moyenne annuelle officielle.
+          </p>
         </Field>
         <Field>
           <Label>Ordre</Label>
@@ -414,7 +421,7 @@ function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boo
                 <TR key={p.id}>
                   <TD>{p.sortOrder}</TD>
                   <TD className="font-medium">{p.label}</TD>
-                  <TD>{p.type === "SEMESTRE" ? "Semestre" : "Trimestre"}</TD>
+                  <TD>{TYPE_PERIODE_LABEL[p.type]}</TD>
                   <TD>
                     <Badge tone={p.closed ? "amber" : "green"}>{p.closed ? "Clôturée" : "Ouverte"}</Badge>
                   </TD>
