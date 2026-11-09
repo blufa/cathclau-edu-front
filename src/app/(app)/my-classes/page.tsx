@@ -8,6 +8,7 @@ import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { getMyTeacher, getTeacherClasses, getTeacherSchedule } from "@/lib/api/staff";
 import { getClass, getClassStudents } from "@/lib/api/academics";
+import { getStudentParents } from "@/lib/api/parents";
 import type { ClassStudent } from "@/lib/types/academics";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +16,17 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 
+interface RosterStudent extends ClassStudent {
+  /** Parent/tuteur principal (§retour utilisateur : les élèves ont souvent pas d'email, le nom du
+   * parent est plus utile ici) — le tuteur marqué primaryGuardian, sinon le premier parent lié, "—"
+   * si aucun parent n'est encore renseigné pour cet élève. */
+  parentName: string;
+}
+
 interface ClassBlock {
   id: number;
   label: string;
-  students: ClassStudent[];
+  students: RosterStudent[];
 }
 
 export default function MyClassesPage() {
@@ -39,8 +47,17 @@ export default function MyClassesPage() {
       if (!label) {
         try { label = (await getClass(id)).label; } catch { label = `Classe #${id}`; }
       }
-      let students: ClassStudent[] = [];
-      try { students = await getClassStudents(id); } catch { students = []; }
+      let baseStudents: ClassStudent[] = [];
+      try { baseStudents = await getClassStudents(id); } catch { baseStudents = []; }
+      const students: RosterStudent[] = await Promise.all(baseStudents.map(async (s) => {
+        let parentName = "—";
+        try {
+          const parents = await getStudentParents(s.id);
+          const primary = parents.find((p) => p.primaryGuardian) ?? parents[0];
+          if (primary) parentName = `${primary.firstName} ${primary.lastName}`;
+        } catch { /* aucun parent lié ou erreur réseau : repli "—", pas bloquant pour le reste de la liste */ }
+        return { ...s, parentName };
+      }));
       blocks.push({ id, label, students });
     }
     return blocks.sort((a, b) => a.label.localeCompare(b.label));
@@ -94,14 +111,14 @@ export default function MyClassesPage() {
                     {/* Pas de matricule ici (§retour utilisateur) : le matricule n'a sa place que sur la
                         saisie anonyme des notes (GradeGrid, grading/page.tsx) — partout ailleurs, y
                         compris cette liste de classe, l'enseignant identifie ses élèves par leur nom. */}
-                    <THead><tr><TH>Élève</TH><TH>Email</TH></tr></THead>
+                    <THead><tr><TH>Élève</TH><TH>Parent</TH></tr></THead>
                     <TBody>
                       {b.students.map((s) => (
                         <TR key={s.id}>
                           <TD className="font-medium text-slate-900">
                             <Link href={`/students/detail?id=${s.id}`} className="hover:text-brand-700 hover:underline">{s.firstName} {s.lastName}</Link>
                           </TD>
-                          <TD className="text-slate-500">{s.email ?? "—"}</TD>
+                          <TD className="text-slate-500">{s.parentName}</TD>
                         </TR>
                       ))}
                     </TBody>
