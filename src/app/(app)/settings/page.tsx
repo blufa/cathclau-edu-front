@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Building2, Hash, Palette, Wallet } from "lucide-react";
+import { Building2, Hash, NotebookPen, Palette, Wallet } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { phoneRule } from "@/lib/phone";
 import { useAuth } from "@/providers/auth-provider";
 import { useBranding } from "@/providers/branding-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { updateTenantBranding } from "@/lib/api/branding";
-import { getSchoolProfile, updateSchoolProfile, type SchoolProfile } from "@/lib/api/platform";
+import { getSchoolProfile, setMonthlyCountsAsCours, updateSchoolProfile, type SchoolProfile } from "@/lib/api/platform";
+import { Switch } from "@/components/ui/switch";
 import { applyBrandColor } from "@/lib/branding/palette";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Label } from "@/components/ui/input";
@@ -161,6 +162,16 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
     }
   }
 
+  async function toggleMonthlyCountsAsCours(enabled: boolean) {
+    try {
+      const updated = await setMonthlyCountsAsCours(enabled);
+      setProfile(updated);
+      notifySuccess(enabled ? "Note mensuelle comptée comme moyenne de cours" : "Note mensuelle exclue du calcul semestriel");
+    } catch (err) {
+      notifyError(err);
+    }
+  }
+
   if (loading) return <p className="py-6 text-sm text-gray-400">Chargement…</p>;
   if (!profile) return <p className="py-6 text-sm text-gray-400">Informations indisponibles.</p>;
 
@@ -223,6 +234,31 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <Field><Label>Inspection régionale (IRE)</Label><Input placeholder="Ex. KINDIA" value={profile.ire ?? ""} disabled={ro} onChange={(e) => set("ire", e.target.value)} /></Field>
         <Field><Label>Direction préfectorale / communale (DPE/DCE)</Label><Input placeholder="Ex. COYAH" value={profile.dpeLabel ?? ""} disabled={ro} onChange={(e) => set("dpeLabel", e.target.value)} /></Field>
         <Field><Label>Sous-préfecture / commune (DSSEE)</Label><Input placeholder="Ex. MANGATA" value={profile.sousPrefectureLabel ?? ""} disabled={ro} onChange={(e) => set("sousPrefectureLabel", e.target.value)} /></Field>
+      </div>
+
+      <div className="pt-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <NotebookPen className="h-4 w-4 text-brand-600" /> Notation
+        </h3>
+        <div className="mt-2 flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">
+              Les notes d&apos;évaluation mensuelle comptent comme moyenne de cours pour le semestre
+            </p>
+            <p className="text-xs text-gray-400">
+              Pour les écoles qui ne font qu&apos;une seule évaluation par mois par matière : cette note
+              sert alors directement de moyenne de cours du mois dans le calcul de la moyenne
+              semestrielle officielle. Désactivé par défaut (la note mensuelle reste alors un diagnostic
+              séparé, voir Bulletins mensuels).
+            </p>
+          </div>
+          <Switch
+            checked={profile.monthlyCountsAsCours}
+            disabled={ro}
+            onChange={toggleMonthlyCountsAsCours}
+            ariaLabel="Note mensuelle comptée comme moyenne de cours"
+          />
+        </div>
       </div>
 
       <div className="pt-2">
