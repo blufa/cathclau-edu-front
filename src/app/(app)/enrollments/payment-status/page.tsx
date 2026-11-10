@@ -24,7 +24,7 @@ import { Reveal } from "@/components/public/reveal";
 import { DataTable, type Column } from "@/components/ui/data-table";
 import { FilePreview } from "@/components/ui/file-preview";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
-import { formatGNF, smsSegmentInfo } from "@/lib/format";
+import { smsSegmentInfo } from "@/lib/format";
 
 const STATUS_TONE: Record<PaymentReminderStatus, "red" | "amber" | "green"> = {
   OVERDUE: "red", UPCOMING: "amber", UP_TO_DATE: "green",
@@ -97,6 +97,10 @@ export default function PaymentRemindersPage() {
       render: (r) => <span className="font-medium text-gray-900">{r.studentName}</span>,
     },
     {
+      key: "studentNumber", header: "Matricule", sortable: true, accessor: (r) => r.studentNumber ?? "",
+      render: (r) => <span className="text-gray-600">{r.studentNumber ?? "—"}</span>,
+    },
+    {
       key: "className", header: "Classe", sortable: true, accessor: (r) => r.className ?? "",
       render: (r) => <span className="text-gray-600">{r.className ?? "—"}</span>,
     },
@@ -105,26 +109,11 @@ export default function PaymentRemindersPage() {
       render: (r) => <Badge tone={STATUS_TONE[r.status]}>{PAYMENT_REMINDER_STATUS_LABEL[r.status]}</Badge>,
     },
     {
-      key: "daysLate", header: "Jours", sortable: true, align: "right", accessor: (r) => r.daysLate,
-      render: (r) => {
-        if (r.status === "UP_TO_DATE") return <span className="text-gray-400">—</span>;
-        return (
-          <span className={r.daysLate > 0 ? "font-medium text-error-600" : "text-gray-600"}>
-            {r.daysLate > 0 ? `${r.daysLate} j de retard` : `${Math.abs(r.daysLate)} j restant(s)`}
-          </span>
-        );
-      },
-    },
-    {
-      key: "amountDue", header: "Montant dû", sortable: true, align: "right", accessor: (r) => Number(r.amountDue),
-      render: (r) => (Number(r.amountDue) > 0 ? formatGNF(r.amountDue) : <span className="text-gray-400">—</span>),
-    },
-    {
       key: "tranchesPaid", header: "Tranches", sortable: true, align: "right", accessor: (r) => r.tranchesPaid,
       render: (r) => (r.totalTranches > 0 ? `${r.tranchesPaid}/${r.totalTranches}` : <span className="text-gray-400">—</span>),
     },
     {
-      key: "parents", header: "Destinataires",
+      key: "parents", header: "Parents",
       render: (r) => (
         <span className="text-xs text-gray-500">
           {r.parents.length > 0 ? r.parents.map((p) => `${p.name} (${p.phone})`).join(", ") : "—"}

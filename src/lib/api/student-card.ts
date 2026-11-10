@@ -50,11 +50,28 @@ export function replaceCard(id: number): Promise<StudentCard> {
 export function declareCardLost(id: number): Promise<StudentCard> {
   return api.patch<StudentCard>(`/cartes/${id}/declarer-perdue`);
 }
+/** Suppression définitive (§retour utilisateur : "je remets le badge, il prend toujours l'ancien
+ * matricule") — sans aucune carte ACTIVE restante pour l'élève, la prochaine émission repart à neuf
+ * avec le matricule/la photo/la classe à jour, au lieu de la détection automatique de
+ * getOrRefreshStudentCard qui ne couvre pas tous les cas. */
+export function deleteStudentCard(id: number): Promise<void> {
+  return api.delete<void>(`/cartes/${id}`);
+}
 
 /** Marque ces cartes comme imprimées (après passage sur une planche de badges) — pour filtrer ensuite
  * les cartes restant à imprimer et ne jamais réimprimer par erreur un badge déjà sorti. */
 export function markCardsPrinted(ids: number[]): Promise<StudentCard[]> {
   return api.patch<StudentCard[]>("/cartes/marquer-imprimees", { ids });
+}
+
+/** Suppression multiple — même garanties que {@link deleteStudentCard}, pour la sélection depuis la
+ * liste. Jamais atomique : un id introuvable n'empêche pas de supprimer les autres. */
+export interface DeleteManyCardsResult {
+  deletedIds: number[];
+  failedIds: number[];
+}
+export function deleteManyStudentCards(ids: number[]): Promise<DeleteManyCardsResult> {
+  return api.post<DeleteManyCardsResult>("/cartes/supprimer", { ids });
 }
 
 /** Vérifie l'authenticité d'une carte scannée (payload + signature du QR code). */

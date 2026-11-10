@@ -35,6 +35,7 @@ import {
   getTheoreticalPay,
   generatePayslipFromHours,
   generatePayslipFromTimetable,
+  generatePayslipFromManualHours,
   generateCombinedPayslip,
   getTeacherCycles,
   getStaffBenefitDeductionDetail,
@@ -154,6 +155,29 @@ function PayslipsTab() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // Mode de paiement choisi EXPLICITEMENT à chaque "Marquer payée" (§retour utilisateur : "il met par
+  // défaut la méthode de paiement BANK_TRANSFER alors que j'ai payé par espèce") — plus aucune
+  // présomption silencieuse, ni côté front ni côté backend (voir PayrollService#markPaid).
+  const [payTargetIds, setPayTargetIds] = useState<number[] | null>(null);
+  const [payMethod, setPayMethod] = useState("CASH");
+  const [payLoading, setPayLoading] = useState(false);
+  function openPayModal(ids: number[]) { setPayMethod("CASH"); setPayTargetIds(ids); }
+  async function confirmPay() {
+    if (!payTargetIds || payTargetIds.length === 0) return;
+    setPayLoading(true);
+    try {
+      const results = await Promise.allSettled(payTargetIds.map((id) => payPayslip(id, payMethod)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) notifyError(new Error(`${failed} fiche(s) sur ${payTargetIds.length} ont échoué.`));
+      else notifySuccess(`${payTargetIds.length} fiche(s) payée(s).`);
+      setSelected(new Set());
+      setPayTargetIds(null);
+      q.refetch();
+    } finally {
+      setPayLoading(false);
+    }
+  }
+
   function act(p: Promise<unknown>) { p.then(() => { notifySuccess("Mis à jour"); q.refetch(); }).catch(notifyError); }
   function remove(p: Payslip) {
     confirmAction({ title: "Supprimer la fiche", message: "Confirmer ?", confirmLabel: "Supprimer", danger: true,
@@ -235,8 +259,8 @@ function PayslipsTab() {
             onClick={() => bulkAction(selectableDraft, (id) => approvePayslip(id), "validée(s)")}>
             Valider la sélection ({selectableDraft.length})
           </Button>
-          <Button size="sm" loading={bulkLoading} disabled={selectableValidated.length === 0}
-            onClick={() => bulkAction(selectableValidated, (id) => payPayslip(id), "payée(s)")}>
+          <Button size="sm" disabled={selectableValidated.length === 0}
+            onClick={() => openPayModal(selectableValidated)}>
             Payer la sélection ({selectableValidated.length})
           </Button>
           <button type="button" className="text-xs text-gray-500 hover:underline" onClick={() => setSelected(new Set())}>Tout décocher</button>
@@ -270,7 +294,7 @@ function PayslipsTab() {
                     <Button size="sm" variant="ghost" onClick={() => setLinesFor(p)}>Détails</Button>
                     <Button size="sm" variant="ghost" onClick={async () => { try { openPdfInApp(await getPayslipPdfObjectUrl(p.id), "Fiche de paie"); } catch (e) { notifyError(e); } }}>PDF</Button>
                     {p.status === "DRAFT" && <Button size="sm" variant="ghost" onClick={() => act(approvePayslip(p.id))}>Valider</Button>}
-                    {p.status === "VALIDATED" && <Button size="sm" variant="ghost" onClick={() => act(payPayslip(p.id))}>Payer</Button>}
+                    {p.status === "VALIDATED" && <Button size="sm" variant="ghost" onClick={() => openPayModal([p.id])}>Payer</Button>}
                     {p.status === "DRAFT" && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => remove(p)}>Suppr.</Button>}
                   </div>
                 </TD>
@@ -292,6 +316,26 @@ function PayslipsTab() {
 
       <Modal open={staffPayslipOpen} onClose={() => setStaffPayslipOpen(false)} title="Fiches de paie — personnel direction/administratif" className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <StaffPayslipPanel structures={structuresQuery.data ?? []} onGenerated={() => { notifySuccess("Fiche générée"); q.refetch(); }} />
+      </Modal>
+
+      <Modal open={!!payTargetIds} onClose={() => setPayTargetIds(null)} title="Marquer comme payée">
+        <div className="space-y-4">
+          <Field>
+            <Label>Mode de paiement réellement utilisé</Label>
+            <Select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+              <option value="CASH">Espèces</option>
+              <option value="BANK_TRANSFER">Virement bancaire</option>
+              <option value="MOBILE_MONEY">Mobile Money</option>
+            </Select>
+          </Field>
+          <p className="text-xs text-gray-500">
+            {payTargetIds?.length ?? 0} fiche{(payTargetIds?.length ?? 0) > 1 ? "s" : ""} marquée{(payTargetIds?.length ?? 0) > 1 ? "s" : ""} payée{(payTargetIds?.length ?? 0) > 1 ? "s" : ""} avec ce mode — imprimé sur le PDF de chaque fiche.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setPayTargetIds(null)}>Annuler</Button>
+            <Button loading={payLoading} onClick={confirmPay}>Confirmer le paiement</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
@@ -1010,6 +1054,31 @@ function TeacherCompensationPanel({ teacherId, teachers, onBack }: {
     } catch (e) { notifyError(e); } finally { setGenTimetableLoading(false); }
   }
 
+  // Saisie de secours quand le cahier de textes n'a aucune séance validée ce mois (§retour comptable :
+  // "le directeur des études n'a pas créé des séances pour les enseignants du secondaire") — le
+  // comptable doit quand même pouvoir générer la fiche pour appliquer les retenues du mois (avances,
+  // enfants de personnel), même si la paie des cours calculée automatiquement est à 0 GNF.
+  const [manualHoursOpen, setManualHoursOpen] = useState(false);
+  const [manualNormalHours, setManualNormalHours] = useState<number | string>(0);
+  const [manualExamHours, setManualExamHours] = useState<number | string>(0);
+  const [genManualLoading, setGenManualLoading] = useState(false);
+  async function genPayslipManual() {
+    setGenManualLoading(true);
+    try {
+      await ensureTeacherCompensation(tid, teacherName);
+      compQuery.refetch();
+      const normalMinutes = Math.round(Number(manualNormalHours || 0) * 60);
+      const examMinutes = Math.round(Number(manualExamHours || 0) * 60);
+      await generatePayslipFromManualHours(tid, y, m, normalMinutes, examMinutes,
+        teacherName ? `${teacherName.firstName} ${teacherName.lastName}` : null,
+        teacherName?.phone ?? null, teacherName?.bankAccount ?? null);
+      notifySuccess("Fiche de paie générée avec les heures saisies manuellement (onglet Fiches de paie)");
+      setManualHoursOpen(false);
+      setManualNormalHours(0);
+      setManualExamHours(0);
+    } catch (e) { notifyError(e); } finally { setGenManualLoading(false); }
+  }
+
   return (
     <div className="space-y-5">
       <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline">
@@ -1059,6 +1128,43 @@ function TeacherCompensationPanel({ teacherId, teachers, onBack }: {
               <>
                 <div className="mt-3 flex justify-end">
                   <Button onClick={genPayslip} loading={genLoading}>Générer la fiche de paie</Button>
+                </div>
+                <div className="mt-4 border-t border-gray-100 pt-3">
+                  {!manualHoursOpen ? (
+                    <button type="button" onClick={() => setManualHoursOpen(true)}
+                      className="text-xs font-medium text-brand-600 hover:underline">
+                      Séances non saisies ce mois ? Renseigner les heures manuellement
+                    </button>
+                  ) : (
+                    <div className="space-y-3 rounded-xl bg-amber-50/40 p-3">
+                      <p className="text-xs text-gray-600">
+                        À utiliser quand le cahier de textes n&apos;a aucune séance validée ce mois (ex.
+                        emploi du temps du secondaire pas encore créé par le directeur des études), pour
+                        quand même générer la fiche et appliquer les retenues du mois (avances sur
+                        salaire, enfants de personnel). Le tarif reste celui configuré ci-dessus — seules
+                        les heures sont saisies ici.
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Field>
+                          <Label>Heures classes normales</Label>
+                          <Input type="number" min={0} step={0.25} value={manualNormalHours}
+                            onChange={(e) => setManualNormalHours(e.target.value)} />
+                        </Field>
+                        <Field>
+                          <Label>Heures classes d&apos;examen</Label>
+                          <Input type="number" min={0} step={0.25} value={manualExamHours}
+                            onChange={(e) => setManualExamHours(e.target.value)} />
+                        </Field>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setManualHoursOpen(false)}>Annuler</Button>
+                        <Button size="sm" onClick={genPayslipManual} loading={genManualLoading}
+                          disabled={!Number(manualNormalHours) && !Number(manualExamHours)}>
+                          Générer avec ces heures
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}

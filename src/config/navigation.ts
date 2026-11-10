@@ -30,6 +30,7 @@ import {
   Briefcase,
   Bus,
   Receipt,
+  Trash2,
   TrendingUp,
   UserSearch,
   Users,
@@ -122,6 +123,13 @@ export const NAVIGATION: NavSection[] = [
       // §retour comptable : vérifier les élèves probablement en double dans une même classe (même
       // prénom/nom), en comparant leur facturation réelle — jamais de suppression automatique.
       { label: "Doublons élèves", href: "/duplicate-students", icon: Copy, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], module: "STUDENTS" },
+      // Réservé au SUPER_ADMIN (§retour utilisateur) : suppression de fiche élève, risque trop
+      // sensible pour le laisser au personnel d'école — pas de `permissions` ici, qui court-
+      // circuiterait la restriction pour quiconque détient "eleve:read".
+      { label: "Doublons élèves", href: "/duplicate-students", icon: Copy, roles: ["SUPER_ADMIN"], module: "STUDENTS" },
+      // Nettoyage des factures à 0 GNF créées avant le correctif §billing/fondation — même restriction
+      // SUPER_ADMIN et même raison (suppression définitive de factures, action sensible).
+      { label: "Factures fantômes", href: "/invoices-cleanup", icon: Trash2, roles: ["SUPER_ADMIN"], module: "STUDENTS" },
       {
         label: "Personnel", icon: Briefcase, module: "STAFF",
         children: [
@@ -135,7 +143,10 @@ export const NAVIGATION: NavSection[] = [
       // qui l'admin accorde classe:read voit maintenant bien cet item (avant : uniquement rôles fixes,
       // la permission seule ne suffisait pas).
       { label: "Classes", href: "/classes", icon: School, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["classe:read"], excludeRoles: ["TEACHER"], module: "ACADEMICS" },
-      { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["emploi:read"], excludeRoles: ["STUDENT"], module: "ACADEMICS" },
+      // TEACHER retiré (§retour utilisateur) : la page admin laisse parcourir l'emploi du temps de
+      // N'IMPORTE QUELLE classe/enseignant — un enseignant ne doit voir QUE le sien, déjà affiché sur
+      // son propre tableau de bord (/dashboard/enseignant).
+      { label: "Emploi du temps", href: "/timetable", icon: CalendarDays, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["emploi:read"], excludeRoles: ["STUDENT"], module: "ACADEMICS" },
       // Page dédiée aux événements du calendrier (pas de gestion d'année scolaire, contrairement à
       // « Année scolaire & calendrier ») — seul écran auquel le responsable pédagogique a accès pour
       // programmer réunions/sorties, sans les droits plus larges de gestion des années scolaires.
@@ -182,6 +193,10 @@ export const NAVIGATION: NavSection[] = [
           { label: "Factures élèves", href: "/invoices", permissions: ["facture:read"], excludeRoles: ["PARENT"], module: "BILLING" },
           { label: "Frais scolaires", href: "/invoices/fees", permissions: ["frais_scolaire:read"], module: "BILLING" },
           { label: "Règles de facturation", href: "/invoices/rules", permissions: ["regle_facturation:read"], module: "BILLING" },
+          // §retour comptable, analyse de production : surplus laissé par un transfert vers une classe
+          // moins chère, jamais perdu mais jamais visible nulle part avant cet écran (10 élèves, 100 000
+          // GNF non régularisés trouvés dans un export).
+          { label: "Surplus de transfert", href: "/class-transfer-refunds", permissions: ["facture:update"], module: "BILLING" },
         ],
       },
       {
@@ -191,6 +206,7 @@ export const NAVIGATION: NavSection[] = [
           // Vue jour par jour, tous canaux confondus, pour le contrôle mensuel du fondateur
           // (§angles morts comptables) — indépendante du fait que les frais soient réglés par tranche.
           { label: "Encaissements par jour", href: "/payments/daily", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["paiement:read"], module: "PAYMENTS" },
+          { label: "Journal du jour", href: "/payments/journal", roles: ["SCHOOL_ADMIN", "DIRECTOR", "ACCOUNTANT"], permissions: ["dashboard:admin"], module: "PAYMENTS" },
           // "Reçus" (§retour comptable, point 26 ; onglet "Transactions fournisseur" retiré ensuite)
           // est masquée du menu — jugée redondante avec Paiements/Encaissements par jour pour l'usage
           // courant — mais la page reste intacte et accessible par URL directe si besoin (même

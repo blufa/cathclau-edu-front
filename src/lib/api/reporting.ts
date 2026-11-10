@@ -240,6 +240,9 @@ export interface MonthlyFinancialSummary {
   staffPayroll: string;
   salaryAdvancesTotal: string;
   total: string;
+  /** Cumul réel des salaires marqués payés ce mois (pas une masse théorique) — s'additionne à
+   * chaque "Marquer payée" sur une fiche de paie. */
+  actualPaidSalariesTotal: string;
   advances: SalaryAdvanceDetail[];
 }
 export function getMonthlyFinancialSummary(year?: number, month?: number): Promise<MonthlyFinancialSummary> {
@@ -334,4 +337,42 @@ export interface AbandonedStudentRow {
 
 export function getAbandonedStudents(academicYearId: number): Promise<AbandonedStudentRow[]> {
   return api.get<AbandonedStudentRow[]>("/dashboard/founder/abandoned-students", { query: { academicYearId } });
+}
+
+/** Journal d'un jour précis (§retour comptable : "ce jour tu inscris tant d'élèves en classe, voici
+ * les factures encaissées, voici l'argent collecté") — élèves inscrits (avec classe), factures
+ * encaissées (détail + total), et élèves transférés de classe ce jour-là. Les transferts ne
+ * remontent que depuis le correctif qui les journalise (AuditEventListener côté backend) — un
+ * transfert antérieur n'apparaît jamais ici, aucune date fiable n'existait avant. */
+export interface JournalEnrollmentLine {
+  studentId: number;
+  studentName: string;
+  studentNumber: string | null;
+  className: string | null;
+  type: string | null;
+  status: string;
+}
+export interface JournalPaymentLine {
+  paymentId: number;
+  studentId: number;
+  studentName: string;
+  amount: string;
+  channel: string | null;
+  reference: string | null;
+}
+export interface JournalTransferLine {
+  studentId: number;
+  studentName: string;
+  oldClassName: string | null;
+  newClassName: string | null;
+}
+export interface DailyJournal {
+  date: string;
+  enrollments: JournalEnrollmentLine[];
+  payments: JournalPaymentLine[];
+  totalCollected: string;
+  transfers: JournalTransferLine[];
+}
+export function getDailyJournal(date?: string): Promise<DailyJournal> {
+  return api.get<DailyJournal>("/dashboard/journal-jour", { query: { date } });
 }

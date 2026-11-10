@@ -13,6 +13,7 @@ import type {
   FeeType,
   GenerateAllFeesInput,
   GeneratedFeeInvoices,
+  PendingClassTransferRefund,
   GenerateMonthlyResult,
   Installment,
   InstallmentInput,
@@ -111,6 +112,19 @@ export function getStaffChildDeductionStatus(studentId: number): Promise<StaffCh
  *  dues (dé)verrouillables au guichet. */
 export function setStaffChildDeductionExcluded(studentId: number, excluded: boolean): Promise<void> {
   return api.patch<void>("/billing/invoices/staff-deduction/student", undefined, { query: { studentId, excluded } });
+}
+
+/** Rattrapage ponctuel : retague "avantage personnel" toute facture encore due (inscription,
+ * réinscription, annexe, mensualité...) d'un enfant de personnel qui n'a actuellement aucune remise —
+ * pour les factures émises avant que le lien parent↔personnel soit établi. Appelé automatiquement après
+ * avoir lié une fiche Parent à un membre du personnel (voir EditParentForm) — jamais besoin d'un écran
+ * séparé pour ça. Sûr à relancer plusieurs fois (ne touche jamais une facture déjà remisée/payée). */
+export interface StaffBenefitBackfillResult {
+  invoicesUpdated: number;
+  invoiceIds: number[];
+}
+export function backfillStaffBenefitTagging(): Promise<StaffBenefitBackfillResult> {
+  return api.post<StaffBenefitBackfillResult>("/billing/invoices/staff-deduction/backfill");
 }
 
 /** Positionne directement l'étape de recouvrement. */
@@ -213,6 +227,13 @@ export function getInvoiceByReference(reference: string): Promise<Invoice> {
   return api.get<Invoice>(`/billing/invoices/reference/${encodeURIComponent(reference)}`);
 }
 
+/** Factures "fantômes" à 0 GNF créées avant le correctif §billing/fondation (frais ponctuel
+ * entièrement exonéré qui générait quand même une facture). Lecture seule — supprimer via
+ * {@link deleteInvoice} après validation par le comptable. */
+export function listDanglingExemptedInvoices(): Promise<Invoice[]> {
+  return api.get<Invoice[]>("/billing/invoices/dangling-exempted");
+}
+
 // ── Exemptions (exonérations de frais) ───────────────────────────────────────
 export function listExemptions(): Promise<Exemption[]> {
   return api.get<Exemption[]>("/billing/exemptions");
@@ -233,6 +254,11 @@ export function listClassTransferRefunds(studentId: number): Promise<ClassTransf
 }
 export function markClassTransferRefundRefunded(id: number): Promise<ClassTransferRefund> {
   return api.patch<ClassTransferRefund>(`/billing/class-transfer-refunds/${id}/rembourse`);
+}
+/** Tous les surplus en attente de remboursement (toute l'école), noms déjà résolus — écran de
+ * régularisation dédié. */
+export function listPendingClassTransferRefunds(): Promise<PendingClassTransferRefund[]> {
+  return api.get<PendingClassTransferRefund[]>("/billing/class-transfer-refunds/en-attente");
 }
 
 // ── Crédit disponible de l'élève (§4 cahier des charges, trop-perçu) ────────────────────────

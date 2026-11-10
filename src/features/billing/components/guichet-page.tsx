@@ -68,7 +68,9 @@ export default function GuichetPage() {
   );
   const invoices = invoicesQuery.data ?? [];
   const totalBilled = invoices.reduce((s, i) => s + num(i.totalAmount), 0);
-  const totalPaid = invoices.reduce((s, i) => s + num(i.paidAmount), 0);
+  // Crédit reporté (transfert de classe) exclu — déjà compté comme encaissé sur l'ancienne facture,
+  // jamais un nouvel encaissement (même correctif que le tableau de bord).
+  const totalPaid = invoices.reduce((s, i) => s + num(i.paidAmount) - num(i.creditedAmount), 0);
   const balance = invoices.reduce((s, i) => s + num(i.remainingBalance ?? num(i.totalAmount) - num(i.paidAmount)), 0);
   const unpaid = invoices.filter((i) => i.status !== "PAID" && num(i.remainingBalance ?? num(i.totalAmount) - num(i.paidAmount)) > 0);
 
