@@ -1,12 +1,15 @@
 /** Grading contracts mirrored from the backend grading module. */
 
-export type AssessmentType = "QUIZ" | "HOMEWORK" | "EXAM" | "FINAL";
+/** MONTHLY ("Évaluation mensuelle", §censeur) : contrôle de niveau en cours d'année, jamais compté
+ * dans la moyenne semestrielle/trimestrielle — alimente uniquement le bulletin mensuel séparé. */
+export type AssessmentType = "QUIZ" | "HOMEWORK" | "EXAM" | "FINAL" | "MONTHLY";
 
 export const ASSESSMENT_TYPE_LABEL: Record<AssessmentType, string> = {
   QUIZ: "Interrogation",
   HOMEWORK: "Devoir",
   EXAM: "Composition",
   FINAL: "Examen",
+  MONTHLY: "Évaluation mensuelle",
 };
 
 export interface Assessment {
@@ -48,9 +51,7 @@ export interface Grade {
 }
 
 // ── Exams ───────────────────────────────────────────────────────────────────
-/** MONTHLY ("Évaluation mensuelle", §censeur) : composition planifiée sur une Periode de type
- * MENSUEL ou BIMENSUEL — la cadence est déjà portée par la Periode choisie, pas par ce type. */
-export type ExamType = "MOCK" | "SEMESTER" | "ANNUAL" | "NATIONAL" | "MONTHLY";
+export type ExamType = "MOCK" | "SEMESTER" | "ANNUAL" | "NATIONAL";
 export type ExamStatus = "PLANNED" | "ONGOING" | "COMPLETED";
 
 export const EXAM_TYPE_LABEL: Record<ExamType, string> = {
@@ -58,7 +59,6 @@ export const EXAM_TYPE_LABEL: Record<ExamType, string> = {
   SEMESTER: "Semestriel",
   ANNUAL: "Annuel",
   NATIONAL: "National",
-  MONTHLY: "Évaluation mensuelle",
 };
 export const EXAM_STATUS_LABEL: Record<ExamStatus, string> = {
   PLANNED: "Planifié",
@@ -117,6 +117,32 @@ export interface ReportCard {
 
 export type Distinction =
   | "NONE" | "ENCOURAGEMENTS" | "COMPLIMENTS" | "TABLEAU_HONNEUR" | "FELICITATIONS" | "MISE_EN_GARDE";
+
+// ── Bulletins mensuels (§censeur) ───────────────────────────────────────────
+// Diagnostic de niveau en cours d'année, totalement séparé du bulletin officiel (ReportCard
+// ci-dessus) — jamais compté dans la moyenne semestrielle/annuelle.
+export interface MonthlyReportCard {
+  id: number;
+  studentId: number;
+  classId: number;
+  yearMonth: string; // "2026-11"
+  overallAverage: string | null;
+  /** Calculée automatiquement depuis le même barème que le bulletin officiel — "pour que le parent
+   * sache si l'enfant doit réviser". */
+  autoAppreciation: string | null;
+  /** Appréciation manuelle du censeur — éditable, jamais écrasée par une régénération. */
+  comment: string | null;
+  generatedAt: string | null;
+}
+
+export interface MonthlyReportCardLine {
+  id: number;
+  monthlyReportCardId: number;
+  subjectId: number;
+  subjectAverage: string | null;
+  coefficient: string | null;
+  teacherName: string | null;
+}
 
 export const DISTINCTION_LABEL: Record<Distinction, string> = {
   NONE: "—",

@@ -187,13 +187,7 @@ function PeriodForm({ initial, onSubmit, onCancel }: {
           <Select value={v.type} onChange={(e) => setValue("type", e.target.value)}>
             <option value="TRIMESTRE">Trimestre</option>
             <option value="SEMESTRE">Semestre</option>
-            <option value="MENSUEL">Mensuel</option>
-            <option value="BIMENSUEL">Bimensuel</option>
           </Select>
-          <p className="text-xs text-gray-400">
-            Mensuel/Bimensuel : bulletin de contrôle en cours d&apos;année (niveau de l&apos;élève),
-            jamais inclus dans la moyenne annuelle officielle.
-          </p>
         </Field>
         <Field>
           <Label>Ordre</Label>

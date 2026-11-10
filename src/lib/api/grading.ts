@@ -7,6 +7,8 @@ import type {
   ExamInput,
   Grade,
   GradeHistory,
+  MonthlyReportCard,
+  MonthlyReportCardLine,
   ReportCard,
   ReportCardLine,
   SimulationReport,
@@ -296,4 +298,30 @@ export function getSubjectGradeReport(classId: number, subjectId: number, period
 /** Relevé de notes d'une matière (PDF) — object URL local. `month` (1-12) limite au relevé de ce mois. */
 export function getSubjectGradeReportPdfObjectUrl(classId: number, subjectId: number, periodId: number, month?: number): Promise<string> {
   return api.blobUrl(`/grading/classes/${classId}/subjects/${subjectId}/periods/${periodId}/releve/download`, { query: { month } });
+}
+
+// ── Bulletins mensuels (§censeur) — diagnostic séparé du bulletin officiel ─────────────
+export function generateMonthlyReportCard(studentId: number, classId: number, yearMonth: string): Promise<MonthlyReportCard> {
+  return api.post<MonthlyReportCard>("/grading/monthly-report-cards/generate", { studentId, classId, yearMonth });
+}
+
+export function generateMonthlyReportCardsBulk(classId: number, yearMonth: string): Promise<MonthlyReportCard[]> {
+  return api.post<MonthlyReportCard[]>("/grading/monthly-report-cards/generate-bulk", { classId, yearMonth });
+}
+
+export function listMonthlyReportCards(classId: number, yearMonth: string): Promise<MonthlyReportCard[]> {
+  return api.get<MonthlyReportCard[]>("/grading/monthly-report-cards", { query: { classId, yearMonth } });
+}
+
+export function getMonthlyReportCardLines(id: number): Promise<MonthlyReportCardLine[]> {
+  return api.get<MonthlyReportCardLine[]>(`/grading/monthly-report-cards/${id}/lines`);
+}
+
+/** Appréciation manuelle du censeur — éditable, jamais écrasée par une régénération. */
+export function setMonthlyReportCardComment(id: number, comment: string): Promise<MonthlyReportCard> {
+  return api.patch<MonthlyReportCard>(`/grading/monthly-report-cards/${id}/comment`, { comment });
+}
+
+export function getMonthlyReportCardPdfObjectUrl(id: number): Promise<string> {
+  return api.blobUrl(`/grading/monthly-report-cards/${id}/pdf/download`);
 }

@@ -60,15 +60,11 @@ export interface MatiereModele {
   coefficient: string;
 }
 
-/** MENSUEL/BIMENSUEL (§censeur) : périodes additionnelles pour un bulletin de contrôle mensuel —
- * créées librement en plus des trimestres/semestres, jamais incluses dans la moyenne annuelle. */
-export type TypePeriode = "TRIMESTRE" | "SEMESTRE" | "MENSUEL" | "BIMENSUEL";
+export type TypePeriode = "TRIMESTRE" | "SEMESTRE";
 
 export const TYPE_PERIODE_LABEL: Record<TypePeriode, string> = {
   TRIMESTRE: "Trimestre",
   SEMESTRE: "Semestre",
-  MENSUEL: "Mensuel",
-  BIMENSUEL: "Bimensuel",
 };
 
 export interface Periode {
