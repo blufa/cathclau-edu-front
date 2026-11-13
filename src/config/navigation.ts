@@ -4,12 +4,14 @@ import {
   BookOpen,
   Building2,
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   ClipboardList,
   Copy,
   CreditCard,
   IdCard,
+  FileBarChart,
   FileText,
   GraduationCap,
   History,
@@ -120,8 +122,9 @@ export const NAVIGATION: NavSection[] = [
       { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT", "TEACHER"], module: "STUDENTS" },
       { label: "Parents", href: "/parents", icon: Users, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["parent:manage"], excludeRoles: ["PARENT"], module: "STUDENTS" },
       { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
-      // §retour comptable : vérifier les élèves probablement en double dans une même classe (même
-      // prénom/nom), en comparant leur facturation réelle — jamais de suppression automatique.
+      // §retour comptable : vérifier les élèves probablement en double (même prénom/nom élève et même
+      // nom de famille d'un parent), en comparant leur facturation réelle — jamais de suppression
+      // automatique.
       // Réservé au SUPER_ADMIN (§retour utilisateur) : suppression de fiche élève, risque trop
       // sensible pour le laisser au personnel d'école — pas de `permissions` ici, qui court-
       // circuiterait la restriction pour quiconque détient "eleve:read".
@@ -160,14 +163,18 @@ export const NAVIGATION: NavSection[] = [
     items: [
       { label: "Présences", href: "/attendance", icon: CalendarCheck, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["presence:read"], excludeRoles: ["PARENT", "STUDENT"], module: "ATTENDANCE" },
       { label: "Cahier de textes", href: "/lessons", icon: NotebookPen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["cahier:manage"] },
-      {
-        label: "Notes & bulletins", icon: BookOpen,
-        children: [
-          { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
-          { label: "Bulletins", href: "/grading/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-          { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-        ],
-      },
+      // §retour utilisateur : "Evaluation normale, composition normale, bulletin normal comme menu
+      // séparé" — liens de menu autonomes, pas un groupe à `children` (qui ne s'affiche jamais comme
+      // sous-menu dépliable dans la sidebar : un groupe pointe vers un seul lien plat, voir
+      // sidebar.tsx). Mêmes gates qu'avant leur promotion depuis le groupe "Notes & bulletins".
+      { label: "Évaluations & notes", href: "/grading", icon: BookOpen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
+      { label: "Compositions", href: "/grading/compositions", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
+      { label: "Bulletins", href: "/grading/report-cards", icon: FileText, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
+      { label: "Conseil de classe", href: "/grading/validation", icon: Award, roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
+      // §censeur : diagnostic de niveau en cours d'année, jamais mélangé aux évaluations/bulletins
+      // officiels — même raison de lien autonome que ci-dessus.
+      { label: "Évaluations mensuelles", href: "/grading/monthly", icon: CalendarClock, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
+      { label: "Bulletins mensuels", href: "/grading/monthly-report-cards", icon: FileBarChart, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
       {
         label: "Vie scolaire", icon: ShieldAlert,

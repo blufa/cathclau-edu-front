@@ -62,6 +62,11 @@ export interface MatiereModele {
 
 export type TypePeriode = "TRIMESTRE" | "SEMESTRE";
 
+export const TYPE_PERIODE_LABEL: Record<TypePeriode, string> = {
+  TRIMESTRE: "Trimestre",
+  SEMESTRE: "Semestre",
+};
+
 export interface Periode {
   id: number;
   academicYearId: number;

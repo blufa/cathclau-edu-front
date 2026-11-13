@@ -87,6 +87,10 @@ export interface SchoolProfile {
   status?: TenantStatus;
   trialEndsAt?: string | null;
   activatedAt?: string | null;
+  /** §censeur, école visitée : une seule évaluation mensuelle par matière compte comme moyenne de
+   * cours du mois dans le calcul de la moyenne semestrielle — désactivé par défaut. Réglable via
+   * {@link setMonthlyCountsAsCours}, pas via {@link updateSchoolProfile}. */
+  monthlyCountsAsCours: boolean;
 }
 
 export type SchoolProfileInput = Pick<
@@ -104,6 +108,10 @@ export function getSchoolProfile(): Promise<SchoolProfile> {
 
 export function updateSchoolProfile(input: SchoolProfileInput): Promise<SchoolProfile> {
   return api.put<SchoolProfile>("/school/profile", input);
+}
+
+export function setMonthlyCountsAsCours(enabled: boolean): Promise<SchoolProfile> {
+  return api.patch<SchoolProfile>("/school/profile/monthly-counts-as-cours", undefined, { query: { enabled } });
 }
 
 export function getSchoolBranding(slug: string): Promise<SchoolBranding> {
