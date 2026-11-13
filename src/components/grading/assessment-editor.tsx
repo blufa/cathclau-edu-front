@@ -13,6 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { submitGradesOfflineAware } from "@/lib/offline/submit-grades-offline-aware";
 import { useGradeQueueStore } from "@/lib/offline/grade-queue-store";
@@ -262,6 +263,14 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
 }
 
 export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessment: Assessment; canWrite: boolean; canEditExisting: boolean; onDone: () => void }) {
+  // Saisie anonyme (matricule, jamais le nom) réservée au rôle Enseignant — c'est lui qui note ses
+  // propres élèves, l'anonymat évite le biais de connaître l'auteur de la copie en notant. Les
+  // autres profils (direction, secrétariat...) transcrivent des notes déjà attribuées sur papier :
+  // ils doivent voir le nom pour ne pas se tromper d'élève (§retour utilisateur : "pour les autres
+  // profils on doit voir le nom de l'élève pour la saisie des notes").
+  const { user } = useAuth();
+  const anonymous = hasRole(user, "TEACHER");
+
   // Feuille de notes du module grading (élève + note existante en un seul appel) — pas
   // /academics/classes/{id}/students, qui ne liste que les inscriptions VALIDÉES et faisait
   // disparaître toute la classe dès qu'un élève avait une inscription encore PENDING (retour
@@ -293,9 +302,9 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   async function save() {
     setSaving(true);
     try {
-      // Matricule, jamais le nom (§saisie anonyme) — même le message d'erreur ne doit pas
-      // réintroduire la correspondance nom/copie.
-      const withRaw = rows.map((s) => ({ studentId: s.studentId, studentNumber: s.studentNumber, raw: valueOf(s.studentId) }));
+      // En mode anonyme (enseignant), le message d'erreur reste sur le matricule — jamais le nom,
+      // pour ne pas réintroduire la correspondance nom/copie que l'anonymat vise à éviter.
+      const withRaw = rows.map((s) => ({ studentId: s.studentId, studentNumber: s.studentNumber, fullName: s.fullName, raw: valueOf(s.studentId) }));
       // Notes hors barème (0–max) : jamais un échec silencieux (§retour utilisateur) — le reste de la
       // classe s'enregistre normalement, mais l'enseignant doit savoir laquelle a été ignorée et
       // pourquoi, sinon la note disparaît sans explication.
@@ -311,7 +320,9 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
         notifySuccess("Notes enregistrées hors-ligne — seront synchronisées à la reconnexion");
       }
       if (skipped.length > 0) {
-        notifyError(`Note hors barème (0–${max}) ignorée pour le(s) matricule(s) : ${skipped.map((e) => e.studentNumber ?? `#${e.studentId}`).join(", ")}.`);
+        const label = anonymous ? "matricule(s)" : "élève(s)";
+        const names = skipped.map((e) => (anonymous ? e.studentNumber : e.fullName) ?? `#${e.studentId}`).join(", ");
+        notifyError(`Note hors barème (0–${max}) ignorée pour le(s) ${label} : ${names}.`);
       }
     } catch (err) { notifyError(err); } finally { setSaving(false); }
   }
@@ -355,7 +366,7 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
       )}
       <div className="max-h-[55vh] overflow-y-auto">
         <Table>
-          <THead><tr><TH>Matricule</TH><TH>Note / {max}</TH></tr></THead>
+          <THead><tr><TH>{anonymous ? "Matricule" : "Élève"}</TH><TH>Note / {max}</TH></tr></THead>
           <TBody>
             {rows.map((s) => {
               const v = valueOf(s.studentId);
@@ -365,10 +376,12 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
               const readOnly = locked || !canWrite || (alreadyEntered && !canEditExisting);
               return (
                 <TR key={s.studentId}>
-                  {/* Saisie anonyme (§retour utilisateur) : l'élève écrit son matricule sur sa copie, pas
-                      son nom — jamais affiché ici, même en repli, pour ne pas réintroduire la
-                      correspondance nom/copie que l'anonymat vise justement à éviter. */}
-                  <TD className="font-medium text-gray-900">{s.studentNumber ?? "—"}</TD>
+                  {/* Saisie anonyme (enseignant uniquement, §retour utilisateur) : l'élève écrit son
+                      matricule sur sa copie, pas son nom — jamais affiché ici pour ce rôle, même en
+                      repli, pour ne pas réintroduire la correspondance nom/copie que l'anonymat vise
+                      à éviter. Les autres profils voient le nom (ils transcrivent des notes déjà
+                      attribuées, pas de biais à éviter). */}
+                  <TD className="font-medium text-gray-900">{anonymous ? (s.studentNumber ?? "—") : s.fullName}</TD>
                   <TD>
                     <input type="number" min={0} max={max} disabled={readOnly} value={v}
                       onChange={(e) => setValues((p) => ({ ...p, [s.studentId]: e.target.value }))}
