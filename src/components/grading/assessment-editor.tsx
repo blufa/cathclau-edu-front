@@ -281,6 +281,17 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   const max = Number(assessment.maxScore);
 
   const rows = useMemo(() => sheetQuery.data ?? [], [sheetQuery.data]);
+  // Recherche d'élève (§retour utilisateur : "pouvoir rechercher l'élève et trouver sa note dans
+  // cette matière") — filtre d'affichage seulement, jamais les données envoyées à save() (toujours
+  // basé sur `rows` en entier, pour ne jamais perdre une note saisie puis masquée par la recherche).
+  // En mode anonyme (enseignant), la recherche ne porte QUE sur le matricule — chercher par nom
+  // permettrait de retrouver la copie d'un élève précis, contournant l'anonymat voulu.
+  const [search, setSearch] = useState("");
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => (r.studentNumber ?? "").toLowerCase().includes(q) || (!anonymous && r.fullName.toLowerCase().includes(q)));
+  }, [rows, search, anonymous]);
   const existing = useMemo(() => new Map(rows.map((r) => [r.studentId, r])), [rows]);
   const locked = rows.some((r) => r.validated);
   // Sauvegarde hors-ligne pas encore synchronisée pour CETTE évaluation (voir sync-engine.ts) — sert de
@@ -364,6 +375,11 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
       {!locked && !canEditExisting && (
         <p className="rounded-xl bg-gray-50 px-4 py-2 text-xs text-gray-500">Vous pouvez saisir les notes manquantes. Une note déjà saisie n&apos;est modifiable que par la direction.</p>
       )}
+      <Field>
+        <Label>Rechercher {anonymous ? "(matricule)" : "un élève (nom ou matricule)"}</Label>
+        <Input value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder={anonymous ? "Matricule…" : "Nom ou matricule…"} />
+      </Field>
       <div className="max-h-[55vh] overflow-y-auto">
         <Table>
           <THead>
@@ -376,7 +392,10 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
             </tr>
           </THead>
           <TBody>
-            {rows.map((s) => {
+            {filteredRows.length === 0 && (
+              <TR><TD colSpan={anonymous ? 2 : 3} className="py-6 text-center text-gray-400">Aucun élève trouvé.</TD></TR>
+            )}
+            {filteredRows.map((s) => {
               const v = valueOf(s.studentId);
               const bad = invalid(v);
               // A grade already entered for this student is read-only unless the user may edit existing grades.
