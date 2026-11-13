@@ -64,6 +64,9 @@ export interface PaymentReminderCandidate {
   tranchesPaid: number;
   totalTranches: number;
   parents: PaymentReminderParentContact[];
+  /** Mois des tranches déjà payées, triés chronologiquement (ex. ["octobre", "novembre"]) — §retour
+   * comptable : "il faut mettre ces mois", pas seulement le compte tranchesPaid. */
+  paidMonths: string[];
 }
 
 export type ScheduledBroadcastStatus = "PENDING" | "SENT" | "CANCELLED" | "FAILED";

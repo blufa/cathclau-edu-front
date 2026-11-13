@@ -100,8 +100,12 @@ export default function PaymentRemindersPage() {
       render: (r) => <span className="text-gray-600">{r.className ?? "—"}</span>,
     },
     {
-      key: "tranchesPaid", header: "Mois payés", sortable: true, align: "right", accessor: (r) => r.tranchesPaid,
-      render: (r) => r.tranchesPaid,
+      // Trié par nombre de mois payés (le plus parlant), affiché en liste des mois eux-mêmes — §retour
+      // comptable : "il faut mettre ces mois", pas seulement le compte.
+      key: "tranchesPaid", header: "Mois payés", sortable: true, accessor: (r) => r.tranchesPaid,
+      render: (r) => r.paidMonths.length > 0
+        ? r.paidMonths.map((m) => m.charAt(0).toUpperCase() + m.slice(1)).join(", ")
+        : "—",
     },
     {
       key: "parents", header: "Parent",
