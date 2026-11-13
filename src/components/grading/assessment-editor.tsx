@@ -263,13 +263,14 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
 }
 
 export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessment: Assessment; canWrite: boolean; canEditExisting: boolean; onDone: () => void }) {
-  // Saisie anonyme (matricule, jamais le nom) réservée au rôle Enseignant — c'est lui qui note ses
-  // propres élèves, l'anonymat évite le biais de connaître l'auteur de la copie en notant. Les
-  // autres profils (direction, secrétariat...) transcrivent des notes déjà attribuées sur papier :
-  // ils doivent voir le nom pour ne pas se tromper d'élève (§retour utilisateur : "pour les autres
-  // profils on doit voir le nom de l'élève pour la saisie des notes").
+  // Saisie anonyme (matricule, jamais le nom) réservée au rôle Enseignant ET seulement pour les
+  // évaluations mensuelles (§censeur) et les compositions (type EXAM) — c'est là que l'anonymat a
+  // un sens (éviter le biais de connaître l'auteur de la copie en notant une épreuve surveillée).
+  // Sur les évaluations normales (QUIZ/HOMEWORK), l'enseignant voit matricule ET nom comme les
+  // autres profils (§retour censeur : "seulement garder l'anonymat pour les évaluations mensuelles
+  // et compositions, mais pour l'évaluation normale afficher le matricule et le nom").
   const { user } = useAuth();
-  const anonymous = hasRole(user, "TEACHER");
+  const anonymous = hasRole(user, "TEACHER") && (assessment.type === "MONTHLY" || assessment.type === "EXAM");
 
   // Feuille de notes du module grading (élève + note existante en un seul appel) — pas
   // /academics/classes/{id}/students, qui ne liste que les inscriptions VALIDÉES et faisait
