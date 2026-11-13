@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api/errors";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Field } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import type { EffectiveScheduleSlot, JourSemaine, MoveScheduleForWeekInput, Salle } from "@/lib/types/academics";
 import type { Teacher } from "@/lib/types/staff";
 
@@ -64,6 +65,13 @@ export function MoveScheduleForWeekForm({ slot, weekStartDate, rooms, teachers, 
   });
   // eslint-disable-next-line react-hooks/incompatible-library -- react-hook-form manages its own memoization
   const v = watch();
+  const teacherOptions: SearchableOption[] = useMemo(() => [
+    { value: "", trigger: "— Non assigné —", label: "— Non assigné —", searchText: "non assigné" },
+    ...teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+  ], [teachers]);
 
   async function handleFormSubmit(values: MoveFormValues) {
     setError(null);
@@ -139,10 +147,7 @@ export function MoveScheduleForWeekForm({ slot, weekStartDate, rooms, teachers, 
         </Field>
         <Field>
           <Label>Enseignant</Label>
-          <Select value={v.teacherId} onChange={(e) => setValue("teacherId", e.target.value)}>
-            <option value="">— Non assigné —</option>
-            {teachers.map((t) => (<option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>))}
-          </Select>
+          <SearchableSelect value={v.teacherId} options={teacherOptions} onChange={(val) => setValue("teacherId", val)} triggerClassName="w-full justify-between px-3" />
         </Field>
       </div>
       <Field>

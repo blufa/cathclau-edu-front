@@ -7,7 +7,7 @@ import {
   getTeacherCodesForSubject,
   updateSchedule,
 } from "@/lib/api/academics";
-import { Select } from "@/components/ui/select";
+import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import type { ClasseMatiere, CreateScheduleInput, EmploiDuTemps, JourSemaine, Matiere } from "@/lib/types/academics";
@@ -256,6 +256,13 @@ function GridCell({
   const [selectValue, setSelectValue] = useState(existing ? `${existing.subjectId}:${existing.teacherId}` : "");
   const [start, setStart] = useState(existing?.startTime.slice(0, 5) ?? slot.start);
   const [end, setEnd] = useState(existing?.endTime.slice(0, 5) ?? slot.end);
+  // §retour utilisateur : menu déroulant de sélection prof/matière remplacé par le SelectSearch
+  // standard (recherchable) — une classe avec beaucoup de matières/codes profs rend vite le menu
+  // natif long à parcourir.
+  const selectOptions: SearchableOption[] = useMemo(() => [
+    { value: "", trigger: "— Vide —", label: "— Vide —", searchText: "vide" },
+    ...options.map((o) => ({ value: o.value, trigger: o.label, label: o.label, searchText: o.label })),
+  ], [options]);
 
   async function save(nextSelect: string, nextStart: string, nextEnd: string) {
     if (nextSelect && nextEnd <= nextStart) {
@@ -308,10 +315,14 @@ function GridCell({
 
   return (
     <div className={cn("space-y-1", saving && "opacity-50")}>
-      <Select className="text-xs" value={selectValue} disabled={saving} onChange={(e) => onSelectChange(e.target.value)}>
-        <option value="">— Vide —</option>
-        {options.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
-      </Select>
+      <SearchableSelect
+        value={selectValue}
+        options={selectOptions}
+        disabled={saving}
+        onChange={onSelectChange}
+        triggerClassName="w-full justify-between px-2 text-xs"
+        panelClassName="w-72"
+      />
       {selectValue && (
         <div className="flex items-center gap-1">
           <input

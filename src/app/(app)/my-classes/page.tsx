@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ClipboardPen, GraduationCap, Users } from "lucide-react";
+import { CalendarClock, ClipboardPen, GraduationCap, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/auth-provider";
 import { hasRole } from "@/lib/auth/permissions";
@@ -101,6 +101,11 @@ export default function MyClassesPage() {
                     <span className="flex items-center gap-1 text-xs text-slate-500"><Users className="h-3.5 w-3.5" /> {b.students.length}</span>
                     <Button component={Link} href={`/grading?class=${b.id}`} size="sm" variant="outline" leftSection={<ClipboardPen className="h-4 w-4" />}>
                       Saisir les notes
+                    </Button>
+                    {/* §retour utilisateur : "les prof doit les voir sur leur portail pour saisir
+                        les notes" — même accès direct que les évaluations normales ci-dessus. */}
+                    <Button component={Link} href={`/grading/monthly?class=${b.id}`} size="sm" variant="outline" leftSection={<CalendarClock className="h-4 w-4" />}>
+                      Évaluations mensuelles
                     </Button>
                   </div>
                 </div>
