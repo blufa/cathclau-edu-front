@@ -100,12 +100,19 @@ export default function DashboardPage() {
   // Sortie de caisse réelle pour la paie du mois sélectionné = salaires RÉELLEMENT payés + avances
   // accordées (une avance EST une sortie de caisse immédiate, retour comptable) — jamais une masse
   // salariale théorique calculée. Partagé par les deux cartes ci-dessous : "Cumul payé pour la paie"
-  // l'affiche telle quelle, "Encaissé net" la soustrait de l'encaissé — les deux bougent donc
-  // immédiatement dès qu'une avance est accordée ou qu'une fiche est marquée payée.
+  // l'affiche telle quelle, "Encaissé net" la soustrait de l'encaissé du MÊME mois — les deux bougent
+  // donc immédiatement dès qu'une avance est accordée ou qu'une fiche est marquée payée.
   const actualPaidSalaries = financialSummary
     ? num(financialSummary.actualPaidSalariesTotal) + num(financialSummary.salaryAdvancesTotal)
     : null;
-  const netCollected = actualPaidSalaries != null ? totalPaid - actualPaidSalaries : null;
+  // §retour comptable, "surplus" de 2,4M GNF inexpliqué : `totalPaid` ci-dessus est un cumul TOUTES
+  // périodes confondues (toutes les factures du tenant), pas celui du mois choisi dans le filtre —
+  // le soustraire d'une sortie de caisse d'UN SEUL mois comparait deux périodes différentes et
+  // l'écart ne faisait que grossir chaque mois sans rapport avec une vraie anomalie de caisse.
+  // `collectedTotal` (backend) porte le même mois que `actualPaidSalaries`.
+  const netCollected = financialSummary && actualPaidSalaries != null
+    ? num(financialSummary.collectedTotal) - actualPaidSalaries
+    : null;
   const quotaNearLimit = plan?.studentLimit != null && consumed >= plan.studentLimit * 0.9;
   // École qui a déjà des données réelles → on affiche le tableau financier ; sinon (école neuve) on
   // laisse le guide « Premiers pas » être le centre de la page, sans widgets vides qui l'encombrent.

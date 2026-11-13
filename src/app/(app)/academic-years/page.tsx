@@ -18,14 +18,15 @@ import {
   setCurrentAcademicYear,
   updatePeriod,
 } from "@/lib/api/academics";
-import type {
-  AnneeScolaire,
-  CreateAcademicYearInput,
-  CreatePeriodInput,
-  Periode,
-  StatutAnneeScolaire,
-  TypePeriode,
-  SchoolCycle,
+import {
+  TYPE_PERIODE_LABEL,
+  type AnneeScolaire,
+  type CreateAcademicYearInput,
+  type CreatePeriodInput,
+  type Periode,
+  type StatutAnneeScolaire,
+  type TypePeriode,
+  type SchoolCycle,
 } from "@/lib/types/academics";
 import { createEvent, deleteEvent, listEvents } from "@/lib/api/calendar";
 import {
@@ -414,7 +415,7 @@ function PeriodsSection({ year, canWrite }: { year: AnneeScolaire; canWrite: boo
                 <TR key={p.id}>
                   <TD>{p.sortOrder}</TD>
                   <TD className="font-medium">{p.label}</TD>
-                  <TD>{p.type === "SEMESTRE" ? "Semestre" : "Trimestre"}</TD>
+                  <TD>{TYPE_PERIODE_LABEL[p.type]}</TD>
                   <TD>
                     <Badge tone={p.closed ? "amber" : "green"}>{p.closed ? "Clôturée" : "Ouverte"}</Badge>
                   </TD>

@@ -15,7 +15,6 @@ import {
   type PaymentReminderStatus,
 } from "@/lib/types/communication";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Field, Label, Textarea } from "@/components/ui/input";
@@ -25,10 +24,6 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { FilePreview } from "@/components/ui/file-preview";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { smsSegmentInfo } from "@/lib/format";
-
-const STATUS_TONE: Record<PaymentReminderStatus, "red" | "amber" | "green"> = {
-  OVERDUE: "red", UPCOMING: "amber", UP_TO_DATE: "green",
-};
 
 const ALL_CLASSES = "ALL";
 
@@ -105,18 +100,14 @@ export default function PaymentRemindersPage() {
       render: (r) => <span className="text-gray-600">{r.className ?? "—"}</span>,
     },
     {
-      key: "status", header: "Statut", sortable: true, accessor: (r) => r.status,
-      render: (r) => <Badge tone={STATUS_TONE[r.status]}>{PAYMENT_REMINDER_STATUS_LABEL[r.status]}</Badge>,
+      key: "tranchesPaid", header: "Mois payés", sortable: true, align: "right", accessor: (r) => r.tranchesPaid,
+      render: (r) => r.tranchesPaid,
     },
     {
-      key: "tranchesPaid", header: "Tranches", sortable: true, align: "right", accessor: (r) => r.tranchesPaid,
-      render: (r) => (r.totalTranches > 0 ? `${r.tranchesPaid}/${r.totalTranches}` : <span className="text-gray-400">—</span>),
-    },
-    {
-      key: "parents", header: "Parents",
+      key: "parents", header: "Parent",
       render: (r) => (
         <span className="text-xs text-gray-500">
-          {r.parents.length > 0 ? r.parents.map((p) => `${p.name} (${p.phone})`).join(", ") : "—"}
+          {r.parents.length > 0 ? r.parents.map((p) => p.name).join(", ") : "—"}
         </span>
       ),
     },

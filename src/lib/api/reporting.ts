@@ -243,6 +243,12 @@ export interface MonthlyFinancialSummary {
   /** Cumul réel des salaires marqués payés ce mois (pas une masse théorique) — s'additionne à
    * chaque "Marquer payée" sur une fiche de paie. */
   actualPaidSalariesTotal: string;
+  /** Encaissé RÉEL (paiements réussis) du MÊME mois demandé — §retour comptable, "surplus"
+   * inexpliqué sur le tableau de bord : "Encaissé net" comparait jusqu'ici ce cumul de salaires d'UN
+   * SEUL mois à un encaissé CUMULÉ depuis le début de l'année scolaire (deux périodes différentes).
+   * Toujours utiliser ce champ-ci (jamais le total des factures toutes périodes confondues) pour
+   * calculer "Encaissé net (après paie)". */
+  collectedTotal: string;
   advances: SalaryAdvanceDetail[];
 }
 export function getMonthlyFinancialSummary(year?: number, month?: number): Promise<MonthlyFinancialSummary> {
