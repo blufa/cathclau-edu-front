@@ -52,21 +52,16 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <Reveal y={12}>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Paramètres</h1>
-        <p className="text-sm text-gray-500">Informations, apparence et identité visuelle de votre établissement</p>
       </Reveal>
 
-      <div className="max-w-2xl rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Building2 className="h-4 w-4 text-brand-600" /> Informations de l&apos;établissement
         </h2>
-        <p className="mb-4 text-xs text-gray-400">
-          Ces informations (adresse, agrément, autorisation d&apos;ouverture, directeur) figurent sur tous
-          les documents officiels : reçus, factures, bulletins.
-        </p>
         <SchoolInfoForm canEdit={canEditInfo} />
       </div>
 
-      <div className="max-w-2xl rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Palette className="h-4 w-4 text-brand-600" /> Apparence
         </h2>
@@ -190,20 +185,11 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <PhoneInput label="Second téléphone (optionnel)" value={profile.phone2 ?? ""} disabled={ro}
           error={phoneErrors.phone2} onChange={(v) => { set("phone2", v); setPhoneErrors((e) => ({ ...e, phone2: null })); }} />
       </div>
-      <p className="-mt-2 text-xs text-gray-400">
-        Imprimés sur les badges et reçus — mettez les numéros de l&apos;école, pas le numéro personnel
-        du directeur (voir &quot;Numéro du fondateur&quot; ci-dessous pour les alertes qui lui sont réservées).
-      </p>
       <Field><Label>Email</Label><Input value={profile.email ?? ""} disabled={ro} onChange={(e) => set("email", e.target.value)} /></Field>
       <Field><Label>Site web</Label><Input value={profile.website ?? ""} disabled={ro} onChange={(e) => set("website", e.target.value)} /></Field>
       <Field><Label>Directeur</Label><Input value={profile.director ?? ""} disabled={ro} onChange={(e) => set("director", e.target.value)} /></Field>
       <Field>
         <Label>Numéro du fondateur (alertes)</Label>
-        <p className="text-xs text-gray-400">
-          Les alertes automatiques (écart de caisse, exonération suspecte, retard/absence enseignant…)
-          sont envoyées sur ce numéro. Tant qu&apos;il n&apos;est pas renseigné, elles continuent
-          d&apos;être envoyées à tous les comptes administrateur de l&apos;école.
-        </p>
         <PhoneInput value={profile.founderPhone ?? ""} disabled={ro}
           error={phoneErrors.founderPhone} onChange={(v) => { set("founderPhone", v); setPhoneErrors((e) => ({ ...e, founderPhone: null })); }} />
       </Field>
@@ -214,21 +200,16 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Devise de l&apos;établissement</Label>
-          <p className="text-xs text-gray-400">Phrase courte et formelle, imprimée au verso des cartes/badges.</p>
           <Input placeholder="Ex. Excellence, Rigueur, Discipline" value={profile.motto ?? ""} disabled={ro} onChange={(e) => set("motto", e.target.value)} />
         </Field>
         <Field>
           <Label>Slogan</Label>
-          <p className="text-xs text-gray-400">Accroche de l&apos;école, imprimée au verso des cartes/badges.</p>
           <Input placeholder="Ex. Le savoir pour tous" value={profile.slogan ?? ""} disabled={ro} onChange={(e) => set("slogan", e.target.value)} />
         </Field>
       </div>
 
       <Field>
         <Label>Rattachement administratif</Label>
-        <p className="text-xs text-gray-400">
-          Affiché en en-tête des documents pédagogiques officiels (bulletins, fiches de note...).
-        </p>
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field><Label>Inspection régionale (IRE)</Label><Input placeholder="Ex. KINDIA" value={profile.ire ?? ""} disabled={ro} onChange={(e) => set("ire", e.target.value)} /></Field>
@@ -243,13 +224,7 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <div className="mt-2 flex items-center justify-between gap-4 rounded-xl border border-gray-200 p-3">
           <div>
             <p className="text-sm font-medium text-gray-700">
-              Les notes d&apos;évaluation mensuelle comptent comme moyenne de cours pour le semestre
-            </p>
-            <p className="text-xs text-gray-400">
-              Pour les écoles qui ne font qu&apos;une seule évaluation par mois par matière : cette note
-              sert alors directement de moyenne de cours du mois dans le calcul de la moyenne
-              semestrielle officielle. Désactivé par défaut (la note mensuelle reste alors un diagnostic
-              séparé, voir Bulletins mensuels).
+              Les notes d&apos;évaluation mensuelle comptent comme moyenne de cours
             </p>
           </div>
           <Switch
@@ -265,14 +240,7 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Hash className="h-4 w-4 text-brand-600" /> Format des matricules
         </h3>
-        <p className="mb-3 mt-1 text-xs text-gray-400">
-          Choisissez comment sont générés les matricules des élèves et enseignants. Utilisez{" "}
-          <code className="rounded bg-gray-100 px-1">{"{PREFIXE}"}</code> (sigle de l&apos;école),{" "}
-          <code className="rounded bg-gray-100 px-1">{"{ANNEE}"}</code> (année en cours) et{" "}
-          <code className="rounded bg-gray-100 px-1">{"{NUM}"}</code> (numéro), dans l&apos;ordre que
-          vous voulez. Laissez vide pour garder le format par défaut.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field>
             <Label>Format du matricule</Label>
             <Input
@@ -304,11 +272,7 @@ function SchoolInfoForm({ canEdit }: { canEdit: boolean }) {
         <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Wallet className="h-4 w-4 text-brand-600" /> Encaissements — reversement
         </h3>
-        <p className="mb-3 mt-1 text-xs text-gray-400">
-          Les paiements des parents sont encaissés par la plateforme, puis reversés à votre école sur
-          ce compte Mobile Money. Renseignez le numéro marchand qui doit recevoir vos fonds.
-        </p>
-        <div className="space-y-4">
+        <div className="mt-3 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field>
               <Label>Numéro marchand</Label>
