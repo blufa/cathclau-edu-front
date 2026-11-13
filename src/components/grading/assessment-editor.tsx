@@ -366,7 +366,15 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
       )}
       <div className="max-h-[55vh] overflow-y-auto">
         <Table>
-          <THead><tr><TH>{anonymous ? "Matricule" : "Élève"}</TH><TH>Note / {max}</TH></tr></THead>
+          <THead>
+            <tr>
+              <TH>Matricule</TH>
+              {/* Colonne nom masquée seulement en saisie anonyme (enseignant) — §retour utilisateur :
+                  les autres profils veulent le matricule ET le nom, pas l'un à la place de l'autre. */}
+              {!anonymous && <TH>Élève</TH>}
+              <TH>Note / {max}</TH>
+            </tr>
+          </THead>
           <TBody>
             {rows.map((s) => {
               const v = valueOf(s.studentId);
@@ -377,11 +385,12 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
               return (
                 <TR key={s.studentId}>
                   {/* Saisie anonyme (enseignant uniquement, §retour utilisateur) : l'élève écrit son
-                      matricule sur sa copie, pas son nom — jamais affiché ici pour ce rôle, même en
-                      repli, pour ne pas réintroduire la correspondance nom/copie que l'anonymat vise
-                      à éviter. Les autres profils voient le nom (ils transcrivent des notes déjà
-                      attribuées, pas de biais à éviter). */}
-                  <TD className="font-medium text-gray-900">{anonymous ? (s.studentNumber ?? "—") : s.fullName}</TD>
+                      matricule sur sa copie, pas son nom — la colonne Élève n'existe même pas pour ce
+                      rôle, pour ne jamais réintroduire la correspondance nom/copie que l'anonymat vise
+                      à éviter. Les autres profils voient matricule ET nom (ils transcrivent des notes
+                      déjà attribuées, pas de biais à éviter). */}
+                  <TD className="font-medium text-gray-900">{s.studentNumber ?? "—"}</TD>
+                  {!anonymous && <TD className="text-gray-700">{s.fullName}</TD>}
                   <TD>
                     <input type="number" min={0} max={max} disabled={readOnly} value={v}
                       onChange={(e) => setValues((p) => ({ ...p, [s.studentId]: e.target.value }))}
