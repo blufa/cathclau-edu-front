@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { NAVIGATION, type NavItem } from "@/config/navigation";
+import { NAVIGATION, flattenNav, type NavItem } from "@/config/navigation";
 import { useAuth } from "@/providers/auth-provider";
 import { isNavItemAllowed } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
@@ -18,7 +18,19 @@ export function useNavGating() {
   const { user } = useAuth();
   const pathname = usePathname();
 
-  const isActive = (href?: string) => !!href && (pathname === href || pathname.startsWith(`${href}/`));
+  // Lien actif = le href le PLUS SPÉCIFIQUE (le plus long) qui préfixe l'URL courante, parmi TOUS les
+  // liens de la navigation (même principe que route-tabs.tsx) — pas un simple "startsWith" par item
+  // isolé, qui ferait rester "Évaluations & notes" (/grading) sur-ligné en même temps qu'une page sœur
+  // comme /grading/monthly ou /grading/report-cards, puisque ces URLs partagent le même préfixe sans
+  // être des pages enfants les unes des autres (§retour utilisateur : "l'autre menu est toujours
+  // sélectionné").
+  const bestHref = flattenNav(NAVIGATION.flatMap((section) => section.items)).reduce<string | null>((best, { href }) => {
+    const matches = pathname === href || pathname.startsWith(`${href}/`);
+    if (!matches) return best;
+    return best === null || href.length > best.length ? href : best;
+  }, null);
+
+  const isActive = (href?: string) => !!href && href === bestHref;
   const isItemActive = (item: NavItem): boolean =>
     isActive(item.href) || (item.children?.some((c) => isActive(c.href)) ?? false);
 
