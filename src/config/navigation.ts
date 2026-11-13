@@ -4,12 +4,14 @@ import {
   BookOpen,
   Building2,
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   ClipboardList,
   Copy,
   CreditCard,
   IdCard,
+  FileBarChart,
   FileText,
   GraduationCap,
   History,
@@ -167,12 +169,15 @@ export const NAVIGATION: NavSection[] = [
           { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
           { label: "Bulletins", href: "/grading/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
           { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-          // §censeur : diagnostic de niveau en cours d'année, jamais mélangé aux évaluations/bulletins
-          // officiels — deux entrées de menu séparées, pas des onglets de plus sur /grading.
-          { label: "Évaluations mensuelles", href: "/grading/monthly", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
-          { label: "Bulletins mensuels", href: "/grading/monthly-report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
         ],
       },
+      // §censeur : diagnostic de niveau en cours d'année, jamais mélangé aux évaluations/bulletins
+      // officiels — liens de menu autonomes (PAS des enfants d'un groupe, qui ne s'affichent jamais
+      // comme sous-menu dépliable dans la sidebar : un groupe pointe vers un seul lien plat, voir
+      // sidebar.tsx. Des enfants ici seraient restés invisibles, atteignables seulement via les
+      // onglets codés à part dans grading/layout.tsx — jamais mis à jour, d'où le bug signalé).
+      { label: "Évaluations mensuelles", href: "/grading/monthly", icon: CalendarClock, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
+      { label: "Bulletins mensuels", href: "/grading/monthly-report-cards", icon: FileBarChart, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
       {
         label: "Vie scolaire", icon: ShieldAlert,
