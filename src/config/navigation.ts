@@ -120,9 +120,9 @@ export const NAVIGATION: NavSection[] = [
       { label: "Élèves", href: "/students", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["eleve:read"], excludeRoles: ["PARENT", "TEACHER"], module: "STUDENTS" },
       { label: "Parents", href: "/parents", icon: Users, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["parent:manage"], excludeRoles: ["PARENT"], module: "STUDENTS" },
       { label: "Cartes scolaires (badges)", href: "/student-cards", icon: IdCard, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY"], permissions: ["carte:manage"], module: "STUDENT_CARDS" },
-      // §retour comptable : vérifier les élèves probablement en double dans une même classe (même
-      // prénom/nom), en comparant leur facturation réelle — jamais de suppression automatique.
-      { label: "Doublons élèves", href: "/duplicate-students", icon: Copy, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "ACCOUNTANT"], permissions: ["eleve:read"], module: "STUDENTS" },
+      // §retour comptable : vérifier les élèves probablement en double (même prénom/nom élève et même
+      // nom de famille d'un parent), en comparant leur facturation réelle — jamais de suppression
+      // automatique.
       // Réservé au SUPER_ADMIN (§retour utilisateur) : suppression de fiche élève, risque trop
       // sensible pour le laisser au personnel d'école — pas de `permissions` ici, qui court-
       // circuiterait la restriction pour quiconque détient "eleve:read".
