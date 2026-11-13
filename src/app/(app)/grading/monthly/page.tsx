@@ -9,6 +9,7 @@
  */
 
 import { Fragment, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
@@ -60,7 +61,13 @@ export default function MonthlyEvaluationsPage() {
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],
   );
-  const [classId, setClassId] = useState<number | null>(null);
+  // Lien direct depuis l'espace enseignant : /grading/monthly?class=ID préselectionne la classe
+  // (même mécanisme que /grading, §retour utilisateur : "les prof doit les voir sur leur portail").
+  const searchParams = useSearchParams();
+  const [classId, setClassId] = useState<number | null>(() => {
+    const c = searchParams.get("class");
+    return c ? Number(c) : null;
+  });
 
   const tenantId = user?.tenantId ?? null;
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);

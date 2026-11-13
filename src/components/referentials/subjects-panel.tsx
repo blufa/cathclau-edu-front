@@ -16,6 +16,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { SUBJECT_CATALOG } from "@/lib/academics-subjects";
 import { SubjectCatalogPicker } from "@/components/referentials/subject-catalog";
+import { BulkAssignSubjectsModal } from "@/components/referentials/bulk-assign-subjects-modal";
 
 const subjectSchema = z.object({
   label: z.string().trim().min(1, "Libellé requis"),
@@ -83,6 +84,7 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
   const q = useQuery(listSubjects, []);
   const [creating, setCreating] = useState(false);
   const [assisting, setAssisting] = useState(false);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
   const [editing, setEditing] = useState<Matiere | null>(null);
   const subjects = q.data ?? [];
 
@@ -122,6 +124,7 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
       {canWrite && (
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setAssisting(true)}>Catalogue</Button>
+          <Button variant="secondary" onClick={() => setBulkAssigning(true)}>Affecter aux classes</Button>
           <Button onClick={() => setCreating(true)}>Nouvelle matière</Button>
         </div>
       )}
@@ -174,6 +177,7 @@ export function SubjectsPanel({ canWrite }: { canWrite: boolean }) {
       <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier la matière">
         {editing && <SubjectForm initial={editing} onSubmit={handleUpdate} onCancel={() => setEditing(null)} />}
       </Modal>
+      <BulkAssignSubjectsModal open={bulkAssigning} onClose={() => setBulkAssigning(false)} subjects={subjects} />
     </div>
   );
 }

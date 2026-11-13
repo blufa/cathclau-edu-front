@@ -13,6 +13,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { submitGradesOfflineAware } from "@/lib/offline/submit-grades-offline-aware";
 import { useGradeQueueStore } from "@/lib/offline/grade-queue-store";
@@ -43,6 +44,19 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
+/** Catégories figées d'évaluation pour le Français (§retour utilisateur) : "en classe c'est
+ * Français, mais à l'évaluation c'est Dictée et Questions / Rédaction" — toujours ces deux
+ * libellés-là, pour que tous les profs de français utilisent les mêmes noms d'une classe à
+ * l'autre (plutôt qu'un texte libre qui varie selon qui saisit). */
+const FRENCH_LABEL_PRESETS = ["Dictée et Questions", "Rédaction"];
+
+/** Compare un libellé de matière à "Français" en ignorant accents/casse (ex. "français",
+ * "FRANÇAIS", "francais" doivent tous matcher). */
+function isFrench(label: string | undefined): boolean {
+  if (!label) return false;
+  return label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() === "francais";
+}
+
 export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, defaultType = "QUIZ" }: {
   classId: number; yearId: number | null; initial?: Assessment; onCancel: () => void; onCreated: () => void;
   /** Type figé à la création (jamais un sélecteur visible, §retour utilisateur) — "QUIZ" sur l'onglet
@@ -64,6 +78,10 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
 
   const [subjectIds, setSubjectIds] = useState<string[]>(initial ? [String(initial.subjectId)] : []);
   const [subjectError, setSubjectError] = useState<string | null>(null);
+  // Catégories figées du Français (§retour utilisateur) : seulement quand UNE SEULE matière est
+  // choisie et que c'est Français — avec plusieurs matières sélectionnées (ex. composition
+  // commune), les présets n'ont pas de sens pour les autres matières, on garde le texte libre.
+  const isFrancaisSelected = subjectIds.length === 1 && isFrench(subjectName.get(Number(subjectIds[0])));
   // Coefficient par matière, modifiable par l'utilisateur quand plusieurs matières sont choisies
   // (§retour utilisateur : "il ne donne pas la possibilité d'ajouter le coefficient de la matière"
   // quand toutes les matières sont cochées) — initialisé à la valeur automatique (classe puis matière)
@@ -232,7 +250,17 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
       </Field>
       <Field>
         <Label>Libellé <span className="text-error-500">*</span></Label>
-        <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+        {isFrancaisSelected ? (
+          <>
+            <p className="text-xs text-gray-400">Catégories fixes du Français — toujours les mêmes, pour tous les profs.</p>
+            <Select value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label}>
+              <option value="">— Choisir —</option>
+              {FRENCH_LABEL_PRESETS.map((p) => (<option key={p} value={p}>{p}</option>))}
+            </Select>
+          </>
+        ) : (
+          <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
+        )}
         {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
       </Field>
       <Field>
@@ -262,6 +290,15 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
 }
 
 export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { assessment: Assessment; canWrite: boolean; canEditExisting: boolean; onDone: () => void }) {
+  // Saisie anonyme (matricule, jamais le nom) réservée au rôle Enseignant ET seulement pour les
+  // évaluations mensuelles (§censeur) et les compositions (type EXAM) — c'est là que l'anonymat a
+  // un sens (éviter le biais de connaître l'auteur de la copie en notant une épreuve surveillée).
+  // Sur les évaluations normales (QUIZ/HOMEWORK), l'enseignant voit matricule ET nom comme les
+  // autres profils (§retour censeur : "seulement garder l'anonymat pour les évaluations mensuelles
+  // et compositions, mais pour l'évaluation normale afficher le matricule et le nom").
+  const { user } = useAuth();
+  const anonymous = hasRole(user, "TEACHER") && (assessment.type === "MONTHLY" || assessment.type === "EXAM");
+
   // Feuille de notes du module grading (élève + note existante en un seul appel) — pas
   // /academics/classes/{id}/students, qui ne liste que les inscriptions VALIDÉES et faisait
   // disparaître toute la classe dès qu'un élève avait une inscription encore PENDING (retour
@@ -272,6 +309,17 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   const max = Number(assessment.maxScore);
 
   const rows = useMemo(() => sheetQuery.data ?? [], [sheetQuery.data]);
+  // Recherche d'élève (§retour utilisateur : "pouvoir rechercher l'élève et trouver sa note dans
+  // cette matière") — filtre d'affichage seulement, jamais les données envoyées à save() (toujours
+  // basé sur `rows` en entier, pour ne jamais perdre une note saisie puis masquée par la recherche).
+  // En mode anonyme (enseignant), la recherche ne porte QUE sur le matricule — chercher par nom
+  // permettrait de retrouver la copie d'un élève précis, contournant l'anonymat voulu.
+  const [search, setSearch] = useState("");
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => (r.studentNumber ?? "").toLowerCase().includes(q) || (!anonymous && r.fullName.toLowerCase().includes(q)));
+  }, [rows, search, anonymous]);
   const existing = useMemo(() => new Map(rows.map((r) => [r.studentId, r])), [rows]);
   const locked = rows.some((r) => r.validated);
   // Sauvegarde hors-ligne pas encore synchronisée pour CETTE évaluation (voir sync-engine.ts) — sert de
@@ -293,9 +341,9 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   async function save() {
     setSaving(true);
     try {
-      // Matricule, jamais le nom (§saisie anonyme) — même le message d'erreur ne doit pas
-      // réintroduire la correspondance nom/copie.
-      const withRaw = rows.map((s) => ({ studentId: s.studentId, studentNumber: s.studentNumber, raw: valueOf(s.studentId) }));
+      // En mode anonyme (enseignant), le message d'erreur reste sur le matricule — jamais le nom,
+      // pour ne pas réintroduire la correspondance nom/copie que l'anonymat vise à éviter.
+      const withRaw = rows.map((s) => ({ studentId: s.studentId, studentNumber: s.studentNumber, fullName: s.fullName, raw: valueOf(s.studentId) }));
       // Notes hors barème (0–max) : jamais un échec silencieux (§retour utilisateur) — le reste de la
       // classe s'enregistre normalement, mais l'enseignant doit savoir laquelle a été ignorée et
       // pourquoi, sinon la note disparaît sans explication.
@@ -311,7 +359,9 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
         notifySuccess("Notes enregistrées hors-ligne — seront synchronisées à la reconnexion");
       }
       if (skipped.length > 0) {
-        notifyError(`Note hors barème (0–${max}) ignorée pour le(s) matricule(s) : ${skipped.map((e) => e.studentNumber ?? `#${e.studentId}`).join(", ")}.`);
+        const label = anonymous ? "matricule(s)" : "élève(s)";
+        const names = skipped.map((e) => (anonymous ? e.studentNumber : e.fullName) ?? `#${e.studentId}`).join(", ");
+        notifyError(`Note hors barème (0–${max}) ignorée pour le(s) ${label} : ${names}.`);
       }
     } catch (err) { notifyError(err); } finally { setSaving(false); }
   }
@@ -353,11 +403,27 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
       {!locked && !canEditExisting && (
         <p className="rounded-xl bg-gray-50 px-4 py-2 text-xs text-gray-500">Vous pouvez saisir les notes manquantes. Une note déjà saisie n&apos;est modifiable que par la direction.</p>
       )}
+      <Field>
+        <Label>Rechercher {anonymous ? "(matricule)" : "un élève (nom ou matricule)"}</Label>
+        <Input value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder={anonymous ? "Matricule…" : "Nom ou matricule…"} />
+      </Field>
       <div className="max-h-[55vh] overflow-y-auto">
         <Table>
-          <THead><tr><TH>Matricule</TH><TH>Note / {max}</TH></tr></THead>
+          <THead>
+            <tr>
+              <TH>Matricule</TH>
+              {/* Colonne nom masquée seulement en saisie anonyme (enseignant) — §retour utilisateur :
+                  les autres profils veulent le matricule ET le nom, pas l'un à la place de l'autre. */}
+              {!anonymous && <TH>Élève</TH>}
+              <TH>Note / {max}</TH>
+            </tr>
+          </THead>
           <TBody>
-            {rows.map((s) => {
+            {filteredRows.length === 0 && (
+              <TR><TD colSpan={anonymous ? 2 : 3} className="py-6 text-center text-gray-400">Aucun élève trouvé.</TD></TR>
+            )}
+            {filteredRows.map((s) => {
               const v = valueOf(s.studentId);
               const bad = invalid(v);
               // A grade already entered for this student is read-only unless the user may edit existing grades.
@@ -365,10 +431,13 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
               const readOnly = locked || !canWrite || (alreadyEntered && !canEditExisting);
               return (
                 <TR key={s.studentId}>
-                  {/* Saisie anonyme (§retour utilisateur) : l'élève écrit son matricule sur sa copie, pas
-                      son nom — jamais affiché ici, même en repli, pour ne pas réintroduire la
-                      correspondance nom/copie que l'anonymat vise justement à éviter. */}
+                  {/* Saisie anonyme (enseignant uniquement, §retour utilisateur) : l'élève écrit son
+                      matricule sur sa copie, pas son nom — la colonne Élève n'existe même pas pour ce
+                      rôle, pour ne jamais réintroduire la correspondance nom/copie que l'anonymat vise
+                      à éviter. Les autres profils voient matricule ET nom (ils transcrivent des notes
+                      déjà attribuées, pas de biais à éviter). */}
                   <TD className="font-medium text-gray-900">{s.studentNumber ?? "—"}</TD>
+                  {!anonymous && <TD className="text-gray-700">{s.fullName}</TD>}
                   <TD>
                     <input type="number" min={0} max={max} disabled={readOnly} value={v}
                       onChange={(e) => setValues((p) => ({ ...p, [s.studentId]: e.target.value }))}

@@ -85,6 +85,13 @@ export function FixedScheduleForm({
     })
     : subjects.map((s) => ({ value: String(s.id), trigger: s.label, label: s.label, searchText: s.label }))),
   [classSubjects, subjects]);
+  const teacherOptions: SearchableOption[] = useMemo(() => [
+    { value: "", trigger: "— Non assigné —", label: "— Non assigné —", searchText: "non assigné" },
+    ...teachers.map((t) => {
+      const label = `${t.firstName} ${t.lastName}`;
+      return { value: String(t.id), trigger: label, label, searchText: label };
+    }),
+  ], [teachers]);
 
   function onSubjectChange(sid: string) {
     setSubjectId(sid);
@@ -191,10 +198,7 @@ export function FixedScheduleForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field>
           <Label>Enseignant{mode === "sequence" ? " (monitrice)" : ""}</Label>
-          <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-            <option value="">— Non assigné —</option>
-            {teachers.map((t) => (<option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>))}
-          </Select>
+          <SearchableSelect value={teacherId} options={teacherOptions} onChange={setTeacherId} triggerClassName="w-full justify-between px-3" />
         </Field>
         <Field>
           <Label>Salle</Label>
