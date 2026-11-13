@@ -163,19 +163,16 @@ export const NAVIGATION: NavSection[] = [
     items: [
       { label: "Présences", href: "/attendance", icon: CalendarCheck, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER", "SECRETARY"], permissions: ["presence:read"], excludeRoles: ["PARENT", "STUDENT"], module: "ATTENDANCE" },
       { label: "Cahier de textes", href: "/lessons", icon: NotebookPen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["cahier:manage"] },
-      {
-        label: "Notes & bulletins", icon: BookOpen,
-        children: [
-          { label: "Évaluations & notes", href: "/grading", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
-          { label: "Bulletins", href: "/grading/report-cards", roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-          { label: "Conseil de classe", href: "/grading/validation", roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
-        ],
-      },
+      // §retour utilisateur : "Evaluation normale, composition normale, bulletin normal comme menu
+      // séparé" — liens de menu autonomes, pas un groupe à `children` (qui ne s'affiche jamais comme
+      // sous-menu dépliable dans la sidebar : un groupe pointe vers un seul lien plat, voir
+      // sidebar.tsx). Mêmes gates qu'avant leur promotion depuis le groupe "Notes & bulletins".
+      { label: "Évaluations & notes", href: "/grading", icon: BookOpen, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
+      { label: "Compositions", href: "/grading/compositions", icon: GraduationCap, roles: ["SCHOOL_ADMIN", "DIRECTOR", "SECRETARY", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
+      { label: "Bulletins", href: "/grading/report-cards", icon: FileText, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
+      { label: "Conseil de classe", href: "/grading/validation", icon: Award, roles: ["SCHOOL_ADMIN", "DIRECTOR", "RESPONSABLE_PEDAGOGIQUE", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
       // §censeur : diagnostic de niveau en cours d'année, jamais mélangé aux évaluations/bulletins
-      // officiels — liens de menu autonomes (PAS des enfants d'un groupe, qui ne s'affichent jamais
-      // comme sous-menu dépliable dans la sidebar : un groupe pointe vers un seul lien plat, voir
-      // sidebar.tsx. Des enfants ici seraient restés invisibles, atteignables seulement via les
-      // onglets codés à part dans grading/layout.tsx — jamais mis à jour, d'où le bug signalé).
+      // officiels — même raison de lien autonome que ci-dessus.
       { label: "Évaluations mensuelles", href: "/grading/monthly", icon: CalendarClock, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["note:read"], excludeRoles: ["PARENT", "STUDENT"], module: "GRADING" },
       { label: "Bulletins mensuels", href: "/grading/monthly-report-cards", icon: FileBarChart, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["bulletin:read"], excludeRoles: ["PARENT", "STUDENT"], module: "REPORT_CARD" },
       { label: "Devoirs", href: "/assignments", icon: ClipboardList, roles: ["SCHOOL_ADMIN", "DIRECTOR", "TEACHER"], permissions: ["devoir:manage"] },
