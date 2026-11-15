@@ -184,7 +184,16 @@ export default function MonthlyEvaluationsPage() {
                 </TR>
                 {evals.map((a) => (
                   <TR key={a.id}>
-                    <TD className="font-medium text-gray-900">{a.label}</TD>
+                    {/* La matière apparaît toujours ici, jamais seulement dans la colonne "Matière"
+                        ci-dessous (masquée sur mobile, §retour utilisateur : "il faut mettre cette
+                        matière pour qu'on sache sur la liste que c'est pour cette matière") — le
+                        libellé libre de l'évaluation ne mentionne pas forcément la matière. */}
+                    <TD className="font-medium text-gray-900">
+                      {a.label}
+                      <p className="mt-0.5 text-xs font-normal text-gray-400 sm:hidden">
+                        {subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}
+                      </p>
+                    </TD>
                     <TD className="hidden sm:table-cell">{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
                     <TD className="hidden sm:table-cell">/ {a.maxScore}</TD>
                     <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
