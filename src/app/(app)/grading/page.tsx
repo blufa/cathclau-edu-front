@@ -191,13 +191,15 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
       (!searchSubject || String(a.subjectId) === searchSubject) && (!searchDate || a.date === searchDate)),
     [assessmentsQuery.data, searchSubject, searchDate]);
 
-  // Évaluations (interrogations/devoirs) groupées par (matière, mois) — jamais les compositions, qui
-  // ont leur propre liste ci-dessous (compositionGroups) : plus mélangées dans le même tableau/relevé
-  // (§retour utilisateur, "il doit avoir les évaluations à part, et une liste des compositions").
+  // Évaluations (interrogations/devoirs) groupées par (matière, mois) — jamais les compositions
+  // (EXAM) ni les évaluations mensuelles (MONTHLY), qui ont chacune leur propre page dédiée
+  // (compositionGroups ci-dessous, /grading/monthly) : jamais mélangées dans ce tableau (§retour
+  // utilisateur, "il doit avoir les évaluations à part" — et "Détail — Évaluation mensuelle" ne doit
+  // jamais apparaître ici, on est dans les évaluations normales).
   const groups = useMemo(() => {
     const map = new Map<string, { subjectId: number; monthKey: string; evals: Assessment[] }>();
     for (const a of filteredAssessments) {
-      if (a.type === "EXAM") continue;
+      if (a.type === "EXAM" || a.type === "MONTHLY") continue;
       const key = `${a.subjectId}|${monthKeyOf(a)}`;
       if (!map.has(key)) map.set(key, { subjectId: a.subjectId, monthKey: monthKeyOf(a), evals: [] });
       map.get(key)!.evals.push(a);
