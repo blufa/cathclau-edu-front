@@ -26,6 +26,7 @@ import { FilePreview } from "@/components/ui/file-preview";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
@@ -84,6 +85,16 @@ export default function MonthlyEvaluationsPage() {
     }
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [monthly]);
+
+  // Pagination du tableau (§retour utilisateur) — par mois, pas par ligne individuelle d'évaluation.
+  const GROUPS_PER_PAGE = 10;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE));
+  const effectivePage = Math.min(page, totalPages - 1);
+  const pagedGroups = useMemo(
+    () => groups.slice(effectivePage * GROUPS_PER_PAGE, (effectivePage + 1) * GROUPS_PER_PAGE),
+    [groups, effectivePage],
+  );
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Assessment | null>(null);
@@ -161,7 +172,7 @@ export default function MonthlyEvaluationsPage() {
             {groups.length === 0 && (
               <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune évaluation mensuelle.</TD></TR>
             )}
-            {groups.map(([monthKey, evals]) => (
+            {pagedGroups.map(([monthKey, evals]) => (
               <Fragment key={monthKey}>
                 <TR>
                   <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
@@ -192,6 +203,9 @@ export default function MonthlyEvaluationsPage() {
             ))}
           </TBody>
         </Table>
+      )}
+      {groups.length > 0 && (
+        <Pagination page={effectivePage} totalPages={totalPages} totalElements={groups.length} onPageChange={setPage} />
       )}
 
       {classId && (

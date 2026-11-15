@@ -52,6 +52,7 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { openPdfInApp } from "@/lib/open-pdf";
 import { formatDate } from "@/lib/format";
@@ -98,6 +99,15 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
     return [...map.values()].sort(
       (x, y) => (subjectName.get(x.subjectId) ?? "").localeCompare(subjectName.get(y.subjectId) ?? ""));
   }, [assessmentsQuery.data, subjectName]);
+  // Pagination du tableau (§retour utilisateur) — par groupe matière/période.
+  const GROUPS_PER_PAGE = 10;
+  const [compositionPage, setCompositionPage] = useState(0);
+  const compositionTotalPages = Math.max(1, Math.ceil(compositionGroups.length / GROUPS_PER_PAGE));
+  const effectiveCompositionPage = Math.min(compositionPage, compositionTotalPages - 1);
+  const pagedCompositionGroups = useMemo(
+    () => compositionGroups.slice(effectiveCompositionPage * GROUPS_PER_PAGE, (effectiveCompositionPage + 1) * GROUPS_PER_PAGE),
+    [compositionGroups, effectiveCompositionPage],
+  );
   const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
   const [gradeSheetUrl, setGradeSheetUrl] = useState<string | null>(null);
   const [gradeSheetLoadingId, setGradeSheetLoadingId] = useState<number | null>(null);
@@ -297,7 +307,7 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
           {compositionGroups.length === 0 && (
             <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune note de composition saisie.</TD></TR>
           )}
-          {compositionGroups.map((g) => (
+          {pagedCompositionGroups.map((g) => (
             <Fragment key={`compo|${g.subjectId}|${g.periodId}`}>
               <TR>
                 <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
@@ -338,6 +348,10 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
           ))}
         </TBody>
       </Table>
+      {compositionGroups.length > 0 && (
+        <Pagination page={effectiveCompositionPage} totalPages={compositionTotalPages}
+          totalElements={compositionGroups.length} onPageChange={setCompositionPage} />
+      )}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Planifier une composition">
         <form onSubmit={handleSubmit(submit)} className="space-y-4">

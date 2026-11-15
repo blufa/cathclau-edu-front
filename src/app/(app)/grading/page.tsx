@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
@@ -208,6 +209,17 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
     );
   }, [filteredAssessments, subjectLabel]);
 
+  // Pagination du tableau (§retour utilisateur) — par groupe matière/mois, pas par ligne individuelle
+  // d'évaluation (le groupe est l'unité naturelle de ce tableau).
+  const GROUPS_PER_PAGE = 10;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE));
+  const effectivePage = Math.min(page, totalPages - 1);
+  const pagedGroups = useMemo(
+    () => groups.slice(effectivePage * GROUPS_PER_PAGE, (effectivePage + 1) * GROUPS_PER_PAGE),
+    [groups, effectivePage],
+  );
+
   function handleDelete(a: Assessment) {
     confirmAction({
       title: "Supprimer l'évaluation", message: `Supprimer « ${a.label} » et ses notes ?`,
@@ -303,7 +315,7 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
             {groups.length === 0 && (
               <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune évaluation.</TD></TR>
             )}
-            {groups.map((g) => (
+            {pagedGroups.map((g) => (
               <Fragment key={`${g.subjectId}|${g.monthKey}`}>
                 <TR>
                   {/* Une seule cellule sur toute la largeur (colSpan surdimensionné, clampé par le
@@ -348,6 +360,9 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
             ))}
           </TBody>
         </Table>
+        {groups.length > 0 && (
+          <Pagination page={effectivePage} totalPages={totalPages} totalElements={groups.length} onPageChange={setPage} />
+        )}
         </>
       )}
 
