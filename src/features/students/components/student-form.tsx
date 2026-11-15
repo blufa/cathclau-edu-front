@@ -45,6 +45,7 @@ const schema = z
     previousClass: z.string(),
     repeating: z.boolean(),
     transferReason: z.string(),
+    admissionType: z.enum(["NOUVELLE", "TRANSFERT"]),
     medicalNotes: z.string(),
     photo: z.string(),
     createLogin: z.boolean(),
@@ -56,11 +57,21 @@ const schema = z
     if (v.createLogin && v.password.length < 6) {
       ctx.addIssue({ code: "custom", path: ["password"], message: "Mot de passe (6 caractères min.)" });
     }
+    if (v.admissionType === "TRANSFERT") {
+      if (!v.originSchool.trim()) {
+        ctx.addIssue({ code: "custom", path: ["originSchool"], message: "École précédente requise pour un transfert" });
+      }
+      if (!v.transferReason.trim()) {
+        ctx.addIssue({ code: "custom", path: ["transferReason"], message: "Motif de transfert requis pour un transfert" });
+      }
+    }
   });
 type FormValues = z.infer<typeof schema>;
 
 // Which step each validated field lives on (to jump back to the first error on submit).
-const FIELD_STEP: Record<string, number> = { firstName: 0, lastName: 0, phone: 1, password: 1 };
+const FIELD_STEP: Record<string, number> = {
+  firstName: 0, lastName: 0, phone: 1, password: 1, originSchool: 1, transferReason: 1,
+};
 // Formulaire volontairement court (2 étapes) : le personnel administratif (comptables, secrétaires)
 // n'est pas toujours à l'aise avec l'informatique, mieux vaut peu d'étapes que beaucoup de petits pas.
 const STEPS = [
@@ -110,6 +121,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
       previousClass: initial?.previousClass ?? "",
       repeating: initial?.repeating ?? false,
       transferReason: initial?.transferReason ?? "",
+      admissionType: initial?.admissionType ?? "NOUVELLE",
       medicalNotes: initial?.medicalNotes ?? "",
       photo: initial?.photo ?? "",
       createLogin: false,
@@ -160,6 +172,7 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
         previousClass: values.previousClass || null,
         repeating: values.repeating,
         transferReason: values.transferReason || null,
+        admissionType: values.admissionType,
         medicalNotes: values.medicalNotes || null,
       });
     } catch (err) {
@@ -252,15 +265,25 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
 
           <div className="space-y-4 border-t border-slate-100 pt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Scolarité</h3>
+            <Field>
+              <Label>Type d&apos;inscription</Label>
+              <Select value={v.admissionType} onChange={(e) => setValue("admissionType", e.target.value as FormValues["admissionType"])}>
+                <option value="NOUVELLE">Nouvelle inscription</option>
+                <option value="TRANSFERT">Transfert entrant (vient d&apos;une autre école)</option>
+              </Select>
+            </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field>
-                <Label>École précédente</Label>
+                <Label>
+                  École précédente {v.admissionType === "TRANSFERT" && <span className="text-error-500">*</span>}
+                </Label>
                 <Combobox
                   placeholder="Rechercher ou saisir…"
                   options={schoolOptions}
                   value={v.originSchool}
                   onChange={(val) => { setValue("originSchool", val); fetchSchools(val); }}
                 />
+                {errors.originSchool && <p className="text-xs text-error-600">{errors.originSchool.message}</p>}
               </Field>
               <Field>
                 <Label>Dernière classe fréquentée</Label>
@@ -284,8 +307,11 @@ export function StudentForm({ initial, submitLabel, onSubmit, onCancel }: Studen
                 )}
               </div>
               <Field>
-                <Label>Motif de transfert (optionnel)</Label>
+                <Label>
+                  Motif de transfert {v.admissionType === "TRANSFERT" ? <span className="text-error-500">*</span> : "(optionnel)"}
+                </Label>
                 <Textarea rows={2} value={v.transferReason} onChange={(e) => setValue("transferReason", e.target.value)} />
+                {errors.transferReason && <p className="text-xs text-error-600">{errors.transferReason.message}</p>}
               </Field>
             </div>
           </div>
