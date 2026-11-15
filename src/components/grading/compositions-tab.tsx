@@ -217,6 +217,8 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
   // grille réutilisée est exactement celle des évaluations normales (GradeGrid).
   const [pickingSubjectFor, setPickingSubjectFor] = useState<Exam | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
+  // "Détail" (§retour utilisateur) : voir la liste élèves+notes sans passer par la saisie.
+  const [detailFor, setDetailFor] = useState<Assessment | null>(null);
   const [gradedSubjectIds, setGradedSubjectIds] = useState<Set<number>>(new Set());
   const [subjectPickLoading, setSubjectPickLoading] = useState<number | null>(null);
 
@@ -324,6 +326,7 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
                   <TD className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                       <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                       {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditingAssessment(a)}>Modifier</Button>}
                       {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDeleteAssessment(a)}>Suppr.</Button>}
@@ -425,6 +428,9 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""} · ${gradingFor ? subjectName.get(gradingFor.subjectId) ?? "" : ""}`}>
         {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+      </Modal>
+      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""} · ${detailFor ? subjectName.get(detailFor.subjectId) ?? "" : ""}`}>
+        {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}
       </Modal>
       <Modal open={!!editingAssessment} onClose={() => setEditingAssessment(null)} title="Modifier l'évaluation">
         {editingAssessment && (

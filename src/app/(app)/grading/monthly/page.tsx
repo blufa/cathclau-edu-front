@@ -88,6 +88,8 @@ export default function MonthlyEvaluationsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Assessment | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
+  // "Détail" (§retour utilisateur) : voir la liste élèves+notes sans passer par la saisie.
+  const [detailFor, setDetailFor] = useState<Assessment | null>(null);
   const [gradeSheetUrl, setGradeSheetUrl] = useState<string | null>(null);
   const [gradeSheetLoadingId, setGradeSheetLoadingId] = useState<number | null>(null);
 
@@ -178,6 +180,7 @@ export default function MonthlyEvaluationsPage() {
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                         <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                         {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
                         {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
@@ -205,6 +208,9 @@ export default function MonthlyEvaluationsPage() {
           </Modal>
           <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
             {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+          </Modal>
+          <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""}`}>
+            {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}
           </Modal>
           <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} autoPrint />
         </>
