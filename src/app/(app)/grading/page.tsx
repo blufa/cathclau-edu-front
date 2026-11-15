@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Label, Field } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -182,14 +181,19 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
     () => [...new Set((assessmentsQuery.data ?? []).map((a) => a.subjectId))],
     [assessmentsQuery.data]);
 
-  // Recherche par matière et par date sur les listes Évaluations/Compositions ci-dessous (la classe
-  // est déjà le sélecteur de la page, au-dessus des onglets — pas un 3e filtre ici).
+  // Recherche par matière et par mois sur les listes Évaluations/Compositions ci-dessous (la classe
+  // est déjà le sélecteur de la page, au-dessus des onglets — pas un 3e filtre ici). Filtre par MOIS
+  // plutôt que par date exacte (§retour utilisateur : "il faut le filtrer par mois, enlève Rechercher
+  // — date") — une date précise est peu utile ici, les évaluations se regroupent déjà par mois.
   const [searchSubject, setSearchSubject] = useState<string>("");
-  const [searchDate, setSearchDate] = useState<string>("");
+  const [searchMonth, setSearchMonth] = useState<string>("");
+  const distinctMonths = useMemo(
+    () => [...new Set((assessmentsQuery.data ?? []).map((a) => monthKeyOf(a)))].sort((a, b) => b.localeCompare(a)),
+    [assessmentsQuery.data]);
   const filteredAssessments = useMemo(
     () => (assessmentsQuery.data ?? []).filter((a) =>
-      (!searchSubject || String(a.subjectId) === searchSubject) && (!searchDate || a.date === searchDate)),
-    [assessmentsQuery.data, searchSubject, searchDate]);
+      (!searchSubject || String(a.subjectId) === searchSubject) && (!searchMonth || monthKeyOf(a) === searchMonth)),
+    [assessmentsQuery.data, searchSubject, searchMonth]);
 
   // Évaluations (interrogations/devoirs) groupées par (matière, mois) — jamais les compositions
   // (EXAM) ni les évaluations mensuelles (MONTHLY), qui ont chacune leur propre page dédiée
@@ -251,11 +255,14 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
               <SearchableSelect value={searchSubject} options={subjectFilterOptions} onChange={setSearchSubject} triggerClassName="w-[180px] justify-between px-3" noResultsLabel="Aucune matière" />
             </Field>
             <Field>
-              <Label>Rechercher — date</Label>
-              <DatePicker value={searchDate} onChange={setSearchDate} clearable />
+              <Label>Rechercher — mois</Label>
+              <Select value={searchMonth} onChange={(e) => setSearchMonth(e.target.value)} className="w-[160px]">
+                <option value="">Tous les mois</option>
+                {distinctMonths.map((m) => (<option key={m} value={m}>{monthLabelOf(m)}</option>))}
+              </Select>
             </Field>
-            {(searchSubject || searchDate) && (
-              <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchDate(""); }}>Réinitialiser</Button>
+            {(searchSubject || searchMonth) && (
+              <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchMonth(""); }}>Réinitialiser</Button>
             )}
           </div>
         )}

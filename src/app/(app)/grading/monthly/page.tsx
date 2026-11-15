@@ -76,15 +76,25 @@ export default function MonthlyEvaluationsPage() {
 
   const assessmentsQuery = useCachedQuery(classId ? `assessments-class:${classId}` : null, () => listAssessmentsByClass(classId as number), [classId]);
   const monthly = useMemo(() => (assessmentsQuery.data ?? []).filter((a) => a.type === "MONTHLY"), [assessmentsQuery.data]);
+  // Filtre par mois (§retour utilisateur : "sur la liste des évaluations que ce soit mensuelle ou
+  // normale il faut le filtrer par mois") — utile pour sauter directement à un mois précis plutôt
+  // que de parcourir les pages.
+  const [searchMonth, setSearchMonth] = useState<string>("");
+  const distinctMonths = useMemo(
+    () => [...new Set(monthly.map((a) => monthKeyOf(a)))].sort((a, b) => b.localeCompare(a)),
+    [monthly]);
+  const filteredMonthly = useMemo(
+    () => (searchMonth ? monthly.filter((a) => monthKeyOf(a) === searchMonth) : monthly),
+    [monthly, searchMonth]);
   const groups = useMemo(() => {
     const map = new Map<string, Assessment[]>();
-    for (const a of monthly) {
+    for (const a of filteredMonthly) {
       const key = monthKeyOf(a);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(a);
     }
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [monthly]);
+  }, [filteredMonthly]);
 
   // Pagination du tableau (§retour utilisateur) — par mois, pas par ligne individuelle d'évaluation.
   const GROUPS_PER_PAGE = 10;
@@ -148,6 +158,15 @@ export default function MonthlyEvaluationsPage() {
             triggerClassName="w-full justify-between px-3"
           />
         </div>
+        {classId && distinctMonths.length > 0 && (
+          <div className="w-44">
+            <Label>Mois</Label>
+            <Select value={searchMonth} onChange={(e) => setSearchMonth(e.target.value)}>
+              <option value="">Tous les mois</option>
+              {distinctMonths.map((m) => (<option key={m} value={m}>{monthLabelOf(m)}</option>))}
+            </Select>
+          </div>
+        )}
         {classId && canWrite && (
           <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle évaluation mensuelle</Button>
         )}
