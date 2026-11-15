@@ -399,7 +399,11 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
           {canEditExisting && <Button size="sm" variant="outline" onClick={unlockAll}>Déverrouiller</Button>}
         </div>
       )}
-      {!locked && !canEditExisting && (
+      {/* canWrite ajouté (§retour utilisateur) : ce message explique une limite d'ÉDITION, il n'a
+          aucun sens dans la vue "Détail" (toujours canWrite=false, lecture seule forcée quel que
+          soit le rôle réel) — sans cette condition, il s'affichait même quand on vient juste
+          consulter, pas saisir. */}
+      {canWrite && !locked && !canEditExisting && (
         <p className="rounded-xl bg-gray-50 px-4 py-2 text-xs text-gray-500">Vous pouvez saisir les notes manquantes. Une note déjà saisie n&apos;est modifiable que par la direction.</p>
       )}
       <Field>
