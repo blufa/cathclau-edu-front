@@ -12,7 +12,8 @@ import {
   removeClassSubject,
   setClassHeadTeacher,
 } from "@/lib/api/academics";
-import type { ClasseMatiere } from "@/lib/types/academics";
+import type { ClasseMatiere, Grade } from "@/lib/types/academics";
+import { classCycle } from "@/lib/academics-grades";
 import { listTeachers } from "@/lib/api/staff";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
@@ -28,10 +29,14 @@ type Row = { subjectId: string; teacherId: string; coefficient: string; specialt
 const EMPTY_ROW: Row = { subjectId: "", teacherId: "", coefficient: "", specialty: false };
 
 export function ClassSubjectsSection({
-  classId, canWrite, headTeacherId, onHeadTeacherChange,
+  classId, canWrite, grade, headTeacherId, onHeadTeacherChange,
 }: {
   classId: number;
   canWrite: boolean;
+  /** Grade précis de la classe (ex. SEPTIEME, TERMINALE) — sert à ne proposer que les matières du
+   * niveau correspondant (§retour utilisateur : "les mêmes matières s'affichent à tous les
+   * niveaux"). `null` (nomenclature maison/classe historique) : aucun filtrage, tout s'affiche. */
+  grade: Grade | null;
   headTeacherId: number | null;
   onHeadTeacherChange: () => void;
 }) {
@@ -44,9 +49,18 @@ export function ClassSubjectsSection({
   const [submitting, setSubmitting] = useState(false);
   const [rows, setRows] = useState<Row[]>([EMPTY_ROW]);
 
-  const subjects = useMemo(() => subjectsQuery.data ?? [], [subjectsQuery.data]);
+  const allSubjects = useMemo(() => subjectsQuery.data ?? [], [subjectsQuery.data]);
+  // Une matière sans niveau renseigné (cycle null) reste toujours proposée (matière créée avant
+  // cette fonctionnalité, ou volontairement commune à tous les niveaux).
+  const cycle = useMemo(() => classCycle(grade), [grade]);
+  const subjects = useMemo(
+    () => (cycle == null ? allSubjects : allSubjects.filter((s) => !s.cycle || s.cycle === cycle)),
+    [allSubjects, cycle],
+  );
   const teachers = useMemo(() => teachersQuery.data ?? [], [teachersQuery.data]);
-  const subjectLabel = useMemo(() => new Map(subjects.map((s) => [s.id, s.label])), [subjects]);
+  // Le libellé d'une matière DÉJÀ affectée doit toujours se résoudre, même si elle a depuis changé
+  // de niveau ou disparu du filtre ci-dessus — toujours chercher dans allSubjects, pas subjects.
+  const subjectLabel = useMemo(() => new Map(allSubjects.map((s) => [s.id, s.label])), [allSubjects]);
   const teacherName = useMemo(
     () => new Map(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`])),
     [teachers],

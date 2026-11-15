@@ -51,6 +51,10 @@ export interface Matiere {
   label: string;
   coefficient: string;
   syllabus: string | null;
+  /** Cycle auquel appartient cette matière (nullable — matières créées avant cette fonctionnalité,
+   * ou pertinentes quel que soit le cycle) — §retour utilisateur : "les mêmes matières s'affichent
+   * à tous les niveaux", sert à filtrer l'affichage et les affectations par niveau. */
+  cycle: SchoolCycle | null;
 }
 
 /** Entrée du catalogue officiel MEPUA : matière + coefficient pour un cycle/série donné. */

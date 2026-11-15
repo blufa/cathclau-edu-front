@@ -131,3 +131,25 @@ export function gradeProgressionRank(grade: string | null | undefined): number {
   if (!grade) return -1;
   return GRADE_PROGRESSION.indexOf(grade.trim());
 }
+
+/** Cycle MEPUA d'un grade précis (code backend, ex. "SEPTIEME") — miroir exact de
+ * `Grade#mepuaCycle()` côté backend, seule source fiable pour distinguer Collège de Lycée (le champ
+ * `Niveau.cycle` ne porte plus que Maternelle/Primaire/Secondaire). Utilisé pour filtrer les
+ * matières proposées par classe (§retour utilisateur : "les mêmes matières s'affichent à tous les
+ * niveaux"). */
+export const GRADE_CYCLE: Record<string, import("@/lib/types/academics").SchoolCycle> = {
+  GARDERIE: "GARDERIE",
+  PETITE_SECTION: "MATERNELLE", MOYENNE_SECTION: "MATERNELLE", GRANDE_SECTION: "MATERNELLE",
+  CP1: "PRIMAIRE", CP2: "PRIMAIRE", CE1: "PRIMAIRE", CE2: "PRIMAIRE", CM1: "PRIMAIRE", CM2: "PRIMAIRE",
+  SIXIEME: "COLLEGE", CINQUIEME: "COLLEGE", QUATRIEME: "COLLEGE", TROISIEME: "COLLEGE",
+  SEPTIEME: "COLLEGE", HUITIEME: "COLLEGE", NEUVIEME: "COLLEGE", DIXIEME: "COLLEGE",
+  SECONDE: "LYCEE", PREMIERE: "LYCEE", ONZIEME: "LYCEE", DOUZIEME: "LYCEE", TERMINALE: "LYCEE",
+};
+
+/** Cycle MEPUA d'une classe à partir de son grade précis — `null` si la classe n'a pas de grade
+ * renseigné (nomenclature maison, classe historique) : dans ce cas, ne jamais filtrer les matières
+ * par cycle pour cette classe (dégradation gracieuse, voir `gradeHasSeries`/`resolveGradeCode`). */
+export function classCycle(grade: string | null | undefined): import("@/lib/types/academics").SchoolCycle | null {
+  if (!grade) return null;
+  return GRADE_CYCLE[grade] ?? null;
+}
