@@ -4,6 +4,18 @@ export type Gender = "MALE" | "FEMALE";
 export type EnrollmentStatus = "PENDING" | "VALIDATED" | "CANCELLED" | "ABANDONED";
 export type Relationship = "FATHER" | "MOTHER" | "GUARDIAN";
 export type EnrollmentType = "NEW" | "RE_ENROLLMENT";
+/** Nouvelle inscription ou transfert entrant depuis une autre école (§retour fondateur, suivi façon
+ * plateforme de l'État) — purement informatif, ne pilote jamais la facturation (voir EnrollmentType). */
+export type AdmissionType = "NOUVELLE" | "TRANSFERT";
+/** Raison du départ d'un élève en cours d'année (§retour fondateur) — purement informatif. */
+export type DepartureReason = "TRANSFERT" | "ABANDON" | "EXCLUSION" | "AUTRE";
+
+export const DEPARTURE_REASON_LABEL: Record<DepartureReason, string> = {
+  TRANSFERT: "Transfert vers une autre école",
+  ABANDON: "Abandon",
+  EXCLUSION: "Exclusion",
+  AUTRE: "Autre",
+};
 
 export interface Student {
   id: number;
@@ -28,6 +40,7 @@ export interface Student {
   previousClass: string | null;
   repeating: boolean | null;
   transferReason: string | null;
+  admissionType: AdmissionType;
   medicalNotes: string | null;
   createdAt: string | null;
   deletedAt: string | null;
@@ -47,6 +60,10 @@ export interface Enrollment {
   /** Ce parent règle mois par mois plutôt que par tranche groupée — les tranches multi-mois de sa
    * classe sont alors facturées en autant de factures séparées d'un mois. */
   monthlyPaymentOptIn: boolean;
+  /** Renseignés uniquement quand status === "ABANDONED" (départ en cours d'année). */
+  departureDate: string | null;
+  departureReason: DepartureReason | null;
+  destinationSchool: string | null;
 }
 
 /** Body for POST /enrollments and /enrollments/re-enrollment. */
@@ -124,6 +141,7 @@ export interface CreateStudentInput {
   previousClass?: string | null;
   repeating?: boolean | null;
   transferReason?: string | null;
+  admissionType?: AdmissionType | null;
   medicalNotes?: string | null;
   /** Créer un accès au portail élève : la connexion se fait par le matricule + ce mot de passe. */
   createLogin?: boolean;

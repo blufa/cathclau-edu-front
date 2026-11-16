@@ -9,13 +9,14 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import { searchStudents } from "@/lib/api/students";
 import {
-  abandonEnrollment,
   cancelEnrollment,
   deleteEnrollment,
   searchEnrollments,
   updatePlatformAccess,
 } from "@/lib/api/enrollments";
+import { DeclareDepartureModal } from "./declare-departure-modal";
 import type { Enrollment, EnrollmentStatus } from "@/lib/types/student";
+import { DEPARTURE_REASON_LABEL } from "@/lib/types/student";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -54,6 +55,7 @@ export default function EnrollmentsPage() {
   // Open the enrollment fee invoice for collection; full payment validates the enrollment server-side.
   const [collectFor, setCollectFor] = useState<{ studentId: number; classId: number } | null>(null);
   const [editing, setEditing] = useState<Enrollment | null>(null);
+  const [departing, setDeparting] = useState<Enrollment | null>(null);
   // Multi-student family checkout: pick several students, pay all their unpaid invoices at once.
   const [picked, setPicked] = useState<number[]>([]);
   const [familyOpen, setFamilyOpen] = useState(false);
@@ -120,23 +122,6 @@ export default function EnrollmentsPage() {
         try {
           await cancelEnrollment(id);
           notifySuccess("Inscription annulée");
-          enrollmentsQuery.refetch();
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
-  }
-  function handleAbandon(id: number) {
-    confirmAction({
-      title: "Marquer comme abandon",
-      message: "L'élève arrête les cours en cours d'année ? Il restera visible pour cette classe "
-        + "(facturation, recouvrement) mais disparaîtra des listes d'appel et de saisie de notes.",
-      confirmLabel: "Marquer comme abandon",
-      onConfirm: async () => {
-        try {
-          await abandonEnrollment(id);
-          notifySuccess("Inscription marquée comme abandon");
           enrollmentsQuery.refetch();
         } catch (err) {
           notifyError(err);
@@ -330,6 +315,12 @@ export default function EnrollmentsPage() {
                 </TD>
                 <TD>
                   <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                  {e.status === "ABANDONED" && e.departureDate && (
+                    <p className="mt-1 text-xs text-gray-400">
+                      {e.departureReason ? DEPARTURE_REASON_LABEL[e.departureReason] : "—"} le {e.departureDate}
+                      {e.destinationSchool ? ` — vers ${e.destinationSchool}` : ""}
+                    </p>
+                  )}
                 </TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-2">
@@ -344,8 +335,8 @@ export default function EnrollmentsPage() {
                       </Button>
                     )}
                     {canDecide && e.status === "VALIDATED" && (
-                      <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => handleAbandon(e.id)}>
-                        Abandon
+                      <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => setDeparting(e)}>
+                        Départ
                       </Button>
                     )}
                     {canDecide && e.status !== "CANCELLED" && e.status !== "ABANDONED" && (
@@ -386,6 +377,15 @@ export default function EnrollmentsPage() {
           onCollected={() => { enrollmentsQuery.refetch(); setPicked([]); }}
         />
       )}
+
+      <DeclareDepartureModal
+        enrollment={departing}
+        onClose={() => setDeparting(null)}
+        onDeclared={() => {
+          setDeparting(null);
+          enrollmentsQuery.refetch();
+        }}
+      />
 
       {editing && (
         <EnrollModal

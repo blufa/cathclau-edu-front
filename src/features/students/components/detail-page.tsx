@@ -11,12 +11,13 @@ import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
 import {
-  abandonEnrollment,
   cancelEnrollment,
   deleteEnrollment,
   transferEnrollmentClass,
   updatePlatformAccess,
 } from "@/lib/api/enrollments";
+import { DeclareDepartureModal } from "@/features/enrollments/components/declare-departure-modal";
+import { DEPARTURE_REASON_LABEL } from "@/lib/types/student";
 import type { CreateStudentInput, Enrollment, EnrollmentStatus } from "@/lib/types/student";
 import type { Classe } from "@/lib/types/academics";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ export default function StudentDetailPage() {
   const [editingStudent, setEditingStudent] = useState(false);
   const [collecting, setCollecting] = useState<{ classId: number | null } | null>(null);
   const [transferring, setTransferring] = useState<Enrollment | null>(null);
+  const [departing, setDeparting] = useState<Enrollment | null>(null);
 
   const yearIds = useMemo(
     () => [...new Set((data?.enrollments ?? []).map((e) => e.academicYearId).filter((id): id is number => id != null))],
@@ -134,23 +136,6 @@ export default function StudentDetailPage() {
         try {
           await cancelEnrollment(enrollmentId);
           notifySuccess("Inscription annulée");
-          refetch();
-        } catch (err) {
-          notifyError(err);
-        }
-      },
-    });
-  }
-  function handleAbandon(enrollmentId: number) {
-    confirmAction({
-      title: "Marquer comme abandon",
-      message: "L'élève arrête les cours en cours d'année ? Il restera visible pour cette classe "
-        + "(facturation, recouvrement) mais disparaîtra des listes d'appel et de saisie de notes.",
-      confirmLabel: "Marquer comme abandon",
-      onConfirm: async () => {
-        try {
-          await abandonEnrollment(enrollmentId);
-          notifySuccess("Inscription marquée comme abandon");
           refetch();
         } catch (err) {
           notifyError(err);
@@ -409,6 +394,12 @@ export default function StudentDetailPage() {
                     <TD className="hidden sm:table-cell">{e.type === "RE_ENROLLMENT" ? "Réinscription" : "Inscription"}</TD>
                     <TD>
                       <Badge tone={STATUS_TONE[e.status]}>{STATUS_LABEL[e.status]}</Badge>
+                      {e.status === "ABANDONED" && e.departureDate && (
+                        <p className="mt-1 text-xs text-gray-400">
+                          {e.departureReason ? DEPARTURE_REASON_LABEL[e.departureReason] : "—"} le {e.departureDate}
+                          {e.destinationSchool ? ` — vers ${e.destinationSchool}` : ""}
+                        </p>
+                      )}
                     </TD>
                     <TD className="hidden sm:table-cell">
                       {canEnroll && e.status !== "CANCELLED" ? (
@@ -445,8 +436,8 @@ export default function StudentDetailPage() {
                           </Button>
                         )}
                         {canDecide && e.status === "VALIDATED" && (
-                          <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => handleAbandon(e.id)}>
-                            Marquer comme abandon
+                          <Button size="sm" variant="ghost" className="text-amber-700" onClick={() => setDeparting(e)}>
+                            Déclarer un départ
                           </Button>
                         )}
                         {canDecide && e.status !== "CANCELLED" && e.status !== "ABANDONED" && (
@@ -561,6 +552,15 @@ export default function StudentDetailPage() {
           }}
         />
       )}
+
+      <DeclareDepartureModal
+        enrollment={departing}
+        onClose={() => setDeparting(null)}
+        onDeclared={() => {
+          setDeparting(null);
+          refetch();
+        }}
+      />
     </div>
   );
 }
