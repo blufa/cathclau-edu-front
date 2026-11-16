@@ -52,6 +52,7 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { openPdfInApp } from "@/lib/open-pdf";
 import { formatDate } from "@/lib/format";
@@ -98,6 +99,15 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
     return [...map.values()].sort(
       (x, y) => (subjectName.get(x.subjectId) ?? "").localeCompare(subjectName.get(y.subjectId) ?? ""));
   }, [assessmentsQuery.data, subjectName]);
+  // Pagination du tableau (§retour utilisateur) — par groupe matière/période.
+  const GROUPS_PER_PAGE = 10;
+  const [compositionPage, setCompositionPage] = useState(0);
+  const compositionTotalPages = Math.max(1, Math.ceil(compositionGroups.length / GROUPS_PER_PAGE));
+  const effectiveCompositionPage = Math.min(compositionPage, compositionTotalPages - 1);
+  const pagedCompositionGroups = useMemo(
+    () => compositionGroups.slice(effectiveCompositionPage * GROUPS_PER_PAGE, (effectiveCompositionPage + 1) * GROUPS_PER_PAGE),
+    [compositionGroups, effectiveCompositionPage],
+  );
   const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
   const [gradeSheetUrl, setGradeSheetUrl] = useState<string | null>(null);
   const [gradeSheetLoadingId, setGradeSheetLoadingId] = useState<number | null>(null);
@@ -217,6 +227,8 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
   // grille réutilisée est exactement celle des évaluations normales (GradeGrid).
   const [pickingSubjectFor, setPickingSubjectFor] = useState<Exam | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
+  // "Détail" (§retour utilisateur) : voir la liste élèves+notes sans passer par la saisie.
+  const [detailFor, setDetailFor] = useState<Assessment | null>(null);
   const [gradedSubjectIds, setGradedSubjectIds] = useState<Set<number>>(new Set());
   const [subjectPickLoading, setSubjectPickLoading] = useState<number | null>(null);
 
@@ -295,7 +307,7 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
           {compositionGroups.length === 0 && (
             <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune note de composition saisie.</TD></TR>
           )}
-          {compositionGroups.map((g) => (
+          {pagedCompositionGroups.map((g) => (
             <Fragment key={`compo|${g.subjectId}|${g.periodId}`}>
               <TR>
                 <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
@@ -324,6 +336,7 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
                   <TD className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                       <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                       {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditingAssessment(a)}>Modifier</Button>}
                       {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDeleteAssessment(a)}>Suppr.</Button>}
@@ -335,6 +348,10 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
           ))}
         </TBody>
       </Table>
+      {compositionGroups.length > 0 && (
+        <Pagination page={effectiveCompositionPage} totalPages={compositionTotalPages}
+          totalElements={compositionGroups.length} onPageChange={setCompositionPage} />
+      )}
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Planifier une composition">
         <form onSubmit={handleSubmit(submit)} className="space-y-4">
@@ -425,6 +442,9 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""} · ${gradingFor ? subjectName.get(gradingFor.subjectId) ?? "" : ""}`}>
         {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+      </Modal>
+      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""} · ${detailFor ? subjectName.get(detailFor.subjectId) ?? "" : ""}`}>
+        {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}
       </Modal>
       <Modal open={!!editingAssessment} onClose={() => setEditingAssessment(null)} title="Modifier l'évaluation">
         {editingAssessment && (

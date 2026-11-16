@@ -19,12 +19,12 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
 import { Label, Field } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
 import { FilePreview } from "@/components/ui/file-preview";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
@@ -120,6 +120,10 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Assessment | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
+  // "Détail" (§retour utilisateur) : voir la liste élèves+notes sans passer par la saisie — même
+  // grille que "Saisir les notes" (recherche déjà intégrée), mais toujours en lecture seule, quel
+  // que soit le rôle, pour ne jamais ouvrir par erreur en mode édition juste pour consulter.
+  const [detailFor, setDetailFor] = useState<Assessment | null>(null);
   // Relevé de notes par matière (PDF backend, moyenne calculée selon le paramétrage de l'établissement).
   const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const [releveOpen, setReleveOpen] = useState(false);
@@ -177,22 +181,29 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
     () => [...new Set((assessmentsQuery.data ?? []).map((a) => a.subjectId))],
     [assessmentsQuery.data]);
 
-  // Recherche par matière et par date sur les listes Évaluations/Compositions ci-dessous (la classe
-  // est déjà le sélecteur de la page, au-dessus des onglets — pas un 3e filtre ici).
+  // Recherche par matière et par mois sur les listes Évaluations/Compositions ci-dessous (la classe
+  // est déjà le sélecteur de la page, au-dessus des onglets — pas un 3e filtre ici). Filtre par MOIS
+  // plutôt que par date exacte (§retour utilisateur : "il faut le filtrer par mois, enlève Rechercher
+  // — date") — une date précise est peu utile ici, les évaluations se regroupent déjà par mois.
   const [searchSubject, setSearchSubject] = useState<string>("");
-  const [searchDate, setSearchDate] = useState<string>("");
+  const [searchMonth, setSearchMonth] = useState<string>("");
+  const distinctMonths = useMemo(
+    () => [...new Set((assessmentsQuery.data ?? []).map((a) => monthKeyOf(a)))].sort((a, b) => b.localeCompare(a)),
+    [assessmentsQuery.data]);
   const filteredAssessments = useMemo(
     () => (assessmentsQuery.data ?? []).filter((a) =>
-      (!searchSubject || String(a.subjectId) === searchSubject) && (!searchDate || a.date === searchDate)),
-    [assessmentsQuery.data, searchSubject, searchDate]);
+      (!searchSubject || String(a.subjectId) === searchSubject) && (!searchMonth || monthKeyOf(a) === searchMonth)),
+    [assessmentsQuery.data, searchSubject, searchMonth]);
 
-  // Évaluations (interrogations/devoirs) groupées par (matière, mois) — jamais les compositions, qui
-  // ont leur propre liste ci-dessous (compositionGroups) : plus mélangées dans le même tableau/relevé
-  // (§retour utilisateur, "il doit avoir les évaluations à part, et une liste des compositions").
+  // Évaluations (interrogations/devoirs) groupées par (matière, mois) — jamais les compositions
+  // (EXAM) ni les évaluations mensuelles (MONTHLY), qui ont chacune leur propre page dédiée
+  // (compositionGroups ci-dessous, /grading/monthly) : jamais mélangées dans ce tableau (§retour
+  // utilisateur, "il doit avoir les évaluations à part" — et "Détail — Évaluation mensuelle" ne doit
+  // jamais apparaître ici, on est dans les évaluations normales).
   const groups = useMemo(() => {
     const map = new Map<string, { subjectId: number; monthKey: string; evals: Assessment[] }>();
     for (const a of filteredAssessments) {
-      if (a.type === "EXAM") continue;
+      if (a.type === "EXAM" || a.type === "MONTHLY") continue;
       const key = `${a.subjectId}|${monthKeyOf(a)}`;
       if (!map.has(key)) map.set(key, { subjectId: a.subjectId, monthKey: monthKeyOf(a), evals: [] });
       map.get(key)!.evals.push(a);
@@ -203,6 +214,17 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
         y.monthKey.localeCompare(x.monthKey),
     );
   }, [filteredAssessments, subjectLabel]);
+
+  // Pagination du tableau (§retour utilisateur) — par groupe matière/mois, pas par ligne individuelle
+  // d'évaluation (le groupe est l'unité naturelle de ce tableau).
+  const GROUPS_PER_PAGE = 10;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE));
+  const effectivePage = Math.min(page, totalPages - 1);
+  const pagedGroups = useMemo(
+    () => groups.slice(effectivePage * GROUPS_PER_PAGE, (effectivePage + 1) * GROUPS_PER_PAGE),
+    [groups, effectivePage],
+  );
 
   function handleDelete(a: Assessment) {
     confirmAction({
@@ -233,11 +255,14 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
               <SearchableSelect value={searchSubject} options={subjectFilterOptions} onChange={setSearchSubject} triggerClassName="w-[180px] justify-between px-3" noResultsLabel="Aucune matière" />
             </Field>
             <Field>
-              <Label>Rechercher — date</Label>
-              <DatePicker value={searchDate} onChange={setSearchDate} clearable />
+              <Label>Rechercher — mois</Label>
+              <Select value={searchMonth} onChange={(e) => setSearchMonth(e.target.value)} className="w-[160px]">
+                <option value="">Tous les mois</option>
+                {distinctMonths.map((m) => (<option key={m} value={m}>{monthLabelOf(m)}</option>))}
+              </Select>
             </Field>
-            {(searchSubject || searchDate) && (
-              <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchDate(""); }}>Réinitialiser</Button>
+            {(searchSubject || searchMonth) && (
+              <Button variant="ghost" onClick={() => { setSearchSubject(""); setSearchMonth(""); }}>Réinitialiser</Button>
             )}
           </div>
         )}
@@ -299,7 +324,7 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
             {groups.length === 0 && (
               <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune évaluation.</TD></TR>
             )}
-            {groups.map((g) => (
+            {pagedGroups.map((g) => (
               <Fragment key={`${g.subjectId}|${g.monthKey}`}>
                 <TR>
                   {/* Une seule cellule sur toute la largeur (colSpan surdimensionné, clampé par le
@@ -332,6 +357,7 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                         <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                         {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
                         {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
@@ -343,6 +369,9 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
             ))}
           </TBody>
         </Table>
+        {groups.length > 0 && (
+          <Pagination page={effectivePage} totalPages={totalPages} totalElements={groups.length} onPageChange={setPage} />
+        )}
         </>
       )}
 
@@ -358,6 +387,9 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
         {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+      </Modal>
+      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""}`}>
+        {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}
       </Modal>
       <FilePreview url={releveUrl} title="Relevé de notes" open={releveUrl != null} onClose={() => setReleveUrl(null)} autoPrint />
       <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} autoPrint />
