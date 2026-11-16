@@ -197,7 +197,7 @@ export default function ClassDetailPage() {
         </Card>
       </div>
 
-      <ClassSubjectsSection classId={id} canWrite={canWrite}
+      <ClassSubjectsSection classId={id} canWrite={canWrite} grade={classe.grade}
         headTeacherId={classe.headTeacherId ?? null}
         onHeadTeacherChange={() => classQuery.refetch()} />
 

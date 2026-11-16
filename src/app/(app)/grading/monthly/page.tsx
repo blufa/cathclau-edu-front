@@ -26,6 +26,7 @@ import { FilePreview } from "@/components/ui/file-preview";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Reveal } from "@/components/public/reveal";
 import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
@@ -75,19 +76,41 @@ export default function MonthlyEvaluationsPage() {
 
   const assessmentsQuery = useCachedQuery(classId ? `assessments-class:${classId}` : null, () => listAssessmentsByClass(classId as number), [classId]);
   const monthly = useMemo(() => (assessmentsQuery.data ?? []).filter((a) => a.type === "MONTHLY"), [assessmentsQuery.data]);
+  // Filtre par mois (§retour utilisateur : "sur la liste des évaluations que ce soit mensuelle ou
+  // normale il faut le filtrer par mois") — utile pour sauter directement à un mois précis plutôt
+  // que de parcourir les pages.
+  const [searchMonth, setSearchMonth] = useState<string>("");
+  const distinctMonths = useMemo(
+    () => [...new Set(monthly.map((a) => monthKeyOf(a)))].sort((a, b) => b.localeCompare(a)),
+    [monthly]);
+  const filteredMonthly = useMemo(
+    () => (searchMonth ? monthly.filter((a) => monthKeyOf(a) === searchMonth) : monthly),
+    [monthly, searchMonth]);
   const groups = useMemo(() => {
     const map = new Map<string, Assessment[]>();
-    for (const a of monthly) {
+    for (const a of filteredMonthly) {
       const key = monthKeyOf(a);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(a);
     }
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [monthly]);
+  }, [filteredMonthly]);
+
+  // Pagination du tableau (§retour utilisateur) — par mois, pas par ligne individuelle d'évaluation.
+  const GROUPS_PER_PAGE = 10;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE));
+  const effectivePage = Math.min(page, totalPages - 1);
+  const pagedGroups = useMemo(
+    () => groups.slice(effectivePage * GROUPS_PER_PAGE, (effectivePage + 1) * GROUPS_PER_PAGE),
+    [groups, effectivePage],
+  );
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Assessment | null>(null);
   const [gradingFor, setGradingFor] = useState<Assessment | null>(null);
+  // "Détail" (§retour utilisateur) : voir la liste élèves+notes sans passer par la saisie.
+  const [detailFor, setDetailFor] = useState<Assessment | null>(null);
   const [gradeSheetUrl, setGradeSheetUrl] = useState<string | null>(null);
   const [gradeSheetLoadingId, setGradeSheetLoadingId] = useState<number | null>(null);
 
@@ -135,6 +158,15 @@ export default function MonthlyEvaluationsPage() {
             triggerClassName="w-full justify-between px-3"
           />
         </div>
+        {classId && distinctMonths.length > 0 && (
+          <div className="w-44">
+            <Label>Mois</Label>
+            <Select value={searchMonth} onChange={(e) => setSearchMonth(e.target.value)}>
+              <option value="">Tous les mois</option>
+              {distinctMonths.map((m) => (<option key={m} value={m}>{monthLabelOf(m)}</option>))}
+            </Select>
+          </div>
+        )}
         {classId && canWrite && (
           <Button onClick={() => setCreating(true)} leftSection={<Plus className="h-4 w-4" />}>Nouvelle évaluation mensuelle</Button>
         )}
@@ -159,7 +191,7 @@ export default function MonthlyEvaluationsPage() {
             {groups.length === 0 && (
               <TR><TD colSpan={100} className="py-10 text-center text-gray-400">Aucune évaluation mensuelle.</TD></TR>
             )}
-            {groups.map(([monthKey, evals]) => (
+            {pagedGroups.map(([monthKey, evals]) => (
               <Fragment key={monthKey}>
                 <TR>
                   <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
@@ -171,13 +203,23 @@ export default function MonthlyEvaluationsPage() {
                 </TR>
                 {evals.map((a) => (
                   <TR key={a.id}>
-                    <TD className="font-medium text-gray-900">{a.label}</TD>
+                    {/* La matière apparaît toujours ici, jamais seulement dans la colonne "Matière"
+                        ci-dessous (masquée sur mobile, §retour utilisateur : "il faut mettre cette
+                        matière pour qu'on sache sur la liste que c'est pour cette matière") — le
+                        libellé libre de l'évaluation ne mentionne pas forcément la matière. */}
+                    <TD className="font-medium text-gray-900">
+                      {a.label}
+                      <p className="mt-0.5 text-xs font-normal text-gray-400 sm:hidden">
+                        {subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}
+                      </p>
+                    </TD>
                     <TD className="hidden sm:table-cell">{subjectLabel.get(a.subjectId) ?? `#${a.subjectId}`}</TD>
                     <TD className="hidden sm:table-cell">/ {a.maxScore}</TD>
                     <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                         <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                         {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
                         {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
@@ -189,6 +231,9 @@ export default function MonthlyEvaluationsPage() {
             ))}
           </TBody>
         </Table>
+      )}
+      {groups.length > 0 && (
+        <Pagination page={effectivePage} totalPages={totalPages} totalElements={groups.length} onPageChange={setPage} />
       )}
 
       {classId && (
@@ -205,6 +250,9 @@ export default function MonthlyEvaluationsPage() {
           </Modal>
           <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
             {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+          </Modal>
+          <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""}`}>
+            {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}
           </Modal>
           <FilePreview url={gradeSheetUrl} title="Fiche de notes" open={gradeSheetUrl != null} onClose={() => setGradeSheetUrl(null)} autoPrint />
         </>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { assignClassSubject, listAcademicYears, listClasses } from "@/lib/api/academics";
 import type { Matiere } from "@/lib/types/academics";
+import { classCycle } from "@/lib/academics-grades";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label, Field } from "@/components/ui/input";
@@ -36,18 +37,37 @@ export function BulkAssignSubjectsModal({ open, onClose, subjects }: {
   const [classIds, setClassIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Ne propose que les matières du (des) niveau(x) des classes cochées (§retour utilisateur : "les
+  // mêmes matières s'affichent à tous les niveaux") — une matière sans niveau renseigné (cycle null,
+  // matière créée avant cette fonctionnalité ou volontairement commune) reste toujours proposée.
+  // Tant qu'aucune classe n'est cochée, impossible de savoir quel niveau filtrer : tout s'affiche.
+  const selectedCycles = useMemo(
+    () => new Set(classIds.map((cid) => classCycle(classes.find((c) => String(c.id) === cid)?.grade)).filter((c) => c != null)),
+    [classIds, classes],
+  );
+  const visibleSubjects = useMemo(
+    () => (classIds.length === 0 ? subjects : subjects.filter((s) => !s.cycle || selectedCycles.has(s.cycle))),
+    [subjects, classIds, selectedCycles],
+  );
+  // Une matière cochée qui disparaît du filtre (classe changée après coup) ne doit jamais rester
+  // sélectionnée en silence — recalculé à chaque rendu plutôt qu'un effet dédié.
+  const effectiveSubjectIds = useMemo(
+    () => subjectIds.filter((id) => visibleSubjects.some((s) => String(s.id) === id)),
+    [subjectIds, visibleSubjects],
+  );
+
   function toggle(list: string[], setList: (v: string[]) => void, id: string) {
     setList(list.includes(id) ? list.filter((v) => v !== id) : [...list, id]);
   }
 
   async function submit() {
-    if (subjectIds.length === 0 || classIds.length === 0) {
+    if (effectiveSubjectIds.length === 0 || classIds.length === 0) {
       notifyError("Choisissez au moins une matière et une classe.");
       return;
     }
     setSubmitting(true);
     try {
-      const pairs = subjectIds.flatMap((sid) => classIds.map((cid) => ({ subjectId: Number(sid), classId: Number(cid) })));
+      const pairs = effectiveSubjectIds.flatMap((sid) => classIds.map((cid) => ({ subjectId: Number(sid), classId: Number(cid) })));
       const results = await Promise.allSettled(pairs.map((p) => assignClassSubject(p.classId, p.subjectId)));
       const failed = results.filter((r) => r.status === "rejected").length;
       if (failed === 0) {
@@ -79,15 +99,18 @@ export function BulkAssignSubjectsModal({ open, onClose, subjects }: {
               <Label>Matières <span className="text-error-500">*</span></Label>
               <div className="flex gap-2 text-xs">
                 <button type="button" className="text-brand-600 hover:underline"
-                  onClick={() => setSubjectIds(subjects.map((s) => String(s.id)))}>Tout cocher</button>
+                  onClick={() => setSubjectIds(visibleSubjects.map((s) => String(s.id)))}>Tout cocher</button>
                 <button type="button" className="text-gray-400 hover:underline" onClick={() => setSubjectIds([])}>Tout décocher</button>
               </div>
             </div>
+            {classIds.length > 0 && (
+              <p className="text-xs text-gray-400">Filtrées au niveau des classes cochées.</p>
+            )}
             <div className="mt-1.5 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
-              {subjects.length === 0 && <p className="py-4 text-center text-xs text-gray-400">Aucune matière.</p>}
-              {subjects.map((s) => (
+              {visibleSubjects.length === 0 && <p className="py-4 text-center text-xs text-gray-400">Aucune matière pour ce niveau.</p>}
+              {visibleSubjects.map((s) => (
                 <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input type="checkbox" checked={subjectIds.includes(String(s.id))}
+                  <input type="checkbox" checked={effectiveSubjectIds.includes(String(s.id))}
                     onChange={() => toggle(subjectIds, setSubjectIds, String(s.id))}
                     className="h-4 w-4 rounded border-gray-300 text-brand-600 accent-brand-600" />
                   {s.label}
@@ -119,9 +142,9 @@ export function BulkAssignSubjectsModal({ open, onClose, subjects }: {
           </Field>
         </div>
 
-        {subjectIds.length > 0 && classIds.length > 0 && (
+        {effectiveSubjectIds.length > 0 && classIds.length > 0 && (
           <p className="text-xs text-gray-400">
-            {subjectIds.length} matière(s) × {classIds.length} classe(s) = {subjectIds.length * classIds.length} affectation(s).
+            {effectiveSubjectIds.length} matière(s) × {classIds.length} classe(s) = {effectiveSubjectIds.length * classIds.length} affectation(s).
           </p>
         )}
 

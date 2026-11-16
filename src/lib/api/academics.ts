@@ -218,11 +218,11 @@ export function deleteRoom(id: number): Promise<void> {
 export function listSubjects(): Promise<Matiere[]> {
   return api.get<Matiere[]>("/academics/subjects");
 }
-export function createSubject(label: string, coefficient: number, syllabus?: string): Promise<Matiere> {
-  return api.post<Matiere>("/academics/subjects", undefined, { query: { label, coefficient, syllabus } });
+export function createSubject(label: string, coefficient: number, syllabus?: string, cycle?: SchoolCycle | null): Promise<Matiere> {
+  return api.post<Matiere>("/academics/subjects", undefined, { query: { label, coefficient, syllabus, cycle: cycle ?? undefined } });
 }
-export function updateSubject(id: number, label: string, coefficient: number, syllabus?: string): Promise<Matiere> {
-  return api.put<Matiere>(`/academics/subjects/${id}`, undefined, { query: { label, coefficient, syllabus } });
+export function updateSubject(id: number, label: string, coefficient: number, syllabus?: string, cycle?: SchoolCycle | null): Promise<Matiere> {
+  return api.put<Matiere>(`/academics/subjects/${id}`, undefined, { query: { label, coefficient, syllabus, cycle: cycle ?? undefined } });
 }
 export function deleteSubject(id: number): Promise<void> {
   return api.delete<void>(`/academics/subjects/${id}`);

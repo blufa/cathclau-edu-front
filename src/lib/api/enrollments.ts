@@ -1,5 +1,5 @@
 import { api } from "@/lib/api/client";
-import type { Enrollment, EnrollInput, EnrollmentSearchParams } from "@/lib/types/student";
+import type { DepartureReason, Enrollment, EnrollInput, EnrollmentSearchParams } from "@/lib/types/student";
 
 export function searchEnrollments(params: EnrollmentSearchParams): Promise<Enrollment[]> {
   return api.get<Enrollment[]>("/enrollments", {
@@ -36,11 +36,18 @@ export function cancelEnrollment(id: number): Promise<Enrollment> {
   return api.patch<Enrollment>(`/enrollments/${id}/cancel`);
 }
 
-/** Marque une inscription validée comme abandonnée (élève parti en cours d'année) — distinct de
- * l'annulation : les factures déjà émises restent dues et continuent de compter dans le taux de
- * recouvrement de la classe. */
-export function abandonEnrollment(id: number): Promise<Enrollment> {
-  return api.patch<Enrollment>(`/enrollments/${id}/abandon`);
+export interface DeclareDepartureInput {
+  departureDate: string;
+  reason: DepartureReason;
+  destinationSchool?: string | null;
+}
+
+/** Déclare le départ d'un élève (transfert vers une autre école, abandon, exclusion...) sur une
+ * inscription validée — distinct de l'annulation : exclut l'élève des listes actives (notes,
+ * présences) et des prochaines factures, et annule ses factures encore dues de l'année (l'historique
+ * déjà encaissé n'est jamais touché). */
+export function abandonEnrollment(id: number, input: DeclareDepartureInput): Promise<Enrollment> {
+  return api.patch<Enrollment>(`/enrollments/${id}/abandon`, input);
 }
 
 /** Transfère une inscription validée vers une autre classe en cours d'année (ex. erreur d'orientation
