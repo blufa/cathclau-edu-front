@@ -349,7 +349,7 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
                       <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                       <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                       {canWriteAssessment(a) && <Button size="sm" variant="ghost" onClick={() => setEditingAssessment(a)}>Modifier</Button>}
-                      {canWriteAssessment(a) && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDeleteAssessment(a)}>Suppr.</Button>}
+                      {isAdminOrDirector && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDeleteAssessment(a)}>Suppr.</Button>}
                     </div>
                   </TD>
                 </TR>

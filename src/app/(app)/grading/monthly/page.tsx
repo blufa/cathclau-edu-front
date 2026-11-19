@@ -15,6 +15,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listSubjects } from "@/lib/api/academics";
+import { getTeacherSubjects } from "@/lib/api/staff";
 import { deleteAssessment, getAssessmentGradeSheetPdfObjectUrl, listAssessmentsByClass } from "@/lib/api/grading";
 import type { Assessment } from "@/lib/types/grading";
 import { AssessmentForm, GradeGrid } from "@/components/grading/assessment-editor";
@@ -66,7 +67,20 @@ export default function MonthlyEvaluationsPage() {
     () => listClasses(effectiveYearId as number),
     [effectiveYearId],
   );
-  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  // Un enseignant ne choisit une évaluation mensuelle QUE pour les classes où il enseigne
+  // réellement (§retour fondateur) — même restriction que sur /grading.
+  const lockToOwnClasses = isTeacherRole && !isAdminOrDirector && user?.teacherId != null;
+  const teacherSubjectsQuery = useCachedQuery(
+    lockToOwnClasses ? `teacher-subjects:${user!.teacherId}` : null,
+    () => getTeacherSubjects(user!.teacherId as number),
+    [lockToOwnClasses, user?.teacherId],
+  );
+  const classes = useMemo(() => {
+    const all = classesQuery.data ?? [];
+    if (!lockToOwnClasses) return all;
+    const allowedIds = new Set((teacherSubjectsQuery.data ?? []).map((s) => s.classId));
+    return all.filter((c) => allowedIds.has(c.id));
+  }, [classesQuery.data, lockToOwnClasses, teacherSubjectsQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],
@@ -74,10 +88,12 @@ export default function MonthlyEvaluationsPage() {
   // Lien direct depuis l'espace enseignant : /grading/monthly?class=ID préselectionne la classe
   // (même mécanisme que /grading, §retour utilisateur : "les prof doit les voir sur leur portail").
   const searchParams = useSearchParams();
-  const [classId, setClassId] = useState<number | null>(() => {
+  const [selectedClassId, setClassId] = useState<number | null>(() => {
     const c = searchParams.get("class");
     return c ? Number(c) : null;
   });
+  // Enseignant avec une seule classe : pas de choix à faire, elle est sélectionnée pour lui.
+  const classId = selectedClassId ?? (lockToOwnClasses && classes.length === 1 ? classes[0].id : null);
 
   const tenantId = user?.tenantId ?? null;
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
@@ -160,12 +176,18 @@ export default function MonthlyEvaluationsPage() {
         </div>
         <div className="w-56">
           <Label>Classe</Label>
-          <SearchableSelect
-            value={classId != null ? String(classId) : ""}
-            options={classOptions}
-            onChange={(v) => setClassId(v ? Number(v) : null)}
-            triggerClassName="w-full justify-between px-3"
-          />
+          {lockToOwnClasses && classes.length <= 1 ? (
+            <p className="flex h-11 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600">
+              {classes[0]?.label ?? "Aucune classe affectée"}
+            </p>
+          ) : (
+            <SearchableSelect
+              value={classId != null ? String(classId) : ""}
+              options={classOptions}
+              onChange={(v) => setClassId(v ? Number(v) : null)}
+              triggerClassName="w-full justify-between px-3"
+            />
+          )}
         </div>
         {classId && distinctMonths.length > 0 && (
           <div className="w-44">
@@ -231,7 +253,7 @@ export default function MonthlyEvaluationsPage() {
                         <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                         <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
                         {canWriteAssessment(a) && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
-                        {canWriteAssessment(a) && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
+                        {isAdminOrDirector && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
                       </div>
                     </TD>
                   </TR>
