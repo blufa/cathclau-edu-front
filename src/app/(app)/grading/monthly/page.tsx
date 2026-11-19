@@ -45,6 +45,15 @@ export default function MonthlyEvaluationsPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["evaluation:create"]);
   const canEditExisting = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR") || hasAnyPermission(user, ["note:unlock"]);
+  // Un enseignant ne saisit/modifie/supprime que SES évaluations (§retour fondateur) — il garde la
+  // vue de celles des collègues (colonnes "Détail"/PDF), jamais l'écriture.
+  const isAdminOrDirector = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const isTeacherRole = hasRole(user, "TEACHER");
+  function canWriteAssessment(a: Assessment): boolean {
+    if (!canWrite) return false;
+    if (isAdminOrDirector || !isTeacherRole) return true;
+    return a.teacherId != null && a.teacherId === user?.teacherId;
+  }
 
   const yearsQuery = useCachedQuery("academic-years", listAcademicYears, []);
   const years = useMemo(() => yearsQuery.data ?? [], [yearsQuery.data]);
@@ -218,11 +227,11 @@ export default function MonthlyEvaluationsPage() {
                     <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        {canWriteAssessment(a) && <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>}
                         <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                         <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
-                        {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
-                        {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
+                        {canWriteAssessment(a) && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
+                        {canWriteAssessment(a) && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
                       </div>
                     </TD>
                   </TR>
@@ -249,7 +258,7 @@ export default function MonthlyEvaluationsPage() {
             )}
           </Modal>
           <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
-            {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+            {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWriteAssessment(gradingFor)} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
           </Modal>
           <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""}`}>
             {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}

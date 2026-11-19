@@ -57,7 +57,7 @@ async function enrichWithBusinessProfile(me: AuthUser): Promise<AuthUser> {
     }
     if (roles.includes("TEACHER")) {
       const t = await getMyTeacher();
-      return { ...me, phone: t.phone ?? me.phone, photo: t.photo ?? me.photo };
+      return { ...me, phone: t.phone ?? me.phone, photo: t.photo ?? me.photo, teacherId: t.id };
     }
   } catch {
     // Pas de fiche liée (ou erreur réseau) : on garde le profil générique tel quel.
