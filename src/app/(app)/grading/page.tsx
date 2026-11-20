@@ -6,7 +6,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listPeriods, listSubjects } from "@/lib/api/academics";
-import { listTeachers } from "@/lib/api/staff";
+import { listTeachers, getTeacherSubjects } from "@/lib/api/staff";
 import {
   deleteAssessment,
   getAssessmentGradeSheetPdfObjectUrl,
@@ -47,7 +47,23 @@ export default function GradingPage() {
     () => listClasses(effectiveYearId as number),
     [effectiveYearId],
   );
-  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  // Un enseignant ne doit choisir une évaluation/un devoir QUE pour les classes où il enseigne
+  // réellement (§retour fondateur) — jamais la liste complète des classes de l'école, réservée à
+  // admin/direction. Le système le sait déjà via ses affectations classe+matière.
+  const isAdminOrDirector = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const isTeacherRole = hasRole(user, "TEACHER");
+  const lockToOwnClasses = isTeacherRole && !isAdminOrDirector && user?.teacherId != null;
+  const teacherSubjectsQuery = useCachedQuery(
+    lockToOwnClasses ? `teacher-subjects:${user!.teacherId}` : null,
+    () => getTeacherSubjects(user!.teacherId as number),
+    [lockToOwnClasses, user?.teacherId],
+  );
+  const classes = useMemo(() => {
+    const all = classesQuery.data ?? [];
+    if (!lockToOwnClasses) return all;
+    const allowedIds = new Set((teacherSubjectsQuery.data ?? []).map((s) => s.classId));
+    return all.filter((c) => allowedIds.has(c.id));
+  }, [classesQuery.data, lockToOwnClasses, teacherSubjectsQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],
@@ -58,6 +74,8 @@ export default function GradingPage() {
     const c = searchParams.get("class");
     return c ? Number(c) : null;
   });
+  // Enseignant avec une seule classe : pas de choix à faire, elle est sélectionnée pour lui.
+  const effectiveClassId = classId ?? (lockToOwnClasses && classes.length === 1 ? classes[0].id : null);
 
   return (
     <div className="space-y-6">
@@ -75,21 +93,27 @@ export default function GradingPage() {
         </div>
         <div className="w-56">
           <Label>Classe</Label>
-          <SearchableSelect
-            value={classId != null ? String(classId) : ""}
-            options={classOptions}
-            onChange={(v) => setClassId(v ? Number(v) : null)}
-            triggerClassName="w-full justify-between px-3"
-          />
+          {lockToOwnClasses && classes.length <= 1 ? (
+            <p className="flex h-11 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600">
+              {classes[0]?.label ?? "Aucune classe affectée"}
+            </p>
+          ) : (
+            <SearchableSelect
+              value={classId != null ? String(classId) : ""}
+              options={classOptions}
+              onChange={(v) => setClassId(v ? Number(v) : null)}
+              triggerClassName="w-full justify-between px-3"
+            />
+          )}
         </div>
       </div>
 
-      {!classId ? (
+      {!effectiveClassId ? (
         <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">
           Sélectionnez une classe.
         </p>
       ) : (
-        <EvaluationsTab classId={classId}
+        <EvaluationsTab classId={effectiveClassId}
           yearId={effectiveYearId} canWrite={canWrite} canEditExisting={canEditExisting} />
       )}
     </div>
@@ -112,6 +136,16 @@ function monthLabelOf(key: string): string {
 function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classId: number; yearId: number | null; canWrite: boolean; canEditExisting: boolean }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
+  // Un enseignant ne saisit/modifie/supprime que SES évaluations (§retour fondateur) — il garde la
+  // vue de celles des collègues (colonnes "Détail"/PDF), jamais l'écriture. Les admins/directeurs ne
+  // sont jamais concernés par cette restriction.
+  const isAdminOrDirector = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const isTeacherRole = hasRole(user, "TEACHER");
+  function canWriteAssessment(a: Assessment): boolean {
+    if (!canWrite) return false;
+    if (isAdminOrDirector || !isTeacherRole) return true;
+    return a.teacherId != null && a.teacherId === user?.teacherId;
+  }
   const assessmentsQuery = useCachedQuery(`assessments-class:${classId}`, () => listAssessmentsByClass(classId), [classId]);
   const subjectsQuery = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
   const teachersQuery = useCachedQuery(tenantId ? `teachers-all:${tenantId}` : null, listTeachers, [tenantId]);
@@ -356,11 +390,11 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
                     <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
                     <TD className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                        {canWriteAssessment(a) && <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>}
                         <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                         <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
-                        {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
-                        {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
+                        {canWriteAssessment(a) && <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>Modifier</Button>}
+                        {isAdminOrDirector && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDelete(a)}>Suppr.</Button>}
                       </div>
                     </TD>
                   </TR>
@@ -386,7 +420,7 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
         )}
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""}`}>
-        {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+        {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWriteAssessment(gradingFor)} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
       </Modal>
       <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""}`}>
         {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}
