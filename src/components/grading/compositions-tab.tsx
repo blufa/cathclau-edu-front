@@ -437,17 +437,23 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
 
       <Modal open={!!pickingSubjectFor} onClose={() => setPickingSubjectFor(null)} title={`Saisir les notes — ${pickingSubjectFor?.label ?? ""}`}>
         <div className="max-h-72 space-y-1 overflow-y-auto">
-          {(classSubjectsQuery.data ?? []).length === 0 && (
-            <p className="py-6 text-center text-sm text-gray-400">Aucune matière affectée à cette classe.</p>
-          )}
-          {(classSubjectsQuery.data ?? []).map((cm) => (
+          {/* Un enseignant ne saisit que SA/SES matière(s) dans cette classe (§retour fondateur) —
+              jamais celles d'un collègue, même pour une composition planifiée par l'admin. */}
+          {(() => {
+            const pickable = isTeacherRole && !isAdminOrDirector
+              ? (classSubjectsQuery.data ?? []).filter((cm) => cm.teacherId === user?.teacherId)
+              : (classSubjectsQuery.data ?? []);
+            return pickable.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-400">Aucune matière affectée à cette classe.</p>
+            ) : pickable.map((cm) => (
             <Button key={cm.subjectId} variant="secondary" className="w-full justify-between"
               loading={subjectPickLoading === cm.subjectId}
               onClick={() => pickingSubjectFor && pickSubject(pickingSubjectFor, cm.subjectId)}>
               <span>{subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}</span>
               {gradedSubjectIds.has(cm.subjectId) && <span className="text-xs text-success-600">✓ déjà saisi</span>}
             </Button>
-          ))}
+            ));
+          })()}
         </div>
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""} · ${gradingFor ? subjectName.get(gradingFor.subjectId) ?? "" : ""}`}>

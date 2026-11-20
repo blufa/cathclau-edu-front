@@ -75,6 +75,13 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
   const subjectName = useMemo(() => new Map((allSubjects.data ?? []).map((s) => [s.id, s.label])), [allSubjects.data]);
   const teacherName = useMemo(() => new Map((teachersQuery.data ?? []).map((t) => [t.id, `${t.firstName} ${t.lastName}`])), [teachersQuery.data]);
   const classSubjects: ClasseMatiere[] = subjectsQuery.data ?? [];
+  // Un enseignant ne choisit que SA/SES matière(s) dans cette classe (§retour fondateur) — jamais
+  // celles d'un collègue affecté à la même classe (ex. composition commune créée par l'admin).
+  const isAdminOrDirector = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const isTeacherRole = hasRole(user, "TEACHER");
+  const visibleClassSubjects = isTeacherRole && !isAdminOrDirector
+    ? classSubjects.filter((cm) => cm.teacherId === user?.teacherId)
+    : classSubjects;
 
   const [subjectIds, setSubjectIds] = useState<string[]>(initial ? [String(initial.subjectId)] : []);
   const [subjectError, setSubjectError] = useState<string | null>(null);
@@ -190,7 +197,7 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
           {isEdit ? "La matière ne se change pas ici (supprimez et recréez si besoin)." : "Sélectionnez plusieurs matières pour créer l'évaluation d'un coup (ex. composition)."}
         </p>
         <div className="mt-1.5 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
-          {classSubjects.map((cm) => (
+          {visibleClassSubjects.map((cm) => (
             <label key={cm.subjectId} className={`flex items-center gap-2 text-sm ${isEdit ? "opacity-60" : "cursor-pointer"}`}>
               <input type="checkbox" disabled={isEdit} checked={subjectIds.includes(String(cm.subjectId))}
                 onChange={() => toggleSubject(String(cm.subjectId))}
