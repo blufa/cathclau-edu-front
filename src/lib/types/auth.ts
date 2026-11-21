@@ -33,4 +33,7 @@ export interface AuthUser {
   photo: string | null;
   roles: string[];
   permissions: string[];
+  /** Identifiant de la fiche enseignant liée (rôle TEACHER uniquement) — sert à cloisonner la saisie
+   * des notes : un enseignant ne modifie que les évaluations dont `Assessment.teacherId` correspond. */
+  teacherId?: number | null;
 }

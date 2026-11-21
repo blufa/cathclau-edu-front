@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/providers/auth-provider";
+import { hasRole } from "@/lib/auth/permissions";
 import { useQuery } from "@/hooks/use-query";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import {
@@ -72,6 +73,15 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
 }) {
   const { user } = useAuth();
   const tenantId = user?.tenantId ?? null;
+  // Un enseignant ne saisit/modifie/supprime que SES évaluations (§retour fondateur) — il garde la
+  // vue de celles des collègues (colonnes "Détail"/PDF), jamais l'écriture.
+  const isAdminOrDirector = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const isTeacherRole = hasRole(user, "TEACHER");
+  function canWriteAssessment(a: Assessment | null): boolean {
+    if (!a || !canWrite) return false;
+    if (isAdminOrDirector || !isTeacherRole) return true;
+    return a.teacherId != null && a.teacherId === user?.teacherId;
+  }
   const examsQuery = useCachedQuery(`exams-class:${classId}`, () => listExamsByClass(classId), [classId]);
   const periodsQuery = useCachedQuery(yearId ? `periods:${yearId}` : null, () => listPeriods(yearId as number), [yearId]);
   const classSubjectsQuery = useCachedQuery(`class-subjects:${classId}`, () => listClassSubjects(classId), [classId]);
@@ -335,11 +345,11 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
                   <TD className="hidden sm:table-cell">{formatDate(a.date)}</TD>
                   <TD className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>
+                      {canWriteAssessment(a) && <Button size="sm" onClick={() => setGradingFor(a)}>Saisir les notes</Button>}
                       <Button size="sm" variant="ghost" onClick={() => setDetailFor(a)}>Détail</Button>
                       <Button size="sm" variant="ghost" loading={gradeSheetLoadingId === a.id} onClick={() => openGradeSheet(a)}>PDF</Button>
-                      {canWrite && <Button size="sm" variant="ghost" onClick={() => setEditingAssessment(a)}>Modifier</Button>}
-                      {canWrite && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDeleteAssessment(a)}>Suppr.</Button>}
+                      {canWriteAssessment(a) && <Button size="sm" variant="ghost" onClick={() => setEditingAssessment(a)}>Modifier</Button>}
+                      {isAdminOrDirector && <Button size="sm" variant="ghost" className="text-error-600" onClick={() => handleDeleteAssessment(a)}>Suppr.</Button>}
                     </div>
                   </TD>
                 </TR>
@@ -427,21 +437,27 @@ export function CompositionsTab({ classId, yearId, canManage, canWrite, canEditE
 
       <Modal open={!!pickingSubjectFor} onClose={() => setPickingSubjectFor(null)} title={`Saisir les notes — ${pickingSubjectFor?.label ?? ""}`}>
         <div className="max-h-72 space-y-1 overflow-y-auto">
-          {(classSubjectsQuery.data ?? []).length === 0 && (
-            <p className="py-6 text-center text-sm text-gray-400">Aucune matière affectée à cette classe.</p>
-          )}
-          {(classSubjectsQuery.data ?? []).map((cm) => (
+          {/* Un enseignant ne saisit que SA/SES matière(s) dans cette classe (§retour fondateur) —
+              jamais celles d'un collègue, même pour une composition planifiée par l'admin. */}
+          {(() => {
+            const pickable = isTeacherRole && !isAdminOrDirector
+              ? (classSubjectsQuery.data ?? []).filter((cm) => cm.teacherId === user?.teacherId)
+              : (classSubjectsQuery.data ?? []);
+            return pickable.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-400">Aucune matière affectée à cette classe.</p>
+            ) : pickable.map((cm) => (
             <Button key={cm.subjectId} variant="secondary" className="w-full justify-between"
               loading={subjectPickLoading === cm.subjectId}
               onClick={() => pickingSubjectFor && pickSubject(pickingSubjectFor, cm.subjectId)}>
               <span>{subjectName.get(cm.subjectId) ?? `#${cm.subjectId}`}</span>
               {gradedSubjectIds.has(cm.subjectId) && <span className="text-xs text-success-600">✓ déjà saisi</span>}
             </Button>
-          ))}
+            ));
+          })()}
         </div>
       </Modal>
       <Modal open={!!gradingFor} onClose={() => setGradingFor(null)} title={`Notes — ${gradingFor?.label ?? ""} · ${gradingFor ? subjectName.get(gradingFor.subjectId) ?? "" : ""}`}>
-        {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWrite} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
+        {gradingFor && <GradeGrid assessment={gradingFor} canWrite={canWriteAssessment(gradingFor)} canEditExisting={canEditExisting} onDone={() => setGradingFor(null)} />}
       </Modal>
       <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={`Détail — ${detailFor?.label ?? ""} · ${detailFor ? subjectName.get(detailFor.subjectId) ?? "" : ""}`}>
         {detailFor && <GradeGrid assessment={detailFor} canWrite={false} canEditExisting={false} onDone={() => setDetailFor(null)} />}

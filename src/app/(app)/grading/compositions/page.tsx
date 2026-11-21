@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/auth-provider";
 import { hasAnyPermission, hasRole } from "@/lib/auth/permissions";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses } from "@/lib/api/academics";
+import { getTeacherSubjects } from "@/lib/api/staff";
 import { CompositionsTab } from "@/components/grading/compositions-tab";
 import { Select } from "@/components/ui/select";
 import { SearchableSelect, type SearchableOption } from "@/components/ui/searchable-select";
@@ -30,17 +31,34 @@ export default function CompositionsPage() {
     () => listClasses(effectiveYearId as number),
     [effectiveYearId],
   );
-  const classes = useMemo(() => classesQuery.data ?? [], [classesQuery.data]);
+  // Un enseignant ne choisit une classe QUE parmi celles où il enseigne réellement (§retour
+  // fondateur) — même restriction que sur /grading et /grading/monthly.
+  const isAdminOrDirector = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR");
+  const isTeacherRole = hasRole(user, "TEACHER");
+  const lockToOwnClasses = isTeacherRole && !isAdminOrDirector && user?.teacherId != null;
+  const teacherSubjectsQuery = useCachedQuery(
+    lockToOwnClasses ? `teacher-subjects:${user!.teacherId}` : null,
+    () => getTeacherSubjects(user!.teacherId as number),
+    [lockToOwnClasses, user?.teacherId],
+  );
+  const classes = useMemo(() => {
+    const all = classesQuery.data ?? [];
+    if (!lockToOwnClasses) return all;
+    const allowedIds = new Set((teacherSubjectsQuery.data ?? []).map((s) => s.classId));
+    return all.filter((c) => allowedIds.has(c.id));
+  }, [classesQuery.data, lockToOwnClasses, teacherSubjectsQuery.data]);
   const classOptions: SearchableOption[] = useMemo(
     () => classes.map((c) => ({ value: String(c.id), trigger: c.label, label: c.label, searchText: c.label })),
     [classes],
   );
   // Deep-link from the teacher space: /grading/compositions?class=ID preselects the class.
   const searchParams = useSearchParams();
-  const [classId, setClassId] = useState<number | null>(() => {
+  const [selectedClassId, setClassId] = useState<number | null>(() => {
     const c = searchParams.get("class");
     return c ? Number(c) : null;
   });
+  // Enseignant avec une seule classe : pas de choix à faire, elle est sélectionnée pour lui.
+  const classId = selectedClassId ?? (lockToOwnClasses && classes.length === 1 ? classes[0].id : null);
 
   return (
     <div className="space-y-6">
@@ -58,12 +76,18 @@ export default function CompositionsPage() {
         </div>
         <div className="w-56">
           <Label>Classe</Label>
-          <SearchableSelect
-            value={classId != null ? String(classId) : ""}
-            options={classOptions}
-            onChange={(v) => setClassId(v ? Number(v) : null)}
-            triggerClassName="w-full justify-between px-3"
-          />
+          {lockToOwnClasses && classes.length <= 1 ? (
+            <p className="flex h-11 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600">
+              {classes[0]?.label ?? "Aucune classe affectée"}
+            </p>
+          ) : (
+            <SearchableSelect
+              value={classId != null ? String(classId) : ""}
+              options={classOptions}
+              onChange={(v) => setClassId(v ? Number(v) : null)}
+              triggerClassName="w-full justify-between px-3"
+            />
+          )}
         </div>
       </div>
 
