@@ -30,6 +30,14 @@ import { confirmAction, notifyError, notifySuccess } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
 import { FileText, Plus } from "lucide-react";
 
+// Couleur stable par matière (§retour utilisateur : "pour que je puisse faire la différence sur
+// les matières") - même matière = toujours la même couleur sur toute la liste, jamais aléatoire
+// d'un rendu à l'autre (dérivée de l'identifiant, pas de l'ordre d'affichage).
+const SUBJECT_TONES = ["indigo", "blue", "green", "amber", "red", "brand"] as const;
+function subjectTone(subjectId: number): (typeof SUBJECT_TONES)[number] {
+  return SUBJECT_TONES[subjectId % SUBJECT_TONES.length];
+}
+
 export default function GradingPage() {
   const { user } = useAuth();
   const canWrite = hasRole(user, "SCHOOL_ADMIN", "DIRECTOR", "TEACHER") || hasAnyPermission(user, ["evaluation:create"]);
@@ -367,9 +375,10 @@ function EvaluationsTab({ classId, yearId, canWrite, canEditExisting }: { classI
                       côté casserait l'alignement. */}
                   <TD colSpan={100} className="bg-gray-50 font-semibold text-gray-700">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span>
-                        {subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`} · {monthLabelOf(g.monthKey)}
-                        <span className="ml-2 font-normal text-gray-400">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge tone={subjectTone(g.subjectId)}>{subjectLabel.get(g.subjectId) ?? `#${g.subjectId}`}</Badge>
+                        <span>· {monthLabelOf(g.monthKey)}</span>
+                        <span className="font-normal text-gray-400">
                           {g.evals.length} évaluation{g.evals.length > 1 ? "s" : ""}
                         </span>
                       </span>
