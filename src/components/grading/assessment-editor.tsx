@@ -57,6 +57,21 @@ function isFrench(label: string | undefined): boolean {
   return label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() === "francais";
 }
 
+// Saisie en deux cases (censeur) : une seule evaluation creee dans tous les cas (AssessmentForm
+// inchange) - seule la grille de saisie (GradeGrid) affiche deux cases au lieu d'une, selon le type
+// d'evaluation et la matiere. Le serveur calcule et stocke `value` comme moyenne des deux cases
+// (voir GradeService), jamais recalcule cote client. `null` -> une seule case, comportement actuel
+// (devoirs, compositions, examens, mensuelle non-Francais).
+function componentLabels(type: AssessmentType, subjectLabel: string | undefined): [string, string] | null {
+  if ((type === "QUIZ" || type === "MONTHLY") && isFrench(subjectLabel)) {
+    return FRENCH_LABEL_PRESETS as [string, string];
+  }
+  if (type === "QUIZ") {
+    return ["Orale", "Écrite"];
+  }
+  return null;
+}
+
 export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, defaultType = "QUIZ" }: {
   classId: number; yearId: number | null; initial?: Assessment; onCancel: () => void; onCreated: () => void;
   /** Type figé à la création (jamais un sélecteur visible, §retour utilisateur) — "QUIZ" sur l'onglet
@@ -304,6 +319,18 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   // doivent figurer" — réglage initial du censeur sur les mensuelles annulé par le fondateur).
   const { user } = useAuth();
   const anonymous = hasRole(user, "TEACHER") && assessment.type === "EXAM";
+  const tenantId = user?.tenantId ?? null;
+
+  // Même clé de cache que AssessmentForm (`subjects:${tenantId}`) — partagée, pas un appel réseau
+  // en plus. Sert uniquement à résoudre le libellé de la matière pour `componentLabels` ci-dessous.
+  const allSubjects = useCachedQuery(tenantId ? `subjects:${tenantId}` : null, () => listSubjects(), [tenantId]);
+  const subjectLabel = useMemo(
+    () => allSubjects.data?.find((s) => s.id === assessment.subjectId)?.label,
+    [allSubjects.data, assessment.subjectId],
+  );
+  // Deux cases (Orale/Écrite, ou Dictée-Question/Rédaction pour le Français) au lieu d'une seule —
+  // voir componentLabels ci-dessus. `null` → comportement actuel inchangé (une seule case).
+  const labels = componentLabels(assessment.type, subjectLabel);
 
   // Feuille de notes du module grading (élève + note existante en un seul appel) — pas
   // /academics/classes/{id}/students, qui ne liste que les inscriptions VALIDÉES et faisait
@@ -311,6 +338,8 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   // enseignant : "je ne vois pas la liste des élèves" après avoir créé une composition).
   const sheetQuery = useCachedQuery(`grade-sheet:${assessment.id}`, () => getGradeSheet(assessment.id), [assessment.id]);
   const [values, setValues] = useState<Record<number, string>>({});
+  const [valuesA, setValuesA] = useState<Record<number, string>>({});
+  const [valuesB, setValuesB] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const max = Number(assessment.maxScore);
 
@@ -333,30 +362,73 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
   // le serveur ne le connaît pas encore.
   const queuedEntry = useGradeQueueStore((s) => s.items.find((i) => i.assessmentId === assessment.id));
   const queuedByStudent = useMemo(
-    () => new Map((queuedEntry?.grades ?? []).map((g) => [g.studentId, g.value])),
+    () => new Map((queuedEntry?.grades ?? []).map((g) => [g.studentId, g])),
     [queuedEntry],
   );
 
   function valueOf(studentId: number): string {
     if (values[studentId] !== undefined) return values[studentId];
-    if (queuedByStudent.has(studentId)) return String(queuedByStudent.get(studentId));
+    const q = queuedByStudent.get(studentId);
+    if (q?.value != null) return String(q.value);
     return existing.get(studentId)?.value ?? "";
   }
+  function valueOfA(studentId: number): string {
+    if (valuesA[studentId] !== undefined) return valuesA[studentId];
+    const q = queuedByStudent.get(studentId);
+    if (q?.valueA != null) return String(q.valueA);
+    return existing.get(studentId)?.valueA ?? "";
+  }
+  function valueOfB(studentId: number): string {
+    if (valuesB[studentId] !== undefined) return valuesB[studentId];
+    const q = queuedByStudent.get(studentId);
+    if (q?.valueB != null) return String(q.valueB);
+    return existing.get(studentId)?.valueB ?? "";
+  }
   function invalid(v: string): boolean { if (v === "") return false; const n = Number(v); return Number.isNaN(n) || n < 0 || n > max; }
+  // Moyenne affichée en lecture seule à côté des deux cases (§retour censeur) — calculée en direct
+  // depuis la saisie en cours ; retombe sur la moyenne déjà connue du serveur tant que rien n'a
+  // encore été modifié localement.
+  function averagePreview(studentId: number): string {
+    const a = valueOfA(studentId);
+    const b = valueOfB(studentId);
+    const na = a !== "" && !invalid(a) ? Number(a) : null;
+    const nb = b !== "" && !invalid(b) ? Number(b) : null;
+    if (na != null && nb != null) return ((na + nb) / 2).toFixed(2);
+    if (na != null) return na.toFixed(2);
+    if (nb != null) return nb.toFixed(2);
+    return existing.get(studentId)?.value ?? "—";
+  }
 
   async function save() {
     setSaving(true);
     try {
       // En mode anonyme (enseignant), le message d'erreur reste sur le matricule — jamais le nom,
       // pour ne pas réintroduire la correspondance nom/copie que l'anonymat vise à éviter.
-      const withRaw = rows.map((s) => ({ studentId: s.studentId, studentNumber: s.studentNumber, fullName: s.fullName, raw: valueOf(s.studentId) }));
       // Notes hors barème (0–max) : jamais un échec silencieux (§retour utilisateur) — le reste de la
       // classe s'enregistre normalement, mais l'enseignant doit savoir laquelle a été ignorée et
       // pourquoi, sinon la note disparaît sans explication.
-      const skipped = withRaw.filter((e) => e.raw !== "" && invalid(e.raw));
-      const entries = withRaw
-        .filter((e) => e.raw !== "" && !invalid(e.raw))
-        .map((e) => ({ studentId: e.studentId, value: Number(e.raw) }));
+      let entries: { studentId: number; value?: number; valueA?: number; valueB?: number }[];
+      let skipped: { studentId: number; studentNumber: string | null; fullName: string }[];
+      if (labels) {
+        const withRaw = rows.map((s) => ({
+          studentId: s.studentId, studentNumber: s.studentNumber, fullName: s.fullName,
+          rawA: valueOfA(s.studentId), rawB: valueOfB(s.studentId),
+        }));
+        skipped = withRaw.filter((e) => (e.rawA !== "" && invalid(e.rawA)) || (e.rawB !== "" && invalid(e.rawB)));
+        entries = withRaw
+          .filter((e) => !skipped.includes(e) && (e.rawA !== "" || e.rawB !== ""))
+          .map((e) => ({
+            studentId: e.studentId,
+            valueA: e.rawA !== "" ? Number(e.rawA) : undefined,
+            valueB: e.rawB !== "" ? Number(e.rawB) : undefined,
+          }));
+      } else {
+        const withRaw = rows.map((s) => ({ studentId: s.studentId, studentNumber: s.studentNumber, fullName: s.fullName, raw: valueOf(s.studentId) }));
+        skipped = withRaw.filter((e) => e.raw !== "" && invalid(e.raw));
+        entries = withRaw
+          .filter((e) => e.raw !== "" && !invalid(e.raw))
+          .map((e) => ({ studentId: e.studentId, value: Number(e.raw) }));
+      }
       const attempt = await submitGradesOfflineAware(assessment.id, entries);
       if (attempt.outcome === "online") {
         notifySuccess("Notes enregistrées");
@@ -426,19 +498,33 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
               {/* Colonne nom masquée seulement en saisie anonyme (enseignant) — §retour utilisateur :
                   les autres profils veulent le matricule ET le nom, pas l'un à la place de l'autre. */}
               {!anonymous && <TH>Élève</TH>}
-              <TH>Note / {max}</TH>
+              {labels ? (
+                <>
+                  <TH>{labels[0]}</TH>
+                  <TH>{labels[1]}</TH>
+                  <TH>Moyenne</TH>
+                </>
+              ) : (
+                <TH>Note / {max}</TH>
+              )}
             </tr>
           </THead>
           <TBody>
             {filteredRows.length === 0 && (
-              <TR><TD colSpan={anonymous ? 2 : 3} className="py-6 text-center text-gray-400">Aucun élève trouvé.</TD></TR>
+              <TR><TD colSpan={(anonymous ? 1 : 2) + (labels ? 3 : 1)} className="py-6 text-center text-gray-400">Aucun élève trouvé.</TD></TR>
             )}
             {filteredRows.map((s) => {
               const v = valueOf(s.studentId);
               const bad = invalid(v);
+              const vA = valueOfA(s.studentId);
+              const vB = valueOfB(s.studentId);
+              const badA = invalid(vA);
+              const badB = invalid(vB);
               // A grade already entered for this student is read-only unless the user may edit existing grades.
               const alreadyEntered = existing.get(s.studentId)?.value != null && existing.get(s.studentId)?.value !== "";
               const readOnly = locked || !canWrite || (alreadyEntered && !canEditExisting);
+              const inputClass = (bad: boolean) =>
+                `h-9 w-24 rounded-lg border px-2 text-sm outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${bad ? "border-error-400 bg-error-50 text-error-700" : "border-gray-300 focus:border-brand-400"}`;
               return (
                 <TR key={s.studentId}>
                   {/* Saisie anonyme (enseignant uniquement, §retour utilisateur) : l'élève écrit son
@@ -448,12 +534,29 @@ export function GradeGrid({ assessment, canWrite, canEditExisting, onDone }: { a
                       déjà attribuées, pas de biais à éviter). */}
                   <TD className="font-medium text-gray-900">{s.studentNumber ?? "—"}</TD>
                   {!anonymous && <TD className="text-gray-700">{s.fullName}</TD>}
-                  <TD>
-                    <input type="number" min={0} max={max} disabled={readOnly} value={v}
-                      onChange={(e) => setValues((p) => ({ ...p, [s.studentId]: e.target.value }))}
-                      className={`h-9 w-24 rounded-lg border px-2 text-sm outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 ${bad ? "border-error-400 bg-error-50 text-error-700" : "border-gray-300 focus:border-brand-400"}`} />
-                    {alreadyEntered && !canEditExisting && !locked && <span className="ml-2 text-[10px] text-gray-400">saisie verrouillée</span>}
-                  </TD>
+                  {labels ? (
+                    <>
+                      <TD>
+                        <input type="number" min={0} max={max} disabled={readOnly} value={vA}
+                          onChange={(e) => setValuesA((p) => ({ ...p, [s.studentId]: e.target.value }))}
+                          className={inputClass(badA)} />
+                      </TD>
+                      <TD>
+                        <input type="number" min={0} max={max} disabled={readOnly} value={vB}
+                          onChange={(e) => setValuesB((p) => ({ ...p, [s.studentId]: e.target.value }))}
+                          className={inputClass(badB)} />
+                        {alreadyEntered && !canEditExisting && !locked && <span className="ml-2 text-[10px] text-gray-400">saisie verrouillée</span>}
+                      </TD>
+                      <TD className="text-sm text-gray-500">{averagePreview(s.studentId)}</TD>
+                    </>
+                  ) : (
+                    <TD>
+                      <input type="number" min={0} max={max} disabled={readOnly} value={v}
+                        onChange={(e) => setValues((p) => ({ ...p, [s.studentId]: e.target.value }))}
+                        className={inputClass(bad)} />
+                      {alreadyEntered && !canEditExisting && !locked && <span className="ml-2 text-[10px] text-gray-400">saisie verrouillée</span>}
+                    </TD>
+                  )}
                 </TR>
               );
             })}

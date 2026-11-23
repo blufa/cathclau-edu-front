@@ -14,6 +14,7 @@ import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { listAcademicYears, listClasses, listSubjects, getClassStudents } from "@/lib/api/academics";
 import {
   generateMonthlyReportCardsBulk,
+  getMonthlyCentralizerPdfObjectUrl,
   getMonthlyReportCardLines,
   getMonthlyReportCardPdfObjectUrl,
   listMonthlyReportCards,
@@ -30,6 +31,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Reveal } from "@/components/public/reveal";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 import { openPdfInApp } from "@/lib/open-pdf";
+import { FilePreview } from "@/components/ui/file-preview";
 
 function currentMonthValue(): string {
   return new Date().toISOString().slice(0, 7);
@@ -72,6 +74,8 @@ export default function MonthlyReportCardsPage() {
   const [generating, setGenerating] = useState(false);
   const [detail, setDetail] = useState<MonthlyReportCard | null>(null);
   const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
+  const [centralizerLoading, setCentralizerLoading] = useState(false);
+  const [preview, setPreview] = useState<{ url: string | null; title: string } | null>(null);
 
   async function generate() {
     if (!classId) return;
@@ -87,6 +91,16 @@ export default function MonthlyReportCardsPage() {
     setPdfLoadingId(c.id);
     try { openPdfInApp(await getMonthlyReportCardPdfObjectUrl(c.id), "Bulletin mensuel"); }
     catch (err) { notifyError(err); } finally { setPdfLoadingId(null); }
+  }
+
+  // Centralisateur de classe pour ce mois (§censeur) — même aperçu imprimable (FilePreview +
+  // autoPrint) que le centralisateur semestriel sur /grading/report-cards, pour une UX cohérente.
+  async function centralizer() {
+    if (!classId) return;
+    setCentralizerLoading(true);
+    try {
+      setPreview({ url: await getMonthlyCentralizerPdfObjectUrl(classId, month), title: "Centralisateur de classe" });
+    } catch (err) { notifyError(err); } finally { setCentralizerLoading(false); }
   }
 
   return (
@@ -125,6 +139,14 @@ export default function MonthlyReportCardsPage() {
         )}
       </div>
 
+      {classId && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" loading={centralizerLoading} onClick={centralizer}>
+            Centralisateur (PDF)
+          </Button>
+        </div>
+      )}
+
       {!classId ? (
         <p className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-400">Sélectionnez une classe.</p>
       ) : cardsQuery.loading ? (
@@ -158,6 +180,8 @@ export default function MonthlyReportCardsPage() {
           <MonthlyAppreciationPane card={detail} onSaved={(updated) => { setDetail(updated); cardsQuery.refetch(); }} />
         )}
       </Modal>
+
+      <FilePreview url={preview?.url ?? null} title={preview?.title} open={preview != null} onClose={() => setPreview(null)} autoPrint />
     </div>
   );
 }

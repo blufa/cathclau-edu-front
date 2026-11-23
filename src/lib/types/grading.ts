@@ -46,6 +46,11 @@ export interface Grade {
   assessmentId: number;
   studentId: number;
   value: string;
+  /** Composantes de la saisie en deux cases (Orale/Écrite, ou Dictée-Question/Rédaction pour le
+   * Français) quand applicable — voir `componentLabels` dans assessment-editor.tsx. `null` sinon ;
+   * `value` reste toujours la moyenne finale, seule lue par les bulletins. */
+  valueA?: string | null;
+  valueB?: string | null;
   validated: boolean | null;
   enteredAt: string | null;
 }
