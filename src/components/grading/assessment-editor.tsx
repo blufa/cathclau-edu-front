@@ -44,32 +44,33 @@ import { Spinner } from "@/components/ui/spinner";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { notifyError, notifySuccess } from "@/lib/feedback";
 
-/** Catégories figées d'évaluation pour le Français (§retour utilisateur) : "en classe c'est
- * Français, mais à l'évaluation c'est Dictée et Questions / Rédaction" — toujours ces deux
- * libellés-là, pour que tous les profs de français utilisent les mêmes noms d'une classe à
- * l'autre (plutôt qu'un texte libre qui varie selon qui saisit). */
-const FRENCH_LABEL_PRESETS = ["Dictée et Questions", "Rédaction"];
-
-/** Compare un libellé de matière à "Français" en ignorant accents/casse (ex. "français",
- * "FRANÇAIS", "francais" doivent tous matcher). */
-function isFrench(label: string | undefined): boolean {
-  if (!label) return false;
-  return label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() === "francais";
+// Compare un libellé de matière en ignorant accents/casse (ex. "français", "FRANÇAIS",
+// "francais" doivent tous matcher).
+function normalizeSubjectLabel(label: string | undefined): string {
+  if (!label) return "";
+  return label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }
 
-// Saisie en deux cases (censeur) : une seule evaluation creee dans tous les cas (AssessmentForm
-// inchange) - seule la grille de saisie (GradeGrid) affiche deux cases au lieu d'une, selon le type
-// d'evaluation et la matiere. Le serveur calcule et stocke `value` comme moyenne des deux cases
-// (voir GradeService), jamais recalcule cote client. `null` -> une seule case, comportement actuel
-// (devoirs, compositions, examens, mensuelle non-Francais).
+// "Dictée et Questions" et "Rédaction" sont des matières à part entière (pas des sous-catégories
+// du Français), chacune avec son propre coefficient — §retour utilisateur : "le professeur sait la
+// note de dictée et le système la multiplie par son coefficient... pour les deux il n'y a pas
+// oral/écrit". Jamais de double saisie pour elles, quel que soit le type d'évaluation. Recherche par
+// sous-chaîne (pas une égalité stricte) : les libellés réels embarquent la catégorie dans une forme
+// parenthésée, ex. "Français (Dictée - Questions)" ou "Français (Rédaction / Composition)".
+function isSingleValueOnlySubject(subjectLabel: string | undefined): boolean {
+  const normalized = normalizeSubjectLabel(subjectLabel);
+  return normalized.includes("dictee") || normalized.includes("redaction");
+}
+
+// Saisie en deux cases Orale/Écrite (censeur) sur les interrogations — une seule évaluation créée
+// dans tous les cas (AssessmentForm inchangé), seule la grille de saisie (GradeGrid) affiche deux
+// cases au lieu d'une. Le serveur calcule et stocke `value` comme moyenne des deux cases (voir
+// GradeService), jamais recalculé côté client. `null` → une seule case, comportement actuel
+// (devoirs, compositions, examens, évaluations mensuelles, et les deux matières ci-dessus).
 function componentLabels(type: AssessmentType, subjectLabel: string | undefined): [string, string] | null {
-  if ((type === "QUIZ" || type === "MONTHLY") && isFrench(subjectLabel)) {
-    return FRENCH_LABEL_PRESETS as [string, string];
-  }
-  if (type === "QUIZ") {
-    return ["Orale", "Écrite"];
-  }
-  return null;
+  if (type !== "QUIZ") return null;
+  if (isSingleValueOnlySubject(subjectLabel)) return null;
+  return ["Orale", "Écrite"];
 }
 
 export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, defaultType = "QUIZ" }: {
@@ -100,10 +101,6 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
 
   const [subjectIds, setSubjectIds] = useState<string[]>(initial ? [String(initial.subjectId)] : []);
   const [subjectError, setSubjectError] = useState<string | null>(null);
-  // Catégories figées du Français (§retour utilisateur) : seulement quand UNE SEULE matière est
-  // choisie et que c'est Français — avec plusieurs matières sélectionnées (ex. composition
-  // commune), les présets n'ont pas de sens pour les autres matières, on garde le texte libre.
-  const isFrancaisSelected = subjectIds.length === 1 && isFrench(subjectName.get(Number(subjectIds[0])));
   // Coefficient par matière, modifiable par l'utilisateur quand plusieurs matières sont choisies
   // (§retour utilisateur : "il ne donne pas la possibilité d'ajouter le coefficient de la matière"
   // quand toutes les matières sont cochées) — initialisé à la valeur automatique (classe puis matière)
@@ -272,17 +269,12 @@ export function AssessmentForm({ classId, yearId, initial, onCancel, onCreated, 
       </Field>
       <Field>
         <Label>Libellé <span className="text-error-500">*</span></Label>
-        {isFrancaisSelected ? (
-          <>
-            <p className="text-xs text-gray-400">Catégories fixes du Français — toujours les mêmes, pour tous les profs.</p>
-            <Select value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label}>
-              <option value="">— Choisir —</option>
-              {FRENCH_LABEL_PRESETS.map((p) => (<option key={p} value={p}>{p}</option>))}
-            </Select>
-          </>
-        ) : (
-          <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
-        )}
+        {/* Toujours un texte libre, y compris pour le Français (§retour utilisateur : "dès que le
+            système détecte que c'est Français au collège, il sait automatiquement que c'est Dictée
+            et Questions / Rédaction") — plus besoin de choisir une catégorie ici, les deux cases de
+            saisie (Dictée et Questions/Rédaction) s'affichent automatiquement dans la grille de
+            notes selon le type et la matière (voir componentLabels), peu importe ce libellé. */}
+        <Input value={v.label} onChange={(e) => setValue("label", e.target.value)} aria-invalid={!!errors.label} />
         {errors.label && <p className="text-xs text-error-600">{errors.label.message}</p>}
       </Field>
       <Field>
