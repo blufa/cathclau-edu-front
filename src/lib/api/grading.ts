@@ -39,9 +39,12 @@ export function getAssessmentGrades(assessmentId: number): Promise<Grade[]> {
   return api.get<Grade[]>(`/grading/grades/assessment/${assessmentId}`);
 }
 
+/** `value` OU `valueA`/`valueB` selon le mode de saisie de cette évaluation (voir `componentLabels`,
+ * assessment-editor.tsx) — jamais les deux à la fois pour un même élève. Le serveur recalcule
+ * toujours `value` comme moyenne de `valueA`/`valueB` quand elles sont fournies. */
 export function enterBulkGrades(
   assessmentId: number,
-  grades: { studentId: number; value: number }[],
+  grades: { studentId: number; value?: number; valueA?: number; valueB?: number }[],
 ): Promise<Grade[]> {
   return api.post<Grade[]>(`/grading/assessments/${assessmentId}/grades/bulk`, { grades });
 }
@@ -160,6 +163,9 @@ export interface GradeSheetRow {
   gradeId: number | null;
   value: string | null;
   validated: boolean | null;
+  /** Composantes de la saisie en deux cases si applicable (voir `componentLabels`) — `null` sinon. */
+  valueA: string | null;
+  valueB: string | null;
 }
 
 /** Feuille de notes d'une évaluation : tous les élèves de la classe avec leur note saisie. */
@@ -201,6 +207,12 @@ export function getReportCardByStudentPeriod(studentId: number, periodId: number
  * puis bilan annuel (moyenne, rang, mention, décision) — portée = année scolaire entière. */
 export function getClassCentralizerPdfObjectUrl(classId: number, academicYearId: number): Promise<string> {
   return api.blobUrl(`/grading/report-cards/class/${classId}/year/${academicYearId}/centralisateur/download`);
+}
+
+/** Centralisateur de classe pour un mois (§censeur) — même document que le centralisateur
+ * semestriel ci-dessus, mais une seule moyenne par matière (pas de split 1er/2ème semestre). */
+export function getMonthlyCentralizerPdfObjectUrl(classId: number, yearMonth: string): Promise<string> {
+  return api.blobUrl(`/grading/monthly-report-cards/class/${classId}/month/${yearMonth}/centralisateur/download`);
 }
 
 /** Fiche de notes vierge (PDF) à imprimer et donner à l'enseignant : liste des élèves de la classe. */

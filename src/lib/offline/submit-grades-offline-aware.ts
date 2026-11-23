@@ -17,7 +17,7 @@ export type GradeSubmitAttempt =
  * sauvegarde plusieurs fois si la connexion est instable.
  */
 export async function submitGradesOfflineAware(
-  assessmentId: number, grades: { studentId: number; value: number }[],
+  assessmentId: number, grades: { studentId: number; value?: number; valueA?: number; valueB?: number }[],
 ): Promise<GradeSubmitAttempt> {
   if (useNetworkStore.getState().online) {
     try {

@@ -505,7 +505,7 @@ async function refreshGradeQueueSnapshot(): Promise<void> {
  * sauvegarde hors-ligne pour la MÊME évaluation écrase la précédente au lieu de s'empiler, voir
  * QueuedGradeEntry dans db.ts. */
 export async function enqueueGrades(
-  assessmentId: number, grades: { studentId: number; value: number }[],
+  assessmentId: number, grades: { studentId: number; value?: number; valueA?: number; valueB?: number }[],
 ): Promise<QueuedGradeEntry> {
   const entry: QueuedGradeEntry = {
     assessmentId, grades,

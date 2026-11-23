@@ -124,7 +124,7 @@ export interface QueuedGradeEntry {
    * MÊME évaluation REMPLACE l'entrée précédente au lieu de s'empiler : c'est toujours le dernier état
    * connu par l'enseignant qui part à la synchronisation, jamais une pile de sauvegardes intermédiaires. */
   assessmentId: number;
-  grades: { studentId: number; value: number }[];
+  grades: { studentId: number; value?: number; valueA?: number; valueB?: number }[];
   createdAt: string;
   status: QueuedGradeStatus;
   attempts: number;
